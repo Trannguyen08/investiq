@@ -1,0 +1,28 @@
+{
+  "settings": {
+    "showTimestamp": true,
+    "showStd": false,
+    "showAllContainers": false,
+    "softWrap": true,
+    "compact": true,
+    "size": "medium",
+    "lightTheme": "auto",
+    "hourStyle": "24",
+    "dateLocale": "en-GB",
+    "groupContainers": "at-least-2",
+    "automaticRedirect": "delayed"
+  },
+  "visibleKeys": [
+    "code",
+    "api_url",
+    "log_content",
+    "problem",
+    "container",
+    "request_id",
+    "duration_ms",
+    "duration_seconds"
+  ],
+  "pinned": [],
+  "collapsedGroups": [],
+  "dismissedLinkHint": true
+}

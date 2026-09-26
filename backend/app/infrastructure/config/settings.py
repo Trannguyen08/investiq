@@ -12,6 +12,8 @@ class Settings(BaseSettings):
 
     app_name: str = "InvestIQ API"
     app_env: str = "development"
+    service_name: str = "backend"
+    log_level: str = "INFO"
     database_url: str = "postgresql://investiq:investiq@localhost:5432/investiq"
     redis_url: str = "redis://localhost:6379/0"
     celery_broker_url: str = "redis://localhost:6379/1"

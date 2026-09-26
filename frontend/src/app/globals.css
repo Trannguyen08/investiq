@@ -46,3 +46,31 @@ a {
   letter-spacing: 0.08em;
   text-transform: uppercase;
 }
+
+.primary-link {
+  display: inline-flex;
+  min-height: 44px;
+  margin-top: 1rem;
+  align-items: center;
+  justify-content: center;
+  padding: 0.75rem 1rem;
+  border-radius: 0.65rem;
+  color: #fff;
+  background: #16734a;
+  font-weight: 700;
+  text-decoration: none;
+}
+
+.primary-link:hover {
+  background: #105b3a;
+}
+
+.primary-link:focus-visible {
+  outline: 3px solid #f2b84b;
+  outline-offset: 3px;
+}
+
+.muted-copy {
+  color: #52645d;
+  font-size: 0.9rem;
+}

@@ -51,7 +51,7 @@ jobs:
 
       - name: Test
         working-directory: backend
-        run: python -m pytest
+        run: python -m pytest --cov=app --cov-branch --cov-report=term-missing
 
       - name: Build backend image
         run: docker build --tag investiq-backend:ci backend
