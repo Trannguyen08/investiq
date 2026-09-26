@@ -3,6 +3,32 @@
 Record durable decisions in reverse chronological order. Do not record routine implementation
 details.
 
+## 2026-09-26 — Feature-level test evidence and local reports
+
+- **Status:** Accepted
+- **Context:** Test pass counts alone do not show which feature lines and branches were exercised,
+  and developers need one repeatable location for unit and integration evidence.
+- **Decision:** Every feature carries meaningful unit and integration tests. Backend features are
+  registered in a standard runner that emits separate branch-aware JUnit, Markdown, XML, and HTML
+  reports beneath ignored `test-results/<feature>/<level>/` directories. CI measures the full
+  backend with pytest-cov, while local reports stay uncommitted.
+- **Consequences:** Feature coverage is comparable and easy to inspect without adding generated
+  artifacts to Git. Coverage remains diagnostic evidence and does not replace behavior-focused
+  assertions or required boundary/failure cases.
+
+## 2026-09-26 — Local runtime log viewer with restricted Docker access
+
+- **Status:** Accepted
+- **Context:** Developers need one chronological UI for useful API, application, warning, and error
+  logs across runtime containers without mixing in build output or repetitive health checks.
+- **Decision:** Run a pinned Dozzle viewer on a loopback-only host port and restrict its Docker API
+  access through a private socket proxy to GET/HEAD container metadata, events, info, and log
+  endpoints. Label only user-relevant runtime services for display. Emit sanitized structured HTTP
+  fields from FastAPI/Celery and Nginx, and keep viewer actions, shell, MCP, and analytics off.
+- **Consequences:** Local developers get merged searchable logs with container/time metadata and
+  structured request context. Remote access requires an explicit authenticated proxy or SSH tunnel;
+  the Docker socket proxy remains a privileged infrastructure boundary and must never be published.
+
 ## 2026-09-26 — Redis-backed jobs and container delivery baseline
 
 - **Status:** Accepted

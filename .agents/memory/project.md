@@ -13,9 +13,13 @@
 - Frontend: Node.js 24 container, Next.js 16, React 19, and TypeScript under `frontend/`.
 - Persistence: PostgreSQL 17.
 - Cache and jobs: Redis 8 for cache plus Celery broker/result storage; Celery worker and Beat.
-- Edge: Nginx reverse proxy is the only service published to the host.
+- Edge: Nginx is the public application entry point; the runtime log viewer is separately published
+  on a loopback-only host port.
 - Operations: Docker Compose, GHCR images, GitHub Actions CI, and self-hosted deployment runners.
 - Messaging constraint: no Kafka, RabbitMQ, or separate event-streaming/message-bus platform.
+- Observability: a localhost-only Dozzle viewer reads labeled runtime logs through an
+  endpoint-restricted, GET-only Docker socket proxy. Actions, shell access, MCP, and build logs are
+  disabled.
 
 ## Goals
 
@@ -30,4 +34,6 @@ relevant issue or specification when available.
   during agent sessions.
 - Keep `frontend/package-lock.json` synchronized with `package.json` and backend requirement pins
   synchronized with the Docker image.
+- Use `DEVELOPMENT_GUIDE.md` for Docker/port commands and `backend/tests/run_feature_tests.py` for
+  per-feature unit, integration, and branch-coverage reports.
 - Follow `.agents/rules/project-structure.md` for every path or boundary change.

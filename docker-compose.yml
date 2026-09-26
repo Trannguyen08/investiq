@@ -2,6 +2,7 @@ name: ${COMPOSE_PROJECT_NAME:-investiq}
 
 x-backend-environment: &backend-environment
   APP_ENV: ${APP_ENV:-development}
+  LOG_LEVEL: ${LOG_LEVEL:-INFO}
   DATABASE_URL: postgresql://${POSTGRES_USER:-investiq}:${POSTGRES_PASSWORD:?POSTGRES_PASSWORD is required}@db:5432/${POSTGRES_DB:-investiq}
   REDIS_URL: redis://:${REDIS_PASSWORD:?REDIS_PASSWORD is required}@redis:6379/0
   CELERY_BROKER_URL: redis://:${REDIS_PASSWORD:?REDIS_PASSWORD is required}@redis:6379/1
@@ -21,6 +22,8 @@ x-backend-service: &backend-service
       condition: service_healthy
   networks:
     - backend
+  labels:
+    com.investiq.logs: "true"
   restart: unless-stopped
 
 services:
@@ -40,6 +43,8 @@ services:
       start_period: 10s
     networks:
       - backend
+    labels:
+      com.investiq.logs: "true"
     restart: unless-stopped
 
   redis:
@@ -57,10 +62,15 @@ services:
       start_period: 5s
     networks:
       - backend
+    labels:
+      com.investiq.logs: "true"
     restart: unless-stopped
 
   backend:
     <<: *backend-service
+    environment:
+      <<: *backend-environment
+      SERVICE_NAME: backend
     expose:
       - "8000"
     healthcheck:
@@ -75,11 +85,17 @@ services:
 
   celery-worker:
     <<: *backend-service
+    environment:
+      <<: *backend-environment
+      SERVICE_NAME: celery-worker
     command: ["celery", "-A", "app.workers.celery_app:celery_app", "worker", "--loglevel=INFO", "--concurrency=${CELERY_CONCURRENCY:-2}"]
     stop_grace_period: 30s
 
   celery-beat:
     <<: *backend-service
+    environment:
+      <<: *backend-environment
+      SERVICE_NAME: celery-beat
     command: ["celery", "-A", "app.workers.celery_app:celery_app", "beat", "--loglevel=INFO", "--schedule=/tmp/celerybeat-schedule"]
 
   frontend:
@@ -89,6 +105,7 @@ services:
       dockerfile: Dockerfile
       args:
         NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL:-/api}
+        NEXT_PUBLIC_LOG_VIEWER_URL: ${NEXT_PUBLIC_LOG_VIEWER_URL:-http://localhost:9999}
     environment:
       NODE_ENV: production
       HOSTNAME: 0.0.0.0
@@ -103,6 +120,8 @@ services:
       start_period: 20s
     networks:
       - edge
+    labels:
+      com.investiq.logs: "true"
     restart: unless-stopped
 
   nginx:
@@ -124,13 +143,81 @@ services:
       start_period: 5s
     networks:
       - edge
+    labels:
+      com.investiq.logs: "true"
+    restart: unless-stopped
+
+  docker-socket-proxy:
+    image: lscr.io/linuxserver/socket-proxy:3.4.4-r0-ls96@sha256:cba12c42b1df30a6446856028f5ab726e9d8921f1ea74be509216c5e41357d42
+    environment:
+      ALLOW_ARCHIVE: "0"
+      ALLOW_CHANGES: "0"
+      ALLOW_EXPORT: "0"
+      ALLOW_LOGS: "1"
+      ALLOW_TOP: "0"
+      CONTAINERS: "1"
+      EVENTS: "1"
+      INFO: "1"
+      LOG_LEVEL: warning
+      PING: "1"
+      POST: "0"
+      VERSION: "1"
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+    networks:
+      - observability
+    read_only: true
+    tmpfs:
+      - /run
+    security_opt:
+      - no-new-privileges:true
+    restart: unless-stopped
+
+  log-viewer:
+    image: amir20/dozzle:v11.1.1@sha256:c90494cbc3a9ca959634b89fdb3fdecbcbae1f690d7a567d0d356c6fda1d957c
+    environment:
+      DOZZLE_AUTH_PROVIDER: none
+      DOZZLE_ENABLE_ACTIONS: "false"
+      DOZZLE_ENABLE_MCP: "false"
+      DOZZLE_ENABLE_SHELL: "false"
+      DOZZLE_FILTER: label=com.investiq.logs=true
+      DOZZLE_HOSTNAME: InvestIQ local
+      DOZZLE_IMAGE_CHECK_MODE: "off"
+      DOZZLE_NO_ANALYTICS: "true"
+      DOZZLE_RELEASE_CHECK_MODE: manual
+      DOZZLE_REMOTE_HOST: tcp://docker-socket-proxy:2375
+    ports:
+      - "127.0.0.1:${LOG_VIEWER_PORT:-9999}:8080"
+    volumes:
+      - log-viewer-data:/data
+      - ./infra/log-viewer/profile.json:/data/__default__/profile.json:ro
+    depends_on:
+      - docker-socket-proxy
+    healthcheck:
+      test: ["CMD", "/dozzle", "healthcheck"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 15s
+    networks:
+      - observability
+      - log-viewer-edge
+    read_only: true
+    tmpfs:
+      - /tmp
+    security_opt:
+      - no-new-privileges:true
     restart: unless-stopped
 
 volumes:
   postgres-data:
   redis-data:
+  log-viewer-data:
 
 networks:
   backend:
     internal: true
   edge:
+  observability:
+    internal: true
+  log-viewer-edge:

@@ -14,6 +14,8 @@ baseline is runnable; most finance and ML feature modules remain intentional pla
 | `redis` | Cache plus Celery broker/result backend | Internal only |
 | `celery-worker` | Asynchronous task execution | Internal only |
 | `celery-beat` | Scheduled task dispatch | Internal only |
+| `docker-socket-proxy` | Endpoint-restricted Docker log access | Internal only |
+| `log-viewer` | Dozzle runtime log viewer | Loopback port `LOG_VIEWER_PORT` |
 
 Kafka, RabbitMQ, and other standalone message buses are not part of the architecture. Celery uses
 Redis databases 1 and 2 for delivery/results; application caching uses Redis database 0.
@@ -30,11 +32,21 @@ Redis databases 1 and 2 for delivery/results; application caching uses Redis dat
 
 3. Open `http://localhost:8080` (or the configured `HTTP_PORT`). The API smoke endpoint is
    `http://localhost:8080/api/v1/status`.
-4. Stop containers with `docker compose down`. Add `--volumes` only when intentionally deleting the
+4. Open `http://localhost:9999` (or the configured `LOG_VIEWER_PORT`) for runtime logs. The port is
+   bound to `127.0.0.1` only. The viewer includes every application runtime container while
+   excluding image-build output, its own viewer/proxy logs, and routine health request entries.
+5. Stop containers with `docker compose down`. Add `--volumes` only when intentionally deleting the
    local PostgreSQL and Redis data.
 
 Liveness is available at `/healthz` inside the backend container; `/readyz` verifies PostgreSQL and
 Redis without returning connection details.
+
+FastAPI/Celery and Nginx emit sanitized JSON fields for `code`, `api_url`, `log_content`,
+`logged_at`, `container`, `problem`, and `request_id`. The viewer parses these fields, highlights
+warnings/errors, supports level/text filtering, and merges selected containers chronologically.
+Application code must not log request bodies, credentials, tokens, cookies, or personal financial
+data. Access beyond the Docker host should use an SSH tunnel or an authenticated TLS reverse proxy;
+do not change the viewer bind address to a public interface without adding authentication.
 
 ## CI/CD
 
@@ -46,10 +58,11 @@ Redis without returning connection details.
 
 Deployment jobs require dedicated Linux self-hosted runners labelled `investiq-staging` and
 `investiq-production`. Configure GitHub environments with secrets `POSTGRES_PASSWORD`,
-`REDIS_PASSWORD`, and `SECRET_KEY`; optional variables are `HTTP_PORT`, `POSTGRES_DB`, and
-`POSTGRES_USER`. Protect the `production` environment with required reviewers. A rollback deploys a
-previous immutable backend/frontend tag with the same Compose file; database migrations must include
-their own compatibility and rollback plan once migrations are introduced.
+`REDIS_PASSWORD`, and `SECRET_KEY`; optional variables include `HTTP_PORT`, `LOG_VIEWER_PORT`,
+`LOG_LEVEL`, `POSTGRES_DB`, and `POSTGRES_USER`. Protect the `production` environment with required
+reviewers. A rollback deploys a previous immutable backend/frontend tag with the same Compose file;
+database migrations must include their own compatibility and rollback plan once migrations are
+introduced.
 
 ## Project layout
 
@@ -58,13 +71,17 @@ investiq/
 |-- backend/              # FastAPI runtime, Clean Architecture modules, workers, Dockerfile
 |-- frontend/             # Next.js app and Dockerfile
 |-- infra/
+|   |-- log-viewer/       # Default local runtime-log viewer profile
 |   |-- nginx/            # Reverse-proxy configuration
 |   `-- scripts/          # Operational scripts
 |-- .github/workflows/    # Backend/frontend CI and staging/production delivery
 |-- .agents/              # Agent memory, rules, skills, roles, and workflows
-|-- docker-compose.yml    # Seven-service local/deployment topology
+|-- docker-compose.yml    # Nine-service local/deployment topology with local log viewer
 `-- .env.example          # Non-secret configuration template
 ```
 
 The canonical architectural overview is `.agents/memory/architecture.md`. Every structural change
 must update that overview and all configuration or documentation that references affected paths.
+
+See [`DEVELOPMENT_GUIDE.md`](DEVELOPMENT_GUIDE.md) for Docker lifecycle commands, the complete port
+table, backend quality checks, and per-feature coverage reports.

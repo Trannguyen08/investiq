@@ -2,30 +2,41 @@
 
 ## Status
 
-Implementation and full local container smoke validation complete.
+Complete.
 
 ## Objective
 
-Provide a runnable Docker topology and GitHub CI/CD for frontend, backend, PostgreSQL, Redis, Celery
-worker, Celery Beat, and Nginx while removing Kafka and other standalone message-bus assumptions.
+Standardize feature-level unit/integration testing and coverage reporting, install pytest-cov, and
+document Docker, ports, and per-feature test commands from the repository root.
 
 ## Completed
 
-- Added the seven-service Compose topology, health checks, persistent data volumes, private networks,
-  Nginx routing, environment template, and service-local Dockerfiles.
-- Implemented minimal FastAPI health/status endpoints, Redis-backed Celery configuration, and a
-  buildable Next.js shell so container builds have real entry points.
-- Added backend/frontend CI plus GHCR publishing and staging/production deployment workflows.
-- Namespaced service CI concurrency by caller workflow so standalone `develop` CI and reusable
-  staging verification cannot cancel one another.
-- Removed Kafka producer/consumer files and the unused event-publisher interface; removed RabbitMQ
-  and ActiveMQ ignore entries; rewrote messaging guidance around Redis-backed Celery and WebSockets.
-- Synchronized README, architecture/project memory, dependencies, and operational guidance.
-- Built both service images and smoke-tested all seven containers through Nginx using an isolated
-  Compose project. PostgreSQL, Redis, backend readiness, frontend HTTP, Celery worker ping, Celery
-  Beat startup, and Nginx configuration all passed.
+- Pinned pytest-cov 7.1.0 and coverage.py 7.16.1; configured statement and branch reporting.
+- Updated the testing rule so every feature requires meaningful unit and integration evidence, with
+  frontend component/API-E2E equivalents and documented exceptions only when a level cannot apply.
+- Added `backend/tests/run_feature_tests.py` as the registry/runner for isolated feature suites.
+- Added the ignored `test-results/<feature>/<unit|integration>/` workspace for JUnit, Markdown, XML,
+  and browsable HTML coverage reports.
+- Expanded logging-viewer tests for redaction, exception/duration formatting, logger configuration,
+  valid/invalid request IDs, health exclusions, 404 warnings, 503 errors, and unhandled exceptions.
+- Added `DEVELOPMENT_GUIDE.md` at the repository root with environment setup, Docker lifecycle,
+  active host/internal ports, all-backend tests, and per-feature commands.
+- Updated backend CI to exercise pytest-cov, and synchronized README, architecture/project memory,
+  and the architecture decision log.
+
+## Validation
+
+- Logging-viewer unit suite: 6 passed; 100.00% statement and branch coverage for
+  `logging_config.py`.
+- Logging-viewer integration suite: 5 passed; 100.00% statement and branch coverage for
+  `request_logging.py`.
+- Full backend suite: 13 passed; 89.18% statement/branch coverage across currently imported app
+  modules, with only dependency-backed readiness branches in `main.py` uncovered.
+- Ruff and strict mypy passed. Generated feature reports exist locally and are ignored by Git.
+- `pip check`, Docker Compose resolution, test collection, runner help, and final diff/config checks
+  passed.
 
 ## Next step
 
-Implement product modules incrementally. Before the first schema deployment, add reviewed Alembic
-migrations and a backwards-compatible migration step to the deployment workflow.
+Register each new backend feature in `backend/tests/run_feature_tests.py`, run its `all` suite, and
+review both HTML reports before considering the feature complete.

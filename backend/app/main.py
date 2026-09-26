@@ -9,9 +9,14 @@ from fastapi import FastAPI, status
 from fastapi.responses import JSONResponse
 from redis.asyncio import Redis
 
+from app.infrastructure.config.logging_config import configure_logging
 from app.infrastructure.config.settings import settings
+from app.middleware.request_logging import RequestLoggingMiddleware
+
+configure_logging()
 
 app = FastAPI(title=settings.app_name, version="0.1.0")
+app.add_middleware(RequestLoggingMiddleware)
 
 
 @app.get("/healthz", tags=["operations"])
