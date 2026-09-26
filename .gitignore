@@ -136,14 +136,6 @@ celerybeat.pid
 *.aof
 *.pid
 
-# RabbitMQ
-mnesia/
-rabbitmq/
-rabbitmq-data/
-
-# ActiveMQ
-activemq-data/
-
 # SageMath parsed files
 *.sage.py
 
@@ -151,6 +143,7 @@ activemq-data/
 .env
 .envrc
 .venv
+.venv*/
 env/
 venv/
 ENV/
@@ -216,3 +209,16 @@ __marimo__/
 
 # Streamlit
 .streamlit/secrets.toml
+
+# InvestIQ frontend and local environment
+node_modules/
+.next/
+out/
+.env.local
+.env.*.local
+
+# InvestIQ generated ML data and trained artifacts
+backend/app/infrastructure/ml/data/*
+backend/app/infrastructure/ml/artifacts/*
+!backend/app/infrastructure/ml/data/.gitkeep
+!backend/app/infrastructure/ml/artifacts/.gitkeep

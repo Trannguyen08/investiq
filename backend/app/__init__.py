@@ -1,0 +1,1 @@
+"""InvestIQ backend package."""
