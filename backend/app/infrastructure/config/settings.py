@@ -19,6 +19,9 @@ class Settings(BaseSettings):
     celery_broker_url: str = "redis://localhost:6379/1"
     celery_result_backend: str = "redis://localhost:6379/2"
     secret_key: str = "local-development-key-change-before-deployment"
+    database_pool_min_size: int = 1
+    database_pool_max_size: int = 5
+    news_ingestion_enabled: bool = False
 
 
 @lru_cache

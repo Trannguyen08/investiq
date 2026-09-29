@@ -49,5 +49,9 @@ jobs:
         working-directory: frontend
         run: npm run typecheck
 
+      - name: Test
+        working-directory: frontend
+        run: npm test
+
       - name: Build frontend image
         run: docker build --tag investiq-frontend:ci frontend

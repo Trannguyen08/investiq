@@ -10,10 +10,33 @@ celery_app = Celery(
     "investiq",
     broker=settings.celery_broker_url,
     backend=settings.celery_result_backend,
+    include=("app.workers.news_ingestion_worker",),
 )
 celery_app.conf.update(
     accept_content=["json"],
-    beat_schedule={},
+    beat_schedule=(
+        {
+            "discover-vietstock": {
+                "task": "investiq.news.discover.v1",
+                "schedule": 300.0,
+                "args": ("vietstock", 50),
+                "options": {"queue": "news-ingestion"},
+            },
+            "discover-cafef": {
+                "task": "investiq.news.discover.v1",
+                "schedule": 300.0,
+                "args": ("cafef", 50),
+                "options": {"queue": "news-ingestion"},
+            },
+            "dispatch-persisted-news-jobs": {
+                "task": "investiq.news.dispatch.v1",
+                "schedule": 60.0,
+                "options": {"queue": "news-ingestion"},
+            },
+        }
+        if settings.news_ingestion_enabled
+        else {}
+    ),
     broker_connection_retry_on_startup=True,
     enable_utc=True,
     result_serializer="json",
@@ -21,6 +44,7 @@ celery_app.conf.update(
     task_reject_on_worker_lost=True,
     task_serializer="json",
     timezone="Asia/Ho_Chi_Minh",
+    task_routes={"investiq.news.*": {"queue": "news-ingestion"}},
     worker_prefetch_multiplier=1,
 )
 

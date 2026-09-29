@@ -5,7 +5,8 @@
 - Name: InvestIQ
 - Repository: `C:\investiq`
 - Application type: FastAPI and Next.js monorepo
-- Status: Runnable operational baseline; finance and ML feature modules are mostly placeholders.
+- Status: Runnable operational baseline with a tested two-source stock-news MVP; most other finance
+  and ML modules remain placeholders.
 
 ## Confirmed stack
 
@@ -23,8 +24,13 @@
 
 ## Goals
 
-Document product goals here as they are confirmed. Keep goals outcome-focused and link to the
-relevant issue or specification when available.
+- Implemented MVP: Vietnamese stock-market news aggregation for Vietstock and CafeF with article
+  history, stock-symbol identification, rule sentiment, public list/detail pages, and a white header.
+- User confirmed periodic database backups only; no database replica in this feature scope.
+- Feature plans live in `docs/plan/`; see `docs/plan/vietnam-stock-news.md` and its database/API/UI
+  companion documents. `docs/plan/news-implementation-report.md` records implemented behavior,
+  validation, activation gates, and the seven sources that remain pending/blocked. No deployment
+  has been performed and live ingestion is disabled by default.
 
 ## Local development
 

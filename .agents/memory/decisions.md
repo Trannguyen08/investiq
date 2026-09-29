@@ -3,6 +3,43 @@
 Record durable decisions in reverse chronological order. Do not record routine implementation
 details.
 
+## 2026-09-29 — News persistence protection scope
+
+- **Status:** Accepted and implemented
+- **Context:** The news feature request mentioned `db reply`; clarification explicitly selected
+  periodic backups only.
+- **Decision:** Use one primary PostgreSQL database and independent periodic `pg_dump` backups with
+  checksum validation and an isolated restore procedure. Do not add a database replica.
+- **Consequences:** The implementation provides no database failover or point-in-time recovery.
+  A six-hour scheduler is available, while production storage, tiered retention and alerting remain
+  deployment configuration. A PostgreSQL 17 restore drill was completed on 29/09/2026.
+
+## 2026-09-29 — Durable stock-news ingestion and activation gate
+
+- **Status:** Accepted
+- **Context:** Redis/Celery delivery can lose queued messages, source rights differ, and article
+  updates must retain history.
+- **Decision:** Store discovery/fetch jobs and leases in PostgreSQL, dispatch them to Celery after
+  commit, and recover pending/expired jobs every minute. Persist immutable article revisions and
+  source-specific content-access policies. Ship Vietstock/CafeF adapters but keep ingestion off by
+  default until source policy and security-master data are approved.
+- **Consequences:** Redis is transport rather than the only job record. Operators must explicitly
+  activate ingestion and maintain source policy; seven researched sources remain pending/blocked.
+
+## 2026-09-29 — Source-explicit tickers and bounded market-impact analysis
+
+- **Status:** Accepted and implemented
+- **Context:** Live articles contain qualified and contextual tickers that are absent from the small
+  reviewed security master. The first rule baseline also returned neutral or mixed too often and did
+  not explain likely stock-market impact.
+- **Decision:** Persist publisher-explicit ticker candidates separately from verified security
+  mentions. Display them as source-mentioned codes without enabling verified-symbol filtering.
+  Sentiment rules use weighted financial events, sentence evidence, a stated impact scope and an
+  explicit short-term horizon. Confidence remains null until calibration. Analyzer version changes
+  replace current analysis without creating an article-content revision.
+- **Consequences:** Cards can show useful tickers while preserving master-data trust. Market-impact
+  text is an explainable content assessment, carries a non-advice notice, and is not a price forecast.
+
 ## 2026-09-26 — Feature-level test evidence and local reports
 
 - **Status:** Accepted

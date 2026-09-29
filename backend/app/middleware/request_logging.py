@@ -36,6 +36,7 @@ class RequestLoggingMiddleware(BaseHTTPMiddleware):
             if _request_id_pattern.fullmatch(supplied_request_id)
             else uuid4().hex
         )
+        request.state.request_id = request_id
         context_token = bind_request_id(request_id)
         started_at = time.perf_counter()
 

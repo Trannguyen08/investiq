@@ -14,8 +14,8 @@ dist/
 downloads/
 eggs/
 .eggs/
-lib/
-lib64/
+/lib/
+/lib64/
 parts/
 sdist/
 var/
@@ -223,3 +223,4 @@ backend/app/infrastructure/ml/artifacts/*
 !backend/app/infrastructure/ml/data/.gitkeep
 !backend/app/infrastructure/ml/artifacts/.gitkeep
 DEVELOPMENT_GUIDE.md
+docs/plan/
