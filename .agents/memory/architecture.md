@@ -3,8 +3,9 @@
 ## Current state
 
 The monorepo has a runnable container and delivery baseline. FastAPI health/status endpoints, the
-Next.js shell, Celery configuration, Docker Compose, Nginx, and CI/CD are implemented. Most product,
-data, and ML modules remain placeholders and must not be described as implemented features.
+Next.js shell, Celery configuration, Docker Compose, Nginx, and CI/CD are implemented. A two-source
+Vietnamese stock-news vertical slice is implemented and tested; most other product, data, and ML
+modules remain placeholders.
 
 ## Repository layout
 
@@ -24,6 +25,8 @@ investiq/
 |-- frontend/
 |   |-- Dockerfile
 |   `-- src/                  # Next.js App Router, UI, hooks, state, and contracts
+|-- docs/
+|   `-- plan/                 # Feature specifications and implementation evidence
 |-- infra/
 |   |-- log-viewer/           # Default local runtime-log viewer profile
 |   |-- nginx/nginx.conf      # Public reverse proxy and structured access logs
@@ -44,6 +47,10 @@ investiq/
 - Backend and frontend images are built from service-local Dockerfiles. Deployment overrides their
   Compose image names with immutable GHCR tags.
 - PostgreSQL and Redis are private to the Compose network and persist in named volumes.
+- News articles, immutable revisions, source policies, verified symbols, publisher-explicit symbol
+  candidates, versioned sentiment/market-impact analysis, crawl runs, and durable
+  ingestion jobs are stored in PostgreSQL. Celery/Redis deliver work; a PostgreSQL dispatcher
+  recovers pending and expired-lease jobs.
 - Redis database 0 is reserved for application caching, database 1 is the Celery broker, and database
   2 is the Celery result backend. No Kafka, RabbitMQ, or generic event bus is present.
 - Celery worker and Beat reuse the backend image. Each environment must run only one Beat scheduler.
@@ -69,6 +76,13 @@ investiq/
   branch-coverage reports are written by feature and test level under ignored `test-results/` paths.
 
 ## Structure maintenance
+
+News ingestion, database/backups, and API/UI specifications are documented under `docs/plan/`,
+starting at `docs/plan/vietnam-stock-news.md`; implementation evidence is in
+`docs/plan/news-implementation-report.md`. Vietstock and CafeF adapters, public news APIs/UI, and
+backup/restore scripts are implemented. Live ingestion remains disabled by default pending source
+policy approval and reviewed security-master input. The user selected periodic backups only, with
+no database replica; backup scheduling is an external script and adds no runtime service here.
 
 This file is the canonical architectural overview. Every path or boundary change updates this file
 and all affected references in the same task, following `.agents/rules/project-structure.md`.

@@ -41,6 +41,28 @@ Redis databases 1 and 2 for delivery/results; application caching uses Redis dat
 Liveness is available at `/healthz` inside the backend container; `/readyz` verifies PostgreSQL and
 Redis without returning connection details.
 
+## Stock news MVP
+
+Apply database migrations as a dedicated step before opening the news routes:
+
+```sh
+docker compose run --rm backend python -m app.infrastructure.db.base
+```
+
+The public pages are `/news` and `/news/<article-id>`. Live ingestion is off by default. Before
+enabling it, approve each source's storage/display policy and import a reviewed UTF-8 security
+master CSV with columns `exchange,symbol,issuer_name,valid_from`:
+
+```sh
+docker compose run --rm backend python -m app.infrastructure.db.import_securities \
+  --file /data/securities.csv --source reviewed-master --dry-run
+```
+
+The container must be given a read-only mount for that CSV before running the import. Remove
+`--dry-run` only after reviewing validation output. See the
+[implementation report](docs/plan/news-implementation-report.md) for source status, test evidence,
+backup commands, and remaining activation gates.
+
 FastAPI/Celery and Nginx emit sanitized JSON fields for `code`, `api_url`, `log_content`,
 `logged_at`, `container`, `problem`, and `request_id`. The viewer parses these fields, highlights
 warnings/errors, supports level/text filtering, and merges selected containers chronologically.
@@ -51,7 +73,7 @@ do not change the viewer bind address to a public interface without adding authe
 ## CI/CD
 
 - `backend-ci.yml` runs Ruff, mypy, pytest, builds the backend image, and validates Compose.
-- `frontend-ci.yml` runs ESLint and TypeScript checks, then builds the production image.
+- `frontend-ci.yml` runs ESLint, TypeScript, and Vitest checks, then builds the production image.
 - A push to `develop` publishes immutable `staging-<commit>` images to GHCR and deploys staging.
 - A `v*` tag publishes versioned images and deploys production. Manual dispatch builds the selected
   commit with a `manual-<commit>` tag.
@@ -70,6 +92,7 @@ introduced.
 investiq/
 |-- backend/              # FastAPI runtime, Clean Architecture modules, workers, Dockerfile
 |-- frontend/             # Next.js app and Dockerfile
+|-- docs/plan/            # Feature plans, data designs, and API/UI specifications
 |-- infra/
 |   |-- log-viewer/       # Default local runtime-log viewer profile
 |   |-- nginx/            # Reverse-proxy configuration
@@ -85,3 +108,8 @@ must update that overview and all configuration or documentation that references
 
 See [`DEVELOPMENT_GUIDE.md`](DEVELOPMENT_GUIDE.md) for Docker lifecycle commands, the complete port
 table, backend quality checks, and per-feature coverage reports.
+
+See [`docs/plan/`](docs/plan/README.md) for the feature specifications. The
+[Vietnamese stock-market news plan](docs/plan/vietnam-stock-news.md) now has an implemented,
+tested two-source MVP; the [implementation report](docs/plan/news-implementation-report.md)
+records research evidence, validation results, activation gates, and remaining source limitations.

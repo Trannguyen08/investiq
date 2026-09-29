@@ -21,6 +21,22 @@ class FeatureTests:
 
 
 FEATURES: dict[str, FeatureTests] = {
+    "news": FeatureTests(
+        unit_paths=("tests/unit/news",),
+        integration_paths=(
+            "tests/integration/api/test_news_api.py",
+            "tests/integration/db/test_news_repository.py",
+        ),
+        unit_coverage_modules=(
+            "app.application.use_cases.news",
+            "app.infrastructure.external.crawlers",
+        ),
+        integration_coverage_modules=(
+            "app.api.v1.news",
+            "app.schemas.news",
+            "app.infrastructure.db.repositories.sql_news_repository",
+        ),
+    ),
     "logging-viewer": FeatureTests(
         unit_paths=("tests/unit/infrastructure/test_logging_config.py",),
         integration_paths=("tests/integration/api/test_request_logging.py",),

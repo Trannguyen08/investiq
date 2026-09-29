@@ -13,14 +13,38 @@
     "automaticRedirect": "delayed"
   },
   "visibleKeys": [
-    "code",
-    "api_url",
-    "log_content",
-    "problem",
-    "container",
-    "request_id",
-    "duration_ms",
-    "duration_seconds"
+    [
+      "investiq-preview-api: uvicorn app.main:app --host 0.0.0.0 --port 8000 --proxy-headers --forwarded-allow-ips=*",
+      [
+        [["code"], true],
+        [["api_url"], true],
+        [["duration_ms"], true],
+        [["log_content"], true],
+        [["problem"], true],
+        [["request_id"], true],
+        [["timestamp"], false],
+        [["level"], false],
+        [["message"], false],
+        [["logged_at"], false],
+        [["container"], false]
+      ]
+    ],
+    [
+      "investiq-backend: uvicorn app.main:app --host 0.0.0.0 --port 8000 --proxy-headers --forwarded-allow-ips=*",
+      [
+        [["code"], true],
+        [["api_url"], true],
+        [["duration_ms"], true],
+        [["log_content"], true],
+        [["problem"], true],
+        [["request_id"], true],
+        [["timestamp"], false],
+        [["level"], false],
+        [["message"], false],
+        [["logged_at"], false],
+        [["container"], false]
+      ]
+    ]
   ],
   "pinned": [],
   "collapsedGroups": [],

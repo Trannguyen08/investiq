@@ -1,6 +1,7 @@
 import json
 import logging
 import sys
+from pathlib import Path
 
 import pytest
 
@@ -12,6 +13,51 @@ from app.infrastructure.config.logging_config import (
     reset_request_id,
 )
 from app.infrastructure.config.settings import settings
+
+REPOSITORY_ROOT = Path(__file__).resolve().parents[4]
+
+
+def test_dozzle_profile_visible_keys_can_be_hydrated_by_v11() -> None:
+    profile_path = REPOSITORY_ROOT / "infra" / "log-viewer" / "profile.json"
+    profile = json.loads(profile_path.read_text(encoding="utf-8"))
+
+    visible_keys = profile.get("visibleKeys", [])
+    assert isinstance(visible_keys, list)
+    for host_key, container_keys in visible_keys:
+        assert isinstance(host_key, str)
+        assert isinstance(container_keys, list)
+        for container_key, keys in container_keys:
+            assert isinstance(container_key, list)
+            assert container_key
+            assert all(isinstance(part, str) for part in container_key)
+            assert isinstance(keys, bool)
+
+
+def test_dozzle_profile_prioritizes_api_request_fields() -> None:
+    profile_path = REPOSITORY_ROOT / "infra" / "log-viewer" / "profile.json"
+    profile = json.loads(profile_path.read_text(encoding="utf-8"))
+    profiles = dict(profile["visibleKeys"])
+    preview_key = (
+        "investiq-preview-api: uvicorn app.main:app --host 0.0.0.0 --port 8000 "
+        "--proxy-headers --forwarded-allow-ips=*"
+    )
+    configured_fields = {
+        tuple(field_path): enabled for field_path, enabled in profiles[preview_key]
+    }
+
+    assert configured_fields == {
+        ("code",): True,
+        ("api_url",): True,
+        ("duration_ms",): True,
+        ("log_content",): True,
+        ("problem",): True,
+        ("request_id",): True,
+        ("timestamp",): False,
+        ("level",): False,
+        ("message",): False,
+        ("logged_at",): False,
+        ("container",): False,
+    }
 
 
 def test_json_formatter_emits_viewer_contract_and_redacts_secrets() -> None:

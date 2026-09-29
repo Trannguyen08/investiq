@@ -1,42 +1,64 @@
-# Current Task
+﻿# Current Task
 
 ## Status
 
-Complete.
+Complete: researched all nine candidate sources and delivered a tested two-source Vietnamese
+stock-market news MVP. No deployment was requested or performed.
 
 ## Objective
 
-Standardize feature-level unit/integration testing and coverage reporting, install pytest-cov, and
-document Docker, ports, and per-feature test commands from the repository root.
+Deliver a runnable vertical slice for Vietstock and CafeF from discovery/parsing through PostgreSQL,
+sentiment/symbol enrichment, versioned APIs, and responsive Next.js list/detail pages. Add periodic
+backup/restore tooling, register feature tests, and report all nine candidate sources accurately.
 
-## Completed
+## Confirmed constraints
 
-- Pinned pytest-cov 7.1.0 and coverage.py 7.16.1; configured statement and branch reporting.
-- Updated the testing rule so every feature requires meaningful unit and integration evidence, with
-  frontend component/API-E2E equivalents and documented exceptions only when a level cannot apply.
-- Added `backend/tests/run_feature_tests.py` as the registry/runner for isolated feature suites.
-- Added the ignored `test-results/<feature>/<unit|integration>/` workspace for JUnit, Markdown, XML,
-  and browsable HTML coverage reports.
-- Expanded logging-viewer tests for redaction, exception/duration formatting, logger configuration,
-  valid/invalid request IDs, health exclusions, 404 warnings, 503 errors, and unhandled exceptions.
-- Added `DEVELOPMENT_GUIDE.md` at the repository root with environment setup, Docker lifecycle,
-  active host/internal ports, all-backend tests, and per-feature commands.
-- Updated backend CI to exercise pytest-cov, and synchronized README, architecture/project memory,
-  and the architecture decision log.
+- Periodic database backups only; no PostgreSQL replica.
+- Preserve FastAPI/Next.js/PostgreSQL/Celery/Redis and Clean Architecture boundaries.
+- Public crawler inputs are allowlisted and bounded; live websites are not called from CI tests.
+- Vietstock exposes RSS feeds. CafeF robots currently allows crawling and advertises sitemap/news
+  sitemap endpoints; full-text republication rights still require product/legal approval.
+- Seven other candidate sources remain profiled until a public ingestion route and policy are confirmed.
+- No standalone logo asset exists; implement a local accessible InvestIQ SVG mark based on the
+  visible blue/green wordmark direction.
 
-## Validation
+## Acceptance conditions
 
-- Logging-viewer unit suite: 6 passed; 100.00% statement and branch coverage for
-  `logging_config.py`.
-- Logging-viewer integration suite: 5 passed; 100.00% statement and branch coverage for
-  `request_logging.py`.
-- Full backend suite: 13 passed; 89.18% statement/branch coverage across currently imported app
-  modules, with only dependency-backed readiness branches in `main.py` uncovered.
-- Ruff and strict mypy passed. Generated feature reports exist locally and are ignored by Git.
-- `pip check`, Docker Compose resolution, test collection, runner help, and final diff/config checks
-  passed.
+- Migration/repository support idempotent revisions, symbols, sentiment, and durable jobs.
+- Vietstock/CafeF adapters parse deterministic fixtures and discover only allowlisted URLs.
+- Public list/detail/source/security APIs use explicit schemas and stable cursor pagination.
+- Celery work is bounded/idempotent and scheduled only when ingestion is enabled.
+- News UI/header are responsive and handle empty/error/partial states.
+- Backup/restore scripts are safe, configurable, checksum-aware, and dry-run capable.
+- News unit/integration suites are registered and relevant checks pass, or exact limitations are reported.
 
-## Next step
+## Completion evidence
 
-Register each new backend feature in `backend/tests/run_feature_tests.py`, run its `all` suite, and
-review both HTML reports before considering the feature complete.
+- Backend: Ruff and mypy pass; 33 pytest tests pass.
+- News feature: 14 unit and 6 PostgreSQL/API integration tests pass with generated local reports.
+- Frontend: ESLint, TypeScript, and 4 Vitest tests pass.
+- Operations: Compose validation and shell syntax pass; PostgreSQL 17 backup/isolated restore drill
+  succeeds.
+- Report: `docs/plan/news-implementation-report.md` lists source research, delivered behavior,
+  activation requirements, and remaining pre-production gaps.
+- Preview validation: controlled live backfill stored 50 Vietstock and 10 CafeF articles with full
+  content blocks; demo rows were removed. The list returns 30 items per page and the detail view adds
+  extracted key passages before the full article body. One short dynamic-table article is correctly
+  marked partial.
+- Analysis follow-up: cards show sentiment followed by at most three verified or publisher-explicit
+  tickers and an overflow count. Detail headings are smaller, and the analysis panel now provides a
+  weighted position, sentence evidence, scope, short-term market impact, and mentioned tickers.
+  Preview reanalysis found 63 ticker references across 25/60 articles and reduced neutral labels from
+  21 to 9. Final checks pass: 39 backend tests with an isolated PostgreSQL database, Ruff, mypy over
+  138 files, frontend lint/typecheck, and 4 Vitest tests.
+- Log-viewer follow-up: corrected the Dozzle v11 `visibleKeys` profile shape that crashed the browser
+  during state hydration. A clean Chrome session renders the viewer and both labeled preview
+  containers on port 9999; all 7 logging unit tests and 5 request-logging integration tests pass.
+- Preview observability follow-up: replaced the host Uvicorn preview process with the labeled
+  `investiq-preview-api` container on the same host port 8001. It retains the existing preview
+  PostgreSQL/Redis data, emits structured request logs, and is visible beside those containers in
+  Dozzle. The frontend list and API list/detail smoke checks return HTTP 200.
+- Structured-log display follow-up: the Dozzle v11 profile now stores field visibility in its
+  per-image-command map format. API rows prioritize status, route, duration, content, explanation,
+  and request ID while hiding five duplicate fields. Runtime DOM validation confirms the selected
+  fields render in order for `investiq-preview-api` and the hidden fields are absent.

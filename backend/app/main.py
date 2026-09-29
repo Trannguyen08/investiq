@@ -1,22 +1,74 @@
 """FastAPI application entry point and platform health endpoints."""
 
 import asyncio
-from collections.abc import Awaitable
+from collections.abc import AsyncIterator, Awaitable
+from contextlib import asynccontextmanager
 from typing import Any
 
 import psycopg
-from fastapi import FastAPI, status
+from fastapi import FastAPI, HTTPException, Request, status
+from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
 from redis.asyncio import Redis
 
+from app.api.v1.news import router as news_router
 from app.infrastructure.config.logging_config import configure_logging
 from app.infrastructure.config.settings import settings
+from app.infrastructure.db.session import close_pool
 from app.middleware.request_logging import RequestLoggingMiddleware
 
 configure_logging()
 
-app = FastAPI(title=settings.app_name, version="0.1.0")
+
+@asynccontextmanager
+async def lifespan(_: FastAPI) -> AsyncIterator[None]:
+    yield
+    close_pool()
+
+
+app = FastAPI(title=settings.app_name, version="0.1.0", lifespan=lifespan)
 app.add_middleware(RequestLoggingMiddleware)
+app.include_router(news_router)
+
+
+def _request_id(request: Request) -> str:
+    return str(getattr(request.state, "request_id", "unknown"))
+
+
+@app.exception_handler(HTTPException)
+async def http_error(request: Request, exc: HTTPException) -> JSONResponse:
+    code = "NOT_FOUND" if exc.status_code == 404 else "REQUEST_REJECTED"
+    return JSONResponse(
+        status_code=exc.status_code,
+        content={
+            "error": {
+                "code": code,
+                "message": str(exc.detail),
+                "request_id": _request_id(request),
+                "details": [],
+            }
+        },
+        headers=exc.headers,
+    )
+
+
+@app.exception_handler(RequestValidationError)
+async def validation_error(request: Request, exc: RequestValidationError) -> JSONResponse:
+    details = [
+        {"location": list(error["loc"]), "message": error["msg"], "type": error["type"]}
+        for error in exc.errors()
+    ]
+    return JSONResponse(
+        status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
+        content={
+            "error": {
+                "code": "VALIDATION_ERROR",
+                "message": "Request validation failed.",
+                "request_id": _request_id(request),
+                "details": details,
+            }
+        },
+    )
 
 
 @app.get("/healthz", tags=["operations"])
