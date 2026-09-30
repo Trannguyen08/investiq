@@ -106,6 +106,8 @@ def _sentiment(value: SentimentScore | None) -> SentimentResponse:
             evidence=[],
             market_impact=None,
             impact_scope=None,
+            topics=[],
+            event_types=[],
         )
     return SentimentResponse(
         status="ready",
@@ -120,6 +122,8 @@ def _sentiment(value: SentimentScore | None) -> SentimentResponse:
         market_impact=value.market_impact,
         impact_scope=value.impact_scope,
         horizon=value.horizon,
+        topics=list(value.topics),
+        event_types=list(value.event_types),
     )
 
 
@@ -179,6 +183,7 @@ def _summary(article: NewsArticle) -> NewsSummaryResponse:
         sentiment=_sentiment(article.sentiment),
         extraction_status=article.extraction_status.value,
         content_access=article.content_access.value,
+        duplicate_source_count=article.duplicate_source_count,
     )
 
 
@@ -228,6 +233,7 @@ def list_news(
         str | None, Query(pattern="^(positive|negative|neutral|mixed|unknown)$")
     ] = None,
     limit: Annotated[int, Query(ge=1, le=50)] = 20,
+    window_days: Annotated[int, Query(ge=1, le=365)] = 7,
     cursor: Annotated[str | None, Query(max_length=2048)] = None,
 ) -> NewsCollectionResponse:
     _private_response(response)
@@ -236,7 +242,7 @@ def list_news(
         raise HTTPException(status_code=422, detail="Search query is too short")
     sources = tuple(value.strip().lower() for value in (source or ()))
     symbols = tuple(value.strip().upper() for value in (symbol or ()))
-    if len(sources) > 9 or len(symbols) > 10:
+    if len(sources) > 20 or len(symbols) > 10:
         raise HTTPException(status_code=422, detail="Too many filter values")
     if any(len(value) > 64 or not re.fullmatch(r"[a-z0-9-]+", value) for value in sources):
         raise HTTPException(status_code=422, detail="Invalid news source filter")
@@ -249,6 +255,7 @@ def list_news(
         "category": category.strip() if category else None,
         "sentiment": sentiment,
         "limit": limit,
+        "window_days": window_days,
     }
     cursor_feed_at = None
     cursor_id = None
@@ -268,6 +275,8 @@ def list_news(
         limit=limit,
         cursor_feed_at=cursor_feed_at,
         cursor_id=cursor_id,
+        published_after=datetime.now(UTC)
+        - timedelta(days=min(window_days, settings.news_retention_days)),
     )
     items, has_more = repository.list_articles(query)
     next_cursor = _encode_cursor(items[-1], filters) if has_more and items else None

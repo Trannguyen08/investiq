@@ -3,7 +3,7 @@
 ## Current state
 
 The monorepo has a runnable container and delivery baseline. FastAPI health/status endpoints, the
-Next.js shell, Celery configuration, Docker Compose, Nginx, and CI/CD are implemented. A two-source
+Next.js shell, Celery configuration, Docker Compose, Nginx, and CI/CD are implemented. A five-source
 Vietnamese stock-news vertical slice is implemented and tested; most other product, data, and ML
 modules remain placeholders.
 
@@ -53,6 +53,15 @@ investiq/
   recovers pending and expired-lease jobs.
 - Redis database 0 is reserved for application caching, database 1 is the Celery broker, and database
   2 is the Celery result backend. No Kafka, RabbitMQ, or generic event bus is present.
+- News provider traffic is coordinated per domain through Redis-backed request budgets and circuit
+  state, with a bounded process-local fallback when Redis is temporarily unavailable. Freshness is
+  enforced before persistence and again on public queries; retention cleanup is explicit and
+  dry-run by default.
+- Protected news operations endpoints use a dedicated bearer token, optimistic source row versions,
+  and PostgreSQL audit records. They fail closed when no token is configured.
+- The Next.js Admin News workspace uses a server-validated, HMAC-signed HttpOnly session cookie.
+  Browser actions execute as server actions, while the FastAPI operations token remains server-only;
+  both layers fail closed when their independent runtime secrets are absent.
 - Celery worker and Beat reuse the backend image. Each environment must run only one Beat scheduler.
 - FastAPI, Celery, and Nginx produce sanitized structured runtime fields. Health access logs and
   image-build output are excluded from the viewer to limit operational noise.
@@ -79,10 +88,11 @@ investiq/
 
 News ingestion, database/backups, and API/UI specifications are documented under `docs/plan/`,
 starting at `docs/plan/vietnam-stock-news.md`; implementation evidence is in
-`docs/plan/news-implementation-report.md`. Vietstock and CafeF adapters, public news APIs/UI, and
-backup/restore scripts are implemented. Live ingestion remains disabled by default pending source
-policy approval and reviewed security-master input. The user selected periodic backups only, with
-no database replica; backup scheduling is an external script and adds no runtime service here.
+`docs/plan/news-implementation-report.md`. Vietstock and CafeF full-article adapters plus HNX,
+VnEconomy, and VnExpress metadata-only adapters, public news APIs/UI, and backup/restore scripts are
+implemented. Live ingestion remains disabled by default pending source policy approval and reviewed
+security-master input. The user selected periodic backups only, with no database replica; backup
+scheduling is an external script and adds no runtime service here.
 
 This file is the canonical architectural overview. Every path or boundary change updates this file
 and all affected references in the same task, following `.agents/rules/project-structure.md`.

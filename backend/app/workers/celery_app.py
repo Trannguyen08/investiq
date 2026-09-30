@@ -28,6 +28,24 @@ celery_app.conf.update(
                 "args": ("cafef", 50),
                 "options": {"queue": "news-ingestion"},
             },
+            "discover-hnx": {
+                "task": "investiq.news.discover.v1",
+                "schedule": 300.0,
+                "args": ("hnx", 50),
+                "options": {"queue": "news-ingestion"},
+            },
+            "discover-vneconomy": {
+                "task": "investiq.news.discover.v1",
+                "schedule": 300.0,
+                "args": ("vneconomy", 50),
+                "options": {"queue": "news-ingestion"},
+            },
+            "discover-vnexpress": {
+                "task": "investiq.news.discover.v1",
+                "schedule": 300.0,
+                "args": ("vnexpress", 50),
+                "options": {"queue": "news-ingestion"},
+            },
             "dispatch-persisted-news-jobs": {
                 "task": "investiq.news.dispatch.v1",
                 "schedule": 60.0,

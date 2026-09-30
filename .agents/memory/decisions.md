@@ -3,6 +3,19 @@
 Record durable decisions in reverse chronological order. Do not record routine implementation
 details.
 
+## 2026-09-30 — Metadata-only expansion through publisher RSS feeds
+
+- **Status:** Accepted and implemented
+- **Context:** The news product needed more reputable sources, while publisher RSS terms and official
+  disclosure feeds do not imply permission to republish full article bodies.
+- **Decision:** Add HNX, VnEconomy, and VnExpress through bounded, allowlisted RSS discovery. Store and
+  display only metadata, images/attachments explicitly linked by the source, and the canonical source
+  link. Filter VnExpress's broad business feed to securities topics and exclude non-equity HNX feed
+  entries. Keep the global ingestion activation gate off by default.
+- **Consequences:** The product has five technically active adapters without treating RSS access as
+  full-text rights. Detail pages for the three new sources direct readers to the publisher; six
+  researched sources remain pending or blocked.
+
 ## 2026-09-29 — News persistence protection scope
 
 - **Status:** Accepted and implemented
@@ -119,3 +132,35 @@ details.
 - **Decision:** Store memory, rules, skills, roles, and workflows under `.agents/`, with
   `AGENTS.md` as the repository entry point.
 - **Consequences:** Agents must keep durable memory current and avoid duplicating guidance.
+
+## 2026-09-30 — Freshness-first news ingestion and protected operations
+
+- **Status:** Accepted
+- **Context:** Multi-source crawling must not retain stale or unverifiable articles, and provider
+  instability must not produce request storms. Operators also need controlled source and retention
+  actions before the general user-authentication scaffold is complete.
+- **Decision:** Require a publisher timestamp and reject articles older than a configurable 72-hour
+  ingestion window. Serve at most the configurable 90-day retention window. Coordinate per-domain
+  fixed-window budgets and circuit state through Redis with a local fallback. Protect news operations
+  with a dedicated bearer token, optimistic row versions, explicit destructive confirmation, and an
+  audit table. Keep browser-side mutation controls disabled until real admin sessions exist.
+- **Consequences:** Undated publisher pages are skipped rather than guessed. Cleanup can be previewed
+  safely, but production deletion still requires an operator choice and target-environment review.
+  The static operations token is transitional and must be replaced by role-based admin identity when
+  the authentication module is implemented.
+
+## 2026-09-30 — Server-mediated Admin News workspace
+
+- **Status:** Accepted
+- **Context:** Operators need browser controls now, but exposing the FastAPI operations token to
+  client JavaScript would turn an operational secret into a public credential, and the broader user
+  identity/RBAC module is not implemented yet.
+- **Decision:** Authenticate the Admin workspace with a dedicated server-side password and an
+  HMAC-signed, HttpOnly, SameSite-strict, eight-hour cookie. Execute mutations through Next.js server
+  actions and keep `NEWS_ADMIN_TOKEN` only in the Next.js server environment. Require the backend
+  token independently, retain audit records, optimistic concurrency, dry-run cleanup, and explicit
+  `DELETE` confirmation.
+- **Consequences:** The browser never receives the operations bearer token and missing secrets keep
+  the UI closed. This is suitable for the current controlled Admin workspace, but should be replaced
+  by named admin identities, RBAC, and centralized login throttling when the authentication module
+  is delivered.

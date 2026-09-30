@@ -86,6 +86,20 @@ reviewers. A rollback deploys a previous immutable backend/frontend tag with the
 database migrations must include their own compatibility and rollback plan once migrations are
 introduced.
 
+News ingestion accepts only publisher-dated articles within `NEWS_INGESTION_MAX_AGE_HOURS` (72 by
+default). Public feeds are limited to `NEWS_RETENTION_DAYS` (90 by default). Provider requests use a
+Redis-coordinated per-domain rate limit and circuit breaker. The protected news operations endpoints
+under `/api/v1/admin/news` remain disabled until `NEWS_ADMIN_TOKEN` is configured; retention deletion
+also requires an explicit non-dry-run request with `confirm=true`.
+
+The Admin News workspace is available at `/admin-login`. It also requires `ADMIN_UI_PASSWORD` and
+an independent `ADMIN_SESSION_SECRET` of at least 32 random characters. The browser receives only a
+signed, HttpOnly, eight-hour session cookie; `NEWS_ADMIN_TOKEN` stays on the Next.js server and is
+never exposed to client code. From `/admin/data-pipeline`, an authenticated operator can pause or
+resume sources, queue manual crawls, inspect the latest 100 crawl runs, preview retention cleanup,
+and confirm deletion by entering `DELETE`. Leave all three Admin variables unset to keep these
+operations fail-closed.
+
 ## Project layout
 
 ```text
@@ -111,5 +125,5 @@ table, backend quality checks, and per-feature coverage reports.
 
 See [`docs/plan/`](docs/plan/README.md) for the feature specifications. The
 [Vietnamese stock-market news plan](docs/plan/vietnam-stock-news.md) now has an implemented,
-tested two-source MVP; the [implementation report](docs/plan/news-implementation-report.md)
+tested five-source MVP; the [implementation report](docs/plan/news-implementation-report.md)
 records research evidence, validation results, activation gates, and remaining source limitations.

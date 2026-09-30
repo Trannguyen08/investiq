@@ -11,6 +11,7 @@ from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
 from redis.asyncio import Redis
 
+from app.api.v1.admin import router as news_admin_router
 from app.api.v1.news import router as news_router
 from app.infrastructure.config.logging_config import configure_logging
 from app.infrastructure.config.settings import settings
@@ -29,6 +30,7 @@ async def lifespan(_: FastAPI) -> AsyncIterator[None]:
 app = FastAPI(title=settings.app_name, version="0.1.0", lifespan=lifespan)
 app.add_middleware(RequestLoggingMiddleware)
 app.include_router(news_router)
+app.include_router(news_admin_router)
 
 
 def _request_id(request: Request) -> str:

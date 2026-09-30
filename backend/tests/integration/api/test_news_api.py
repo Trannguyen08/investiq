@@ -1,4 +1,4 @@
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from uuid import UUID
 
 from fastapi.testclient import TestClient
@@ -183,3 +183,56 @@ def test_invalid_article_id_returns_safe_validation_error() -> None:
 
     assert response.status_code == 422
     assert response.json()["error"]["code"] == "VALIDATION_ERROR"
+
+
+def test_news_collection_accepts_filters_for_all_seeded_sources() -> None:
+    source_slugs = (
+        "vietstock",
+        "cafef",
+        "hnx",
+        "hose",
+        "stockbiz",
+        "fireant",
+        "simplize",
+        "ssi-iboard",
+        "tradingview",
+        "vneconomy",
+        "vnexpress",
+    )
+    app.dependency_overrides[get_news_repository] = repository_override
+    try:
+        with TestClient(app) as client:
+            response = client.get(
+                "/api/v1/news", params=[("source", slug) for slug in source_slugs]
+            )
+    finally:
+        app.dependency_overrides.clear()
+
+    assert response.status_code == 200
+
+
+def test_news_collection_applies_recent_window_to_repository() -> None:
+    captured: list[NewsQuery] = []
+
+    class CapturingRepository(FakeNewsRepository):
+        def list_articles(self, query: NewsQuery) -> tuple[tuple[NewsArticle, ...], bool]:
+            captured.append(query)
+            return (), False
+
+    app.dependency_overrides[get_news_repository] = CapturingRepository
+    try:
+        with TestClient(app) as client:
+            response = client.get("/api/v1/news?window_days=1")
+    finally:
+        app.dependency_overrides.clear()
+
+    assert response.status_code == 200
+    assert captured[0].published_after is not None
+    assert datetime.now(UTC) - captured[0].published_after < timedelta(hours=25)
+
+
+def test_news_admin_fails_closed_when_token_is_not_configured() -> None:
+    with TestClient(app) as client:
+        response = client.get("/api/v1/admin/news/sources")
+
+    assert response.status_code == 503

@@ -31,9 +31,8 @@ class IngestNews:
         )
         analysis_text = article_text
         if parsed.candidate_symbols:
-            analysis_text += (
-                "\nMã chứng khoán được nguồn nhắc đến: "
-                + ", ".join(parsed.candidate_symbols)
+            analysis_text += "\nMã chứng khoán được nguồn nhắc đến: " + ", ".join(
+                parsed.candidate_symbols
             )
         article_sentiment = self._sentiment_analyzer.analyze(analysis_text)
         symbol_sentiments = {

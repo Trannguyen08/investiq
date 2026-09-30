@@ -11,32 +11,52 @@ from celery import Task
 from psycopg.rows import dict_row
 
 from app.application.use_cases.news.analyze_sentiment import VietnameseRuleSentimentAnalyzer
+from app.application.use_cases.news.freshness import (
+    StaleArticle,
+    UnverifiableArticleDate,
+    require_recent_article,
+)
 from app.application.use_cases.news.ingest_news import IngestNews
 from app.infrastructure.config.settings import settings
 from app.infrastructure.db.repositories.sql_news_repository import SqlNewsRepository
 from app.infrastructure.db.session import get_pool
-from app.infrastructure.external.crawlers.base import NewsProviderError
+from app.infrastructure.external.crawlers.base import BaseNewsCrawler, NewsProviderError
 from app.infrastructure.external.crawlers.cafef_crawler import CafeFCrawler
+from app.infrastructure.external.crawlers.hnx_crawler import HnxCrawler
 from app.infrastructure.external.crawlers.vietstock_crawler import VietstockCrawler
+from app.infrastructure.external.crawlers.vneconomy_crawler import VnEconomyCrawler
+from app.infrastructure.external.crawlers.vnexpress_crawler import VnExpressCrawler
 from app.workers.celery_app import celery_app
 
 logger = logging.getLogger("investiq.news.worker")
 
 
-def _crawler(source_slug: str) -> VietstockCrawler | CafeFCrawler:
-    if source_slug == "vietstock":
-        return VietstockCrawler()
-    if source_slug == "cafef":
-        return CafeFCrawler()
-    raise ValueError("unsupported news source")
+CRAWLER_TYPES: dict[str, type[BaseNewsCrawler]] = {
+    "cafef": CafeFCrawler,
+    "hnx": HnxCrawler,
+    "vietstock": VietstockCrawler,
+    "vneconomy": VnEconomyCrawler,
+    "vnexpress": VnExpressCrawler,
+}
+
+
+def _crawler(source_slug: str) -> BaseNewsCrawler:
+    crawler_type = CRAWLER_TYPES.get(source_slug)
+    if crawler_type is None:
+        raise ValueError("unsupported news source")
+    return crawler_type()
 
 
 @celery_app.task(  # type: ignore[untyped-decorator]
     name="investiq.news.discover.v1", soft_time_limit=90, time_limit=120
 )
-def discover_news(source_slug: str, limit: int = 50) -> dict[str, int | str]:
+def discover_news(
+    source_slug: str, limit: int = 50, trigger: str = "scheduled"
+) -> dict[str, int | str]:
     if not settings.news_ingestion_enabled:
         return {"source": source_slug, "queued": 0, "status": "disabled"}
+    if trigger not in {"scheduled", "manual"}:
+        raise ValueError("unsupported crawl trigger")
     provider = _crawler(source_slug)
     urls = provider.discover(limit=limit)
     pool = get_pool()
@@ -53,9 +73,9 @@ def discover_news(source_slug: str, limit: int = 50) -> dict[str, int | str]:
         connection.execute(
             """
             INSERT INTO crawl_runs (id, source_id, trigger, status, started_at, discovered_count)
-            VALUES (%s, %s, 'scheduled', 'running', %s, %s)
+            VALUES (%s, %s, %s, 'running', %s, %s)
             """,
-            (run_id, source[0], datetime.now(UTC), len(urls)),
+            (run_id, source[0], trigger, datetime.now(UTC), len(urls)),
         )
         for url in urls:
             job_key = hashlib.sha256(f"fetch:{source_slug}:{window}:{url}".encode()).hexdigest()
@@ -64,7 +84,7 @@ def discover_news(source_slug: str, limit: int = 50) -> dict[str, int | str]:
                 """
                 INSERT INTO ingestion_jobs
                     (id, source_id, crawl_run_id, job_type, payload, job_key, status)
-                VALUES (%s, %s, %s, 'fetch', jsonb_build_object('url', %s), %s, 'pending')
+                VALUES (%s, %s, %s, 'fetch', jsonb_build_object('url', %s::text), %s, 'pending')
                 ON CONFLICT (job_key) DO NOTHING
                 RETURNING id::text
                 """,
@@ -73,8 +93,13 @@ def discover_news(source_slug: str, limit: int = 50) -> dict[str, int | str]:
             if inserted:
                 queued_job_ids.append(inserted[0])
         connection.execute(
-            "UPDATE crawl_runs SET status = 'succeeded', finished_at = %s WHERE id = %s",
-            (datetime.now(UTC), run_id),
+            "UPDATE crawl_runs SET status = %s, finished_at = %s, queued_count = %s WHERE id = %s",
+            (
+                "succeeded" if not queued_job_ids else "running",
+                datetime.now(UTC) if not queued_job_ids else None,
+                len(queued_job_ids),
+                run_id,
+            ),
         )
     dispatch_news_jobs.apply_async(queue="news-ingestion")
     return {"source": source_slug, "queued": len(queued_job_ids), "status": "succeeded"}
@@ -193,8 +218,20 @@ def fetch_news_article(self: Task, job_id: str) -> dict[str, str | bool]:
         raise ValueError("news ingestion job payload is invalid")
     try:
         parsed = _crawler(str(job["slug"])).fetch_article(str(payload["url"]))
+        require_recent_article(
+            parsed,
+            max_age=timedelta(hours=settings.news_ingestion_max_age_hours),
+        )
         use_case = IngestNews(SqlNewsRepository(pool), VietnameseRuleSentimentAnalyzer())
         article_id, changed = use_case.execute(parsed)
+    except (StaleArticle, UnverifiableArticleDate) as exc:
+        error_code = "STALE_ARTICLE" if isinstance(exc, StaleArticle) else "UNVERIFIABLE_DATE"
+        _finish_job(job_id, "cancelled", error_code)
+        logger.info(
+            "News article skipped by freshness policy",
+            extra={"problem": str(exc), "request_id": job_id},
+        )
+        return {"job_id": job_id, "status": "cancelled", "changed": False}
     except NewsProviderError as exc:
         terminal = attempt >= int(job["max_attempts"])
         countdown = min(60, 5 * (2 ** (attempt - 1)))
@@ -242,3 +279,70 @@ def _finish_job(
                 job_id,
             ),
         )
+        connection.execute(
+            """
+            UPDATE crawl_runs AS run
+            SET succeeded_count = counts.succeeded_count,
+                failed_count = counts.failed_count,
+                skipped_count = counts.skipped_count,
+                status = CASE
+                    WHEN counts.active_count > 0 THEN 'running'
+                    WHEN counts.failed_count > 0 AND counts.succeeded_count > 0 THEN 'partial'
+                    WHEN counts.failed_count > 0 THEN 'failed'
+                    ELSE 'succeeded'
+                END,
+                finished_at = CASE WHEN counts.active_count = 0 THEN %s ELSE NULL END
+            FROM (
+                SELECT crawl_run_id,
+                       count(*) FILTER (WHERE status = 'succeeded')::integer AS succeeded_count,
+                       count(*) FILTER (WHERE status = 'failed')::integer AS failed_count,
+                       count(*) FILTER (WHERE status = 'cancelled')::integer AS skipped_count,
+                       count(*) FILTER (
+                           WHERE status IN ('pending', 'dispatched', 'running')
+                       )::integer AS active_count
+                FROM ingestion_jobs
+                WHERE crawl_run_id = (
+                    SELECT crawl_run_id FROM ingestion_jobs WHERE id = %s::uuid
+                )
+                GROUP BY crawl_run_id
+            ) AS counts
+            WHERE run.id = counts.crawl_run_id
+            """,
+            (datetime.now(UTC), job_id),
+        )
+
+
+@celery_app.task(  # type: ignore[untyped-decorator]
+    name="investiq.news.retention.v1", soft_time_limit=60, time_limit=90
+)
+def cleanup_old_news(
+    retention_days: int | None = None,
+    *,
+    dry_run: bool = True,
+    confirm: bool = False,
+) -> dict[str, int | bool | str]:
+    """Preview or delete articles outside retention; deletion requires explicit confirmation."""
+    days = retention_days or settings.news_retention_days
+    if not 7 <= days <= 3650:
+        raise ValueError("retention days must be between 7 and 3650")
+    if not dry_run and not confirm:
+        raise ValueError("destructive retention cleanup requires confirm=true")
+    cutoff = datetime.now(UTC) - timedelta(days=days)
+    with get_pool().connection() as connection, connection.transaction():
+        count_row = connection.execute(
+            "SELECT count(*) FROM news_articles WHERE feed_at < %s", (cutoff,)
+        ).fetchone()
+        matched = int(count_row[0]) if count_row else 0
+        deleted = 0
+        if not dry_run:
+            deleted_rows = connection.execute(
+                "DELETE FROM news_articles WHERE feed_at < %s RETURNING id", (cutoff,)
+            ).fetchall()
+            deleted = len(deleted_rows)
+    return {
+        "status": "preview" if dry_run else "succeeded",
+        "dry_run": dry_run,
+        "retention_days": days,
+        "matched": matched,
+        "deleted": deleted,
+    }

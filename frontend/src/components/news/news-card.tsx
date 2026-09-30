@@ -73,6 +73,12 @@ export function NewsCard({ article, featured = false }: { article: NewsSummary; 
         {article.description && <p>{article.description}</p>}
         <div className="news-tags">
           <SentimentBadge sentiment={article.sentiment} />
+          {article.sentiment.event_types.slice(0, 1).map((event) => (
+            <span className="partial-badge" key={event}>{event.replaceAll("_", " ")}</span>
+          ))}
+          {article.duplicate_source_count > 1 && (
+            <span className="partial-badge">{article.duplicate_source_count} nguồn cùng tin</span>
+          )}
           {tickers.slice(0, 3).map((item) => item.href ? (
             <Link href={item.href} className="symbol-chip" key={item.key}>{item.label}</Link>
           ) : (

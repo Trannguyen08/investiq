@@ -166,9 +166,7 @@ def test_configure_logging_sets_json_handler_and_service_loggers(
     access_logger = logging.getLogger("uvicorn.access")
     original_root_handlers = root_logger.handlers[:]
     original_root_level = root_logger.level
-    original_service_states = [
-        (logger.handlers[:], logger.propagate) for logger in service_loggers
-    ]
+    original_service_states = [(logger.handlers[:], logger.propagate) for logger in service_loggers]
     original_access_disabled = access_logger.disabled
     monkeypatch.setattr(settings, "log_level", "WARNING")
 

@@ -92,6 +92,7 @@ class NewsArticle:
     content_access: ContentAccess
     quality_flags: tuple[str, ...]
     candidate_symbols: tuple[str, ...] = ()
+    duplicate_source_count: int = 1
 
     @property
     def reading_time_minutes(self) -> int:

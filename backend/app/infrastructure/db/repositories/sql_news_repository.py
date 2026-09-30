@@ -4,8 +4,9 @@ from __future__ import annotations
 
 import hashlib
 import json
-from dataclasses import asdict
-from datetime import UTC, datetime
+import unicodedata
+from dataclasses import asdict, replace
+from datetime import UTC, datetime, timedelta
 from decimal import Decimal
 from uuid import UUID, uuid4
 
@@ -25,6 +26,7 @@ from app.domain.entities.news_article import (
 )
 from app.domain.entities.stock import Security
 from app.domain.value_objects.sentiment_score import SentimentLabel, SentimentScore
+from app.infrastructure.config.settings import settings
 
 ARTICLE_SELECT = """
 SELECT
@@ -45,6 +47,14 @@ SELECT
     r.fetched_at,
     r.extraction_status,
     r.quality_flags,
+    COALESCE((
+        SELECT count(DISTINCT duplicate_article.source_id)
+        FROM article_revisions duplicate_revision
+        JOIN news_articles duplicate_article ON duplicate_article.id = duplicate_revision.article_id
+        WHERE r.duplicate_group_key IS NOT NULL
+          AND duplicate_revision.duplicate_group_key = r.duplicate_group_key
+          AND duplicate_article.visibility = 'published'
+    ), 1)::integer AS duplicate_source_count,
     s.id::text AS source_id,
     s.slug AS source_slug,
     s.name AS source_name,
@@ -71,6 +81,8 @@ SELECT
             'sentiment_market_impact', msa.market_impact,
             'sentiment_impact_scope', msa.impact_scope,
             'sentiment_horizon', msa.horizon,
+            'sentiment_topics', msa.topics,
+            'sentiment_event_types', msa.event_types,
             'sentiment_evidence', msa.evidence, 'sentiment_method', msa.method,
             'sentiment_analyzer_version', msa.analyzer_version,
             'sentiment_analyzed_at', msa.analyzed_at
@@ -89,6 +101,8 @@ SELECT
     sa.market_impact AS sentiment_market_impact,
     sa.impact_scope AS sentiment_impact_scope,
     sa.horizon AS sentiment_horizon,
+    sa.topics AS sentiment_topics,
+    sa.event_types AS sentiment_event_types,
     sa.evidence AS sentiment_evidence,
     sa.method AS sentiment_method,
     sa.analyzer_version AS sentiment_analyzer_version,
@@ -127,6 +141,9 @@ class SqlNewsRepository:
         if query.sentiment:
             clauses.append("sa.label = %s")
             parameters.append(query.sentiment)
+        if query.published_after:
+            clauses.append("a.feed_at >= %s")
+            parameters.append(query.published_after)
         if query.cursor_feed_at and query.cursor_id:
             clauses.append("(a.feed_at, a.id) < (%s, %s::uuid)")
             parameters.extend((query.cursor_feed_at, query.cursor_id))
@@ -146,12 +163,16 @@ class SqlNewsRepository:
         return tuple(self._map_article(row) for row in rows[: query.limit]), has_more
 
     def get_article(self, article_id: str) -> NewsArticle | None:
-        sql = ARTICLE_SELECT + " WHERE a.id = %s::uuid AND a.visibility = 'published'"
+        sql = (
+            ARTICLE_SELECT
+            + " WHERE a.id = %s::uuid AND a.visibility = 'published' AND a.feed_at >= %s"
+        )
+        cutoff = datetime.now(UTC) - timedelta(days=settings.news_retention_days)
         with (
             self._pool.connection() as connection,
             connection.cursor(row_factory=dict_row) as cursor,
         ):
-            row = cursor.execute(sql, (article_id,)).fetchone()
+            row = cursor.execute(sql, (article_id, cutoff)).fetchone()
         return self._map_article(row) if row else None
 
     def list_sources(self) -> tuple[NewsSource, ...]:
@@ -217,36 +238,38 @@ class SqlNewsRepository:
     ) -> tuple[str, bool]:
         now = datetime.now(UTC)
         url_hash = hashlib.sha256(parsed.canonical_url.encode()).hexdigest()
-        content_payload = {
-            "title": parsed.title,
-            "description": parsed.description,
-            "content": parsed.content_text,
-            "blocks": [asdict(block) for block in parsed.content_blocks],
-        }
-        content_hash = self._stable_hash(content_payload)
-        revision_payload = {
-            **content_payload,
-            "authors": parsed.authors,
-            "category": parsed.category,
-            "tags": parsed.tags,
-            "published_at": parsed.published_at.isoformat() if parsed.published_at else None,
-            "updated_at": parsed.source_updated_at.isoformat()
-            if parsed.source_updated_at
-            else None,
-            "candidate_symbols": parsed.candidate_symbols,
-        }
-        revision_hash = self._stable_hash(revision_payload)
         with self._pool.connection() as connection, connection.transaction():
             with connection.cursor(row_factory=dict_row) as cursor:
                 source = cursor.execute(
                     """
-                    SELECT id, parser_version FROM news_sources
+                    SELECT id, parser_version, storage_mode FROM news_sources
                     WHERE slug = %s AND status = 'active' FOR UPDATE
                     """,
                     (parsed.source_slug,),
                 ).fetchone()
             if not source:
                 raise ValueError("news source is not active")
+            parsed = self._apply_storage_policy(parsed, str(source["storage_mode"]))
+            content_payload = {
+                "title": parsed.title,
+                "description": parsed.description,
+                "content": parsed.content_text,
+                "blocks": [asdict(block) for block in parsed.content_blocks],
+            }
+            content_hash = self._stable_hash(content_payload)
+            duplicate_group_key = self._duplicate_group_key(parsed.title)
+            revision_payload = {
+                **content_payload,
+                "authors": parsed.authors,
+                "category": parsed.category,
+                "tags": parsed.tags,
+                "published_at": parsed.published_at.isoformat() if parsed.published_at else None,
+                "updated_at": parsed.source_updated_at.isoformat()
+                if parsed.source_updated_at
+                else None,
+                "candidate_symbols": parsed.candidate_symbols,
+            }
+            revision_hash = self._stable_hash(revision_payload)
             with connection.cursor(row_factory=dict_row) as cursor:
                 article = cursor.execute(
                     """
@@ -305,8 +328,7 @@ class SqlNewsRepository:
                             ),
                         )
                     connection.execute(
-                        "UPDATE news_articles SET last_seen_at = %s, updated_at = %s "
-                        "WHERE id = %s",
+                        "UPDATE news_articles SET last_seen_at = %s, updated_at = %s WHERE id = %s",
                         (parsed.fetched_at, now, article["id"]),
                     )
                     return str(article["id"]), True
@@ -344,10 +366,11 @@ class SqlNewsRepository:
                     (id, article_id, revision_no, title, description, content_text, content_blocks,
                      authors, category_key, tags, candidate_symbols, published_at,
                      source_updated_at, fetched_at,
-                     parser_version, content_hash, revision_hash, extraction_status, quality_flags)
+                     parser_version, content_hash, revision_hash, extraction_status, quality_flags,
+                     duplicate_group_key)
                 VALUES
                     (%s, %s, %s, %s, %s, %s, %s::jsonb, %s::jsonb, %s, %s::jsonb, %s::jsonb,
-                     %s, %s, %s, %s, %s, %s, %s, %s::jsonb)
+                     %s, %s, %s, %s, %s, %s, %s, %s::jsonb, %s)
                 """,
                 (
                     revision_id,
@@ -369,6 +392,7 @@ class SqlNewsRepository:
                     revision_hash,
                     parsed.extraction_status.value,
                     json.dumps(parsed.quality_flags),
+                    duplicate_group_key,
                 ),
             )
             self._insert_assets(connection, revision_id, parsed.assets)
@@ -479,9 +503,9 @@ class SqlNewsRepository:
             INSERT INTO sentiment_analyses
                 (id, revision_id, mention_id, method, analyzer_version, input_hash, status,
                  label, score, confidence, rationale, evidence, market_impact, impact_scope,
-                 horizon, analyzed_at, is_current)
+                 horizon, topics, event_types, analyzed_at, is_current)
             VALUES (%s, %s, %s, 'rules', %s, %s, 'ready', %s, %s, %s, %s, %s::jsonb,
-                    %s, %s, %s, %s, true)
+                    %s, %s, %s, %s::jsonb, %s::jsonb, %s, true)
             """,
             (
                 uuid4(),
@@ -497,6 +521,8 @@ class SqlNewsRepository:
                 sentiment.market_impact,
                 sentiment.impact_scope,
                 sentiment.horizon,
+                json.dumps(sentiment.topics),
+                json.dumps(sentiment.event_types),
                 datetime.now(UTC),
             ),
         )
@@ -577,6 +603,7 @@ class SqlNewsRepository:
             candidate_symbols=tuple(
                 str(item) for item in cls._plain_list(row["candidate_symbols"])
             ),
+            duplicate_source_count=cls._integer(row["duplicate_source_count"]),
         )
 
     @classmethod
@@ -618,6 +645,10 @@ class SqlNewsRepository:
             market_impact=cls._optional_string(values.get(f"{prefix}market_impact")),
             impact_scope=cls._optional_string(values.get(f"{prefix}impact_scope")),
             horizon=cls._optional_string(values.get(f"{prefix}horizon")),
+            topics=tuple(str(value) for value in cls._plain_list(values.get(f"{prefix}topics"))),
+            event_types=tuple(
+                str(value) for value in cls._plain_list(values.get(f"{prefix}event_types"))
+            ),
             method=cls._optional_string(values.get(f"{prefix}method")),
             analyzer_version=cls._optional_string(values.get(f"{prefix}analyzer_version")),
             analyzed_at=cls._optional_datetime(values.get(f"{prefix}analyzed_at")),
@@ -648,6 +679,41 @@ class SqlNewsRepository:
     def _stable_hash(value: object) -> str:
         encoded = json.dumps(value, ensure_ascii=False, sort_keys=True, separators=(",", ":"))
         return hashlib.sha256(encoded.encode()).hexdigest()
+
+    @staticmethod
+    def _duplicate_group_key(title: str) -> str:
+        normalized = " ".join(unicodedata.normalize("NFC", title).casefold().split())
+        return hashlib.sha256(normalized.encode()).hexdigest()
+
+    @staticmethod
+    def _apply_storage_policy(parsed: ParsedArticle, storage_mode: str) -> ParsedArticle:
+        if storage_mode == ContentAccess.FULL_TEXT.value:
+            return parsed
+        quality_flag = f"storage_policy_{storage_mode}"
+        quality_flags = tuple(dict.fromkeys((*parsed.quality_flags, quality_flag)))
+        if storage_mode == ContentAccess.METADATA_ONLY.value:
+            return replace(
+                parsed,
+                content_text=None,
+                content_blocks=(),
+                extraction_status=ExtractionStatus.METADATA_ONLY,
+                quality_flags=quality_flags,
+            )
+        if storage_mode == ContentAccess.LINK_ONLY.value:
+            return replace(
+                parsed,
+                description=None,
+                content_text=None,
+                content_blocks=(),
+                authors=(),
+                category=None,
+                tags=(),
+                assets=(),
+                candidate_symbols=(),
+                extraction_status=ExtractionStatus.METADATA_ONLY,
+                quality_flags=quality_flags,
+            )
+        raise ValueError("news source storage mode is invalid")
 
     @staticmethod
     def _object_list(value: object) -> list[dict[str, object]]:

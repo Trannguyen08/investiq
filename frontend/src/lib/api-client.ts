@@ -20,6 +20,8 @@ export type Sentiment = {
   market_impact: string | null;
   impact_scope: string | null;
   horizon: "short_term" | "medium_term" | "long_term" | null;
+  topics: string[];
+  event_types: string[];
 };
 
 export type Asset = {
@@ -63,6 +65,7 @@ export type NewsSummary = {
   sentiment: Sentiment;
   extraction_status: string;
   content_access: string;
+  duplicate_source_count: number;
 };
 
 export type ContentBlock = {
