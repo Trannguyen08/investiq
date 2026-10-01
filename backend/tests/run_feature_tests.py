@@ -21,6 +21,39 @@ class FeatureTests:
 
 
 FEATURES: dict[str, FeatureTests] = {
+    "auth": FeatureTests(
+        unit_paths=("tests/unit/auth",),
+        integration_paths=(
+            "tests/integration/api/test_auth_api.py",
+            "tests/integration/db/test_auth_repository.py",
+        ),
+        unit_coverage_modules=(
+            "app.application.use_cases.auth",
+            "app.infrastructure.security",
+        ),
+        integration_coverage_modules=(
+            "app.api.v1.auth",
+            "app.infrastructure.db.repositories.sql_user_repository",
+        ),
+    ),
+    "admin-users": FeatureTests(
+        unit_paths=(
+            "tests/unit/auth/test_manage_users.py",
+            "tests/unit/auth/test_admin_user_cursors.py",
+        ),
+        integration_paths=(
+            "tests/integration/api/test_auth_api.py",
+            "tests/integration/db/test_auth_repository.py",
+        ),
+        unit_coverage_modules=(
+            "app.application.use_cases.admin.manage_users",
+            "app.api.v1.admin_users",
+        ),
+        integration_coverage_modules=(
+            "app.api.v1.admin_users",
+            "app.infrastructure.db.repositories.sql_user_repository",
+        ),
+    ),
     "news": FeatureTests(
         unit_paths=("tests/unit/news",),
         integration_paths=(

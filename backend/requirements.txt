@@ -6,3 +6,6 @@ psycopg[binary]==3.3.6
 psycopg-pool==3.3.3
 beautifulsoup4==4.15.0
 pydantic-settings==2.15.0
+argon2-cffi==25.1.0
+cryptography==46.0.3
+PyJWT==2.15.1

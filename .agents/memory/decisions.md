@@ -146,8 +146,8 @@ details.
   audit table. Keep browser-side mutation controls disabled until real admin sessions exist.
 - **Consequences:** Undated publisher pages are skipped rather than guessed. Cleanup can be previewed
   safely, but production deletion still requires an operator choice and target-environment review.
-  The static operations token is transitional and must be replaced by role-based admin identity when
-  the authentication module is implemented.
+  The static operations token is transitional and must be replaced by role-based admin identity in a
+  separately scoped RBAC migration.
 
 ## 2026-09-30 — Server-mediated Admin News workspace
 
@@ -162,5 +162,28 @@ details.
   `DELETE` confirmation.
 - **Consequences:** The browser never receives the operations bearer token and missing secrets keep
   the UI closed. This is suitable for the current controlled Admin workspace, but should be replaced
-  by named admin identities, RBAC, and centralized login throttling when the authentication module
-  is delivered.
+  by named admin identities, RBAC, and centralized login throttling in a separately scoped RBAC
+  migration.
+
+## 2026-10-01 — Server-held end-user authentication credentials
+
+- **Status:** Accepted
+- **Context:** Email/password and Google authentication need durable sessions without exposing JWT
+  or refresh credentials to browser JavaScript, while registration and recovery emails must survive
+  process restarts.
+- **Decision:** Use a Next.js BFF with opaque HttpOnly browser cookies and AES-GCM encrypted auth
+  state in Redis database 3. FastAPI issues short-lived HS256 JWTs and rotating, hashed refresh
+  tokens backed by PostgreSQL sessions. Store OTPs as keyed digests, deliver encrypted email jobs
+  through a dedicated Celery notification queue, and keep end-user auth feature-flagged and separate
+  from Admin News authentication.
+- **Consequences:** Enabling auth requires independent BFF, JWT, OTP, payload, session, SMTP, and
+  optional Google credentials. Redis is required for browser auth state and abuse controls; auth
+  fails closed when dependencies or secrets are unavailable. Admin access still needs a future RBAC
+  migration.
+
+### 2026-10-01 — Role-checked account administration
+
+- **Status:** Accepted and implemented
+- **Context:** Admins need account search and controlled role/status management without treating the shared Admin News credential as user identity.
+- **Decision:** Protect account APIs with the BFF server secret and a verified active user session; authorize from the current database role. Audit user changes with actor, target, request ID, requested fields, and outcome. Prevent self changes and last-active-admin removal, and revoke sessions atomically when disabling an account.
+- **Consequences:** The account page requires both the Admin workspace session and a separate authenticated InvestIQ admin account session. Account APIs fail closed when auth or Redis rate-limit protection is unavailable.

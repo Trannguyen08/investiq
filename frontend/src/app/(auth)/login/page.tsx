@@ -1,5 +1,5 @@
-import { ScaffoldPage } from "@/components/ui/scaffold-page";
+import { AuthShell, LoginForm } from "@/components/auth/auth-ui";
 
 export default function LoginPage() {
-  return <div className="shell"><ScaffoldPage area="Account" title="Sign in" description="Authentication UI will be implemented here." /></div>;
+  return <AuthShell eyebrow="Tài khoản" title="Đăng nhập" description="Tiếp tục vào không gian đầu tư của bạn."><LoginForm /></AuthShell>;
 }

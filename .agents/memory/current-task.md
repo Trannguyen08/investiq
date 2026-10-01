@@ -1,4 +1,29 @@
-﻿# Current Task
+# Current Task
+
+## Latest task — 2026-10-01 authentication implementation
+
+Complete: implemented `docs/plan/auth.md` across PostgreSQL/FastAPI, a Next.js BFF/UI, Redis-backed
+browser sessions, durable authentication email delivery, Google OIDC, registration OTP, password
+recovery, header account menu/logout, and separate remember-email/persistent-login choices. JWT and
+refresh credentials stay encrypted in server-side Redis state; refresh tokens are rotated and stored
+only as hashes in PostgreSQL. Existing Admin News authentication remains separate.
+
+Authentication is fail-closed and defaults to `AUTH_ENABLED=false`. Blank key/provider entries were
+added to the ignored local `.env` and tracked `.env.example`. The ignored local
+`docs/tutorial/auth-keys.md` explains key generation plus Google OAuth and SMTP setup.
+
+Local direct validation later enabled auth after replacing an undersized OTP key and generating the
+previously missing local PostgreSQL, Redis, and application secrets. An isolated Docker project
+applied migrations 0001-0005 and passed browser-bound BFF flows for registration/OTP, persistent
+opaque HttpOnly sessions, refresh, logout/login, password reset, old-password rejection, old-session
+revocation, direct-backend rejection, and Google OIDC start with state/nonce/PKCE. The notification
+worker stayed off, so no real email was sent; the isolated containers and volumes were removed.
+
+Validation: backend Ruff and strict mypy passed; full backend suite passed 61 tests with 8 existing
+environment-dependent skips. Auth feature suites passed 4 unit tests and 1 API integration test; the
+PostgreSQL repository integration test was skipped because `TEST_DATABASE_URL`/Docker was
+unavailable. Frontend lint, typecheck, and 11 tests passed. `docker compose config --quiet` passed
+with required placeholder environment values. No production build or deployment was run.
 
 ## Status
 
@@ -107,3 +132,7 @@ development runtime with recent articles while preserving bounded durable worker
   repository root so `frontend/src/lib` is included in Git. The previously missing typed news API
   client and its tests now reach clean CI checkouts; frontend lint, typecheck, and all four Vitest
   tests pass locally.
+
+## Latest task — Admin account management (2026-10-01)
+
+Complete: implemented role-protected account search, filters, pagination, role/status changes, self/last-admin protections, session revocation on disable, shared Redis rate limiting, and audit details. Added migration 0006, account-management documentation, backend/frontend coverage, and updated README. Validation: Ruff, targeted strict mypy, frontend ESLint/typecheck, 14 frontend tests, and 13 backend unit tests passed. Backend integration API tests passed; 2 PostgreSQL repository tests skipped because `TEST_DATABASE_URL` was unavailable. No deployment performed.

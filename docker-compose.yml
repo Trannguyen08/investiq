@@ -15,6 +15,21 @@ x-backend-environment: &backend-environment
   NEWS_PROVIDER_CIRCUIT_FAILURE_THRESHOLD: ${NEWS_PROVIDER_CIRCUIT_FAILURE_THRESHOLD:-5}
   NEWS_PROVIDER_CIRCUIT_OPEN_SECONDS: ${NEWS_PROVIDER_CIRCUIT_OPEN_SECONDS:-120}
   NEWS_ADMIN_TOKEN: ${NEWS_ADMIN_TOKEN:-}
+  AUTH_ENABLED: ${AUTH_ENABLED:-false}
+  AUTH_BFF_SECRET: ${AUTH_BFF_SECRET:-}
+  AUTH_JWT_SECRET: ${AUTH_JWT_SECRET:-}
+  AUTH_JWT_PREVIOUS_SECRET: ${AUTH_JWT_PREVIOUS_SECRET:-}
+  AUTH_OTP_HMAC_KEY: ${AUTH_OTP_HMAC_KEY:-}
+  AUTH_PAYLOAD_ENCRYPTION_KEY: ${AUTH_PAYLOAD_ENCRYPTION_KEY:-}
+  AUTH_GOOGLE_CLIENT_ID: ${AUTH_GOOGLE_CLIENT_ID:-}
+  AUTH_GOOGLE_CLIENT_SECRET: ${AUTH_GOOGLE_CLIENT_SECRET:-}
+  AUTH_GOOGLE_REDIRECT_URI: ${AUTH_GOOGLE_REDIRECT_URI:-}
+  AUTH_MAIL_FROM: ${AUTH_MAIL_FROM:-}
+  AUTH_SMTP_HOST: ${AUTH_SMTP_HOST:-}
+  AUTH_SMTP_PORT: ${AUTH_SMTP_PORT:-587}
+  AUTH_SMTP_USERNAME: ${AUTH_SMTP_USERNAME:-}
+  AUTH_SMTP_PASSWORD: ${AUTH_SMTP_PASSWORD:-}
+  AUTH_SMTP_STARTTLS: ${AUTH_SMTP_STARTTLS:-true}
 
 x-backend-service: &backend-service
   image: ${BACKEND_IMAGE:-investiq-backend:local}
@@ -95,7 +110,15 @@ services:
     environment:
       <<: *backend-environment
       SERVICE_NAME: celery-worker
-    command: ["celery", "-A", "app.workers.celery_app:celery_app", "worker", "--loglevel=INFO", "--concurrency=${CELERY_CONCURRENCY:-2}"]
+    command: ["celery", "-A", "app.workers.celery_app:celery_app", "worker", "--loglevel=INFO", "--concurrency=${CELERY_CONCURRENCY:-2}", "--queues=news-ingestion,celery"]
+    stop_grace_period: 30s
+
+  celery-notifications:
+    <<: *backend-service
+    environment:
+      <<: *backend-environment
+      SERVICE_NAME: celery-notifications
+    command: ["celery", "-A", "app.workers.celery_app:celery_app", "worker", "--loglevel=INFO", "--concurrency=1", "--queues=notifications"]
     stop_grace_period: 30s
 
   celery-beat:
@@ -121,6 +144,11 @@ services:
       NEWS_ADMIN_TOKEN: ${NEWS_ADMIN_TOKEN:-}
       ADMIN_UI_PASSWORD: ${ADMIN_UI_PASSWORD:-}
       ADMIN_SESSION_SECRET: ${ADMIN_SESSION_SECRET:-}
+      AUTH_BFF_SECRET: ${AUTH_BFF_SECRET:-}
+      AUTH_SESSION_REDIS_URL: redis://:${REDIS_PASSWORD:?REDIS_PASSWORD is required}@redis:6379/3
+      AUTH_SESSION_ENCRYPTION_KEY: ${AUTH_SESSION_ENCRYPTION_KEY:-}
+      AUTH_GOOGLE_CLIENT_ID: ${AUTH_GOOGLE_CLIENT_ID:-}
+      AUTH_GOOGLE_REDIRECT_URI: ${AUTH_GOOGLE_REDIRECT_URI:-}
     expose:
       - "3000"
     healthcheck:

@@ -1,5 +1,5 @@
-import { ScaffoldPage } from "@/components/ui/scaffold-page";
+import { AuthShell, RegisterForm } from "@/components/auth/auth-ui";
 
 export default function RegisterPage() {
-  return <div className="shell"><ScaffoldPage area="Account" title="Create account" description="Registration UI will be implemented here." /></div>;
+  return <AuthShell eyebrow="Tài khoản mới" title="Đăng ký InvestIQ" description="Tạo tài khoản và xác minh email bằng mã OTP."><RegisterForm /></AuthShell>;
 }

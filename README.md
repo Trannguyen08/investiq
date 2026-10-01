@@ -13,6 +13,7 @@ baseline is runnable; most finance and ML feature modules remain intentional pla
 | `db` | PostgreSQL persistence | Internal only |
 | `redis` | Cache plus Celery broker/result backend | Internal only |
 | `celery-worker` | Asynchronous task execution | Internal only |
+| `celery-notifications` | Isolated OTP and authentication email delivery | Internal only |
 | `celery-beat` | Scheduled task dispatch | Internal only |
 | `docker-socket-proxy` | Endpoint-restricted Docker log access | Internal only |
 | `log-viewer` | Dozzle runtime log viewer | Loopback port `LOG_VIEWER_PORT` |
@@ -100,6 +101,14 @@ resume sources, queue manual crawls, inspect the latest 100 crawl runs, preview 
 and confirm deletion by entering `DELETE`. Leave all three Admin variables unset to keep these
 operations fail-closed.
 
+The `/admin/users` account-management page requires both the Admin workspace session above and a
+signed-in InvestIQ account with the `admin` role. The backend also requires the server-only BFF
+secret; the Admin News password does not grant account-management permission. Grant the first admin
+role to a verified account through a controlled database operation, then apply the PostgreSQL
+migrations before using the page. See
+the [account-management plan](docs/plan/admin-user-management.md) for supported filters, controls,
+audit behavior, and access checks.
+
 ## Project layout
 
 ```text
@@ -113,7 +122,7 @@ investiq/
 |   `-- scripts/          # Operational scripts
 |-- .github/workflows/    # Backend/frontend CI and staging/production delivery
 |-- .agents/              # Agent memory, rules, skills, roles, and workflows
-|-- docker-compose.yml    # Nine-service local/deployment topology with local log viewer
+|-- docker-compose.yml    # Ten-service local/deployment topology with local log viewer
 `-- .env.example          # Non-secret configuration template
 ```
 
@@ -124,6 +133,10 @@ See [`DEVELOPMENT_GUIDE.md`](DEVELOPMENT_GUIDE.md) for Docker lifecycle commands
 table, backend quality checks, and per-feature coverage reports.
 
 See [`docs/plan/`](docs/plan/README.md) for the feature specifications. The
+[authentication plan](docs/plan/auth.md) covers email/Google login, OTP, server-held JWT/refresh
+credentials, and separate remember-email/session options. The implementation is available behind
+the fail-closed `AUTH_ENABLED` flag; configure the blank auth entries in `.env` before enabling it.
+The
 [Vietnamese stock-market news plan](docs/plan/vietnam-stock-news.md) now has an implemented,
 tested five-source MVP; the [implementation report](docs/plan/news-implementation-report.md)
 records research evidence, validation results, activation gates, and remaining source limitations.

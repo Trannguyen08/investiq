@@ -99,6 +99,23 @@ jobs:
           POSTGRES_PASSWORD: ${{ secrets.POSTGRES_PASSWORD }}
           REDIS_PASSWORD: ${{ secrets.REDIS_PASSWORD }}
           SECRET_KEY: ${{ secrets.SECRET_KEY }}
+          AUTH_ENABLED: ${{ vars.AUTH_ENABLED || 'false' }}
+          AUTH_BFF_SECRET: ${{ secrets.AUTH_BFF_SECRET }}
+          AUTH_JWT_SECRET: ${{ secrets.AUTH_JWT_SECRET }}
+          AUTH_JWT_PREVIOUS_SECRET: ${{ secrets.AUTH_JWT_PREVIOUS_SECRET }}
+          AUTH_OTP_HMAC_KEY: ${{ secrets.AUTH_OTP_HMAC_KEY }}
+          AUTH_PAYLOAD_ENCRYPTION_KEY: ${{ secrets.AUTH_PAYLOAD_ENCRYPTION_KEY }}
+          AUTH_SESSION_ENCRYPTION_KEY: ${{ secrets.AUTH_SESSION_ENCRYPTION_KEY }}
+          AUTH_GOOGLE_CLIENT_ID: ${{ secrets.AUTH_GOOGLE_CLIENT_ID }}
+          AUTH_GOOGLE_CLIENT_SECRET: ${{ secrets.AUTH_GOOGLE_CLIENT_SECRET }}
+          AUTH_GOOGLE_REDIRECT_URI: ${{ vars.AUTH_GOOGLE_REDIRECT_URI }}
+          AUTH_MAIL_FROM: ${{ vars.AUTH_MAIL_FROM }}
+          AUTH_SMTP_HOST: ${{ vars.AUTH_SMTP_HOST }}
+          AUTH_SMTP_PORT: ${{ vars.AUTH_SMTP_PORT || '587' }}
+          AUTH_SMTP_USERNAME: ${{ secrets.AUTH_SMTP_USERNAME }}
+          AUTH_SMTP_PASSWORD: ${{ secrets.AUTH_SMTP_PASSWORD }}
+          AUTH_SMTP_STARTTLS: ${{ vars.AUTH_SMTP_STARTTLS || 'true' }}
         run: |
           docker compose pull
+          docker compose run --rm backend python -m app.infrastructure.db.base
           docker compose up --detach --no-build --remove-orphans --wait --wait-timeout 180

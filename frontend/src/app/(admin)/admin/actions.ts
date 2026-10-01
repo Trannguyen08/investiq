@@ -14,6 +14,7 @@ import {
   triggerAdminCrawl,
   updateAdminSource,
 } from "@/lib/server/admin-news-api";
+import { updateAdminUser } from "@/lib/server/admin-user-api";
 
 function stringField(formData: FormData, name: string) {
   const value = formData.get(name);
@@ -111,4 +112,25 @@ export async function deleteExpiredNews(formData: FormData) {
     redirect(`/admin/data-pipeline?error=${message(error instanceof Error ? error.message : "Không thể xóa dữ liệu")}`);
   }
   redirect(`/admin/data-pipeline?notice=${message(`Đã xóa ${deleted} bài quá hạn`)}`);
+}
+
+export async function changeAdminUser(formData: FormData) {
+  await requireAdminSession();
+  try {
+    const id = stringField(formData, "user_id");
+    const role = stringField(formData, "role");
+    const status = stringField(formData, "status");
+    if (!/^[0-9a-f-]{36}$/i.test(id)) throw new Error("Tài khoản không hợp lệ");
+    if (!(["user", "admin"].includes(role) || ["active", "disabled"].includes(status))) {
+      throw new Error("Cần chọn vai trò hoặc trạng thái hợp lệ");
+    }
+    await updateAdminUser(id, {
+      ...(role ? { role } : {}),
+      ...(status ? { status } : {}),
+    });
+  } catch (error) {
+    redirect(`/admin/users?error=${message(error instanceof Error ? error.message : "Không thể cập nhật tài khoản")}`);
+  }
+  revalidatePath("/admin/users");
+  redirect("/admin/users?notice=Đã cập nhật tài khoản");
 }

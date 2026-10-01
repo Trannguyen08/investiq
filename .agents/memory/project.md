@@ -5,15 +5,16 @@
 - Name: InvestIQ
 - Repository: `C:\investiq`
 - Application type: FastAPI and Next.js monorepo
-- Status: Runnable operational baseline with a hardened, tested five-source stock-news module; most
-  other finance and ML modules remain placeholders.
+- Status: Runnable operational baseline with a hardened, tested five-source stock-news module and
+  feature-flagged end-user authentication; most other finance and ML modules remain placeholders.
 
 ## Confirmed stack
 
 - Backend: Python 3.13 container, FastAPI, Uvicorn, and Clean Architecture modules under `backend/`.
 - Frontend: Node.js 24 container, Next.js 16, React 19, and TypeScript under `frontend/`.
 - Persistence: PostgreSQL 17.
-- Cache and jobs: Redis 8 for cache plus Celery broker/result storage; Celery worker and Beat.
+- Cache and jobs: Redis 8 for cache plus Celery broker/result storage; separate news/notification
+  Celery workers and Beat.
 - Edge: Nginx is the public application entry point; the runtime log viewer is separately published
   on a loopback-only host port.
 - Operations: Docker Compose, GHCR images, GitHub Actions CI, and self-hosted deployment runners.
@@ -38,6 +39,11 @@
 
 ## Local development
 
+- Authentication is implemented behind `AUTH_ENABLED=false` by default. It provides email/Google
+  login, 90-second registration OTP, password recovery, server-held JWT/refresh credentials, and
+  separate remember-email/persistent-login options. Configure the blank auth entries in `.env`
+  using the ignored local guide `docs/tutorial/auth-keys.md` before enabling it.
+
 - Copy `.env.example` to `.env`, replace placeholder secrets, then use `docker compose up --build
   --wait` for the complete stack.
 - Use development servers for interactive code work and do not run the frontend production build
@@ -47,3 +53,7 @@
 - Use `DEVELOPMENT_GUIDE.md` for Docker/port commands and `backend/tests/run_feature_tests.py` for
   per-feature unit, integration, and branch-coverage reports.
 - Follow `.agents/rules/project-structure.md` for every path or boundary change.
+
+## Admin account management
+
+Implemented `/admin/users` with backend role checks, stable search/filter pagination, account role/status updates, active-session revocation on disable, Redis rate limits, and audit details. The Admin News shared password remains a separate gate and does not authorize the account API. See `docs/plan/admin-user-management.md`.
