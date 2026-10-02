@@ -51,9 +51,12 @@ const article: NewsSummary = {
     market_impact: "Có thể hỗ trợ tâm lý ngắn hạn.",
     impact_scope: "cổ phiếu được nhắc đến",
     horizon: "short_term",
+    topics: ["earnings"],
+    event_types: ["earnings_result"],
   },
   extraction_status: "complete",
   content_access: "full_text",
+  duplicate_source_count: 1,
 };
 
 describe("NewsCard", () => {

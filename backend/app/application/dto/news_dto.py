@@ -38,3 +38,4 @@ class NewsQuery:
     limit: int = 20
     cursor_feed_at: datetime | None = None
     cursor_id: str | None = None
+    published_after: datetime | None = None

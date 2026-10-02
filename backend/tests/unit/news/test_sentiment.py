@@ -65,3 +65,12 @@ def test_impact_scope_prioritizes_headline_context_over_deep_mentions() -> None:
     )
 
     assert result.impact_scope == "các doanh nghiệp liên quan"
+
+
+def test_analysis_classifies_topics_and_events() -> None:
+    result = VietnameseRuleSentimentAnalyzer().analyze(
+        "Doanh nghiệp công bố kết quả kinh doanh với lợi nhuận tăng và kế hoạch trả cổ tức."
+    )
+
+    assert "earnings" in result.topics
+    assert set(result.event_types) >= {"earnings_result", "dividend"}

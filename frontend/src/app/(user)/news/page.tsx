@@ -13,7 +13,7 @@ export default async function NewsPage({ searchParams }: { searchParams: SearchP
   const raw = await searchParams;
   const query = new URLSearchParams();
   query.set("limit", "30");
-  for (const key of ["q", "source", "symbol", "sentiment", "cursor"] as const) {
+  for (const key of ["q", "source", "symbol", "sentiment", "window_days", "cursor"] as const) {
     const value = first(raw[key]);
     if (value) query.set(key, value);
   }
@@ -38,6 +38,7 @@ export default async function NewsPage({ searchParams }: { searchParams: SearchP
   const currentSource = first(raw.source) ?? "";
   const currentSymbol = first(raw.symbol) ?? "";
   const currentSentiment = first(raw.sentiment) ?? "";
+  const currentWindow = first(raw.window_days) ?? "7";
   const symbolCounts = new Map<string, number>();
   for (const article of result.data) {
     for (const mention of article.symbols) {
@@ -80,6 +81,15 @@ export default async function NewsPage({ searchParams }: { searchParams: SearchP
           <input name="symbol" defaultValue={currentSymbol} placeholder="HOSE:FPT" pattern="(HOSE|HNX|UPCOM):[A-Za-z0-9]{3,8}" />
         </label>
         <label>
+          <span>Thời gian</span>
+          <select name="window_days" defaultValue={currentWindow}>
+            <option value="1">24 giờ qua</option>
+            <option value="7">7 ngày qua</option>
+            <option value="30">30 ngày qua</option>
+            <option value="90">90 ngày qua</option>
+          </select>
+        </label>
+        <label>
           <span>Sắc thái toàn bài</span>
           <select name="sentiment" defaultValue={currentSentiment}>
             <option value="">Tất cả</option>
@@ -91,7 +101,7 @@ export default async function NewsPage({ searchParams }: { searchParams: SearchP
           </select>
         </label>
         <button type="submit">Áp dụng</button>
-        {(currentQuery || currentSource || currentSymbol || currentSentiment) && <Link className="clear-filters" href="/news">Xóa lọc</Link>}
+        {(currentQuery || currentSource || currentSymbol || currentSentiment || currentWindow !== "7") && <Link className="clear-filters" href="/news">Xóa lọc</Link>}
       </form>
 
       {result.data.length === 0 ? (

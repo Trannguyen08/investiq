@@ -1,3 +1,4 @@
+import gzip
 from datetime import UTC, datetime
 
 import pytest
@@ -5,11 +6,15 @@ import pytest
 from app.infrastructure.external.crawlers.base import (
     NewsProviderError,
     UnsafeProviderUrl,
+    _decode_response_body,
     canonicalize_url,
     validate_provider_url,
 )
 from app.infrastructure.external.crawlers.cafef_crawler import CafeFCrawler
+from app.infrastructure.external.crawlers.hnx_crawler import HnxCrawler
 from app.infrastructure.external.crawlers.vietstock_crawler import VietstockCrawler
+from app.infrastructure.external.crawlers.vneconomy_crawler import VnEconomyCrawler
+from app.infrastructure.external.crawlers.vnexpress_crawler import VnExpressCrawler
 
 VIETSTOCK_HTML = """
 <html><head>
@@ -69,6 +74,26 @@ def test_cafef_parser_uses_source_specific_content_selector() -> None:
     assert article.content_text == "HOSE: HPG có sản lượng tăng trưởng trong tháng."
 
 
+def test_cafef_parser_interprets_naive_publisher_time_as_vietnam_time() -> None:
+    html = """
+    <html><head>
+      <link rel="canonical" href="https://cafef.vn/hpg-cap-nhat.chn">
+      <meta property="og:title" content="HPG cap nhat">
+      <meta property="article:published_time" content="2026-09-30T20:30:00">
+    </head><body>
+      <div class="detail-content"><p>HOSE: HPG cap nhat hoat dong kinh doanh.</p></div>
+    </body></html>
+    """
+
+    article = CafeFCrawler().parse_article(
+        html,
+        "https://cafef.vn/hpg-cap-nhat.chn",
+        fetched_at=datetime(2026, 9, 30, 14, 0, tzinfo=UTC),
+    )
+
+    assert article.published_at == datetime(2026, 9, 30, 13, 30, tzinfo=UTC)
+
+
 def test_discovery_accepts_rss_and_sitemap_but_rejects_foreign_hosts() -> None:
     rss = """<rss><channel>
       <link>https://vietstock.vn/0/tin-moi.rss</link>
@@ -77,6 +102,21 @@ def test_discovery_accepts_rss_and_sitemap_but_rejects_foreign_hosts() -> None:
     </channel></rss>"""
 
     assert VietstockCrawler().parse_discovery_document(rss) == ("https://vietstock.vn/a.htm",)
+
+
+def test_discovery_drops_explicitly_stale_feed_entries_before_fetching_articles() -> None:
+    rss = """<rss><channel>
+      <item><link>https://vietstock.vn/current.htm</link>
+        <pubDate>Wed, 30 Sep 2026 10:00:00 GMT</pubDate></item>
+      <item><link>https://vietstock.vn/old.htm</link>
+        <pubDate>Mon, 01 Jun 2026 10:00:00 GMT</pubDate></item>
+    </channel></rss>"""
+    crawler = VietstockCrawler()
+    urls = crawler.parse_discovery_document(rss)
+
+    recent = crawler._recent_discovery_urls(rss, urls, datetime(2026, 9, 27, 12, tzinfo=UTC))
+
+    assert recent == ("https://vietstock.vn/current.htm",)
 
 
 def test_cafef_discovery_filters_topics_and_ignores_image_urls() -> None:
@@ -127,6 +167,12 @@ def test_url_validation_rejects_credentials_and_non_allowlisted_hosts() -> None:
 def test_invalid_discovery_xml_has_stable_provider_error() -> None:
     with pytest.raises(NewsProviderError, match="invalid XML"):
         CafeFCrawler().parse_discovery_document("<not-closed>")
+
+
+def test_http_body_decoder_handles_provider_gzip_without_response_header() -> None:
+    html = "<html><title>Compressed provider</title></html>"
+
+    assert _decode_response_body(gzip.compress(html.encode()), "utf-8") == html
 
 
 def test_parser_preserves_thumbnail_lists_tables_and_attachments() -> None:
@@ -199,3 +245,104 @@ def test_parser_extracts_qualified_and_contextual_symbols_without_uppercase_nois
     article = VietstockCrawler().parse_article(html, "https://vietstock.vn/hdc.htm")
 
     assert article.candidate_symbols == ("HOSE:HDC", "HDC")
+
+
+def test_vneconomy_parser_keeps_only_publisher_metadata() -> None:
+    html = """
+    <html><head>
+      <link rel="canonical" href="https://vneconomy.vn/co-phieu-fpt-tang.htm">
+      <meta property="og:title" content="Cổ phiếu FPT tăng sau báo cáo lợi nhuận">
+      <meta property="og:description" content="Nhà đầu tư quan tâm kết quả quý mới.">
+      <meta name="article:published_time" content="2026-09-30T16:56:05+07:00">
+      <meta property="og:image" content="https://media.vneconomy.vn/fpt.jpg">
+      <script type="application/ld+json">{
+        "@type":"NewsArticle", "datePublished":"2026-09-30T16:56:05&#x2B;07:00"
+      }</script>
+    </head><body><article><p>Nội dung toàn văn không được lưu.</p></article></body></html>
+    """
+
+    article = VnEconomyCrawler().parse_article(
+        html,
+        "https://vneconomy.vn/co-phieu-fpt-tang.htm",
+        fetched_at=datetime(2026, 9, 30, 10, 0, tzinfo=UTC),
+    )
+
+    assert article.source_slug == "vneconomy"
+    assert article.description == "Nhà đầu tư quan tâm kết quả quý mới."
+    assert article.content_text is None
+    assert article.content_blocks == ()
+    assert article.extraction_status.value == "metadata_only"
+    assert article.published_at == datetime(2026, 9, 30, 9, 56, 5, tzinfo=UTC)
+    assert article.candidate_symbols == ("FPT",)
+
+
+def test_vnexpress_discovery_filters_business_feed_to_stock_market_topics() -> None:
+    rss = """<rss><channel>
+      <item>
+        <title>VN-Index giảm mạnh trong tháng</title>
+        <link>https://vnexpress.net/vn-index-giam-123.html?utm_source=rss</link>
+      </item>
+      <item>
+        <title>Giá cá tăng tại miền Tây</title>
+        <link>https://vnexpress.net/gia-ca-tang-456.html</link>
+      </item>
+      <item>
+        <title>Cổ phiếu ngân hàng hút dòng tiền</title>
+        <link>https://malicious.example/co-phieu-789.html</link>
+      </item>
+    </channel></rss>"""
+
+    assert VnExpressCrawler().parse_discovery_document(rss) == (
+        "https://vnexpress.net/vn-index-giam-123.html",
+    )
+
+
+def test_hnx_discovery_normalizes_legacy_port_and_parser_reads_disclosure_time() -> None:
+    rss = """<rss><channel>
+    <item>
+      <title>Thông báo tình trạng cổ phiếu ECI</title>
+      <link>http://www.hnx.vn:7978/tin-cung-cap-rss-vi_vn-636013-1.html</link>
+    </item>
+    <item>
+      <title>Kết quả giao dịch trái phiếu doanh nghiệp</title>
+      <link>http://www.hnx.vn:7978/tin-cung-cap-rss-vi_vn-636014-1.html</link>
+    </item>
+    </channel></rss>"""
+    html = """
+    <html><head><title>Thông báo tình trạng cổ phiếu ECI</title></head><body>
+      <div class="divContentArticlesDetail">
+        <div class="Box-TieuDe"><label>Thông báo tình trạng cổ phiếu ECI</label></div>
+        <div class="Box-Thoigian"><label>19:05 28/09/2026</label></div>
+        <div class="Box-Tomtat"><label>Thông tin công bố chính thức từ HNX.</label></div>
+        <div class="divLstFileAttach">
+          <a href="https://owa.hnx.vn/ftp/cims/ECI.pdf">Thông báo ECI</a>
+        </div>
+      </div>
+    </body></html>
+    """
+    crawler = HnxCrawler()
+
+    assert crawler.parse_discovery_document(rss) == (
+        "https://www.hnx.vn/tin-cung-cap-rss-vi_vn-636013-1.html",
+    )
+    article = crawler.parse_article(
+        html,
+        "https://www.hnx.vn/tin-cung-cap-rss-vi_vn-636013-1.html",
+        fetched_at=datetime(2026, 9, 30, 10, 0, tzinfo=UTC),
+    )
+
+    assert article.title == "Thông báo tình trạng cổ phiếu ECI"
+    assert article.published_at == datetime(2026, 9, 28, 12, 5, tzinfo=UTC)
+    assert article.content_text is None
+    assert article.extraction_status.value == "metadata_only"
+    assert article.candidate_symbols == ("ECI",)
+    assert article.assets[0].kind == "document"
+
+
+def test_worker_crawler_registry_supports_all_active_sources() -> None:
+    from app.workers.news_ingestion_worker import _crawler
+
+    assert {
+        _crawler(source).source_slug
+        for source in ("vietstock", "cafef", "hnx", "vneconomy", "vnexpress")
+    } == {"vietstock", "cafef", "hnx", "vneconomy", "vnexpress"}

@@ -2,6 +2,7 @@
 
 import unicodedata
 import xml.etree.ElementTree as ET
+from zoneinfo import ZoneInfo
 
 from app.infrastructure.external.crawlers.base import (
     BaseNewsCrawler,
@@ -78,6 +79,7 @@ class CafeFCrawler(BaseNewsCrawler):
     source_slug = "cafef"
     allowed_domains = ("cafef.vn",)
     discovery_urls = ("https://cafef.vn/google-news-sitemap.xml",)
+    naive_datetime_timezone = ZoneInfo("Asia/Ho_Chi_Minh")
     content_selectors = (
         "[data-role='content']",
         ".detail-content",

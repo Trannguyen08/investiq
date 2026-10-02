@@ -31,6 +31,8 @@ class SentimentResponse(StrictModel):
     evidence: list[str]
     market_impact: str | None
     impact_scope: str | None
+    topics: list[str]
+    event_types: list[str]
 
 
 class SymbolResponse(StrictModel):
@@ -85,6 +87,7 @@ class NewsSummaryResponse(StrictModel):
     sentiment: SentimentResponse
     extraction_status: str
     content_access: str
+    duplicate_source_count: int = Field(ge=1)
 
 
 class NewsDetailResponse(NewsSummaryResponse):

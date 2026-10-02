@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import gzip
+import io
 import ipaddress
 import json
 import re
@@ -11,7 +13,7 @@ import urllib.parse
 import urllib.request
 import xml.etree.ElementTree as ET
 from collections.abc import Iterable
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta, tzinfo
 from email.utils import parsedate_to_datetime
 from html import unescape
 from http.client import HTTPMessage
@@ -24,6 +26,13 @@ from app.domain.entities.news_article import (
     ArticleAsset,
     ContentBlock,
     ExtractionStatus,
+)
+from app.infrastructure.config.settings import settings
+from app.infrastructure.external.provider_guard import (
+    ProviderCircuitOpen,
+    ProviderGuard,
+    ProviderRateLimited,
+    get_provider_guard,
 )
 
 MAX_HTML_BYTES: Final = 5 * 1024 * 1024
@@ -40,6 +49,18 @@ class UnsafeProviderUrl(NewsProviderError):
 
 class ResponseTooLarge(NewsProviderError):
     pass
+
+
+def _decode_response_body(raw: bytes, charset: str) -> str:
+    if raw.startswith(b"\x1f\x8b"):
+        try:
+            with gzip.GzipFile(fileobj=io.BytesIO(raw)) as archive:
+                raw = archive.read(MAX_HTML_BYTES + 1)
+        except OSError as exc:
+            raise NewsProviderError("provider returned invalid gzip content") from exc
+        if len(raw) > MAX_HTML_BYTES:
+            raise ResponseTooLarge("provider response exceeded 5 MiB after decompression")
+    return raw.decode(charset, errors="replace")
 
 
 def canonicalize_url(url: str) -> str:
@@ -117,12 +138,22 @@ class _SafeRedirectHandler(urllib.request.HTTPRedirectHandler):
 
 
 class BoundedHttpClient:
-    def __init__(self, allowed_domains: tuple[str, ...]) -> None:
+    def __init__(
+        self,
+        allowed_domains: tuple[str, ...],
+        guard: ProviderGuard | None = None,
+    ) -> None:
         self._allowed_domains = allowed_domains
+        self._guard = guard or get_provider_guard()
         self._opener = urllib.request.build_opener(_SafeRedirectHandler(allowed_domains))
 
     def get_text(self, url: str) -> str:
         safe_url = validate_provider_url(url, self._allowed_domains, resolve_dns=True)
+        provider = urllib.parse.urlsplit(safe_url).hostname or self._allowed_domains[0]
+        try:
+            self._guard.before_request(provider)
+        except (ProviderRateLimited, ProviderCircuitOpen) as exc:
+            raise NewsProviderError(str(exc)) from exc
         request = urllib.request.Request(
             safe_url,
             headers={
@@ -137,11 +168,18 @@ class BoundedHttpClient:
                     raise ResponseTooLarge("provider response exceeded 5 MiB")
                 charset_value = response.headers.get_content_charset()
                 charset = charset_value if isinstance(charset_value, str) else "utf-8"
-                return raw.decode(charset, errors="replace")
+                text = _decode_response_body(raw, charset)
+                self._guard.record_success(provider)
+                return text
         except urllib.error.HTTPError as exc:
+            self._guard.record_failure(provider)
             raise NewsProviderError(f"provider returned HTTP {exc.code}") from exc
         except (TimeoutError, urllib.error.URLError) as exc:
+            self._guard.record_failure(provider)
             raise NewsProviderError("provider request failed") from exc
+        except NewsProviderError:
+            self._guard.record_failure(provider)
+            raise
 
 
 def _first_text(soup: BeautifulSoup, selectors: tuple[str, ...]) -> str | None:
@@ -164,10 +202,12 @@ def _meta_content(soup: BeautifulSoup, *keys: tuple[str, str]) -> str | None:
     return None
 
 
-def _parse_datetime(value: str | None) -> datetime | None:
+def _parse_datetime(
+    value: str | None, *, naive_timezone: tzinfo = UTC
+) -> datetime | None:
     if not value:
         return None
-    normalized = value.strip().replace("Z", "+00:00")
+    normalized = unescape(value.strip()).replace("Z", "+00:00")
     try:
         parsed = datetime.fromisoformat(normalized)
     except ValueError:
@@ -176,7 +216,7 @@ def _parse_datetime(value: str | None) -> datetime | None:
         except (TypeError, ValueError):
             return None
     if parsed.tzinfo is None:
-        return parsed.replace(tzinfo=UTC)
+        return parsed.replace(tzinfo=naive_timezone).astimezone(UTC)
     return parsed.astimezone(UTC)
 
 
@@ -201,11 +241,13 @@ def _json_ld_articles(soup: BeautifulSoup) -> Iterable[dict[str, object]]:
 
 
 class BaseNewsCrawler:
+    naive_datetime_timezone: tzinfo = UTC
     source_slug: str
     allowed_domains: tuple[str, ...]
     discovery_urls: tuple[str, ...]
     content_selectors: tuple[str, ...]
     description_selectors: tuple[str, ...]
+    title_selectors: tuple[str, ...] = ("h1",)
 
     def __init__(self, client: BoundedHttpClient | None = None) -> None:
         self._client = client or BoundedHttpClient(self.allowed_domains)
@@ -216,7 +258,9 @@ class BaseNewsCrawler:
         discovered: list[str] = []
         for feed_url in self.discovery_urls:
             xml = self._client.get_text(feed_url)
-            for url in self.parse_discovery_document(xml):
+            parsed_urls = self.parse_discovery_document(xml)
+            cutoff = datetime.now(UTC) - timedelta(hours=settings.news_ingestion_max_age_hours)
+            for url in self._recent_discovery_urls(xml, parsed_urls, cutoff):
                 if url not in discovered:
                     discovered.append(url)
                 if len(discovered) >= limit:
@@ -269,6 +313,43 @@ class BaseNewsCrawler:
                 urls.append(safe_url)
         return tuple(urls)
 
+    def _recent_discovery_urls(
+        self,
+        document: str,
+        urls: tuple[str, ...],
+        cutoff: datetime,
+    ) -> tuple[str, ...]:
+        """Drop feed entries with an explicit timestamp outside the crawl window."""
+        try:
+            root = ET.fromstring(document)
+        except ET.ParseError:
+            return urls
+        timestamps: dict[str, datetime] = {}
+        for entry in root.iter():
+            entry_name = entry.tag.rsplit("}", 1)[-1].lower()
+            if entry_name not in {"item", "entry", "url"}:
+                continue
+            candidate_url: str | None = None
+            published_at: datetime | None = None
+            for child in entry.iter():
+                name = child.tag.rsplit("}", 1)[-1].lower()
+                if name in {"link", "loc"} and candidate_url is None:
+                    raw_url = child.get("href") or child.text
+                    candidate_url = raw_url.strip() if raw_url else None
+                if name in {
+                    "pubdate",
+                    "published",
+                    "publication_date",
+                    "updated",
+                    "lastmod",
+                }:
+                    published_at = _parse_datetime(
+                        child.text, naive_timezone=self.naive_datetime_timezone
+                    )
+            if candidate_url and published_at:
+                timestamps[canonicalize_url(candidate_url)] = published_at
+        return tuple(url for url in urls if timestamps.get(url, cutoff) >= cutoff)
+
     def fetch_article(self, url: str) -> ParsedArticle:
         safe_url = validate_provider_url(url, self.allowed_domains, resolve_dns=True)
         return self.parse_article(self._client.get_text(safe_url), safe_url)
@@ -283,7 +364,7 @@ class BaseNewsCrawler:
         title = (
             self._string_value(json_ld.get("headline"))
             or _meta_content(soup, ("property", "og:title"), ("name", "twitter:title"))
-            or _first_text(soup, ("h1",))
+            or _first_text(soup, self.title_selectors)
         )
         if not title:
             raise NewsProviderError("article title was not found")
@@ -342,11 +423,21 @@ class BaseNewsCrawler:
         authors = self._authors(author_value)
         published_at = _parse_datetime(
             self._string_value(json_ld.get("datePublished"))
-            or _meta_content(soup, ("property", "article:published_time"))
+            or _meta_content(
+                soup,
+                ("property", "article:published_time"),
+                ("name", "article:published_time"),
+            ),
+            naive_timezone=self.naive_datetime_timezone,
         )
         updated_at = _parse_datetime(
             self._string_value(json_ld.get("dateModified"))
-            or _meta_content(soup, ("property", "article:modified_time"))
+            or _meta_content(
+                soup,
+                ("property", "article:modified_time"),
+                ("name", "article:modified_time"),
+            ),
+            naive_timezone=self.naive_datetime_timezone,
         )
         tags = self._tags(json_ld.get("keywords"), soup)
         category = _meta_content(soup, ("property", "article:section"))

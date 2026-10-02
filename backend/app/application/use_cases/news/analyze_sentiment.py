@@ -76,6 +76,22 @@ class VietnameseRuleSentimentAnalyzer(ISentimentAnalyzer):
         ("nhóm năng lượng", ("dầu khí", "điện", "năng lượng")),
         ("các doanh nghiệp liên quan", ("doanh nghiệp", "công ty", "tập đoàn")),
     )
+    _topic_rules: tuple[tuple[str, tuple[str, ...]], ...] = (
+        ("earnings", ("lợi nhuận", "doanh thu", "kết quả kinh doanh", "báo cáo tài chính")),
+        ("market", ("vn-index", "thị trường chứng khoán", "thanh khoản", "khối ngoại")),
+        ("banking", ("ngân hàng", "tín dụng", "lãi suất", "nợ xấu")),
+        ("real_estate", ("bất động sản", "đất đai", "nhà ở")),
+        ("corporate_governance", ("bổ nhiệm", "hội đồng quản trị", "đại hội cổ đông")),
+        ("regulation", ("xử phạt", "vi phạm", "đình chỉ", "cơ quan quản lý")),
+    )
+    _event_rules: tuple[tuple[str, tuple[str, ...]], ...] = (
+        ("earnings_result", ("lợi nhuận", "doanh thu", "kết quả kinh doanh")),
+        ("dividend", ("cổ tức", "cổ phiếu thưởng")),
+        ("capital_action", ("phát hành", "tăng vốn", "thoái vốn")),
+        ("leadership_change", ("bổ nhiệm", "miễn nhiệm", "xin nghỉ")),
+        ("regulatory_action", ("xử phạt", "vi phạm", "đình chỉ", "hạn chế giao dịch")),
+        ("contract", ("trúng thầu", "ký kết", "hợp đồng")),
+    )
 
     def analyze(self, text: str) -> SentimentScore:
         unique_parts = tuple(
@@ -94,6 +110,8 @@ class VietnameseRuleSentimentAnalyzer(ISentimentAnalyzer):
                 market_impact="Chưa thể xác định ảnh hưởng đến thị trường chứng khoán.",
                 impact_scope=None,
                 horizon=None,
+                topics=(),
+                event_types=(),
                 method="rules",
                 analyzer_version=self.version,
                 analyzed_at=analyzed_at,
@@ -125,6 +143,8 @@ class VietnameseRuleSentimentAnalyzer(ISentimentAnalyzer):
         rationale = self._rationale(label, positive_terms, negative_terms, normalized)
         market_impact = self._market_impact(label, scope, positive_terms, negative_terms)
         evidence = self._evidence(text, (*positive_terms, *negative_terms))
+        topics = self._classify(normalized, self._topic_rules)
+        event_types = self._classify(normalized, self._event_rules)
 
         return SentimentScore(
             label=label,
@@ -135,10 +155,16 @@ class VietnameseRuleSentimentAnalyzer(ISentimentAnalyzer):
             market_impact=market_impact,
             impact_scope=scope,
             horizon="short_term",
+            topics=topics,
+            event_types=event_types,
             method="rules",
             analyzer_version=self.version,
             analyzed_at=analyzed_at,
         )
+
+    @staticmethod
+    def _classify(text: str, rules: tuple[tuple[str, tuple[str, ...]], ...]) -> tuple[str, ...]:
+        return tuple(label for label, phrases in rules if any(phrase in text for phrase in phrases))
 
     @staticmethod
     def _find_hits(text: str, rules: SignalRules) -> tuple[tuple[str, int], ...]:

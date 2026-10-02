@@ -3,6 +3,55 @@
 Record durable decisions in reverse chronological order. Do not record routine implementation
 details.
 
+## 2026-10-02 — Authentication email feedback
+
+- **Status:** Accepted and implemented
+- **Context:** Duplicate registrations left users waiting for an OTP that was never sent; password
+  recovery did not explain unknown addresses or Google-only accounts.
+- **Decision:** Reject registered emails at registration with 409, return 404 for unknown recovery
+  addresses, and return 409 with Google sign-in guidance for Google-only accounts. Keep a 5/hour
+  per-email/per-IP recovery limit and add a 10/hour per-IP limit.
+- **Consequences:** This gives users actionable recovery guidance but reveals account existence and
+  sign-in provider to someone who knows an email address. The user explicitly chose that behavior;
+  the additional IP limit reduces, but does not eliminate, enumeration risk.
+
+## 2026-10-02 — Automatic user sessions and OTP email presentation
+
+- **Status:** Accepted and implemented
+- **Context:** Users should not need to opt into persistent login, and authentication emails need
+  clear copy plus a prominent, readable OTP in both rich and plain-text email clients.
+- **Decision:** Remove remembered-email storage and persistent-session choices from the UI and BFF.
+  Create every user session with the configured absolute lifetime (30 days by default), an
+  HttpOnly browser cookie, encrypted server-side credentials, and automatic rotating refresh tokens.
+  Send OTP and account notices with inline-styled HTML and a plain-text alternative.
+- **Consequences:** Browser storage never retains login email or refresh credentials. Sessions still
+  expire at the backend absolute limit and can be revoked at logout; new sessions use the existing
+  refresh replay protections. Mail clients that do not support HTML receive the same OTP in text.
+
+## 2026-10-02 — SMTP egress for authentication notifications
+
+- **Status:** Accepted and implemented
+- **Context:** The Compose backend network is internal-only, so the authentication email worker
+  could not resolve or connect to its external SMTP provider. OTP delivery failed before SMTP
+  authentication.
+- **Decision:** Keep backend services on the internal network and attach only
+  `celery-notifications` to a separate outbound network for SMTP delivery.
+- **Consequences:** Authentication email delivery can reach its configured provider while the API,
+  general Celery worker, Beat, database, and Redis retain their existing network isolation.
+
+## 2026-09-30 — Metadata-only expansion through publisher RSS feeds
+
+- **Status:** Accepted and implemented
+- **Context:** The news product needed more reputable sources, while publisher RSS terms and official
+  disclosure feeds do not imply permission to republish full article bodies.
+- **Decision:** Add HNX, VnEconomy, and VnExpress through bounded, allowlisted RSS discovery. Store and
+  display only metadata, images/attachments explicitly linked by the source, and the canonical source
+  link. Filter VnExpress's broad business feed to securities topics and exclude non-equity HNX feed
+  entries. Keep the global ingestion activation gate off by default.
+- **Consequences:** The product has five technically active adapters without treating RSS access as
+  full-text rights. Detail pages for the three new sources direct readers to the publisher; six
+  researched sources remain pending or blocked.
+
 ## 2026-09-29 — News persistence protection scope
 
 - **Status:** Accepted and implemented
@@ -119,3 +168,58 @@ details.
 - **Decision:** Store memory, rules, skills, roles, and workflows under `.agents/`, with
   `AGENTS.md` as the repository entry point.
 - **Consequences:** Agents must keep durable memory current and avoid duplicating guidance.
+
+## 2026-09-30 — Freshness-first news ingestion and protected operations
+
+- **Status:** Accepted
+- **Context:** Multi-source crawling must not retain stale or unverifiable articles, and provider
+  instability must not produce request storms. Operators also need controlled source and retention
+  actions before the general user-authentication scaffold is complete.
+- **Decision:** Require a publisher timestamp and reject articles older than a configurable 72-hour
+  ingestion window. Serve at most the configurable 90-day retention window. Coordinate per-domain
+  fixed-window budgets and circuit state through Redis with a local fallback. Protect news operations
+  with a dedicated bearer token, optimistic row versions, explicit destructive confirmation, and an
+  audit table. Keep browser-side mutation controls disabled until real admin sessions exist.
+- **Consequences:** Undated publisher pages are skipped rather than guessed. Cleanup can be previewed
+  safely, but production deletion still requires an operator choice and target-environment review.
+  The static operations token is transitional and must be replaced by role-based admin identity in a
+  separately scoped RBAC migration.
+
+## 2026-09-30 — Server-mediated Admin News workspace
+
+- **Status:** Accepted
+- **Context:** Operators need browser controls now, but exposing the FastAPI operations token to
+  client JavaScript would turn an operational secret into a public credential, and the broader user
+  identity/RBAC module is not implemented yet.
+- **Decision:** Authenticate the Admin workspace with a dedicated server-side password and an
+  HMAC-signed, HttpOnly, SameSite-strict, eight-hour cookie. Execute mutations through Next.js server
+  actions and keep `NEWS_ADMIN_TOKEN` only in the Next.js server environment. Require the backend
+  token independently, retain audit records, optimistic concurrency, dry-run cleanup, and explicit
+  `DELETE` confirmation.
+- **Consequences:** The browser never receives the operations bearer token and missing secrets keep
+  the UI closed. This is suitable for the current controlled Admin workspace, but should be replaced
+  by named admin identities, RBAC, and centralized login throttling in a separately scoped RBAC
+  migration.
+
+## 2026-10-01 — Server-held end-user authentication credentials
+
+- **Status:** Accepted
+- **Context:** Email/password and Google authentication need durable sessions without exposing JWT
+  or refresh credentials to browser JavaScript, while registration and recovery emails must survive
+  process restarts.
+- **Decision:** Use a Next.js BFF with opaque HttpOnly browser cookies and AES-GCM encrypted auth
+  state in Redis database 3. FastAPI issues short-lived HS256 JWTs and rotating, hashed refresh
+  tokens backed by PostgreSQL sessions. Store OTPs as keyed digests, deliver encrypted email jobs
+  through a dedicated Celery notification queue, and keep end-user auth feature-flagged and separate
+  from Admin News authentication.
+- **Consequences:** Enabling auth requires independent BFF, JWT, OTP, payload, session, SMTP, and
+  optional Google credentials. Redis is required for browser auth state and abuse controls; auth
+  fails closed when dependencies or secrets are unavailable. Admin access still needs a future RBAC
+  migration.
+
+### 2026-10-01 — Role-checked account administration
+
+- **Status:** Accepted and implemented
+- **Context:** Admins need account search and controlled role/status management without treating the shared Admin News credential as user identity.
+- **Decision:** Protect account APIs with the BFF server secret and a verified active user session; authorize from the current database role. Audit user changes with actor, target, request ID, requested fields, and outcome. Prevent self changes and last-active-admin removal, and revoke sessions atomically when disabling an account.
+- **Consequences:** The account page requires both the Admin workspace session and a separate authenticated InvestIQ admin account session. Account APIs fail closed when auth or Redis rate-limit protection is unavailable.

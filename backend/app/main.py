@@ -11,10 +11,15 @@ from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
 from redis.asyncio import Redis
 
+from app.api.v1.admin import router as news_admin_router
+from app.api.v1.admin_users import router as admin_users_router
+from app.api.v1.auth import router as auth_router
 from app.api.v1.news import router as news_router
+from app.application.use_cases.auth.auth_service import AuthError
 from app.infrastructure.config.logging_config import configure_logging
 from app.infrastructure.config.settings import settings
 from app.infrastructure.db.session import close_pool
+from app.infrastructure.security.jwt_handler import JwtError
 from app.middleware.request_logging import RequestLoggingMiddleware
 
 configure_logging()
@@ -29,6 +34,9 @@ async def lifespan(_: FastAPI) -> AsyncIterator[None]:
 app = FastAPI(title=settings.app_name, version="0.1.0", lifespan=lifespan)
 app.add_middleware(RequestLoggingMiddleware)
 app.include_router(news_router)
+app.include_router(news_admin_router)
+app.include_router(admin_users_router)
+app.include_router(auth_router)
 
 
 def _request_id(request: Request) -> str:
@@ -68,6 +76,38 @@ async def validation_error(request: Request, exc: RequestValidationError) -> JSO
                 "details": details,
             }
         },
+    )
+
+
+@app.exception_handler(AuthError)
+async def auth_error(request: Request, exc: AuthError) -> JSONResponse:
+    return JSONResponse(
+        status_code=exc.status_code,
+        content={
+            "error": {
+                "code": exc.code,
+                "message": exc.message,
+                "request_id": _request_id(request),
+                "details": [],
+            }
+        },
+        headers={"Cache-Control": "no-store"},
+    )
+
+
+@app.exception_handler(JwtError)
+async def jwt_error(request: Request, _: JwtError) -> JSONResponse:
+    return JSONResponse(
+        status_code=401,
+        content={
+            "error": {
+                "code": "INVALID_SESSION",
+                "message": "Phiên đăng nhập đã hết hạn.",
+                "request_id": _request_id(request),
+                "details": [],
+            }
+        },
+        headers={"Cache-Control": "no-store", "WWW-Authenticate": "Bearer"},
     )
 
 
