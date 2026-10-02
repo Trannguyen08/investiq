@@ -15,6 +15,12 @@ function json(data: object, status = 200) {
   return NextResponse.json(data, { status, headers: { "Cache-Control": "no-store, max-age=0" } });
 }
 
+function googleCallbackRedirect(path: string) {
+  const callbackUri = process.env.AUTH_GOOGLE_REDIRECT_URI;
+  if (!callbackUri) throw new UserAuthError(503, "GOOGLE_NOT_CONFIGURED", "Đăng nhập Google chưa được cấu hình.");
+  return NextResponse.redirect(new URL(path, callbackUri));
+}
+
 function errorResponse(error: unknown) {
   if (error instanceof UserAuthError) return json({ error: { code: error.code, message: error.message } }, error.status);
   return json({ error: { code: "AUTH_UNAVAILABLE", message: "Dịch vụ xác thực tạm thời chưa sẵn sàng." } }, 503);
@@ -46,13 +52,11 @@ export async function GET(request: Request, context: Context) {
       const clientId = process.env.AUTH_GOOGLE_CLIENT_ID;
       const redirectUri = process.env.AUTH_GOOGLE_REDIRECT_URI;
       if (!clientId || !redirectUri) throw new UserAuthError(503, "GOOGLE_NOT_CONFIGURED", "Đăng nhập Google chưa được cấu hình.");
-      const url = new URL(request.url);
-      const rememberSession = url.searchParams.get("rememberSession") === "true";
       const preauth = await getOrCreatePreAuth();
       const state = randomBytes(32).toString("base64url");
       const nonce = randomBytes(32).toString("base64url");
       const verifier = randomBytes(48).toString("base64url");
-      await savePreAuth(preauth.raw, { ...preauth.value, rememberSession, googleState: state, googleNonce: nonce, googleVerifier: verifier });
+      await savePreAuth(preauth.raw, { ...preauth.value, googleState: state, googleNonce: nonce, googleVerifier: verifier });
       const authorize = new URL("https://accounts.google.com/o/oauth2/v2/auth");
       authorize.search = new URLSearchParams({
         client_id: clientId, redirect_uri: redirectUri, response_type: "code", scope: "openid email profile",
@@ -70,15 +74,14 @@ export async function GET(request: Request, context: Context) {
       if (!code || url.searchParams.has("error")) throw new UserAuthError(401, "GOOGLE_CANCELLED", "Đăng nhập Google đã bị hủy.");
       const credentials = await backendJson<BackendCredentials>("/google/exchange", {
         code, code_verifier: preauth.value.googleVerifier, nonce: preauth.value.googleNonce,
-        remember_session: Boolean(preauth.value.rememberSession),
       });
-      await createBrowserSession(credentials, Boolean(preauth.value.rememberSession));
-      return NextResponse.redirect(new URL("/?auth=login-success", request.url));
+      await createBrowserSession(credentials);
+      return googleCallbackRedirect("/?auth=login-success");
     }
     return json({ error: { code: "NOT_FOUND", message: "Không tìm thấy endpoint." } }, 404);
   } catch (error) {
     if ((await context.params).path.join("/") === "google/callback") {
-      return NextResponse.redirect(new URL(`/login?error=${encodeURIComponent(error instanceof UserAuthError ? error.code : "GOOGLE_AUTH_FAILED")}`, request.url));
+      return googleCallbackRedirect(`/login?error=${encodeURIComponent(error instanceof UserAuthError ? error.code : "GOOGLE_AUTH_FAILED")}`);
     }
     return errorResponse(error);
   }
@@ -92,9 +95,9 @@ export async function POST(request: Request, context: Context) {
     const data = await body(request);
     if (path === "login") {
       const credentials = await backendJson<BackendCredentials>("/login", {
-        email: data.email, password: data.password, remember_session: Boolean(data.remember_session),
+        email: data.email, password: data.password,
       });
-      await createBrowserSession(credentials, Boolean(data.remember_session));
+      await createBrowserSession(credentials);
       return json({ user: credentials.user });
     }
     if (path === "register") {
@@ -103,7 +106,7 @@ export async function POST(request: Request, context: Context) {
         pre_auth_id: preauth.value.id, email: data.email, display_name: data.display_name,
         password: data.password, password_confirmation: data.password_confirmation,
       });
-      await savePreAuth(preauth.raw, { ...preauth.value, challengeId: challenge.challenge_id, purpose: "registration", rememberSession: Boolean(data.remember_session) });
+      await savePreAuth(preauth.raw, { ...preauth.value, challengeId: challenge.challenge_id, purpose: "registration" });
       return json({ next: "/verify-email" }, 202);
     }
     if (path === "verify-email") {
@@ -111,9 +114,8 @@ export async function POST(request: Request, context: Context) {
       if (!preauth.value.challengeId) throw new UserAuthError(404, "CHALLENGE_NOT_FOUND", "Không tìm thấy yêu cầu xác thực.");
       const credentials = await backendJson<BackendCredentials>("/email-verification/verify", {
         pre_auth_id: preauth.value.id, challenge_id: preauth.value.challengeId, otp: data.otp,
-        remember_session: Boolean(preauth.value.rememberSession),
       });
-      await createBrowserSession(credentials, Boolean(preauth.value.rememberSession));
+      await createBrowserSession(credentials);
       return json({ user: credentials.user }, 201);
     }
     if (path === "resend") {
@@ -124,15 +126,15 @@ export async function POST(request: Request, context: Context) {
     }
     if (path === "password-reset/request") {
       const preauth = await getOrCreatePreAuth();
-      const challenge = await backendJson<{ challenge_id: string }>("/password-reset/request", { pre_auth_id: preauth.value.id, email: data.email });
+      const challenge = await backendJson<{ challenge_id: string; expires_in: number }>("/password-reset/request", { pre_auth_id: preauth.value.id, email: data.email });
       await savePreAuth(preauth.raw, { ...preauth.value, challengeId: challenge.challenge_id, purpose: "password_reset" });
-      return json({ accepted: true }, 202);
+      return json({ accepted: true, expires_in: challenge.expires_in }, 202);
     }
     if (path === "password-reset/verify") {
       const preauth = await getOrCreatePreAuth();
       if (!preauth.value.challengeId) throw new UserAuthError(404, "CHALLENGE_NOT_FOUND", "Không tìm thấy yêu cầu xác thực.");
       const grant = await backendJson<{ reset_grant: string }>("/password-reset/verify", {
-        pre_auth_id: preauth.value.id, challenge_id: preauth.value.challengeId, otp: data.otp, remember_session: false,
+        pre_auth_id: preauth.value.id, challenge_id: preauth.value.challengeId, otp: data.otp,
       });
       await savePreAuth(preauth.raw, { ...preauth.value, resetGrant: grant.reset_grant });
       return json({ verified: true });

@@ -2,6 +2,7 @@
 
 import base64
 from functools import lru_cache
+from typing import Literal
 
 from pydantic import Field, SecretStr, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
@@ -39,10 +40,9 @@ class Settings(BaseSettings):
     auth_issuer: str = "investiq"
     auth_audience: str = "investiq-api"
     auth_access_token_seconds: int = Field(default=300, ge=60, le=900)
-    auth_otp_seconds: int = Field(default=90, ge=60, le=600)
+    auth_otp_seconds: Literal[90] = 90
     auth_reset_grant_seconds: int = Field(default=300, ge=60, le=900)
-    auth_session_hours: int = Field(default=12, ge=1, le=24)
-    auth_remember_session_days: int = Field(default=30, ge=1, le=90)
+    auth_session_days: int = Field(default=30, ge=1, le=90)
     auth_google_client_id: str | None = None
     auth_google_client_secret: SecretStr | None = None
     auth_google_redirect_uri: str | None = None

@@ -12,6 +12,7 @@ from psycopg.rows import dict_row
 from psycopg_pool import ConnectionPool
 
 from app.domain.entities.user import User
+from app.domain.repositories.i_user_repository import DuplicateEmailError, PasswordResetAccountError
 
 
 class SqlUserRepository:
@@ -273,6 +274,8 @@ class SqlUserRepository:
             existing = connection.execute(
                 "SELECT 1 FROM users WHERE email = %s", (email,)
             ).fetchone()
+            if existing:
+                raise DuplicateEmailError(email)
             connection.execute(
                 """UPDATE auth_challenges SET consumed_at = now(), updated_at = now()
                    WHERE pre_auth_id = %s AND purpose = 'registration' AND consumed_at IS NULL""",
@@ -290,14 +293,12 @@ class SqlUserRepository:
                     display_name,
                     password_hash,
                     otp_digest,
-                    not bool(existing),
+                    True,
                     expires_at,
                     resend_at,
                 ),
             ).fetchone()
             assert row is not None
-            if existing:
-                return str(row[0]), ""
             job_id = self._email_job(
                 connection,
                 "registration_otp",
@@ -407,11 +408,7 @@ class SqlUserRepository:
                 (row["email"], row["display_name"], row["password_hash"], now),
             ).fetchone()
             if user_row is None:
-                connection.execute(
-                    "UPDATE auth_challenges SET consumed_at = %s WHERE id = %s",
-                    (now, challenge_id),
-                )
-                return None
+                raise DuplicateEmailError(str(row["email"]))
             connection.execute(
                 """INSERT INTO user_identities (user_id, provider, provider_subject)
                    VALUES (%s, 'password', %s)""",
@@ -438,7 +435,6 @@ class SqlUserRepository:
         user: User,
         *,
         provider: str,
-        remember: bool,
         refresh_hash: str,
         expires_at: datetime,
         idle_expires_at: datetime,
@@ -449,7 +445,7 @@ class SqlUserRepository:
                 """INSERT INTO auth_sessions
                    (id, user_id, provider, remember_session, idle_expires_at, absolute_expires_at)
                    VALUES (%s, %s, %s, %s, %s, %s)""",
-                (session_id, user.id, provider, remember, idle_expires_at, expires_at),
+                (session_id, user.id, provider, True, idle_expires_at, expires_at),
             )
             connection.execute(
                 """INSERT INTO refresh_tokens (session_id, token_hash, expires_at)
@@ -501,7 +497,7 @@ class SqlUserRepository:
                    VALUES (%s, %s, %s, %s)""",
                 (row["session_id"], new_hash, row["refresh_id"], bounded_expiry),
             )
-            idle_window = timedelta(days=7) if row["remember_session"] else timedelta(hours=2)
+            idle_window = timedelta(days=30) if row["remember_session"] else timedelta(hours=2)
             idle = min(now + idle_window, row["absolute_expires_at"])
             connection.execute(
                 "UPDATE auth_sessions SET last_seen_at = %s, idle_expires_at = %s WHERE id = %s",
@@ -554,8 +550,10 @@ class SqlUserRepository:
                 "SELECT id, password_hash FROM users WHERE email = %s AND status = 'active'",
                 (email,),
             ).fetchone()
-            if row is None or row[1] is None:
-                return None, None
+            if row is None:
+                raise PasswordResetAccountError("EMAIL_NOT_FOUND")
+            if row[1] is None:
+                raise PasswordResetAccountError("GOOGLE_ONLY_ACCOUNT")
             connection.execute(
                 """UPDATE auth_challenges SET consumed_at = now()
                    WHERE pre_auth_id = %s AND purpose = 'password_reset'

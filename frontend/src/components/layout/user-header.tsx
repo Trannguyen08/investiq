@@ -2,6 +2,7 @@
 /* eslint-disable @next/next/no-img-element */
 
 import Link from "next/link";
+import { Suspense } from "react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
 
@@ -91,10 +92,6 @@ function MobileMenu() {
 
 export function UserHeader() {
   const pathname = usePathname();
-  const search = useSearchParams();
-  const message = search.get("auth") === "register-success"
-    ? "Đăng ký thành công. Email xác nhận đã được gửi."
-    : search.get("auth") === "login-success" ? "Đăng nhập thành công." : "";
   return (
     <>
       <header className="site-header"><div className="header-inner">
@@ -103,7 +100,15 @@ export function UserHeader() {
         <form action="/news" className="header-search" role="search"><label className="sr-only" htmlFor="header-search">Tìm mã cổ phiếu hoặc tin tức</label><svg aria-hidden="true" viewBox="0 0 24 24"><path d="m21 21-4.4-4.4m2.4-5.1A7.5 7.5 0 1 1 4 11.5a7.5 7.5 0 0 1 15 0Z" /></svg><input id="header-search" name="q" placeholder="Tìm mã cổ phiếu, tin tức" /></form>
         <AccountMenu /><MobileMenu />
       </div></header>
-      {message && <div className="global-toast" role="status">{message}</div>}
+      <Suspense fallback={null}><AuthMessage /></Suspense>
     </>
   );
+}
+
+function AuthMessage() {
+  const search = useSearchParams();
+  const message = search.get("auth") === "register-success"
+    ? "Đăng ký thành công. Email xác nhận đã được gửi."
+    : search.get("auth") === "login-success" ? "Đăng nhập thành công." : "";
+  return message ? <div className="global-toast" role="status">{message}</div> : null;
 }

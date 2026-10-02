@@ -15,15 +15,12 @@ export async function loadAuth(force = false) {
   if (loaded && !force) return;
   loaded = true;
   try {
+    localStorage.removeItem("investiq_remembered_email");
+    localStorage.removeItem("investiq_remember_email_after_google");
+    sessionStorage.removeItem("investiq_pending_remember_email");
     const response = await fetch("/auth-api/me", { cache: "no-store" });
     if (!response.ok) { emit({ status: "anonymous", user: null }); return; }
     const data = await response.json() as { user: AuthUser };
-    if (localStorage.getItem("investiq_remember_email_after_google") === "true") {
-      localStorage.setItem("investiq_remembered_email", JSON.stringify({
-        email: data.user.email, expiresAt: Date.now() + 30 * 86400_000,
-      }));
-      localStorage.removeItem("investiq_remember_email_after_google");
-    }
     emit({ status: "authenticated", user: data.user });
   } catch { emit({ status: "anonymous", user: null }); }
 }

@@ -7,6 +7,8 @@ import smtplib
 import ssl
 from datetime import UTC, datetime, timedelta
 from email.message import EmailMessage
+from email.utils import format_datetime, make_msgid, parseaddr
+from html import escape
 from typing import Any
 
 from celery import Task
@@ -62,31 +64,97 @@ def _payload(encrypted: str) -> dict[str, str]:
 def _message(payload: dict[str, str]) -> EmailMessage:
     template = payload["template"]
     subjects = {
-        "registration_otp": "Mã xác minh đăng ký InvestIQ",
-        "password_reset_otp": "Mã khôi phục mật khẩu InvestIQ",
-        "registration_success": "Đăng ký InvestIQ thành công",
-        "password_changed": "Mật khẩu InvestIQ đã được thay đổi",
+        "registration_otp": "Mã xác minh email InvestIQ",
+        "password_reset_otp": "Mã đặt lại mật khẩu InvestIQ",
+        "registration_success": "Tài khoản InvestIQ đã sẵn sàng",
+        "password_changed": "Mật khẩu InvestIQ đã được cập nhật",
     }
     if template.endswith("_otp"):
-        body = (
-            f"Mã xác minh của bạn là {payload['otp']}. "
-            "Mã hết hạn sau 90 giây. Không chia sẻ mã này."
+        otp = payload["otp"]
+        purpose = "xác minh địa chỉ email" if template == "registration_otp" else "đặt lại mật khẩu"
+        heading = "Xác minh địa chỉ email" if template == "registration_otp" else "Đặt lại mật khẩu"
+        intro = f"Bạn vừa yêu cầu {purpose} cho tài khoản InvestIQ."
+        text_body = (
+            f"Xin chào,\n\n{intro}\n\n"
+            f"Mã OTP của bạn: {otp}\n\n"
+            "Mã có hiệu lực trong 90 giây và chỉ sử dụng được một lần. "
+            "Vui lòng không chia sẻ mã này với bất kỳ ai.\n\n"
+            "Nếu bạn không thực hiện yêu cầu này, bạn có thể bỏ qua email.\n\n"
+            "Trân trọng,\nĐội ngũ InvestIQ"
+        )
+        otp_block = (
+            '<div style="margin:28px 0;padding:20px 16px;background:#eff6ff;'
+            'border:1px solid #bfdbfe;border-radius:12px;text-align:center">'
+            '<p style="margin:0 0 8px;color:#475569;font-size:13px">MÃ OTP CỦA BẠN</p>'
+            f'<p style="margin:0;color:#1d4ed8;font-family:Arial,sans-serif;'
+            'font-size:34px;font-weight:700;letter-spacing:10px;padding-left:10px">'
+            f'{escape(otp)}</p>'
+            '</div>'
+        )
+        detail = (
+            '<p style="margin:0 0 8px;color:#475569;font-size:14px;line-height:1.6">'
+            'Mã có hiệu lực trong <strong>90 giây</strong> và chỉ sử dụng được một lần.</p>'
+            '<p style="margin:0;color:#475569;font-size:14px;line-height:1.6">'
+            'Vui lòng không chia sẻ mã này với bất kỳ ai. '
+            'Nếu bạn không yêu cầu, hãy bỏ qua email này.</p>'
         )
     elif template == "registration_success":
-        body = (
-            f"Chào {payload.get('display_name', 'bạn')}, "
-            "tài khoản InvestIQ của bạn đã được tạo thành công."
+        name = payload.get("display_name", "bạn")
+        text_body = (
+            f"Xin chào {name},\n\nTài khoản InvestIQ của bạn đã được tạo thành công. "
+            "Bạn có thể đăng nhập và bắt đầu sử dụng dịch vụ.\n\n"
+            "Trân trọng,\nĐội ngũ InvestIQ"
+        )
+        heading = "Chào mừng bạn đến với InvestIQ"
+        intro = "Địa chỉ email của bạn đã được xác minh và tài khoản hiện đã sẵn sàng."
+        otp_block = ""
+        detail = (
+            '<p style="margin:0;color:#475569;font-size:14px;line-height:1.6">'
+            "Bạn có thể đăng nhập để bắt đầu sử dụng InvestIQ.</p>"
         )
     else:
-        body = (
-            "Mật khẩu InvestIQ của bạn vừa được thay đổi. "
-            "Nếu không phải bạn, hãy liên hệ hỗ trợ ngay."
+        text_body = (
+            "Xin chào,\n\nMật khẩu tài khoản InvestIQ của bạn vừa được cập nhật.\n\n"
+            "Nếu bạn không thực hiện thay đổi này, vui lòng đổi lại mật khẩu "
+            "và liên hệ bộ phận hỗ trợ.\n\n"
+            "Trân trọng,\nĐội ngũ InvestIQ"
         )
+        heading = "Mật khẩu đã được cập nhật"
+        intro = "Mật khẩu tài khoản InvestIQ của bạn vừa được thay đổi thành công."
+        otp_block = ""
+        detail = (
+            '<p style="margin:0;color:#475569;font-size:14px;line-height:1.6">'
+            'Nếu bạn không thực hiện thay đổi này, vui lòng đặt lại mật khẩu '
+            'và liên hệ bộ phận hỗ trợ.</p>'
+        )
+
+    safe_heading = escape(heading)
+    safe_intro = escape(intro)
+    html_body = (
+        '<!doctype html><html lang="vi"><body style="margin:0;padding:24px;background:#f1f5f9;'
+        'font-family:Arial,Helvetica,sans-serif;color:#0f172a">'
+        '<table role="presentation" width="100%" cellspacing="0" cellpadding="0" '
+        'style="max-width:560px;margin:0 auto;background:#ffffff;border:1px solid #e2e8f0;'
+        'border-radius:16px"><tr><td style="padding:32px 28px">'
+        '<p style="margin:0 0 24px;color:#1d4ed8;font-size:20px;font-weight:700">InvestIQ</p>'
+        f'<h1 style="margin:0 0 12px;font-size:23px;line-height:1.35">{safe_heading}</h1>'
+        f'<p style="margin:0;color:#475569;font-size:15px;line-height:1.7">{safe_intro}</p>'
+        f'{otp_block}{detail}'
+        '<hr style="height:1px;margin:28px 0 16px;border:0;background:#e2e8f0">'
+        '<p style="margin:0;color:#64748b;font-size:12px;line-height:1.6">'
+        'Email tự động từ InvestIQ. Vui lòng không trả lời thư này.</p>'
+        '</td></tr></table></body></html>'
+    )
     message = EmailMessage()
     message["Subject"] = subjects[template]
     message["From"] = settings.auth_mail_from
     message["To"] = payload["email"]
-    message.set_content(body)
+    sender_address = parseaddr(settings.auth_mail_from or "")[1]
+    sender_domain = sender_address.rpartition("@")[2] or None
+    message["Date"] = format_datetime(datetime.now(UTC))
+    message["Message-ID"] = make_msgid(domain=sender_domain)
+    message.set_content(text_body)
+    message.add_alternative(html_body, subtype="html")
     return message
 
 

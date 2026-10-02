@@ -1,4 +1,4 @@
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 
 import pytest
 from cryptography.fernet import Fernet
@@ -48,11 +48,15 @@ def test_login_hashes_password_and_creates_server_session() -> None:
     password_hash = PasswordHasher().hash(password)
     repository = LoginRepository(password_hash)
 
-    credentials = make_service(repository).login(" User@Example.com ", password, remember=True)
+    credentials = make_service(repository).login(" User@Example.com ", password)
 
     assert credentials.user.email == "user@example.com"
     assert credentials.refresh_token.startswith(f"{credentials.session_id}.")
-    assert repository.session["remember"] is True
+    expires_at = repository.session["expires_at"]
+    idle_expires_at = repository.session["idle_expires_at"]
+    assert isinstance(expires_at, datetime)
+    assert isinstance(idle_expires_at, datetime)
+    assert expires_at - idle_expires_at == timedelta(0)
     assert repository.session["refresh_hash"] != credentials.refresh_token
     assert repository.audit == [("login", "success")]
 
@@ -63,7 +67,7 @@ def test_login_returns_uniform_error_for_unknown_or_wrong_password() -> None:
 
     for email in ("missing@example.com", "user@example.com"):
         with pytest.raises(AuthError) as error:
-            service.login(email, "definitely-the-wrong-password", remember=False)
+            service.login(email, "definitely-the-wrong-password")
         assert error.value.code == "INVALID_CREDENTIALS"
         assert error.value.message == "Email hoặc mật khẩu không đúng."
 
@@ -115,7 +119,6 @@ def test_google_login_rejects_disabled_identity_before_creating_session() -> Non
             email="user@example.com",
             display_name="Nguyễn An",
             avatar_url=None,
-            remember=False,
         )
 
     assert error.value.code == "INVALID_CREDENTIALS"

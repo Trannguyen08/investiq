@@ -16,13 +16,12 @@ type BackendCredentials = {
   user: AuthUser;
 };
 
-type BrowserSession = { credentials: BackendCredentials; rememberSession: boolean; csrf: string };
+type BrowserSession = { credentials: BackendCredentials; csrf: string };
 type PreAuth = {
   id: string;
   csrf: string;
   challengeId?: string;
   purpose?: "registration" | "password_reset";
-  rememberSession?: boolean;
   resetGrant?: string;
   googleState?: string;
   googleNonce?: string;
@@ -122,7 +121,12 @@ export async function getOrCreatePreAuth() {
   const raw = store.get(PREAUTH_COOKIE)?.value;
   if (raw) {
     const stored = await (await redis()).get(key("preauth", raw));
-    if (stored) return { raw, value: decrypt<PreAuth>(stored) };
+    if (stored) {
+      const value = decrypt<PreAuth>(stored);
+      // Keep the readable double-submit cookie aligned with the active pre-auth session.
+      store.set(CSRF_COOKIE, value.csrf, { httpOnly: false, secure: process.env.NODE_ENV === "production", sameSite: "lax", path: "/", maxAge: 15 * 60 });
+      return { raw, value };
+    }
   }
   const value: PreAuth = { id: crypto.randomUUID(), csrf: randomBytes(32).toString("base64url") };
   const created = await setPreAuth(value);
@@ -136,7 +140,9 @@ export async function savePreAuth(raw: string, value: PreAuth) {
 export async function verifyCsrf(request: Request) {
   const origin = request.headers.get("origin");
   const fetchSite = request.headers.get("sec-fetch-site");
-  if (origin && origin !== new URL(request.url).origin) {
+  // The incoming request URL can be the internal frontend address behind Nginx.
+  const publicOrigin = new URL(process.env.AUTH_GOOGLE_REDIRECT_URI ?? request.url).origin;
+  if (origin && origin !== publicOrigin) {
     throw new UserAuthError(403, "CSRF_REJECTED", "Yêu cầu không hợp lệ.");
   }
   if (fetchSite && fetchSite !== "same-origin" && fetchSite !== "none") {
@@ -162,17 +168,22 @@ export async function verifyCsrf(request: Request) {
   throw new UserAuthError(403, "CSRF_REJECTED", "Yêu cầu không hợp lệ.");
 }
 
-export async function createBrowserSession(credentials: BackendCredentials, rememberSession: boolean) {
+const sessionDays = Number(process.env.AUTH_SESSION_DAYS ?? "30");
+if (!Number.isInteger(sessionDays) || sessionDays < 1 || sessionDays > 90) {
+  throw new Error("AUTH_SESSION_DAYS must be between 1 and 90");
+}
+const SESSION_TTL_SECONDS = sessionDays * 24 * 60 * 60;
+
+export async function createBrowserSession(credentials: BackendCredentials) {
   const raw = randomBytes(32).toString("base64url");
-  const ttl = rememberSession ? 7 * 24 * 60 * 60 : 2 * 60 * 60;
   const csrf = randomBytes(32).toString("base64url");
-  await (await redis()).set(key("session", raw), encrypt({ credentials, rememberSession, csrf } satisfies BrowserSession), { EX: ttl });
+  await (await redis()).set(key("session", raw), encrypt({ credentials, csrf } satisfies BrowserSession), { EX: SESSION_TTL_SECONDS });
   const store = await cookies();
   store.set(SESSION_COOKIE, raw, {
     httpOnly: true, secure: process.env.NODE_ENV === "production", sameSite: "lax", path: "/",
-    ...(rememberSession ? { maxAge: 30 * 24 * 60 * 60 } : {}),
+    maxAge: SESSION_TTL_SECONDS,
   });
-  store.set(CSRF_COOKIE, csrf, { httpOnly: false, secure: process.env.NODE_ENV === "production", sameSite: "lax", path: "/", ...(rememberSession ? { maxAge: 30 * 24 * 60 * 60 } : {}) });
+  store.set(CSRF_COOKIE, csrf, { httpOnly: false, secure: process.env.NODE_ENV === "production", sameSite: "lax", path: "/", maxAge: SESSION_TTL_SECONDS });
   const preauth = store.get(PREAUTH_COOKIE)?.value;
   if (preauth) await (await redis()).del(key("preauth", preauth));
   store.delete(PREAUTH_COOKIE);
@@ -208,7 +219,7 @@ async function refreshSession(raw: string, session: BrowserSession) {
     if (new Date(latest.credentials.access_expires_at).getTime() > Date.now() + 15_000) return latest;
     const credentials = await backendJson<BackendCredentials>("/refresh", { refresh_token: latest.credentials.refresh_token });
     const updated = { ...latest, credentials };
-    await client.set(key("session", raw), encrypt(updated), { EX: latest.rememberSession ? 7 * 86400 : 7200 });
+    await client.set(key("session", raw), encrypt(updated), { EX: SESSION_TTL_SECONDS });
     return updated;
   } finally {
     await client.eval("if redis.call('get', KEYS[1]) == ARGV[1] then return redis.call('del', KEYS[1]) else return 0 end", { keys: [lockKey], arguments: [owner] });

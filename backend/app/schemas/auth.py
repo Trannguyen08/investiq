@@ -20,14 +20,12 @@ class RegisterRequest(StrictModel):
 class LoginRequest(StrictModel):
     email: str = Field(min_length=3, max_length=320)
     password: str = Field(min_length=1, max_length=128)
-    remember_session: bool = False
 
 
 class VerifyOtpRequest(StrictModel):
     pre_auth_id: str = Field(min_length=36, max_length=36)
     challenge_id: str = Field(min_length=36, max_length=36)
     otp: str = Field(pattern=r"^\d{6}$")
-    remember_session: bool = False
 
 
 class ResendRequest(StrictModel):
@@ -55,7 +53,6 @@ class GoogleExchangeRequest(StrictModel):
     code: str = Field(min_length=1, max_length=4096)
     code_verifier: str = Field(min_length=43, max_length=128)
     nonce: str = Field(min_length=20, max_length=256)
-    remember_session: bool = False
 
 
 class UserResponse(StrictModel):

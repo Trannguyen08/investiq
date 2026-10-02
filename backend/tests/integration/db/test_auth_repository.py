@@ -53,10 +53,10 @@ def test_registration_login_refresh_reuse_and_logout(auth_repository: SqlUserRep
     )
     assert job_id
 
-    verified = service.verify_registration(pre_auth_id, challenge_id, "123456", False)
+    verified = service.verify_registration(pre_auth_id, challenge_id, "123456")
     assert service.current_user(verified.access_token).display_name == "Nguyễn An"
 
-    logged_in = service.login("an@example.com", "a-secure-password-long-enough", remember=True)
+    logged_in = service.login("an@example.com", "a-secure-password-long-enough")
     rotated = service.refresh(logged_in.refresh_token)
     assert rotated.refresh_token != logged_in.refresh_token
 
@@ -88,14 +88,14 @@ def test_admin_user_update_revokes_sessions_and_audits(auth_repository: SqlUserR
             "a-secure-password-long-enough",
             "a-secure-password-long-enough",
         )
-        return service.verify_registration(preauth, challenge, "123456", False).user.id
+        return service.verify_registration(preauth, challenge, "123456").user.id
 
     admin_id = register("admin@example.com", "11111111-1111-4111-8111-111111111111")
     target_id = register("target@example.com", "22222222-2222-4222-8222-222222222222")
     with auth_repository._pool.connection() as connection:
         connection.execute("UPDATE users SET role = 'admin' WHERE id = %s", (admin_id,))
-    admin = service.login("admin@example.com", "a-secure-password-long-enough", False)
-    target_session = service.login("target@example.com", "a-secure-password-long-enough", False)
+    admin = service.login("admin@example.com", "a-secure-password-long-enough")
+    target_session = service.login("target@example.com", "a-secure-password-long-enough")
 
     items, total = ManageUsers(auth_repository).list(query="target@", limit=10)
     assert total == 1
@@ -122,8 +122,81 @@ def test_admin_user_update_revokes_sessions_and_audits(auth_repository: SqlUserR
             request_id="request-last-admin",
         )
     with auth_repository._pool.connection() as connection:
-        assert connection.execute(
+        audit_count = connection.execute(
             """SELECT count(*) FROM auth_audit_events
                WHERE event_type = 'admin_user_update' AND outcome = 'rejected'"""
-        ).fetchone()[0] == 1
+        ).fetchone()
+        assert audit_count is not None and audit_count[0] == 1
     assert service.current_user(admin.access_token).role == "admin"
+
+
+def test_registration_rejects_an_existing_email(auth_repository: SqlUserRepository) -> None:
+    service = AuthService(
+        auth_repository,
+        PasswordHasher(),
+        JwtHandler("j" * 48, "investiq", "investiq-api", 300),
+        "o" * 48,
+        Fernet.generate_key().decode(),
+    )
+    service._otp = lambda: "123456"  # type: ignore[method-assign]
+    pre_auth_id = "11111111-1111-4111-8111-111111111111"
+    challenge_id, _ = service.register(
+        pre_auth_id,
+        "an@example.com",
+        "Test Account",
+        "a-secure-password-long-enough",
+        "a-secure-password-long-enough",
+    )
+    concurrent_pre_auth_id = "22222222-2222-4222-8222-222222222222"
+    concurrent_challenge_id, _ = service.register(
+        concurrent_pre_auth_id,
+        "AN@example.com",
+        "Another Account",
+        "another-secure-password-long",
+        "another-secure-password-long",
+    )
+    service.verify_registration(pre_auth_id, challenge_id, "123456")
+
+    with pytest.raises(AuthError) as concurrent_error:
+        service.verify_registration(concurrent_pre_auth_id, concurrent_challenge_id, "123456")
+    assert concurrent_error.value.code == "EMAIL_ALREADY_REGISTERED"
+
+    with pytest.raises(AuthError) as error:
+        service.register(
+            "22222222-2222-4222-8222-222222222222",
+            " AN@example.com ",
+            "Another Account",
+            "another-secure-password-long",
+            "another-secure-password-long",
+        )
+
+    assert error.value.code == "EMAIL_ALREADY_REGISTERED"
+    assert error.value.status_code == 409
+
+
+def test_password_recovery_distinguishes_unknown_and_google_only_accounts(
+    auth_repository: SqlUserRepository,
+) -> None:
+    service = AuthService(
+        auth_repository,
+        PasswordHasher(),
+        JwtHandler("j" * 48, "investiq", "investiq-api", 300),
+        "o" * 48,
+        Fernet.generate_key().decode(),
+    )
+    service._otp = lambda: "123456"  # type: ignore[method-assign]
+    auth_repository.create_google_user_or_login(
+        subject="google-subject-test",
+        email="google@example.com",
+        display_name="Google Account",
+        avatar_url=None,
+        encrypted_mail_payload="encrypted-payload",
+    )
+
+    for email, expected_code in (
+        ("missing@example.com", "EMAIL_NOT_FOUND"),
+        ("google@example.com", "GOOGLE_ONLY_ACCOUNT"),
+    ):
+        with pytest.raises(AuthError) as error:
+            service.request_password_reset("11111111-1111-4111-8111-111111111111", email)
+        assert error.value.code == expected_code

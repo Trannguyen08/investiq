@@ -40,8 +40,9 @@
 ## Local development
 
 - Authentication is implemented behind `AUTH_ENABLED=false` by default. It provides email/Google
-  login, 90-second registration OTP, password recovery, server-held JWT/refresh credentials, and
-  separate remember-email/persistent-login options. Configure the blank auth entries in `.env`
+  login, 90-second registration and password-reset OTPs, server-held JWT/refresh credentials, and
+  automatic persistent sessions with rotating refresh tokens. Email addresses are not remembered
+  in browser storage. Configure the blank auth entries in `.env`
   using the ignored local guide `docs/tutorial/auth-keys.md` before enabling it.
 
 - Copy `.env.example` to `.env`, replace placeholder secrets, then use `docker compose up --build

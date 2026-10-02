@@ -92,8 +92,7 @@ def _service(repository: SqlUserRepository) -> AuthService:
         payload_key.get_secret_value(),
         otp_seconds=settings.auth_otp_seconds,
         reset_grant_seconds=settings.auth_reset_grant_seconds,
-        session_hours=settings.auth_session_hours,
-        remember_days=settings.auth_remember_session_days,
+        session_days=settings.auth_session_days,
     )
 
 
@@ -189,7 +188,7 @@ def verify_email(
     _limit(request, "verify", body.challenge_id, 10, 900)
     return _credentials(
         _service(repository).verify_registration(
-            body.pre_auth_id, body.challenge_id, body.otp, body.remember_session
+            body.pre_auth_id, body.challenge_id, body.otp
         )
     )
 
@@ -204,7 +203,7 @@ def login(
     _private(response)
     _limit(request, "login", body.email.casefold(), 10, 900)
     return _credentials(
-        _service(repository).login(body.email, body.password, body.remember_session)
+        _service(repository).login(body.email, body.password)
     )
 
 
@@ -249,6 +248,7 @@ def request_reset(
 ) -> ChallengeResponse:
     _private(response)
     _require_mail()
+    _limit(request, "reset-ip", _client_ip(request), 10, 3600)
     _limit(request, "reset", body.email.casefold(), 5, 3600)
     challenge_id, _ = _service(repository).request_password_reset(body.pre_auth_id, body.email)
     return ChallengeResponse(
@@ -313,6 +313,5 @@ def google_exchange(
         email=identity.email,
         display_name=identity.display_name,
         avatar_url=identity.avatar_url,
-        remember=body.remember_session,
     )
     return _credentials(credentials)

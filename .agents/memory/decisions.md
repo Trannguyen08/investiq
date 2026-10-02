@@ -3,6 +3,42 @@
 Record durable decisions in reverse chronological order. Do not record routine implementation
 details.
 
+## 2026-10-02 — Authentication email feedback
+
+- **Status:** Accepted and implemented
+- **Context:** Duplicate registrations left users waiting for an OTP that was never sent; password
+  recovery did not explain unknown addresses or Google-only accounts.
+- **Decision:** Reject registered emails at registration with 409, return 404 for unknown recovery
+  addresses, and return 409 with Google sign-in guidance for Google-only accounts. Keep a 5/hour
+  per-email/per-IP recovery limit and add a 10/hour per-IP limit.
+- **Consequences:** This gives users actionable recovery guidance but reveals account existence and
+  sign-in provider to someone who knows an email address. The user explicitly chose that behavior;
+  the additional IP limit reduces, but does not eliminate, enumeration risk.
+
+## 2026-10-02 — Automatic user sessions and OTP email presentation
+
+- **Status:** Accepted and implemented
+- **Context:** Users should not need to opt into persistent login, and authentication emails need
+  clear copy plus a prominent, readable OTP in both rich and plain-text email clients.
+- **Decision:** Remove remembered-email storage and persistent-session choices from the UI and BFF.
+  Create every user session with the configured absolute lifetime (30 days by default), an
+  HttpOnly browser cookie, encrypted server-side credentials, and automatic rotating refresh tokens.
+  Send OTP and account notices with inline-styled HTML and a plain-text alternative.
+- **Consequences:** Browser storage never retains login email or refresh credentials. Sessions still
+  expire at the backend absolute limit and can be revoked at logout; new sessions use the existing
+  refresh replay protections. Mail clients that do not support HTML receive the same OTP in text.
+
+## 2026-10-02 — SMTP egress for authentication notifications
+
+- **Status:** Accepted and implemented
+- **Context:** The Compose backend network is internal-only, so the authentication email worker
+  could not resolve or connect to its external SMTP provider. OTP delivery failed before SMTP
+  authentication.
+- **Decision:** Keep backend services on the internal network and attach only
+  `celery-notifications` to a separate outbound network for SMTP delivery.
+- **Consequences:** Authentication email delivery can reach its configured provider while the API,
+  general Celery worker, Beat, database, and Redis retain their existing network isolation.
+
 ## 2026-09-30 — Metadata-only expansion through publisher RSS feeds
 
 - **Status:** Accepted and implemented

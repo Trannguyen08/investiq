@@ -8,6 +8,18 @@ from typing import Protocol
 from app.domain.entities.user import User
 
 
+class DuplicateEmailError(ValueError):
+    """The email is already reserved by a user account."""
+
+
+class PasswordResetAccountError(ValueError):
+    """The email is unknown or belongs to an account without a password."""
+
+    def __init__(self, code: str) -> None:
+        super().__init__(code)
+        self.code = code
+
+
 class IUserRepository(Protocol):
     def find_user_by_email(self, email: str) -> tuple[User, str | None] | None: ...
     def find_google_user(self, subject: str) -> User | None: ...
@@ -49,7 +61,6 @@ class IUserRepository(Protocol):
         user: User,
         *,
         provider: str,
-        remember: bool,
         refresh_hash: str,
         expires_at: datetime,
         idle_expires_at: datetime,

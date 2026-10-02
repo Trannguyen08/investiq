@@ -13,7 +13,7 @@ baseline is runnable; most finance and ML feature modules remain intentional pla
 | `db` | PostgreSQL persistence | Internal only |
 | `redis` | Cache plus Celery broker/result backend | Internal only |
 | `celery-worker` | Asynchronous task execution | Internal only |
-| `celery-notifications` | Isolated OTP and authentication email delivery | Internal only |
+| `celery-notifications` | Isolated OTP and authentication email delivery | Internal services plus outbound SMTP |
 | `celery-beat` | Scheduled task dispatch | Internal only |
 | `docker-socket-proxy` | Endpoint-restricted Docker log access | Internal only |
 | `log-viewer` | Dozzle runtime log viewer | Loopback port `LOG_VIEWER_PORT` |
@@ -31,12 +31,18 @@ Redis databases 1 and 2 for delivery/results; application caching uses Redis dat
    docker compose up --build --wait
    ```
 
-3. Open `http://localhost:8080` (or the configured `HTTP_PORT`). The API smoke endpoint is
+3. Apply the database migrations before using the UI or API:
+
+   ```sh
+   docker compose run --rm backend python -m app.infrastructure.db.base
+   ```
+
+4. Open `http://localhost:8080` (or the configured `HTTP_PORT`). The API smoke endpoint is
    `http://localhost:8080/api/v1/status`.
-4. Open `http://localhost:9999` (or the configured `LOG_VIEWER_PORT`) for runtime logs. The port is
+5. Open `http://localhost:9999` (or the configured `LOG_VIEWER_PORT`) for runtime logs. The port is
    bound to `127.0.0.1` only. The viewer includes every application runtime container while
    excluding image-build output, its own viewer/proxy logs, and routine health request entries.
-5. Stop containers with `docker compose down`. Add `--volumes` only when intentionally deleting the
+6. Stop containers with `docker compose down`. Add `--volumes` only when intentionally deleting the
    local PostgreSQL and Redis data.
 
 Liveness is available at `/healthz` inside the backend container; `/readyz` verifies PostgreSQL and
@@ -134,7 +140,7 @@ table, backend quality checks, and per-feature coverage reports.
 
 See [`docs/plan/`](docs/plan/README.md) for the feature specifications. The
 [authentication plan](docs/plan/auth.md) covers email/Google login, OTP, server-held JWT/refresh
-credentials, and separate remember-email/session options. The implementation is available behind
+credentials, and automatic session refresh. The implementation is available behind
 the fail-closed `AUTH_ENABLED` flag; configure the blank auth entries in `.env` before enabling it.
 The
 [Vietnamese stock-market news plan](docs/plan/vietnam-stock-news.md) now has an implemented,

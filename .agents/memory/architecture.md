@@ -49,6 +49,9 @@ investiq/
 - Backend and frontend images are built from service-local Dockerfiles. Deployment overrides their
   Compose image names with immutable GHCR tags.
 - PostgreSQL and Redis are private to the Compose network and persist in named volumes.
+- Backend services use an internal-only network. The authentication notification worker also joins
+  a dedicated outbound network so it can reach the configured SMTP server; other backend services
+  remain isolated from external egress.
 - News articles, immutable revisions, source policies, verified symbols, publisher-explicit symbol
   candidates, versioned sentiment/market-impact analysis, crawl runs, and durable
   ingestion jobs are stored in PostgreSQL. Celery/Redis deliver work; a PostgreSQL dispatcher
@@ -71,6 +74,7 @@ investiq/
   Browser actions execute as server actions, while the FastAPI operations token remains server-only;
   both layers fail closed when their independent runtime secrets are absent.
 - Celery news worker, isolated authentication notification worker, and Beat reuse the backend image.
+  Only the notification worker has external network access, for SMTP delivery.
   Each environment must run only one Beat scheduler.
 - FastAPI, Celery, and Nginx produce sanitized structured runtime fields. Health access logs and
   image-build output are excluded from the viewer to limit operational noise.

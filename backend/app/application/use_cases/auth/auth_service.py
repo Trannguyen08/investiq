@@ -14,7 +14,11 @@ from uuid import uuid4
 from cryptography.fernet import Fernet, InvalidToken
 
 from app.domain.entities.user import User
-from app.domain.repositories.i_user_repository import IUserRepository
+from app.domain.repositories.i_user_repository import (
+    DuplicateEmailError,
+    IUserRepository,
+    PasswordResetAccountError,
+)
 from app.infrastructure.security.jwt_handler import JwtHandler
 from app.infrastructure.security.password_hasher import PasswordHasher
 
@@ -56,8 +60,7 @@ class AuthService:
         *,
         otp_seconds: int = 90,
         reset_grant_seconds: int = 300,
-        session_hours: int = 12,
-        remember_days: int = 30,
+        session_days: int = 30,
     ) -> None:
         if len(otp_key) < 32:
             raise ValueError("AUTH_OTP_HMAC_KEY must contain at least 32 characters")
@@ -71,8 +74,7 @@ class AuthService:
             raise ValueError("AUTH_PAYLOAD_ENCRYPTION_KEY must be a Fernet key") from exc
         self._otp_seconds = otp_seconds
         self._reset_seconds = reset_grant_seconds
-        self._session_hours = session_hours
-        self._remember_days = remember_days
+        self._session_days = session_days
 
     @staticmethod
     def normalize_email(value: str) -> str:
@@ -134,16 +136,23 @@ class AuthService:
         self.validate_password(password, confirmation)
         otp = self._otp()
         now = datetime.now(UTC)
-        challenge_id, job_id = self._repository.create_registration_challenge(
-            pre_auth_id=pre_auth_id,
-            email=normalized,
-            display_name=name,
-            password_hash=self._passwords.hash(password),
-            otp_digest=self._otp_digest(pre_auth_id, "registration", normalized, otp),
-            expires_at=now + timedelta(seconds=self._otp_seconds),
-            resend_at=now + timedelta(seconds=30),
-            encrypted_mail_payload=self._encrypt_mail("registration_otp", normalized, otp=otp),
-        )
+        try:
+            challenge_id, job_id = self._repository.create_registration_challenge(
+                pre_auth_id=pre_auth_id,
+                email=normalized,
+                display_name=name,
+                password_hash=self._passwords.hash(password),
+                otp_digest=self._otp_digest(pre_auth_id, "registration", normalized, otp),
+                expires_at=now + timedelta(seconds=self._otp_seconds),
+                resend_at=now + timedelta(seconds=30),
+                encrypted_mail_payload=self._encrypt_mail("registration_otp", normalized, otp=otp),
+            )
+        except DuplicateEmailError as exc:
+            raise AuthError(
+                "EMAIL_ALREADY_REGISTERED",
+                "Email này đã được đăng ký. Vui lòng đăng nhập hoặc khôi phục mật khẩu.",
+                409,
+            ) from exc
         return challenge_id, job_id
 
     def challenge_status(self, pre_auth_id: str, challenge_id: str) -> dict[str, object]:
@@ -176,9 +185,7 @@ class AuthService:
         except ValueError as exc:
             raise AuthError("RESEND_TOO_SOON", "Vui lòng chờ trước khi gửi lại mã.", 429) from exc
 
-    def verify_registration(
-        self, pre_auth_id: str, challenge_id: str, otp: str, remember: bool
-    ) -> Credentials:
+    def verify_registration(self, pre_auth_id: str, challenge_id: str, otp: str) -> Credentials:
         if not re.fullmatch(r"\d{6}", otp):
             raise AuthError("INVALID_OTP", "Mã OTP không hợp lệ.", 401)
         current = self._repository.challenge_status(challenge_id, pre_auth_id)
@@ -186,22 +193,32 @@ class AuthService:
             raise AuthError("INVALID_OTP", "Mã OTP không hợp lệ hoặc đã hết hạn.", 401)
         email = str(current["email"])
         now = datetime.now(UTC)
-        user = self._repository.verify_registration(
-            challenge_id,
-            pre_auth_id,
-            self._otp_digest(pre_auth_id, "registration", email, otp),
-            now,
-            self._encrypt_mail(
-                "registration_success", email, display_name=str(current.get("display_name") or "")
-            ),
-        )
+        try:
+            user = self._repository.verify_registration(
+                challenge_id,
+                pre_auth_id,
+                self._otp_digest(pre_auth_id, "registration", email, otp),
+                now,
+                self._encrypt_mail(
+                    "registration_success",
+                    email,
+                    display_name=str(current.get("display_name") or ""),
+                ),
+            )
+        except DuplicateEmailError as exc:
+            self._repository.record_audit("registration_verify", "denied")
+            raise AuthError(
+                "EMAIL_ALREADY_REGISTERED",
+                "Email này đã được đăng ký. Vui lòng đăng nhập hoặc khôi phục mật khẩu.",
+                409,
+            ) from exc
         if user is None:
             self._repository.record_audit("registration_verify", "denied")
             raise AuthError("INVALID_OTP", "Mã OTP không hợp lệ hoặc đã hết hạn.", 401)
         self._repository.record_audit("registration_verify", "success", user.id)
-        return self._new_session(user, "password", remember)
+        return self._new_session(user, "password")
 
-    def login(self, email: str, password: str, remember: bool) -> Credentials:
+    def login(self, email: str, password: str) -> Credentials:
         normalized = self.normalize_email(email)
         found = self._repository.authenticate(normalized)
         valid = bool(found and found[1] and self._passwords.verify(found[1], password))
@@ -214,26 +231,19 @@ class AuthService:
         if user.status != "active" or user.email_verified_at is None:
             self._repository.record_audit("login", "denied", user.id)
             raise AuthError("INVALID_CREDENTIALS", "Email hoặc mật khẩu không đúng.", 401)
-        credentials = self._new_session(user, "password", remember)
+        credentials = self._new_session(user, "password")
         self._repository.record_audit("login", "success", user.id)
         return credentials
 
-    def _new_session(self, user: User, provider: str, remember: bool) -> Credentials:
+    def _new_session(self, user: User, provider: str) -> Credentials:
         now = datetime.now(UTC)
         session_id = str(uuid4())
         refresh_token = f"{session_id}.{secrets.token_urlsafe(48)}"
-        refresh_expires = now + (
-            timedelta(days=self._remember_days)
-            if remember
-            else timedelta(hours=self._session_hours)
-        )
-        idle_expires = min(
-            refresh_expires, now + (timedelta(days=7) if remember else timedelta(hours=2))
-        )
+        refresh_expires = now + timedelta(days=self._session_days)
+        idle_expires = refresh_expires
         self._repository.create_session(
             user,
             provider=provider,
-            remember=remember,
             refresh_hash=self._token_hash(refresh_token),
             expires_at=refresh_expires,
             idle_expires_at=idle_expires,
@@ -248,7 +258,7 @@ class AuthService:
             raise AuthError("INVALID_SESSION", "Phiên đăng nhập không hợp lệ.", 401)
         new_refresh = f"{session_id}.{secrets.token_urlsafe(48)}"
         now = datetime.now(UTC)
-        expires = now + timedelta(days=self._remember_days)
+        expires = now + timedelta(days=self._session_days)
         user = self._repository.rotate_refresh(
             self._token_hash(refresh_token), self._token_hash(new_refresh), now, expires
         )
@@ -277,14 +287,30 @@ class AuthService:
         normalized = self.normalize_email(email)
         otp = self._otp()
         now = datetime.now(UTC)
-        return self._repository.request_password_reset(
-            pre_auth_id=pre_auth_id,
-            email=normalized,
-            otp_digest=self._otp_digest(pre_auth_id, "password_reset", normalized, otp),
-            expires_at=now + timedelta(seconds=self._otp_seconds),
-            resend_at=now + timedelta(seconds=30),
-            encrypted_mail_payload=self._encrypt_mail("password_reset_otp", normalized, otp=otp),
-        )
+        try:
+            result = self._repository.request_password_reset(
+                pre_auth_id=pre_auth_id,
+                email=normalized,
+                otp_digest=self._otp_digest(pre_auth_id, "password_reset", normalized, otp),
+                expires_at=now + timedelta(seconds=self._otp_seconds),
+                resend_at=now + timedelta(seconds=30),
+                encrypted_mail_payload=self._encrypt_mail(
+                    "password_reset_otp", normalized, otp=otp
+                ),
+            )
+        except PasswordResetAccountError as exc:
+            code = exc.code
+            if code == "GOOGLE_ONLY_ACCOUNT":
+                raise AuthError(
+                    code,
+                    "Tài khoản này đăng nhập bằng Google và chưa có mật khẩu. "
+                    "Vui lòng chọn Đăng nhập với Google.",
+                    409,
+                ) from exc
+            if code == "EMAIL_NOT_FOUND":
+                raise AuthError(code, "Không tìm thấy tài khoản với email này.", 404) from exc
+            raise
+        return result
 
     def verify_password_reset(self, pre_auth_id: str, challenge_id: str, otp: str) -> str:
         current = self._repository.challenge_status(challenge_id, pre_auth_id)
@@ -331,7 +357,6 @@ class AuthService:
         email: str,
         display_name: str,
         avatar_url: str | None,
-        remember: bool,
     ) -> tuple[Credentials, str | None]:
         normalized = self.normalize_email(email)
         name = self.validate_display_name(display_name)
@@ -355,7 +380,7 @@ class AuthService:
         if user.status != "active" or user.email_verified_at is None:
             self._repository.record_audit("google_login", "denied", user.id)
             raise AuthError("INVALID_CREDENTIALS", "Tài khoản không thể đăng nhập.", 401)
-        credentials = self._new_session(user, "google", remember)
+        credentials = self._new_session(user, "google")
         self._repository.record_audit("google_login", "success", user.id)
         return credentials, job_id
 
