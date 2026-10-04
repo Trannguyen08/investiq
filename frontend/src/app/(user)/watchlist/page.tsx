@@ -1,5 +1,5 @@
-import { ScaffoldPage } from "@/components/ui/scaffold-page";
+import { redirect } from "next/navigation";
 
 export default function WatchlistPage() {
-  return <ScaffoldPage title="Watchlist" description="Tracked securities will be displayed here." />;
+  redirect("/market?tab=watchlist");
 }

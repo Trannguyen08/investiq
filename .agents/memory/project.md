@@ -5,8 +5,9 @@
 - Name: InvestIQ
 - Repository: `C:\investiq`
 - Application type: FastAPI and Next.js monorepo
-- Status: Runnable operational baseline with a six-source stock-news module and
-  feature-flagged end-user authentication; most other finance and ML modules remain placeholders.
+- Status: Runnable operational baseline with six-source stock news, feature-flagged end-user
+  authentication, and a fixture-backed home/market vertical slice; production market providers and
+  most portfolio/ML modules remain gated or placeholders.
 
 ## Confirmed stack
 
@@ -41,6 +42,15 @@
   evidence-backed investment theses, immutable updates, outcome-based contextual reputation, and
   source-linked AI counter-analysis. Target: differentiated MVP in 12 weeks and public beta in 28
   weeks. This roadmap is planned only; implementation has not started.
+- `docs/plan/home-market-pages.md` defines the public home page and `/market`. The local vertical
+  slice is implemented: index/trending/breadth/event home cards; Stocks, Watchlist, Indices, Events
+  and People tabs; canonical market entities/provider port; strict REST contracts; versioned snapshot
+  WebSocket; Redis public-read cache; PostgreSQL market/watchlist migration; and private watchlist
+  BFF/API operations. Development uses deterministic data labeled as a fixture. FiinGroup remains the
+  recommended commercial source for corporate/event/people coverage, while SSI or DNSE are realtime
+  candidates subject to credentials, field mapping, explicit redistribution rights, and SLA. Live
+  ingestion, stream reconciliation/failover, production popularity aggregation, and licensed history
+  backfill are not active.
 
 ## Local development
 
@@ -52,6 +62,8 @@
 
 - Copy `.env.example` to `.env`, replace placeholder secrets, then use `docker compose up --build
   --wait` for the complete stack.
+- `docs/tutorial/market-data-api-keys.md` ranks current Vietnam market-data options and documents
+  credential acquisition for Vnstock, TCBS, FinLens, DNSE, SSI, and FiinGroup without storing keys.
 - Use development servers for interactive code work and do not run the frontend production build
   during agent sessions.
 - Keep `frontend/package-lock.json` synchronized with `package.json` and backend requirement pins

@@ -3,6 +3,28 @@
 Record durable decisions in reverse chronological order. Do not record routine implementation
 details.
 
+## 2026-10-04 — Canonical licensed market data and explainable popularity
+
+- **Status:** Foundation implemented; licensed production adapters pending.
+- **Context:** The home and market pages need replaceable realtime/delayed providers, reliable
+  freshness, popular-stock ranking, events and public businessperson data without coupling UI to a
+  vendor or misrepresenting financial/person data.
+- **Decision:** Put licensed provider SDKs behind canonical market-data adapters and expose only
+  InvestIQ REST/WebSocket contracts. Stamp every value with source, market/received time, delay and
+  freshness; reconcile stream gaps with REST snapshots. Rank popular stocks from privacy-safe
+  InvestIQ engagement plus normalized market activity and show human-readable reason codes. Treat
+  matched volume as two-sided; show active buy/sell only when the provider defines it. For people,
+  minimize public professional/holding fields and label the computed metric “estimated listed-equity
+  value,” never total net worth.
+- **Consequences:** Production launch is gated by field-level storage/display/redistribution rights.
+  A provider can be replaced per data class without changing domain/UI contracts, but failover may
+  occur only between semantically compatible feeds. Engagement needs retention and anti-abuse
+  controls; people imagery and holdings need source dates and usage rights. The full specification is
+  `docs/plan/home-market-pages.md`.
+- **Refines:** “Evidence-based market community as the next product phase” below. The MVP baseline
+  remains licensed EOD/delayed data, while the canonical transport may accept realtime data earlier
+  when rights and budget are approved; a professional tick-by-tick board remains deferred.
+
 ## 2026-10-04 — Evidence-based market community as the next product phase
 
 - **Status:** Accepted as roadmap; not implemented.

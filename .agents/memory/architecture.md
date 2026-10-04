@@ -3,10 +3,10 @@
 ## Current state
 
 The monorepo has a runnable container and delivery baseline. FastAPI health/status endpoints, the
-Next.js shell, Celery configuration, Docker Compose, Nginx, and CI/CD are implemented. A six-source
-Vietnamese stock-news vertical slice is implemented and tested; most other product, data, and ML
-modules remain placeholders. End-user authentication is implemented behind a fail-closed feature
-flag and remains separate from the existing Admin News session boundary.
+Next.js shell, Celery configuration, Docker Compose, Nginx, and CI/CD are implemented. Six-source
+Vietnamese stock news and a fixture-backed home/market vertical slice are implemented; most
+portfolio and ML modules remain placeholders. End-user authentication is implemented behind a
+fail-closed feature flag and remains separate from the existing Admin News session boundary.
 
 ## Repository layout
 
@@ -72,6 +72,17 @@ investiq/
   dry-run by default.
 - Protected news operations endpoints use a dedicated bearer token, optimistic source row versions,
   and PostgreSQL audit records. They fail closed when no token is configured.
+- Public market routes use canonical domain entities and an application-owned provider port. The
+  development adapter emits deterministic fixture data with an explicit fixture freshness label;
+  `MARKET_DATA_MODE=disabled` is the shared/production default. Redis caches bounded public read
+  models, while PostgreSQL migration `0011_market_foundation` owns future licensed history, events,
+  public people/holding snapshots, engagement retention, and current private watchlists.
+- `/ws/v1/market` sends versioned hello/heartbeat/snapshot events with bounded symbol subscriptions.
+  It is an ephemeral delivery path; REST remains the resync source. Live provider sequence/gap
+  reconciliation is not active until a licensed adapter is configured.
+- Private watchlists use the existing Next.js server-held user session. The browser calls the
+  same-origin `/market-api/watchlists` BFF; FastAPI independently verifies the BFF secret, bearer
+  session, active user, and row ownership. Personalized responses are never shared-cacheable.
 - The Next.js Admin News workspace uses a server-validated, HMAC-signed HttpOnly session cookie.
   Browser actions execute as server actions, while the FastAPI operations token remains server-only;
   both layers fail closed when their independent runtime secrets are absent.
@@ -121,6 +132,14 @@ It keeps the existing FastAPI/Next.js/PostgreSQL/Redis/Celery boundaries and beg
 EOD or delayed market data. It plans private watchlists, a moderated community, versioned investment
 theses with market snapshots, outcome tracking, contextual reputation, and source-linked AI
 counter-analysis. These are product and architecture intentions, not implemented runtime facts.
+
+`docs/plan/home-market-pages.md` defines the market boundary now implemented for local development.
+Provider-specific clients remain infrastructure adapters behind canonical application ports, and
+browsers call only InvestIQ APIs. PostgreSQL owns the market/watchlist schema and Redis holds
+short-lived public read models. The current fixture WebSocket supplies bounded snapshots and
+heartbeat; licensed delayed/realtime ingestion, provider sequence/gap reconciliation, history
+backfill, and provider failover remain future adapter/worker work. Every current market response
+carries provider, market time, received time, delay class and freshness.
 
 This file is the canonical architectural overview. Every path or boundary change updates this file
 and all affected references in the same task, following `.agents/rules/project-structure.md`.

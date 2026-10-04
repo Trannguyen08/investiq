@@ -14,6 +14,9 @@ from redis.asyncio import Redis
 from app.api.v1.admin import router as news_admin_router
 from app.api.v1.admin_users import router as admin_users_router
 from app.api.v1.auth import router as auth_router
+from app.api.v1.market_data import router as market_router
+from app.api.v1.market_data import stream_router as market_stream_router
+from app.api.v1.market_data import watchlist_router
 from app.api.v1.news import router as news_router
 from app.application.use_cases.auth.auth_service import AuthError
 from app.infrastructure.config.logging_config import configure_logging
@@ -37,6 +40,9 @@ app.include_router(news_router)
 app.include_router(news_admin_router)
 app.include_router(admin_users_router)
 app.include_router(auth_router)
+app.include_router(market_router)
+app.include_router(market_stream_router)
+app.include_router(watchlist_router)
 
 
 def _request_id(request: Request) -> str:

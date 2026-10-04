@@ -1,3 +1,11 @@
+import type {
+  EventCollection,
+  IndexCollection,
+  InstrumentCollection,
+  MarketOverview,
+  PeopleCollection,
+} from "@/types/market";
+
 export type Source = {
   slug: string;
   name: string;
@@ -120,4 +128,26 @@ export function getNewsArticle(id: string): Promise<Envelope<NewsDetail>> {
 
 export function getNewsSources(): Promise<Envelope<Source[]>> {
   return requestJson<Envelope<Source[]>>("/v1/news-sources", 60);
+}
+
+export function getMarketOverview(): Promise<MarketOverview> {
+  return requestJson<MarketOverview>("/v1/market/overview", 30);
+}
+
+export function getMarketInstruments(query: URLSearchParams): Promise<InstrumentCollection> {
+  const suffix = query.size ? `?${query.toString()}` : "";
+  return requestJson<InstrumentCollection>(`/v1/market/instruments${suffix}`, 5);
+}
+
+export function getMarketIndices(): Promise<IndexCollection> {
+  return requestJson<IndexCollection>("/v1/market/indices", 5);
+}
+
+export function getMarketEvents(query = new URLSearchParams()): Promise<EventCollection> {
+  const suffix = query.size ? `?${query.toString()}` : "";
+  return requestJson<EventCollection>(`/v1/market/events${suffix}`, 300);
+}
+
+export function getMarketPeople(): Promise<PeopleCollection> {
+  return requestJson<PeopleCollection>("/v1/market/people", 3600);
 }

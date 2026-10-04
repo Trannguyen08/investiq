@@ -48,6 +48,27 @@ Redis databases 1 and 2 for delivery/results; application caching uses Redis dat
 Liveness is available at `/healthz` inside the backend container; `/readyz` verifies PostgreSQL and
 Redis without returning connection details.
 
+## Home and market center
+
+The home dashboard and `/market` center are implemented with Stocks, Watchlist, Indices, Events,
+and People tabs. Public FastAPI routes live under `/api/v1/market`; the versioned snapshot stream is
+`/ws/v1/market`. PostgreSQL migration `0011_market_foundation` adds canonical instrument/candle,
+event, public professional/holding, privacy-bounded engagement, and private watchlist storage.
+Public market read models use a bounded Redis cache; watchlist traffic crosses the authenticated
+Next.js BFF and remains `private, no-store`.
+
+Market data fails closed by default. For local UI development only, set:
+
+```env
+MARKET_DATA_MODE=fixture
+MARKET_PUBLIC_CACHE_SECONDS=30
+```
+
+The fixture is deterministic and every page labels it **Dữ liệu minh họa**. Keep
+`MARKET_DATA_MODE=disabled` in shared or production environments until a licensed provider contract,
+field catalog, credentials, redistribution rights, and SLA are approved. The provider port keeps the
+domain, API, cache, WebSocket, and UI independent from SSI, DNSE, FiinGroup, or another approved feed.
+
 ## Stock news MVP
 
 Apply database migrations as a dedicated step before opening the news routes:
@@ -162,4 +183,9 @@ The next product phase is defined in the
 [market and investment-community roadmap](docs/plan/community-market-roadmap.md): licensed market
 data, private watchlists, structured evidence-backed theses, outcome-based reputation, moderation,
 and source-linked AI assistance. It targets a differentiated MVP in 12 weeks and public beta in 28
-weeks; implementation has not started.
+weeks. The implementation-ready [home and market pages plan](docs/plan/home-market-pages.md) defines
+the home dashboard, five `/market` tabs, provider strategy, canonical data model, REST/WebSocket
+contracts, caching, freshness, privacy, acceptance criteria, and a 12-week delivery sequence.
+The local vertical slice is implemented with a clearly labeled deterministic fixture and private
+watchlists. Production market data, ingestion/reconciliation jobs, and provider failover remain
+gated by licensing, credentials, redistribution approval, and source-specific field mapping.

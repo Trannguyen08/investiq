@@ -1,5 +1,40 @@
 # Current Task
 
+## Market-data API credential tutorial — 2026-10-04 (complete)
+
+Added the local guide `docs/tutorial/market-data-api-keys.md`. It ranks Vnstock Community, TCBS
+iFlash OpenAPI, FinLens, DNSE, SSI and FiinGroup by coverage, update mode, onboarding effort and
+initial cost; documents credential acquisition and safe environment-variable handling; separates
+free software/access from redistribution rights; and provides a staged provider-evaluation path for
+the existing fail-closed market provider port. No credential, dependency, runtime configuration or
+market adapter was added or enabled.
+
+## Home and market pages implementation — 2026-10-04 (complete)
+
+Implemented the approved `docs/plan/home-market-pages.md` local vertical slice. Added canonical
+market domain/provider contracts, deterministic fixture data with an explicit non-production label,
+strict public market APIs, bounded Redis caching, versioned WebSocket snapshots, migration
+`0011_market_foundation`, user-owned watchlists with BFF/session/ownership enforcement, and the
+responsive home plus Stocks, Watchlist, Indices, Events and People tabs. Added search/sort/filter,
+candlestick visuals, freshness/source status, grouped event dates, businessperson methodology, and
+mobile/accessibility states. Local `.env` enables the fixture while `.env.example` and Compose fail
+closed by default. Applied the migration locally, rebuilt/restarted the backend, and confirmed API,
+all pages, and WebSocket snapshot delivery. Ruff, frontend ESLint, TypeScript and `git diff --check`
+pass. No automated tests or frontend production build were run. Licensed provider credentials,
+redistribution approval, live ingestion/reconciliation/failover, licensed history backfill, and
+traffic-derived production popularity remain external provider-gated work.
+
+## Detailed home and market pages plan — 2026-10-04 (complete)
+
+Added `docs/plan/home-market-pages.md`, an implementation-ready specification for the public home
+page and `/market` tabs: Stocks, Watchlist, Indices, Events and People. It defines UX and navigation,
+accurate financial terminology, privacy-safe/explainable popularity, field-level tables, provider
+selection and failover, canonical data/schema, REST/WebSocket contracts, cache/freshness budgets,
+resilience, privacy, observability, delivery backlog, 12-week timeline and acceptance criteria.
+Official documentation for FiinGroup, SSI, DNSE and VSDC is linked; production access remains gated
+by storage/display/redistribution rights. Synced the parent roadmap, plan index, root README,
+project/architecture memory and decision log. No application code, migration or runtime changed.
+
 ## Community and market product roadmap — 2026-10-04 (complete)
 
 Added `docs/plan/community-market-roadmap.md` as the accepted direction after auth and news. The

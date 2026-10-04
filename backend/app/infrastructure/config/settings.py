@@ -52,6 +52,8 @@ class Settings(BaseSettings):
     auth_smtp_username: str | None = None
     auth_smtp_password: SecretStr | None = None
     auth_smtp_starttls: bool = True
+    market_data_mode: Literal["disabled", "fixture"] = "disabled"
+    market_public_cache_seconds: int = Field(default=30, ge=1, le=300)
 
     @field_validator(
         "news_admin_token",
@@ -101,17 +103,15 @@ class Settings(BaseSettings):
         ]
         payload = self.auth_payload_encryption_key
         try:
-            payload_length = len(
-                base64.urlsafe_b64decode(payload.get_secret_value())
-            ) if payload else 0
+            payload_length = (
+                len(base64.urlsafe_b64decode(payload.get_secret_value())) if payload else 0
+            )
         except (ValueError, TypeError):
             payload_length = 0
         if payload_length != 32:
             too_short.append("AUTH_PAYLOAD_ENCRYPTION_KEY")
         if too_short:
-            raise RuntimeError(
-                f"Authentication keys are invalid: {', '.join(too_short)}"
-            )
+            raise RuntimeError(f"Authentication keys are invalid: {', '.join(too_short)}")
 
     def auth_mail_configured(self) -> bool:
         return bool(self.auth_mail_from and self.auth_smtp_host)
