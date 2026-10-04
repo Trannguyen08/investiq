@@ -24,8 +24,8 @@ class Settings(BaseSettings):
     secret_key: str = "local-development-key-change-before-deployment"
     database_pool_min_size: int = 1
     database_pool_max_size: int = 5
-    news_ingestion_enabled: bool = False
-    news_ingestion_max_age_hours: int = Field(default=72, ge=1, le=24 * 30)
+    news_ingestion_enabled: bool = True
+    news_ingestion_max_age_hours: int = Field(default=24 * 90, ge=1, le=24 * 365)
     news_retention_days: int = Field(default=90, ge=7, le=3650)
     news_provider_requests_per_minute: int = Field(default=30, ge=1, le=600)
     news_provider_circuit_failure_threshold: int = Field(default=5, ge=1, le=50)

@@ -3,6 +3,36 @@
 Record durable decisions in reverse chronological order. Do not record routine implementation
 details.
 
+## 2026-10-04 — Evidence-based market community as the next product phase
+
+- **Status:** Accepted as roadmap; not implemented.
+- **Context:** Authentication and stock-news aggregation provide a base for market and community
+  features, but copying a broad market platform feature-for-feature would create a costly data and
+  tooling race without a clear InvestIQ advantage.
+- **Decision:** Build the next phase around licensed EOD/delayed market context, private watchlists,
+  moderated community content, and structured investment theses with evidence, horizon, invalidation,
+  disclosure, immutable updates, publication-time market snapshots, and outcome-based reputation.
+  Add source-linked AI critique after these foundations. Defer realtime tick data, copy trading,
+  broker connectivity, private signal rooms, and generic buy/sell AI until after public beta.
+- **Consequences:** Market-data licensing and field semantics gate implementation. Reputation must
+  account for benchmark, horizon, sample size, bias and manipulation. Community scope requires
+  privacy, moderation, abuse controls, auditability and retention from its first release. The
+  detailed roadmap is `docs/plan/community-market-roadmap.md`.
+
+## 2026-10-04 — Numbered news browsing and archive recovery
+
+- **Status:** Accepted and implemented.
+- **Context:** Users need direct access to ten-item pages and three months of publisher-dated news.
+- **Decision:** Keep the signed cursor contract for API clients, add bounded numbered offsets and
+  filtered counts for UI navigation, and cache public list payloads in Redis for 30 seconds using a
+  version key invalidated after committed article writes. Backfill Vietstock's public date-filtered
+  archive one page per task, checkpoint the next page in PostgreSQL, and let Beat resume stalled runs.
+  Activate StockBiz from its public RSS as a metadata-only source. Supply HNX's missing GlobalSign
+  intermediate to the HNX HTTP client while retaining certificate and hostname verification.
+- **Consequences:** Numbered pages can shift as new articles arrive. UI cache may display data up to
+  30 seconds old. Archive coverage depends on what the publisher exposes; verified publication dates
+  and the 90-day retention cutoff still govern stored articles.
+
 ## 2026-10-02 — Authentication email feedback
 
 - **Status:** Accepted and implemented

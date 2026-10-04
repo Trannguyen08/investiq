@@ -8,8 +8,8 @@ x-backend-environment: &backend-environment
   CELERY_BROKER_URL: redis://:${REDIS_PASSWORD:?REDIS_PASSWORD is required}@redis:6379/1
   CELERY_RESULT_BACKEND: redis://:${REDIS_PASSWORD:?REDIS_PASSWORD is required}@redis:6379/2
   SECRET_KEY: ${SECRET_KEY:?SECRET_KEY is required}
-  NEWS_INGESTION_ENABLED: ${NEWS_INGESTION_ENABLED:-false}
-  NEWS_INGESTION_MAX_AGE_HOURS: ${NEWS_INGESTION_MAX_AGE_HOURS:-72}
+  NEWS_INGESTION_ENABLED: ${NEWS_INGESTION_ENABLED:-true}
+  NEWS_INGESTION_MAX_AGE_HOURS: ${NEWS_INGESTION_MAX_AGE_HOURS:-2160}
   NEWS_RETENTION_DAYS: ${NEWS_RETENTION_DAYS:-90}
   NEWS_PROVIDER_REQUESTS_PER_MINUTE: ${NEWS_PROVIDER_REQUESTS_PER_MINUTE:-30}
   NEWS_PROVIDER_CIRCUIT_FAILURE_THRESHOLD: ${NEWS_PROVIDER_CIRCUIT_FAILURE_THRESHOLD:-5}
@@ -112,6 +112,9 @@ services:
       <<: *backend-environment
       SERVICE_NAME: celery-worker
     command: ["celery", "-A", "app.workers.celery_app:celery_app", "worker", "--loglevel=INFO", "--concurrency=${CELERY_CONCURRENCY:-2}", "--queues=news-ingestion,celery"]
+    networks:
+      - backend
+      - news-egress
     stop_grace_period: 30s
 
   celery-notifications:
@@ -263,6 +266,7 @@ networks:
   backend:
     internal: true
   mail-egress:
+  news-egress:
   edge:
   observability:
     internal: true

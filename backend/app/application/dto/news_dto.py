@@ -36,6 +36,7 @@ class NewsQuery:
     category: str | None = None
     sentiment: str | None = None
     limit: int = 20
+    page: int = 1
     cursor_feed_at: datetime | None = None
     cursor_id: str | None = None
     published_after: datetime | None = None

@@ -1,5 +1,5 @@
 import gzip
-from datetime import UTC, datetime
+from datetime import UTC, date, datetime
 
 import pytest
 
@@ -12,6 +12,7 @@ from app.infrastructure.external.crawlers.base import (
 )
 from app.infrastructure.external.crawlers.cafef_crawler import CafeFCrawler
 from app.infrastructure.external.crawlers.hnx_crawler import HnxCrawler
+from app.infrastructure.external.crawlers.stockbiz_crawler import StockBizCrawler
 from app.infrastructure.external.crawlers.vietstock_crawler import VietstockCrawler
 from app.infrastructure.external.crawlers.vneconomy_crawler import VnEconomyCrawler
 from app.infrastructure.external.crawlers.vnexpress_crawler import VnExpressCrawler
@@ -344,5 +345,32 @@ def test_worker_crawler_registry_supports_all_active_sources() -> None:
 
     assert {
         _crawler(source).source_slug
-        for source in ("vietstock", "cafef", "hnx", "vneconomy", "vnexpress")
-    } == {"vietstock", "cafef", "hnx", "vneconomy", "vnexpress"}
+        for source in ("vietstock", "cafef", "hnx", "stockbiz", "vneconomy", "vnexpress")
+    } == {"vietstock", "cafef", "hnx", "stockbiz", "vneconomy", "vnexpress"}
+
+
+def test_stockbiz_parser_uses_publisher_time_and_metadata_only_content() -> None:
+    html = """<html><head><meta property="og:title" content="Cổ phiếu FPT tăng giá">
+      <meta name="description" content="Tin thị trường chứng khoán"></head>
+      <body><span class="news_date">02/10/2026 9:00:46 SA</span></body></html>"""
+    article = StockBizCrawler().parse_article(
+        html, "https://web.stockbiz.vn/News/2026/10/2/1910663/fpt.aspx"
+    )
+    assert article.published_at == datetime(2026, 10, 2, 2, 0, 46, tzinfo=UTC)
+    assert article.content_text is None
+
+
+def test_vietstock_archive_discovers_only_in_range_articles() -> None:
+    class Client:
+        def get_text(self, url: str) -> str:
+            assert "page=2" in url
+            return """<div class="channelContent">
+              <a href="/2026/09/market-123.htm">Market</a>
+              <a href="/2026/06/old-123.htm">Old</a>
+              <a href="https://outside.example/2026/09/bad.htm">Bad</a>
+            </div>"""
+
+    crawler = VietstockCrawler(client=Client())
+    assert crawler.discover_history_page(2, date(2026, 7, 4), date(2026, 10, 4)) == (
+        "https://vietstock.vn/2026/09/market-123.htm",
+    )

@@ -13,13 +13,16 @@ from typing import Annotated
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, Response, status
+from pydantic import ValidationError
 
 from app.api.deps import get_news_repository
 from app.application.dto.news_dto import NewsQuery
 from app.domain.entities.news_article import ArticleAsset, NewsArticle, NewsSource
 from app.domain.repositories.i_news_repository import INewsRepository
 from app.domain.value_objects.sentiment_score import SentimentScore
+from app.infrastructure.cache.redis_client import get_news_read_cache
 from app.infrastructure.config.settings import settings
+from app.infrastructure.db.repositories.sql_news_repository import SqlNewsRepository
 from app.schemas.news import (
     AssetResponse,
     ContentBlockResponse,
@@ -233,6 +236,7 @@ def list_news(
         str | None, Query(pattern="^(positive|negative|neutral|mixed|unknown)$")
     ] = None,
     limit: Annotated[int, Query(ge=1, le=50)] = 20,
+    page: Annotated[int, Query(ge=1, le=1000)] = 1,
     window_days: Annotated[int, Query(ge=1, le=365)] = 7,
     cursor: Annotated[str | None, Query(max_length=2048)] = None,
 ) -> NewsCollectionResponse:
@@ -240,6 +244,8 @@ def list_news(
     normalized_query = q.strip() if q else None
     if normalized_query is not None and len(normalized_query) < 2:
         raise HTTPException(status_code=422, detail="Search query is too short")
+    if cursor and page != 1:
+        raise HTTPException(status_code=422, detail="Cursor and page cannot be combined")
     sources = tuple(value.strip().lower() for value in (source or ()))
     symbols = tuple(value.strip().upper() for value in (symbol or ()))
     if len(sources) > 20 or len(symbols) > 10:
@@ -273,19 +279,48 @@ def list_news(
         category=category.strip() if category else None,
         sentiment=sentiment,
         limit=limit,
+        page=page,
         cursor_feed_at=cursor_feed_at,
         cursor_id=cursor_id,
         published_after=datetime.now(UTC)
         - timedelta(days=min(window_days, settings.news_retention_days)),
     )
+    cache = get_news_read_cache() if isinstance(repository, SqlNewsRepository) else None
+    cache_key = cache.key({**filters, "page": page, "cursor": cursor}) if cache else None
+    if cache and cache_key:
+        cached = cache.get(cache_key)
+        if cached:
+            try:
+                source_rows = repository.list_sources()
+                response.headers["X-News-Cache"] = "HIT"
+                return NewsCollectionResponse.model_validate(
+                    {**cached, "meta": _meta(request, source_rows)}
+                )
+            except ValidationError:
+                pass
     items, has_more = repository.list_articles(query)
+    total_items = repository.count_articles(query)
+    total_pages = (total_items + limit - 1) // limit
+    if not cursor:
+        has_more = page < total_pages
     next_cursor = _encode_cursor(items[-1], filters) if has_more and items else None
     source_rows = repository.list_sources()
-    return NewsCollectionResponse(
+    collection = NewsCollectionResponse(
         data=[_summary(item) for item in items],
-        pagination=PaginationResponse(next_cursor=next_cursor, has_more=has_more),
+        pagination=PaginationResponse(
+            next_cursor=next_cursor,
+            has_more=has_more,
+            page=page,
+            page_size=limit,
+            total_items=total_items,
+            total_pages=total_pages,
+        ),
         meta=_meta(request, source_rows),
     )
+    if cache and cache_key:
+        cache.set(cache_key, collection.model_dump(mode="json", exclude={"meta"}))
+        response.headers["X-News-Cache"] = "MISS"
+    return collection
 
 
 @router.get("/news/{article_id}", response_model=NewsEnvelope)

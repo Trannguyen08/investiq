@@ -93,7 +93,7 @@ export type NewsDetail = NewsSummary & {
 
 export type NewsCollection = {
   data: NewsSummary[];
-  pagination: { next_cursor: string | null; has_more: boolean };
+  pagination: { next_cursor: string | null; has_more: boolean; page: number; page_size: number; total_items: number; total_pages: number };
   meta: { request_id: string; as_of: string; last_ingested_at: string | null; freshness: string };
 };
 
@@ -101,8 +101,8 @@ type Envelope<T> = { data: T; meta: NewsCollection["meta"] };
 
 const serverBase = process.env.API_INTERNAL_BASE_URL ?? "http://localhost:8000/api";
 
-async function requestJson<T>(path: string): Promise<T> {
-  const response = await fetch(`${serverBase}${path}`, { cache: "no-store" });
+async function requestJson<T>(path: string, revalidate?: number): Promise<T> {
+  const response = await fetch(`${serverBase}${path}`, revalidate ? { next: { revalidate } } : { cache: "no-store" });
   if (!response.ok) {
     throw new Error(`InvestIQ API returned ${response.status}`);
   }
@@ -111,7 +111,7 @@ async function requestJson<T>(path: string): Promise<T> {
 
 export function getNews(query: URLSearchParams): Promise<NewsCollection> {
   const suffix = query.size ? `?${query.toString()}` : "";
-  return requestJson<NewsCollection>(`/v1/news${suffix}`);
+  return requestJson<NewsCollection>(`/v1/news${suffix}`, 30);
 }
 
 export function getNewsArticle(id: string): Promise<Envelope<NewsDetail>> {
@@ -119,5 +119,5 @@ export function getNewsArticle(id: string): Promise<Envelope<NewsDetail>> {
 }
 
 export function getNewsSources(): Promise<Envelope<Source[]>> {
-  return requestJson<Envelope<Source[]>>("/v1/news-sources");
+  return requestJson<Envelope<Source[]>>("/v1/news-sources", 60);
 }

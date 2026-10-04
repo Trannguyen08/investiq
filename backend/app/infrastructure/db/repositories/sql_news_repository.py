@@ -120,11 +120,54 @@ class SqlNewsRepository:
         self._pool = pool
 
     def list_articles(self, query: NewsQuery) -> tuple[tuple[NewsArticle, ...], bool]:
+        clauses, parameters = self._article_filters(query)
+        if query.cursor_feed_at and query.cursor_id:
+            clauses.append("(a.feed_at, a.id) < (%s, %s::uuid)")
+            parameters.extend((query.cursor_feed_at, query.cursor_id))
+        sql = (
+            ARTICLE_SELECT
+            + " WHERE "
+            + " AND ".join(clauses)
+            + " ORDER BY a.feed_at DESC, a.id DESC LIMIT %s OFFSET %s"
+        )
+        offset = (query.page - 1) * query.limit if not query.cursor_id else 0
+        parameters.extend((query.limit + 1, offset))
+        with (
+            self._pool.connection() as connection,
+            connection.cursor(row_factory=dict_row) as cursor,
+        ):
+            rows = cursor.execute(sql, parameters).fetchall()
+        has_more = len(rows) > query.limit
+        return tuple(self._map_article(row) for row in rows[: query.limit]), has_more
+
+    def count_articles(self, query: NewsQuery) -> int:
+        clauses, parameters = self._article_filters(query)
+        sql = (
+            "SELECT count(*) FROM news_articles a "
+            "JOIN article_revisions r ON r.id = a.current_revision_id "
+            "JOIN news_sources s ON s.id = a.source_id "
+            "LEFT JOIN sentiment_analyses sa ON sa.revision_id = r.id "
+            "AND sa.mention_id IS NULL AND sa.is_current WHERE " + " AND ".join(clauses)
+        )
+        with self._pool.connection() as connection:
+            row = connection.execute(sql, parameters).fetchone()
+        return int(row[0]) if row else 0
+
+    @staticmethod
+    def _article_filters(query: NewsQuery) -> tuple[list[str], list[object]]:
         clauses = ["a.visibility = 'published'"]
         parameters: list[object] = []
         if query.query:
-            clauses.append("r.search_document @@ plainto_tsquery('simple', %s)")
-            parameters.append(query.query)
+            clauses.append(
+                "(r.search_document @@ plainto_tsquery('simple', %s) OR "
+                "news_unaccent(lower(coalesce(r.title, '') || ' ' || "
+                "coalesce(r.description, '') || ' ' || coalesce(r.content_text, ''))) "
+                "LIKE news_unaccent(lower(%s)) ESCAPE '\\')"
+            )
+            literal_query = (
+                query.query.strip().replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
+            )
+            parameters.extend((query.query, f"%{literal_query}%"))
         if query.sources:
             clauses.append("s.slug = ANY(%s)")
             parameters.append(list(query.sources))
@@ -144,23 +187,7 @@ class SqlNewsRepository:
         if query.published_after:
             clauses.append("a.feed_at >= %s")
             parameters.append(query.published_after)
-        if query.cursor_feed_at and query.cursor_id:
-            clauses.append("(a.feed_at, a.id) < (%s, %s::uuid)")
-            parameters.extend((query.cursor_feed_at, query.cursor_id))
-        sql = (
-            ARTICLE_SELECT
-            + " WHERE "
-            + " AND ".join(clauses)
-            + " ORDER BY a.feed_at DESC, a.id DESC LIMIT %s"
-        )
-        parameters.append(query.limit + 1)
-        with (
-            self._pool.connection() as connection,
-            connection.cursor(row_factory=dict_row) as cursor,
-        ):
-            rows = cursor.execute(sql, parameters).fetchall()
-        has_more = len(rows) > query.limit
-        return tuple(self._map_article(row) for row in rows[: query.limit]), has_more
+        return clauses, parameters
 
     def get_article(self, article_id: str) -> NewsArticle | None:
         sql = (

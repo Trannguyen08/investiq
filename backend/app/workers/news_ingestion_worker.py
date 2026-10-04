@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import hashlib
 import logging
-from datetime import UTC, datetime, timedelta
+from datetime import UTC, date, datetime, timedelta
 from uuid import UUID, uuid4
 
 from celery import Task
@@ -17,12 +17,14 @@ from app.application.use_cases.news.freshness import (
     require_recent_article,
 )
 from app.application.use_cases.news.ingest_news import IngestNews
+from app.infrastructure.cache.redis_client import get_news_read_cache
 from app.infrastructure.config.settings import settings
 from app.infrastructure.db.repositories.sql_news_repository import SqlNewsRepository
 from app.infrastructure.db.session import get_pool
 from app.infrastructure.external.crawlers.base import BaseNewsCrawler, NewsProviderError
 from app.infrastructure.external.crawlers.cafef_crawler import CafeFCrawler
 from app.infrastructure.external.crawlers.hnx_crawler import HnxCrawler
+from app.infrastructure.external.crawlers.stockbiz_crawler import StockBizCrawler
 from app.infrastructure.external.crawlers.vietstock_crawler import VietstockCrawler
 from app.infrastructure.external.crawlers.vneconomy_crawler import VnEconomyCrawler
 from app.infrastructure.external.crawlers.vnexpress_crawler import VnExpressCrawler
@@ -34,6 +36,7 @@ logger = logging.getLogger("investiq.news.worker")
 CRAWLER_TYPES: dict[str, type[BaseNewsCrawler]] = {
     "cafef": CafeFCrawler,
     "hnx": HnxCrawler,
+    "stockbiz": StockBizCrawler,
     "vietstock": VietstockCrawler,
     "vneconomy": VnEconomyCrawler,
     "vnexpress": VnExpressCrawler,
@@ -59,6 +62,12 @@ def discover_news(
         raise ValueError("unsupported crawl trigger")
     provider = _crawler(source_slug)
     urls = provider.discover(limit=limit)
+    return _persist_discovery(source_slug, urls, trigger)
+
+
+def _persist_discovery(
+    source_slug: str, urls: tuple[str, ...], trigger: str
+) -> dict[str, int | str]:
     pool = get_pool()
     run_id = uuid4()
     queued_job_ids: list[str] = []
@@ -101,8 +110,86 @@ def discover_news(
                 run_id,
             ),
         )
-    dispatch_news_jobs.apply_async(queue="news-ingestion")
     return {"source": source_slug, "queued": len(queued_job_ids), "status": "succeeded"}
+
+
+@celery_app.task(  # type: ignore[untyped-decorator]
+    bind=True,
+    name="investiq.news.backfill.v1",
+    soft_time_limit=60,
+    time_limit=90,
+    max_retries=3,
+)
+def backfill_news(self: Task, page: int, start_day: str, end_day: str) -> dict[str, int | str]:
+    """Scan one archive page, checkpoint jobs, then schedule the next page."""
+    if not settings.news_ingestion_enabled:
+        return {"page": page, "queued": 0, "status": "disabled"}
+    start, end = date.fromisoformat(start_day), date.fromisoformat(end_day)
+    if not 1 <= page <= 150 or start > end or (end - start).days > 90:
+        raise ValueError("invalid news backfill range")
+    now = datetime.now(UTC)
+    with get_pool().connection() as connection, connection.transaction():
+        connection.execute(
+            """INSERT INTO news_backfill_progress (start_day, end_day, next_page, status)
+               VALUES (%s, %s, %s, 'running') ON CONFLICT DO NOTHING""",
+            (start, end, page),
+        )
+        claim = connection.execute(
+            """UPDATE news_backfill_progress
+               SET lease_until = %s, updated_at = %s
+               WHERE start_day = %s AND end_day = %s AND next_page = %s
+                 AND status = 'running' AND (lease_until IS NULL OR lease_until < %s)
+               RETURNING next_page""",
+            (now + timedelta(minutes=2), now, start, end, page, now),
+        ).fetchone()
+    if claim is None:
+        return {"page": page, "queued": 0, "status": "skipped"}
+    try:
+        urls = VietstockCrawler().discover_history_page(page, start, end)
+    except NewsProviderError as exc:
+        with get_pool().connection() as connection:
+            connection.execute(
+                """UPDATE news_backfill_progress SET lease_until = NULL, updated_at = now()
+                   WHERE start_day = %s AND end_day = %s AND next_page = %s""",
+                (start, end, page),
+            )
+        raise self.retry(exc=exc, countdown=min(300, 30 * 2**self.request.retries)) from exc
+    result = (
+        _persist_discovery("vietstock", urls, "backfill")
+        if urls
+        else {"source": "vietstock", "queued": 0, "status": "succeeded"}
+    )
+    with get_pool().connection() as connection:
+        connection.execute(
+            """UPDATE news_backfill_progress
+               SET next_page = %s, status = %s, lease_until = NULL, updated_at = now()
+               WHERE start_day = %s AND end_day = %s AND next_page = %s""",
+            (page + 1, "running" if urls and page < 150 else "complete", start, end, page),
+        )
+    if urls and page < 150:
+        backfill_news.apply_async(
+            args=(page + 1, start_day, end_day), queue="news-ingestion", countdown=10
+        )
+    return {"page": page, "queued": int(str(result["queued"])), "status": str(result["status"])}
+
+
+@celery_app.task(  # type: ignore[untyped-decorator]
+    name="investiq.news.resume-backfills.v1", soft_time_limit=30, time_limit=45
+)
+def resume_news_backfills() -> dict[str, int]:
+    if not settings.news_ingestion_enabled:
+        return {"resumed": 0}
+    with get_pool().connection() as connection:
+        rows = connection.execute(
+            """SELECT next_page, start_day::text, end_day::text
+               FROM news_backfill_progress
+               WHERE status = 'running' AND updated_at < now() - interval '2 minutes'
+                 AND (lease_until IS NULL OR lease_until < now())
+               ORDER BY updated_at LIMIT 3"""
+        ).fetchall()
+    for page, start_day, end_day in rows:
+        backfill_news.apply_async(args=(page, start_day, end_day), queue="news-ingestion")
+    return {"resumed": len(rows)}
 
 
 @celery_app.task(  # type: ignore[untyped-decorator]
@@ -110,7 +197,7 @@ def discover_news(
     soft_time_limit=30,
     time_limit=45,
 )
-def dispatch_news_jobs(limit: int = 100) -> dict[str, int]:
+def dispatch_news_jobs(limit: int = 20) -> dict[str, int]:
     """Claim persisted work and publish it, including jobs left by worker loss."""
     if not settings.news_ingestion_enabled:
         return {"dispatched": 0}
@@ -224,6 +311,8 @@ def fetch_news_article(self: Task, job_id: str) -> dict[str, str | bool]:
         )
         use_case = IngestNews(SqlNewsRepository(pool), VietnameseRuleSentimentAnalyzer())
         article_id, changed = use_case.execute(parsed)
+        if changed:
+            get_news_read_cache().invalidate()
     except (StaleArticle, UnverifiableArticleDate) as exc:
         error_code = "STALE_ARTICLE" if isinstance(exc, StaleArticle) else "UNVERIFIABLE_DATE"
         _finish_job(job_id, "cancelled", error_code)
@@ -339,6 +428,8 @@ def cleanup_old_news(
                 "DELETE FROM news_articles WHERE feed_at < %s RETURNING id", (cutoff,)
             ).fetchall()
             deleted = len(deleted_rows)
+    if deleted:
+        get_news_read_cache().invalidate()
     return {
         "status": "preview" if dry_run else "succeeded",
         "dry_run": dry_run,
