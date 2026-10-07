@@ -2,6 +2,8 @@ import type {
   EventCollection,
   IndexCollection,
   InstrumentCollection,
+  InstrumentEnvelope,
+  MarketCandles,
   MarketOverview,
   PeopleCollection,
 } from "@/types/market";
@@ -109,17 +111,27 @@ type Envelope<T> = { data: T; meta: NewsCollection["meta"] };
 
 const serverBase = process.env.API_INTERNAL_BASE_URL ?? "http://localhost:8000/api";
 
-async function requestJson<T>(path: string, revalidate?: number): Promise<T> {
-  const response = await fetch(`${serverBase}${path}`, revalidate ? { next: { revalidate } } : { cache: "no-store" });
+class InvestIqApiError extends Error {
+  constructor(readonly status: number) {
+    super(`InvestIQ API returned ${status}`);
+  }
+}
+
+async function requestJson<T>(path: string, revalidate?: number, timeoutMs?: number): Promise<T> {
+  const cacheOptions = revalidate ? { next: { revalidate } } : { cache: "no-store" as const };
+  const response = await fetch(`${serverBase}${path}`, {
+    ...cacheOptions,
+    ...(timeoutMs ? { signal: AbortSignal.timeout(timeoutMs) } : {}),
+  });
   if (!response.ok) {
-    throw new Error(`InvestIQ API returned ${response.status}`);
+    throw new InvestIqApiError(response.status);
   }
   return response.json() as Promise<T>;
 }
 
-export function getNews(query: URLSearchParams): Promise<NewsCollection> {
+export function getNews(query: URLSearchParams, timeoutMs?: number): Promise<NewsCollection> {
   const suffix = query.size ? `?${query.toString()}` : "";
-  return requestJson<NewsCollection>(`/v1/news${suffix}`, 30);
+  return requestJson<NewsCollection>(`/v1/news${suffix}`, 30, timeoutMs);
 }
 
 export function getNewsArticle(id: string): Promise<Envelope<NewsDetail>> {
@@ -131,12 +143,55 @@ export function getNewsSources(): Promise<Envelope<Source[]>> {
 }
 
 export function getMarketOverview(): Promise<MarketOverview> {
-  return requestJson<MarketOverview>("/v1/market/overview", 30);
+  return requestJson<MarketOverview>("/v1/market/overview", 5);
 }
 
-export function getMarketInstruments(query: URLSearchParams): Promise<InstrumentCollection> {
-  const suffix = query.size ? `?${query.toString()}` : "";
-  return requestJson<InstrumentCollection>(`/v1/market/instruments${suffix}`, 5);
+function normalizeInstrumentCollection(
+  collection: InstrumentCollection,
+  query: URLSearchParams,
+): InstrumentCollection {
+  const limit = collection.pagination.limit || Number(query.get("limit")) || 15;
+  return {
+    ...collection,
+    data: collection.data.map((item) => ({ ...item, is_vn30: item.is_vn30 ?? false })),
+    pagination: {
+      ...collection.pagination,
+      previous_cursor: collection.pagination.previous_cursor ?? null,
+      page: collection.pagination.page ?? 1,
+      total_pages: collection.pagination.total_pages
+        ?? Math.ceil(collection.pagination.total_items / limit),
+    },
+  };
+}
+
+export async function getMarketInstruments(query: URLSearchParams): Promise<InstrumentCollection> {
+  const request = async (selected: URLSearchParams) => {
+    const suffix = selected.size ? `?${selected.toString()}` : "";
+    return requestJson<InstrumentCollection>(`/v1/market/instruments${suffix}`, 5);
+  };
+  try {
+    return normalizeInstrumentCollection(await request(query), query);
+  } catch (error) {
+    if (!(error instanceof InvestIqApiError) || error.status !== 422 || query.get("sort") !== "vn30") {
+      throw error;
+    }
+    const compatibleQuery = new URLSearchParams(query);
+    compatibleQuery.set("sort", "matched_value");
+    return normalizeInstrumentCollection(await request(compatibleQuery), compatibleQuery);
+  }
+}
+
+export function getMarketInstrument(symbol: string): Promise<InstrumentEnvelope> {
+  return requestJson<InstrumentEnvelope>(`/v1/market/instruments/${encodeURIComponent(symbol)}`, 5);
+}
+
+export function getMarketCandles(
+  symbol: string,
+  interval: "1d" | "5m",
+  limit: number,
+): Promise<MarketCandles> {
+  const query = new URLSearchParams({ symbol, interval, limit: String(limit) });
+  return requestJson<MarketCandles>(`/v1/market/candles?${query.toString()}`, 5);
 }
 
 export function getMarketIndices(): Promise<IndexCollection> {

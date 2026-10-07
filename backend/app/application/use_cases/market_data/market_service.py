@@ -5,8 +5,10 @@ from __future__ import annotations
 import base64
 import json
 import unicodedata
+from collections.abc import Callable
 from datetime import UTC, datetime
 from decimal import Decimal
+from typing import Any
 
 from app.domain.entities.market import Candle, MarketIndex, MarketInstrument
 from app.domain.repositories.i_market_provider import IMarketProvider
@@ -53,6 +55,7 @@ def _instrument(value: MarketInstrument, include_candles: bool = True) -> dict[s
         "volume_vs_20d": _decimal(value.volume_vs_20d),
         "interest_score": _decimal(value.interest_score),
         "interest_reasons": list(value.interest_reasons),
+        "is_vn30": value.is_vn30,
     }
     if include_candles:
         payload["candles"] = [_candle(item) for item in value.candles[-30:]]
@@ -111,7 +114,7 @@ class MarketService:
     def __init__(self, provider: IMarketProvider) -> None:
         self._provider = provider
 
-    def meta(self, partial: bool = False) -> dict[str, object]:
+    def meta(self, partial: bool | None = None) -> dict[str, object]:
         return {
             "schema_version": "1",
             "provider": self._provider.slug,
@@ -119,11 +122,9 @@ class MarketService:
             "market_time": self._provider.market_time,
             "received_at": datetime.now(UTC).isoformat().replace("+00:00", "Z"),
             "delay_class": self._provider.delay_class,
-            "freshness": "fixture"
-            if self._provider.delay_class == "development_fixture"
-            else "fresh",
-            "session": "closed",
-            "partial": partial,
+            "freshness": self._provider.freshness,
+            "session": self._provider.session,
+            "partial": self._provider.partial if partial is None else partial,
             "market_timezone": "Asia/Ho_Chi_Minh",
         }
 
@@ -132,19 +133,24 @@ class MarketService:
             self._provider.instruments(), key=lambda item: item.interest_score, reverse=True
         )[:8]
         indices = self._provider.indices()
+        # VN30 is a subset of HOSE. Counting it again would overstate market breadth
+        # and matched value, so the aggregate uses only the three exchange-wide boards.
+        breadth_indices = tuple(
+            item for item in indices if item.symbol in {"VNINDEX", "HNXINDEX", "UPCOMINDEX"}
+        )
         events = sorted(self._provider.events(), key=lambda item: item.event_at)[:4]
         return {
             "data": {
                 "indices": [_index(item) for item in indices],
                 "trending": [_instrument(item) for item in trending],
                 "breadth": {
-                    "advances": sum(item.advances for item in indices),
-                    "declines": sum(item.declines for item in indices),
-                    "unchanged": sum(item.unchanged for item in indices),
-                    "ceiling_count": sum(item.ceiling_count for item in indices),
-                    "floor_count": sum(item.floor_count for item in indices),
+                    "advances": sum(item.advances for item in breadth_indices),
+                    "declines": sum(item.declines for item in breadth_indices),
+                    "unchanged": sum(item.unchanged for item in breadth_indices),
+                    "ceiling_count": sum(item.ceiling_count for item in breadth_indices),
+                    "floor_count": sum(item.floor_count for item in breadth_indices),
                     "matched_value": _decimal(
-                        sum((item.matched_value for item in indices), Decimal())
+                        sum((item.matched_value for item in breadth_indices), Decimal())
                     ),
                 },
                 "upcoming_events": [
@@ -189,7 +195,8 @@ class MarketService:
             values = [item for item in values if item.exchange == exchange]
         if sector:
             values = [item for item in values if item.sector == sector]
-        sorters = {
+        sorters: dict[str, Callable[[MarketInstrument], Any]] = {
+            "vn30": lambda item: (item.is_vn30, item.matched_value),
             "symbol": lambda item: item.symbol,
             "price": lambda item: item.price,
             "change_percent": lambda item: item.change_percent,
@@ -203,13 +210,18 @@ class MarketService:
         )
         page = values[offset : offset + limit]
         next_offset = offset + len(page)
+        previous_offset = max(0, offset - limit)
+        total_pages = (len(values) + limit - 1) // limit
         return {
             "data": [_instrument(item) for item in page],
             "pagination": {
                 "next_cursor": _encode_cursor(next_offset) if next_offset < len(values) else None,
+                "previous_cursor": _encode_cursor(previous_offset) if offset > 0 else None,
                 "has_more": next_offset < len(values),
                 "limit": limit,
                 "total_items": len(values),
+                "page": offset // limit + 1,
+                "total_pages": total_pages,
             },
             "meta": self.meta(),
         }

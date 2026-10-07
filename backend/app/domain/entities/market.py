@@ -42,6 +42,7 @@ class MarketInstrument:
     interest_score: Decimal
     interest_reasons: tuple[str, ...]
     candles: tuple[Candle, ...]
+    is_vn30: bool = False
 
     @property
     def change(self) -> Decimal:

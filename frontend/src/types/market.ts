@@ -45,6 +45,7 @@ export type MarketInstrument = {
   volume_vs_20d: string;
   interest_score: string;
   interest_reasons: string[];
+  is_vn30: boolean;
   candles: MarketCandle[];
 };
 
@@ -116,9 +117,27 @@ export type MarketOverview = {
 
 export type InstrumentCollection = {
   data: MarketInstrument[];
-  pagination: { next_cursor: string | null; has_more: boolean; limit: number; total_items: number };
+  pagination: {
+    next_cursor: string | null;
+    previous_cursor: string | null;
+    has_more: boolean;
+    limit: number;
+    total_items: number;
+    page: number;
+    total_pages: number;
+  };
   meta: MarketMeta;
 };
+
+export type MarketCandles = {
+  data: MarketCandle[];
+  instrument: string;
+  interval: string;
+  adjusted: boolean;
+  meta: MarketMeta;
+};
+
+export type InstrumentEnvelope = { data: MarketInstrument; meta: MarketMeta };
 
 export type IndexCollection = { data: MarketIndex[]; meta: MarketMeta };
 export type EventCollection = { data: MarketEvent[]; meta: MarketMeta };

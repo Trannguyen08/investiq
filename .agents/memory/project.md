@@ -6,8 +6,9 @@
 - Repository: `C:\investiq`
 - Application type: FastAPI and Next.js monorepo
 - Status: Runnable operational baseline with six-source stock news, feature-flagged end-user
-  authentication, and a fixture-backed home/market vertical slice; production market providers and
-  most portfolio/ML modules remain gated or placeholders.
+  authentication, a beginner-first home/market vertical slice, a source-delayed Vnstock evaluation
+  adapter, and a credential-gated TCBS iFlash adapter; production market redistribution and most
+  portfolio/ML modules remain gated or placeholders.
 
 ## Confirmed stack
 
@@ -42,15 +43,20 @@
   evidence-backed investment theses, immutable updates, outcome-based contextual reputation, and
   source-linked AI counter-analysis. Target: differentiated MVP in 12 weeks and public beta in 28
   weeks. This roadmap is planned only; implementation has not started.
-- `docs/plan/home-market-pages.md` defines the public home page and `/market`. The local vertical
-  slice is implemented: index/trending/breadth/event home cards; Stocks, Watchlist, Indices, Events
-  and People tabs; canonical market entities/provider port; strict REST contracts; versioned snapshot
-  WebSocket; Redis public-read cache; PostgreSQL market/watchlist migration; and private watchlist
-  BFF/API operations. Development uses deterministic data labeled as a fixture. FiinGroup remains the
-  recommended commercial source for corporate/event/people coverage, while SSI or DNSE are realtime
-  candidates subject to credentials, field mapping, explicit redistribution rights, and SLA. Live
-  ingestion, stream reconciliation/failover, production popularity aggregation, and licensed history
-  backfill are not active.
+- `docs/plan/home-market-pages.md` defines the public home page and stable `/market/<tab>` routes.
+  The local vertical slice and TCBS iFlash adapter are implemented: index/trending/breadth/event home
+  cards; Stocks, Watchlist, Indices, Events and People routes; canonical provider port; strict REST
+  contracts; versioned snapshot/quote WebSocket; Redis public-read cache; PostgreSQL market/watchlist
+  migration; and private watchlist BFF/API operations. TCBS mode normalizes security metadata and REST
+  quotes, identifies VN30 membership from board 2, consumes the official index WebSocket with an
+  initial snapshot request plus text heartbeat/reconnect, and fails partial rather than fabricating
+  unsupported events, people, fundamentals or multi-session daily candles. The dark navy UI now has
+  a 15-row VN30-first stock table, centered numeric columns, a large VN-Index red/green candlestick
+  chart, and `/market/stocks/<symbol>` detail pages using the same volume-and-MA chart renderer with
+  honest current-session five-minute data. Activation still
+  requires a current token or API key plus Smart OTP and explicit redistribution rights. FiinGroup
+  remains recommended for corporate/event/people coverage. Provider failover, licensed history
+  backfill and traffic-derived production popularity are not active.
 
 ## Local development
 

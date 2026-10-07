@@ -1,5 +1,5 @@
 import { redirect } from "next/navigation";
 
 export default function WatchlistPage() {
-  redirect("/market?tab=watchlist");
+  redirect("/market/watchlist");
 }

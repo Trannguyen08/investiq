@@ -1,5 +1,11 @@
 name: ${COMPOSE_PROJECT_NAME:-investiq}
 
+x-logging: &default-logging
+  driver: json-file
+  options:
+    max-size: "10m"
+    max-file: "3"
+
 x-backend-environment: &backend-environment
   APP_ENV: ${APP_ENV:-development}
   LOG_LEVEL: ${LOG_LEVEL:-INFO}
@@ -16,6 +22,21 @@ x-backend-environment: &backend-environment
   NEWS_PROVIDER_CIRCUIT_OPEN_SECONDS: ${NEWS_PROVIDER_CIRCUIT_OPEN_SECONDS:-120}
   MARKET_DATA_MODE: ${MARKET_DATA_MODE:-disabled}
   MARKET_PUBLIC_CACHE_SECONDS: ${MARKET_PUBLIC_CACHE_SECONDS:-30}
+  VNSTOCK_API_KEY: ${VNSTOCK_API_KEY:-}
+  VNSTOCK_REFRESH_SECONDS: ${VNSTOCK_REFRESH_SECONDS:-300}
+  VNSTOCK_CANDLE_CACHE_SECONDS: ${VNSTOCK_CANDLE_CACHE_SECONDS:-300}
+  VNSTOCK_MAX_SYMBOLS: ${VNSTOCK_MAX_SYMBOLS:-1800}
+  TCBS_API_BASE_URL: ${TCBS_API_BASE_URL:-https://openapi.tcbs.com.vn}
+  TCBS_WS_URL: ${TCBS_WS_URL:-wss://openapi.tcbs.com.vn/ws/thesis/v1/stream/normal}
+  TCBS_API_KEY: ${TCBS_API_KEY:-}
+  TCBS_OTP: ${TCBS_OTP:-}
+  TCBS_ACCESS_TOKEN: ${TCBS_ACCESS_TOKEN:-}
+  TCBS_REQUEST_TIMEOUT_SECONDS: ${TCBS_REQUEST_TIMEOUT_SECONDS:-5}
+  TCBS_QUOTE_REFRESH_SECONDS: ${TCBS_QUOTE_REFRESH_SECONDS:-3}
+  TCBS_SECURITY_REFRESH_SECONDS: ${TCBS_SECURITY_REFRESH_SECONDS:-21600}
+  TCBS_HTTP_RETRY_ATTEMPTS: ${TCBS_HTTP_RETRY_ATTEMPTS:-3}
+  TCBS_CIRCUIT_FAILURE_THRESHOLD: ${TCBS_CIRCUIT_FAILURE_THRESHOLD:-5}
+  TCBS_CIRCUIT_OPEN_SECONDS: ${TCBS_CIRCUIT_OPEN_SECONDS:-30}
   NEWS_ADMIN_TOKEN: ${NEWS_ADMIN_TOKEN:-}
   AUTH_ENABLED: ${AUTH_ENABLED:-false}
   AUTH_BFF_SECRET: ${AUTH_BFF_SECRET:-}
@@ -49,6 +70,7 @@ x-backend-service: &backend-service
     - backend
   labels:
     com.investiq.logs: "true"
+  logging: *default-logging
   restart: unless-stopped
 
 services:
@@ -70,6 +92,7 @@ services:
       - backend
     labels:
       com.investiq.logs: "true"
+    logging: *default-logging
     restart: unless-stopped
 
   redis:
@@ -89,6 +112,7 @@ services:
       - backend
     labels:
       com.investiq.logs: "true"
+    logging: *default-logging
     restart: unless-stopped
 
   backend:
@@ -107,6 +131,7 @@ services:
     networks:
       - backend
       - edge
+      - market-egress
 
   celery-worker:
     <<: *backend-service
@@ -172,6 +197,7 @@ services:
       - edge
     labels:
       com.investiq.logs: "true"
+    logging: *default-logging
     restart: unless-stopped
 
   nginx:
@@ -195,6 +221,7 @@ services:
       - edge
     labels:
       com.investiq.logs: "true"
+    logging: *default-logging
     restart: unless-stopped
 
   docker-socket-proxy:
@@ -221,6 +248,7 @@ services:
       - /run
     security_opt:
       - no-new-privileges:true
+    logging: *default-logging
     restart: unless-stopped
 
   log-viewer:
@@ -257,6 +285,7 @@ services:
       - /tmp
     security_opt:
       - no-new-privileges:true
+    logging: *default-logging
     restart: unless-stopped
 
 volumes:
@@ -269,6 +298,7 @@ networks:
     internal: true
   mail-egress:
   news-egress:
+  market-egress:
   edge:
   observability:
     internal: true

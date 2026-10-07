@@ -3,7 +3,9 @@
 import Link from "next/link";
 import { FormEvent, useCallback, useEffect, useMemo, useState } from "react";
 
+import { changeTone, formatChange, formatPercent } from "@/components/market/formatters";
 import { useAuth } from "@/hooks/use-auth";
+import { useMarketStream } from "@/hooks/use-realtime-price";
 import type { MarketInstrument, Watchlist } from "@/types/market";
 
 async function csrfToken() {
@@ -73,6 +75,11 @@ export function WatchlistPanel({ instruments }: { instruments: MarketInstrument[
   }, [auth.status]);
 
   const active = useMemo(() => watchlists.find((item) => item.id === activeId), [watchlists, activeId]);
+  const stream = useMarketStream(active?.items.map((item) => item.symbol) ?? []);
+  const instrumentsBySymbol = useMemo(
+    () => new Map(instruments.map((item) => [item.symbol, item])),
+    [instruments],
+  );
   const available = instruments.filter((item) => !active?.items.some((watched) => watched.symbol === item.symbol));
 
   if (auth.status === "loading") return <div className="market-empty">Đang kiểm tra phiên đăng nhập…</div>;
@@ -124,7 +131,7 @@ export function WatchlistPanel({ instruments }: { instruments: MarketInstrument[
         {!active ? <div className="market-empty"><h2>Chưa có watchlist</h2><p>Tạo danh sách đầu tiên để bắt đầu theo dõi.</p></div> : <>
           <div className="watchlist-content-heading"><div><p className="eyebrow">DANH SÁCH RIÊNG TƯ</p><h2>{active.name}</h2></div><button className="watchlist-delete" type="button" onClick={removeList} disabled={pending}>Xóa danh sách</button></div>
           <form className="watchlist-add" onSubmit={add}><label htmlFor="watchlist-symbol">Thêm mã</label><select id="watchlist-symbol" value={symbol} onChange={(event) => setSymbol(event.target.value)} disabled={!available.length}>{available.map((item) => <option value={item.symbol} key={item.symbol}>{item.symbol} · {item.name}</option>)}</select><button type="submit" disabled={pending || !available.length}>Thêm vào watchlist</button></form>
-          {active.items.length ? <div className="market-table-wrap"><table className="market-table"><thead><tr><th>Mã</th><th>Công ty</th><th>Sàn</th><th>Ngành</th><th><span className="sr-only">Thao tác</span></th></tr></thead><tbody>{active.items.map((item) => <tr key={item.symbol}><td><strong>{item.symbol}</strong></td><td>{item.name}</td><td>{item.exchange}</td><td>{item.sector ?? "—"}</td><td><button className="table-remove" type="button" onClick={() => remove(item.symbol)} disabled={pending} aria-label={`Xóa ${item.symbol} khỏi watchlist`}>×</button></td></tr>)}</tbody></table></div> : <div className="market-empty compact"><p>Danh sách chưa có mã. Chọn một mã ở phía trên để thêm.</p></div>}
+          {active.items.length ? <div className="market-table-wrap"><table className="market-table"><thead><tr><th>Mã</th><th>Công ty</th><th>Giá</th><th>Thay đổi</th><th>Sàn</th><th>Ngành</th><th><span className="sr-only">Thao tác</span></th></tr></thead><tbody>{active.items.map((item) => { const snapshot = instrumentsBySymbol.get(item.symbol); const live = stream.items[item.symbol]; const price = typeof live?.price === "string" ? live.price : snapshot?.price; const changePercent = typeof live?.change_percent === "string" ? live.change_percent : snapshot?.change_percent; return <tr key={item.symbol}><td><strong>{item.symbol}</strong></td><td>{item.name}</td><td>{price ? formatChange(price) : "—"}</td><td className={changeTone(changePercent ?? "0")}>{changePercent ? formatPercent(changePercent) : "—"}</td><td>{item.exchange}</td><td>{item.sector ?? "—"}</td><td><button className="table-remove" type="button" onClick={() => remove(item.symbol)} disabled={pending} aria-label={`Xóa ${item.symbol} khỏi watchlist`}>×</button></td></tr>; })}</tbody></table></div> : <div className="market-empty compact"><p>Danh sách chưa có mã. Chọn một mã ở phía trên để thêm.</p></div>}
         </>}
       </section>
     </div>

@@ -58,6 +58,7 @@ class InstrumentResponse(StrictModel):
     volume_vs_20d: str
     interest_score: str
     interest_reasons: list[str]
+    is_vn30: bool
     candles: list[CandleResponse] = Field(default_factory=list)
 
 
@@ -139,9 +140,12 @@ class OverviewResponse(StrictModel):
 
 class InstrumentsPagination(StrictModel):
     next_cursor: str | None
+    previous_cursor: str | None
     has_more: bool
     limit: int
     total_items: int
+    page: int
+    total_pages: int
 
 
 class InstrumentsResponse(StrictModel):

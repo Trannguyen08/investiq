@@ -4,7 +4,8 @@
 
 The monorepo has a runnable container and delivery baseline. FastAPI health/status endpoints, the
 Next.js shell, Celery configuration, Docker Compose, Nginx, and CI/CD are implemented. Six-source
-Vietnamese stock news and a fixture-backed home/market vertical slice are implemented; most
+Vietnamese stock news, a fixture-backed home/market vertical slice, and a credential-gated TCBS
+iFlash adapter are implemented; most
 portfolio and ML modules remain placeholders. End-user authentication is implemented behind a
 fail-closed feature flag and remains separate from the existing Admin News session boundary.
 
@@ -49,7 +50,8 @@ investiq/
 - Backend and frontend images are built from service-local Dockerfiles. Deployment overrides their
   Compose image names with immutable GHCR tags.
 - PostgreSQL and Redis are private to the Compose network and persist in named volumes.
-- Backend services use an internal-only network. The notification worker joins a mail outbound
+- Backend services use an internal-only network. The API additionally joins a dedicated market-data
+  egress network for TCBS; the notification worker joins a mail outbound
   network for SMTP; the news worker joins a separate news outbound network for publishers.
 - News articles, immutable revisions, source policies, verified symbols, publisher-explicit symbol
   candidates, versioned sentiment/market-impact analysis, crawl runs, and durable
@@ -74,12 +76,37 @@ investiq/
   and PostgreSQL audit records. They fail closed when no token is configured.
 - Public market routes use canonical domain entities and an application-owned provider port. The
   development adapter emits deterministic fixture data with an explicit fixture freshness label;
-  `MARKET_DATA_MODE=disabled` is the shared/production default. Redis caches bounded public read
+  the TCBS adapter filters its active common-stock security master by documented exchange fields,
+  marks VN30 membership from board 2, supplies normalized security/quote REST data, preserves the
+  provider trading date for closed-session snapshots, and
+  consumes official index WebSocket snapshots/updates with bounded retries, circuit breaking,
+  reconnect and stale/partial state. `MARKET_DATA_MODE=disabled`
+  is the shared/production default. Redis caches bounded public read
   models, while PostgreSQL migration `0011_market_foundation` owns future licensed history, events,
   public people/holding snapshots, engagement retention, and current private watchlists.
-- `/ws/v1/market` sends versioned hello/heartbeat/snapshot events with bounded symbol subscriptions.
-  It is an ephemeral delivery path; REST remains the resync source. Live provider sequence/gap
-  reconciliation is not active until a licensed adapter is configured.
+- Vnstock is a local/private evaluation adapter behind the same port. It uses source-delayed KBS
+  reference/quote/OHLCV data plus VCI industry labels, normalizes equity candles to VND, caches
+  snapshots and candles, and serves labeled stale data after a transient upstream failure. Its
+  optional key stays server-side. Because the client aggregates third-party sources, this adapter is
+  not evidence of public redistribution rights and is not a production licensing substitute.
+- Stock discovery defaults to VN30-first ordering with 15-row cursor pages. The path-addressable
+  `/market/stocks/<symbol>` view aggregates documented current-session TCBS trades into five-minute
+  candles. Week/month/year controls disclose unavailable multi-session history rather than deriving
+  or fabricating OHLC data. Home and Market share a scoped dark navy visual system, and Home derives
+  its market-wide breadth summary from canonical exchange snapshots. One shared accessible SVG
+  candlestick renderer serves the Home VN-Index chart and stock detail pages with red/green OHLC,
+  volume, MA5/MA20, axes, and a table alternative. The TCBS adapter accumulates bounded five-minute
+  VN-Index candles from real index stream ticks in process; absent historical ticks remain absent.
+- The default beginner presentation uses plain-language summaries, an estimated sentiment gauge,
+  line charts, inline definitions, a fixed five-color price legend, sector heatmap, relative
+  sector-strength indicator, and a simplified stock table. `mode=advanced` is URL-addressable and
+  reveals candlesticks and detailed columns; a URL-addressable stock drawer provides a 90-session
+  line chart without inventing community posts or causal news explanations.
+- `/ws/v1/market` sends versioned hello/heartbeat/snapshot/quote events with bounded symbol
+  subscriptions and local sequence numbers. Clients deduplicate event IDs and reconnect for a REST-
+  backed snapshot after a sequence gap. It is an ephemeral delivery path; REST remains the resync
+  source. TCBS wire messages have no documented provider sequence, so reconnect reconciliation uses
+  a fresh REST snapshot rather than claiming provider-level gap recovery.
 - Private watchlists use the existing Next.js server-held user session. The browser calls the
   same-origin `/market-api/watchlists` BFF; FastAPI independently verifies the BFF secret, bearer
   session, active user, and row ownership. Personalized responses are never shared-cacheable.
@@ -91,6 +118,8 @@ investiq/
   Each environment must run only one Beat scheduler.
 - FastAPI, Celery, and Nginx produce sanitized structured runtime fields. Health access logs and
   image-build output are excluded from the viewer to limit operational noise.
+- Every Compose service uses the `json-file` driver with three 10 MB rotated files, bounding local
+  Docker log storage to approximately 30 MB per container independently of host daemon defaults.
 
 ## Dependency boundaries
 
@@ -133,13 +162,17 @@ EOD or delayed market data. It plans private watchlists, a moderated community, 
 theses with market snapshots, outcome tracking, contextual reputation, and source-linked AI
 counter-analysis. These are product and architecture intentions, not implemented runtime facts.
 
-`docs/plan/home-market-pages.md` defines the market boundary now implemented for local development.
-Provider-specific clients remain infrastructure adapters behind canonical application ports, and
-browsers call only InvestIQ APIs. PostgreSQL owns the market/watchlist schema and Redis holds
-short-lived public read models. The current fixture WebSocket supplies bounded snapshots and
-heartbeat; licensed delayed/realtime ingestion, provider sequence/gap reconciliation, history
-backfill, and provider failover remain future adapter/worker work. Every current market response
-carries provider, market time, received time, delay class and freshness.
+`docs/plan/home-market-pages.md` defines the market boundary now implemented for local development
+and credential-gated TCBS evaluation. Provider-specific clients remain infrastructure adapters behind
+canonical application ports, and browsers call only InvestIQ APIs. PostgreSQL owns the market/watchlist
+schema and Redis holds short-lived public read models. The TCBS adapter uses in-memory token reuse,
+REST snapshot refresh, one upstream index stream with an initial index request, official text
+heartbeat and bounded reconnect;
+credentials are never sent to Redis or the browser. TCBS requires a Smart OTP for token issuance and
+documents no refresh token, so unattended key-only renewal is impossible. Licensed history backfill,
+provider-level sequence reconciliation, secondary-provider failover and Events/People sources remain
+future work. Every market response carries provider, market time, received time, delay class,
+freshness and partial state.
 
 This file is the canonical architectural overview. Every path or boundary change updates this file
 and all affected references in the same task, following `.agents/rules/project-structure.md`.

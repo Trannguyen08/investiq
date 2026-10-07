@@ -14,10 +14,26 @@ from app.domain.entities.market import (
 
 
 class IMarketProvider(Protocol):
-    slug: str
-    display_name: str
-    delay_class: str
-    market_time: str
+    @property
+    def slug(self) -> str: ...
+
+    @property
+    def display_name(self) -> str: ...
+
+    @property
+    def delay_class(self) -> str: ...
+
+    @property
+    def market_time(self) -> str: ...
+
+    @property
+    def freshness(self) -> str: ...
+
+    @property
+    def session(self) -> str: ...
+
+    @property
+    def partial(self) -> bool: ...
 
     def instruments(self) -> tuple[MarketInstrument, ...]: ...
 

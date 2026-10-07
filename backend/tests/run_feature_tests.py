@@ -76,6 +76,20 @@ FEATURES: dict[str, FeatureTests] = {
         unit_coverage_modules=("app.infrastructure.config.logging_config",),
         integration_coverage_modules=("app.middleware.request_logging",),
     ),
+    "market-data": FeatureTests(
+        unit_paths=("tests/unit/market_data",),
+        integration_paths=("tests/integration/api/test_market_data_api.py",),
+        unit_coverage_modules=(
+            "app.infrastructure.external.tcbs_market_provider",
+            "app.infrastructure.external.vnstock_market_provider",
+            "app.application.use_cases.market_data.market_service",
+        ),
+        integration_coverage_modules=(
+            "app.api.v1.market_data",
+            "app.schemas.market",
+            "app.infrastructure.external.tcbs_market_provider",
+        ),
+    ),
 }
 
 

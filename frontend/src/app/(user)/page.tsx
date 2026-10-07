@@ -1,15 +1,17 @@
 import Link from "next/link";
 
 import { HomeMarketDashboard } from "@/components/market/home-market-dashboard";
-import { getMarketOverview } from "@/lib/api-client";
+import { getMarketOverview, getNews } from "@/lib/api-client";
+import type { NewsSummary } from "@/lib/api-client";
 
 export default async function OverviewPage() {
-  let overview = null;
-  try {
-    overview = await getMarketOverview();
-  } catch {
-    overview = null;
-  }
+  const query = new URLSearchParams({ limit: "3" });
+  const [overviewResult, newsResult] = await Promise.allSettled([
+    getMarketOverview(),
+    getNews(query, 800),
+  ]);
+  const overview = overviewResult.status === "fulfilled" ? overviewResult.value : null;
+  const news: NewsSummary[] = newsResult.status === "fulfilled" ? newsResult.value.data : [];
   if (!overview) {
     return (
       <main id="main-content" className="market-unavailable">
@@ -20,5 +22,5 @@ export default async function OverviewPage() {
       </main>
     );
   }
-  return <HomeMarketDashboard overview={overview} />;
+  return <HomeMarketDashboard overview={overview} news={news} />;
 }

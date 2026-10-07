@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+import json
 from functools import lru_cache
 from typing import Annotated, Literal
 from uuid import UUID, uuid4
@@ -20,6 +21,7 @@ from fastapi import (
 )
 
 from app.api.deps import authenticated_user_id, require_auth_bff
+from app.application.use_cases.market_data.errors import MarketDataUnavailable
 from app.application.use_cases.market_data.market_service import MarketService, decode_cursor
 from app.domain.repositories.i_market_provider import IMarketProvider
 from app.infrastructure.cache.market_cache import MarketReadCache, get_market_read_cache
@@ -31,6 +33,8 @@ from app.infrastructure.db.repositories.sql_watchlist_repository import (
 )
 from app.infrastructure.db.session import get_pool
 from app.infrastructure.external.market_fixture_provider import FixtureMarketProvider
+from app.infrastructure.external.tcbs_market_provider import TcbsConfig, TcbsMarketProvider
+from app.infrastructure.external.vnstock_market_provider import VnstockConfig, VnstockMarketProvider
 from app.schemas.market import (
     AddWatchlistItemRequest,
     CandlesResponse,
@@ -60,7 +64,57 @@ watchlist_router = APIRouter(
 def _provider() -> IMarketProvider:
     if settings.market_data_mode == "fixture":
         return FixtureMarketProvider()
+    if settings.market_data_mode == "tcbs":
+        settings.require_tcbs_configuration()
+        return TcbsMarketProvider(
+            TcbsConfig(
+                api_base_url=settings.tcbs_api_base_url,
+                ws_url=settings.tcbs_ws_url,
+                api_key=(
+                    settings.tcbs_api_key.get_secret_value() if settings.tcbs_api_key else None
+                ),
+                otp=settings.tcbs_otp.get_secret_value() if settings.tcbs_otp else None,
+                access_token=(
+                    settings.tcbs_access_token.get_secret_value()
+                    if settings.tcbs_access_token
+                    else None
+                ),
+                request_timeout_seconds=settings.tcbs_request_timeout_seconds,
+                quote_refresh_seconds=settings.tcbs_quote_refresh_seconds,
+                security_refresh_seconds=settings.tcbs_security_refresh_seconds,
+                retry_attempts=settings.tcbs_http_retry_attempts,
+                circuit_failure_threshold=settings.tcbs_circuit_failure_threshold,
+                circuit_open_seconds=settings.tcbs_circuit_open_seconds,
+            )
+        )
+    if settings.market_data_mode == "vnstock":
+        return VnstockMarketProvider(
+            VnstockConfig(
+                api_key=(
+                    settings.vnstock_api_key.get_secret_value()
+                    if settings.vnstock_api_key
+                    else None
+                ),
+                refresh_seconds=settings.vnstock_refresh_seconds,
+                candle_cache_seconds=settings.vnstock_candle_cache_seconds,
+                max_symbols=settings.vnstock_max_symbols,
+            )
+        )
     raise RuntimeError("Market data is disabled until a licensed provider is configured")
+
+
+async def start_market_provider() -> None:
+    if settings.market_data_mode == "tcbs":
+        provider = _provider()
+        if isinstance(provider, TcbsMarketProvider):
+            await provider.start()
+
+
+async def close_market_provider() -> None:
+    if settings.market_data_mode == "tcbs":
+        provider = _provider()
+        if isinstance(provider, TcbsMarketProvider):
+            await provider.close()
 
 
 def _service() -> MarketService:
@@ -75,7 +129,10 @@ def _watchlists() -> SqlWatchlistRepository:
 
 
 def _public_headers(response: Response) -> None:
-    response.headers["Cache-Control"] = "public, max-age=5, s-maxage=30, stale-while-revalidate=15"
+    ttl = settings.market_public_cache_seconds
+    response.headers["Cache-Control"] = (
+        f"public, max-age={min(ttl, 5)}, s-maxage={ttl}, stale-while-revalidate={min(ttl, 15)}"
+    )
     response.headers["Vary"] = "Accept-Encoding"
 
 
@@ -116,10 +173,17 @@ def instruments(
     exchange: Annotated[str | None, Query(pattern="^(HOSE|HNX|UPCOM)$")] = None,
     sector: Annotated[str | None, Query(max_length=120)] = None,
     sort: Literal[
-        "symbol", "price", "change_percent", "volume", "matched_value", "trending", "market_cap"
-    ] = "symbol",
-    direction: Literal["asc", "desc"] = "asc",
-    limit: Annotated[int, Query(ge=1, le=100)] = 50,
+        "vn30",
+        "symbol",
+        "price",
+        "change_percent",
+        "volume",
+        "matched_value",
+        "trending",
+        "market_cap",
+    ] = "vn30",
+    direction: Literal["asc", "desc"] = "desc",
+    limit: Annotated[int, Query(ge=1, le=100)] = 15,
     cursor: Annotated[str | None, Query(max_length=512)] = None,
 ) -> dict[str, object]:
     _public_headers(response)
@@ -310,20 +374,44 @@ async def stream_market(websocket: WebSocket) -> None:
             "data": {"max_symbols": 20, "delay_class": _provider().delay_class},
         }
     )
+    sequence = 0
+    symbols: list[str] = []
+    last_snapshot = ""
+    heartbeat_ticks = 0
     try:
         while True:
             try:
-                message = await asyncio.wait_for(websocket.receive_json(), timeout=20)
+                message = await asyncio.wait_for(websocket.receive_json(), timeout=2)
             except TimeoutError:
-                await websocket.send_json(
-                    {
-                        "version": "1",
-                        "event_id": str(uuid4()),
-                        "type": "heartbeat",
-                        "timestamp": _provider().market_time,
-                        "data": {},
-                    }
-                )
+                if not symbols:
+                    continue
+                snapshots = await asyncio.to_thread(_stream_snapshots, symbols)
+                serialized = json.dumps(snapshots, sort_keys=True, separators=(",", ":"))
+                heartbeat_ticks += 1
+                if serialized != last_snapshot:
+                    sequence += 1
+                    last_snapshot = serialized
+                    heartbeat_ticks = 0
+                    await websocket.send_json(
+                        {
+                            "version": "1",
+                            "event_id": str(uuid4()),
+                            "type": "quote",
+                            "timestamp": _provider().market_time,
+                            "data": {"sequence": sequence, "items": snapshots},
+                        }
+                    )
+                elif heartbeat_ticks >= 10:
+                    heartbeat_ticks = 0
+                    await websocket.send_json(
+                        {
+                            "version": "1",
+                            "event_id": str(uuid4()),
+                            "type": "heartbeat",
+                            "timestamp": _provider().market_time,
+                            "data": {},
+                        }
+                    )
                 continue
             if not isinstance(message, dict) or message.get("type") != "subscribe":
                 await websocket.close(code=1008, reason="Invalid subscription")
@@ -336,22 +424,32 @@ async def stream_market(websocket: WebSocket) -> None:
             if len(symbols) != len(raw_symbols) or any(len(value) > 24 for value in symbols):
                 await websocket.close(code=1008, reason="Invalid symbol")
                 return
-            snapshots: list[dict[str, object]] = []
-            service = _service()
-            for symbol in dict.fromkeys(symbols):
-                value = service.instrument(symbol) or service.index(symbol)
-                if value:
-                    data = value.get("data")
-                    if isinstance(data, dict):
-                        snapshots.append(data)
+            symbols = list(dict.fromkeys(symbols))
+            snapshots = await asyncio.to_thread(_stream_snapshots, symbols)
+            sequence += 1
+            last_snapshot = json.dumps(snapshots, sort_keys=True, separators=(",", ":"))
             await websocket.send_json(
                 {
                     "version": "1",
                     "event_id": str(uuid4()),
                     "type": "snapshot",
                     "timestamp": _provider().market_time,
-                    "data": {"sequence": 1, "items": snapshots},
+                    "data": {"sequence": sequence, "items": snapshots},
                 }
             )
     except WebSocketDisconnect:
         return
+    except MarketDataUnavailable:
+        await websocket.close(code=1013, reason="Market provider unavailable")
+
+
+def _stream_snapshots(symbols: list[str]) -> list[dict[str, object]]:
+    snapshots: list[dict[str, object]] = []
+    service = _service()
+    for symbol in symbols:
+        value = service.instrument(symbol) or service.index(symbol)
+        if value:
+            data = value.get("data")
+            if isinstance(data, dict):
+                snapshots.append(data)
+    return snapshots

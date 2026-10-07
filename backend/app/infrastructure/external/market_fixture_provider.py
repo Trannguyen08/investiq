@@ -15,6 +15,21 @@ from app.domain.entities.market import (
 
 D = Decimal
 FIXTURE_TIME = datetime(2026, 10, 2, 8, 0, tzinfo=UTC)
+_VN30_FIXTURE = {
+    "FPT",
+    "HPG",
+    "VIC",
+    "SSI",
+    "TCB",
+    "VCB",
+    "VNM",
+    "MWG",
+    "MBB",
+    "VHM",
+    "GAS",
+    "MSN",
+    "STB",
+}
 
 
 def _candles(base: Decimal, seed: int, count: int = 30) -> tuple[Candle, ...]:
@@ -81,6 +96,7 @@ def _instrument(
         interest_score=D(interest),
         interest_reasons=reasons,
         candles=_candles(last, seed),
+        is_vn30=symbol in _VN30_FIXTURE,
     )
 
 
@@ -91,6 +107,9 @@ class FixtureMarketProvider:
     display_name = "InvestIQ — dữ liệu minh họa"
     delay_class = "development_fixture"
     market_time = FIXTURE_TIME.isoformat().replace("+00:00", "Z")
+    freshness = "fixture"
+    session = "closed"
+    partial = False
 
     _instruments = (
         _instrument(

@@ -1,5 +1,155 @@
 # Current Task
 
+## Market contrast and non-blocking navigation - 2026-10-07 (complete)
+
+Fix the reproduced Market readability and navigation defects. Heatmap labels currently inherit the
+same red/green tone as their saturated tile backgrounds, reducing contrast. Route transitions can
+remain in Next.js "Rendering" while an expired Vnstock snapshot performs a synchronous full-market
+refresh; visible market links also create avoidable server-route prefetch load. Make cached reads
+stale-while-refresh after the initial snapshot, disable expensive prefetch where appropriate, retain
+URL-addressable state, add regression coverage, and verify click navigation plus WCAG-oriented color
+contrast in the running development app.
+
+Implemented stronger dark-theme borders and muted text, white high-weight heatmap labels on deeper
+red/green/yellow tiles, clearer gain/loss numerics, and visible keyboard focus for stock rows. Market
+links no longer prefetch expensive server routes, stock-row selection remains URL-addressable, and
+local WebSockets now connect directly to the backend. Vnstock snapshots use stale-while-refresh after
+their first load with a five-minute refresh default; optional Home news is fetched concurrently with
+an 800 ms ceiling so an unavailable local PostgreSQL database cannot hold navigation for 30 seconds.
+The backend was restarted from the repository root so the root `.env` selects Vnstock, and both dev
+servers remain running. Browser click smoke tests measured the five Market routes at 135-440 ms and
+Market-to-Home at about 1.05 seconds; stock-row selection opened `selected=MSN`. Computed heatmap text
+is near-white at weight 950. Frontend ESLint and TypeScript passed, all 36 frontend tests passed,
+19 focused backend market tests passed, and `git diff --check` reported no whitespace errors.
+
+## Beginner-first Home/Market and Vnstock evaluation - 2026-10-07 (complete)
+
+Redesign Home and Market around plain-language decisions for new investors: one-sentence market
+summary, sentiment, breadth/liquidity/foreign-flow explanations, learning path, daily terminology,
+translated news context, community entry points, sector heatmap/flow, simplified stock table, fixed
+five-color legend, inline glossary, and an explicit Basic/Advanced mode. Integrate Vnstock behind the
+existing canonical backend provider boundary for real historical OHLCV and source-delayed in-session
+data without exposing its key to the browser or claiming exchange-grade realtime. Preserve current
+TCBS/fixture modes and existing public contracts where possible; label unavailable/derived fields
+instead of fabricating market reasons. Add focused backend/provider and frontend interaction tests,
+then run lint, type checking, feature tests, and development-server smoke checks.
+
+Implemented a cached `vnstock` provider using KBS reference/quote/OHLCV data and VCI sectors, with
+source-delayed/partial metadata, VND normalization, daily and five-minute candles, stale fallback,
+server-only optional key configuration, and pinned package hashes. Redesigned Home and Stocks for
+beginners with plain-language conclusions, line charts, an explicitly estimated sentiment gauge,
+breadth/liquidity/foreign explanations, learning/glossary/news/community scaffolds, sector heatmap,
+relative sector strength, basic/advanced URL state, 15-row VN30-first paging, simplified/advanced
+tables, a stock drawer with 90-session chart, inline definitions, five-color legend, and disclaimers.
+No unsupported news reasons or community posts are fabricated. Local `.env` now selects Vnstock.
+Validation: backend Ruff passed; full backend suite passed 100 tests with 11 database skips; focused
+Vnstock/service tests passed 4 tests; registered market-data suites passed 14 unit and 4 integration
+tests with branch coverage; frontend ESLint and TypeScript passed; 32 frontend tests passed;
+real localhost smoke checks returned HTTP 200 for overview, FPT 30-day candles, Home and Stocks, with
+provider `vnstock-kbs`, 4 indices, 1,399 instruments, and VN30 members first. No deployment occurred.
+
+## Stale backend market compatibility - 2026-10-07 (complete; data restart pending)
+
+Fix the reproduced local mismatch where the pre-change backend returns 422 for `sort=vn30` and an
+empty index collection, causing `/market/stocks` to crash and the Home candlestick section to vanish.
+Limit compatibility behavior to the verified 422 contract mismatch, normalize missing additive fields,
+and keep the Home chart shell visible with an explicit waiting state until real index candles arrive.
+
+Reproduction confirmed the running legacy backend returned HTTP 422 only for `sort=vn30`, accepted
+`sort=matched_value` with 15 rows, returned an empty index collection, and returned no candle series.
+The server-side API client now retries only that verified 422 mismatch with the legacy supported sort
+and normalizes missing additive pagination/VN30 fields; other failures still surface. Home always
+renders the candlestick panel and identifies the wait for VN-Index instead of silently removing it.
+Direct localhost smoke checks now return HTTP 200 for `/` and `/market/stocks`, include the Home chart
+shell, and contain no 422 runtime error. Frontend ESLint and TypeScript passed; all 30 Vitest tests
+passed, including the legacy-contract regression; `git diff --check` passed. Real candles still require
+restarting the backend with the implemented provider and a fresh Smart OTP because the retained old
+process reports no indices or candles.
+
+## Shared red/green candlestick charts - 2026-10-07 (complete; runtime restart pending)
+
+Replace the Home breadth bar visualization and stock-detail line chart with one accessible financial
+candlestick renderer: red/green OHLC bodies and wicks, aligned volume, current-price marker, MA5/MA20,
+time/price axes, textual data alternative, and honest empty states. Retain the existing dark navy
+theme and provider limitations. Accumulate real five-minute VN-Index candles from TCBS index stream
+updates in process; never manufacture missing history.
+
+Implemented one shared SVG financial chart on Home and stock detail: bounded red/green OHLC candles,
+wicks, aligned directional volume, grid/axes, latest-price marker, MA5/MA20, responsive horizontal
+scrolling, and a semantic table alternative. Home now uses VN-Index instead of the former breadth bar
+chart, while the breadth summary remains. TCBS index ticks accumulate into bounded five-minute candles
+and flow through REST/WebSocket contracts; missing pre-process history stays an explicit empty state.
+Removed the superseded breadth-chart component and synchronized README/project/architecture facts.
+Validation: backend Ruff and targeted strict mypy passed; full backend suite passed 97 tests with 11
+database-dependent skips. Registered market-data feature reports passed 11 unit tests at 65.22%
+branch-aware coverage and four integration tests at 61.43%. Frontend ESLint, TypeScript, and all 29
+Vitest tests passed; Next.js HMR compiled Home and stock detail; `git diff --check` passed. The old
+backend process still needs a fresh Smart OTP restart before live candles can be smoke-tested.
+
+## Dark market workspace, VN30-first paging, and stock detail - 2026-10-07 (implementation complete; runtime restart pending)
+
+Extend the live market experience with a dark navy Home/Market visual system, a 15-row VN30-first
+stock table with bidirectional pagination, centered financial columns and stronger gain/loss colors,
+an aggregate whole-market chart on Home, and a path-addressable stock detail screen with accessible
+range controls and provider-explicit chart availability. Preserve server-only TCBS credentials and
+do not fabricate multi-session history that iFlash OpenAPI does not expose.
+
+Implemented the vertical slice across TCBS normalization, canonical contracts, API pagination, Home,
+Market, and `/market/stocks/<symbol>`. Board 2 identifies VN30 membership; documented intraday trades
+are aggregated into five-minute Day candles; Week/Month/Year states disclose the absent multi-session
+OHLC feed. Added focused provider/service/API/component regression coverage and synchronized README,
+project, and architecture memory. Validation: backend Ruff and targeted strict mypy passed; the full
+backend suite passed 96 tests with 11 database-dependent skips; frontend ESLint, TypeScript, and all
+28 Vitest tests passed; `git diff --check` passed before the final documentation update. The Next.js
+dev server compiles Home, Stocks, and FPT detail routes. Its existing backend process intentionally
+remains on the pre-change code because the previous Smart OTP is expired and the live access token is
+process-local; restart and final real-data smoke testing require a newly generated Smart OTP.
+
+## TCBS live market activation and redistribution review - 2026-10-07 (complete)
+
+Validate the configured TCBS iFlash credentials against read-only live market endpoints, correct
+provider mappings and UI behavior needed for real snapshots, and document whether public hosting
+on Render/Vercel is permitted. No deployment or trading operation is authorized; public hosting
+remains blocked unless TCBS grants explicit redistribution/display rights.
+
+Implemented real-data corrections: paginated/filtered the common-stock master, retained closed-session
+trading dates, requested an immediate upstream index snapshot, serialized the single OTP exchange
+across concurrent startup consumers, excluded VN30 double counting from breadth, aligned public cache
+headers with settings, merged live snapshots into home cards, and marked unsupported/estimated TCBS
+fields honestly in the UI. The configured key reached the official token endpoint, which returned
+`203033 Invalid OTP` for the first expired codes. A newly generated Smart OTP subsequently returned
+HTTP 200 with a non-empty JWT, and the same in-memory token returned an HTTP 200 FPT quote snapshot
+for trading date 07/10/2026. No token or credential was printed or persisted by the verification.
+Public TCBS docs were reviewed without finding an explicit third-party redistribution grant. Render
+fits the current long-running topology technically; Vercel WebSockets are public beta and bounded by
+Function duration, so Vercel is suitable for the frontend unless the backend is redesigned. No deploy
+was performed. Validation: backend Ruff and strict targeted mypy passed; full backend suite passed
+93 tests with 11 database-dependent skips; frontend ESLint, TypeScript, and all 25 Vitest tests passed.
+
+## Bounded Docker container logs — 2026-10-06 (complete)
+
+Applied one shared Compose `json-file` logging policy to all ten InvestIQ services with 10 MB files
+and three retained files, limiting Docker-managed log storage to approximately 30 MB per container.
+Documented that the policy takes effect on container recreation and does not alter unrelated host
+containers. Compose rendering confirms every service receives the driver and both rotation options;
+live recreation was not attempted because Docker Desktop was not running in the current environment.
+
+## TCBS market adapter and canonical market routes — 2026-10-06 (complete)
+
+Implemented a production-shaped TCBS iFlash adapter behind the canonical market provider port:
+validated secret configuration, bounded/retried REST calls, circuit breaking, in-memory token reuse,
+normalized stock/index snapshots, one shared upstream index stream, downstream quote snapshots,
+stale fallback, safe failure classification, and credential-free contract tests. The frontend now
+uses canonical `/market/stocks`, `/market/watchlist`, `/market/indices`, `/market/events`, and
+`/market/people` routes; `/market?tab=...` redirects compatibly while preserving URL filters. Runtime,
+Compose networking, documentation, project memory, and decision records are synchronized. TCBS
+requires Smart OTP to exchange an API key and documents no refresh token, so the runtime accepts a
+pre-issued access token or an API key plus one-time OTP and reuses the token without logging it.
+Validation: backend Ruff passed; the full backend suite passed with 90 tests and 11 database skips;
+the isolated market-data suites passed 6 unit and 2 integration tests; targeted strict mypy passed;
+frontend ESLint, TypeScript, and all 23 Vitest tests passed; Compose config and `git diff --check`
+passed. Live TCBS validation remains pending until credentials and provider entitlements are issued.
+
 ## Market-data API credential tutorial — 2026-10-04 (complete)
 
 Added the local guide `docs/tutorial/market-data-api-keys.md`. It ranks Vnstock Community, TCBS
