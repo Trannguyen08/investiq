@@ -4,8 +4,11 @@
 
 Merged `origin/dev` into `feature/market` and resolved the sole content conflict by preserving both
 branches' completed task history. Updated Market test assertions to narrow generic service payloads
-for strict mypy and removed one obsolete ignore. Ruff and strict mypy pass; the full backend suite
-passes 110 tests with 11 database tests skipped locally, all 48 frontend tests plus ESLint and
+for strict mypy and removed one obsolete ignore. The first GitHub run then exposed an uptime-dependent
+TCBS initialization defect: a newly started host could treat an empty security master as fresh and
+skip its initial load. The adapter now requires cached securities before applying the refresh TTL,
+with a deterministic low-monotonic-time regression test. Ruff and strict mypy pass; the full backend
+suite passes 110 tests with 11 database tests skipped locally, all 48 frontend tests plus ESLint and
 TypeScript pass, and the Compose model validates. GitHub Actions owns the PostgreSQL-backed tests and
 container builds because the local Docker Desktop engine is unavailable.
 

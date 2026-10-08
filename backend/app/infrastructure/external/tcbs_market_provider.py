@@ -535,7 +535,10 @@ class TcbsMarketProvider:
     def _refresh_security_master(self) -> None:
         now = time.monotonic()
         with self._state_lock:
-            if now - self._last_security_refresh < self._config.security_refresh_seconds:
+            if (
+                self._securities
+                and now - self._last_security_refresh < self._config.security_refresh_seconds
+            ):
                 return
         securities: dict[str, dict[str, object]] = {}
         # The public contract documents filtering but not request-side page controls.
