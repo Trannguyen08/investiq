@@ -83,7 +83,9 @@
   simulation account per user. Migration `0012_paper_trading` stores row-locked cash, weighted-average
   holdings, and immutable idempotent fills. The API/UI expose modeled fees/tax, current and realized/
   unrealized performance, bounded price/equity history, observed gainers, positive tagged news, and
-  deterministic risk notices without placing broker orders or presenting predictions as facts. The
+  deterministic risk notices without placing broker orders or presenting predictions as facts. Its
+  advanced market table now starts confirmed buy/sell tickets per row, with sell limited to owned
+  symbols, while a separate position table manages purchased stocks and their observed performance. The
   same-origin `/portfolio-api` BFF enforces CSRF while FastAPI independently verifies the BFF secret,
   bearer session, active user, and resource ownership. See `docs/plan/paper-trading.md`.
 

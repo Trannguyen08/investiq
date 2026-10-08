@@ -137,6 +137,8 @@ investiq/
   modeled fee/tax plus realized profit or loss. Dashboard reads mark holdings against the canonical
   market provider, return null/partial valuation when a price is unavailable, and derive bounded
   current-holdings history and educational notices without shared caching or personal-data logging.
+  The UI reuses the advanced market data fields as a searchable, paged trade picker; row actions open
+  a quantity-confirmation ticket, and a separate private table manages owned positions.
 - The Next.js Admin News workspace uses a server-validated, HMAC-signed HttpOnly session cookie.
   Browser actions execute as server actions, while the FastAPI operations token remains server-only;
   both layers fail closed when their independent runtime secrets are absent.

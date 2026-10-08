@@ -1,5 +1,22 @@
 # Current Task
 
+## Portfolio market-table trading workflow - 2026-10-08 (complete)
+
+Replace the standalone symbol-entry order card with the advanced Market stock table. Every displayed
+symbol provides a Buy action; owned symbols also provide Sell. Both actions open a bounded quantity
+confirmation ticket and continue to use the existing CSRF-protected, idempotent simulated-order API.
+Replace holding cards with a dedicated management table for purchased stocks, preserving price source,
+fees/tax disclosure, observed performance, and explicit missing-value behavior.
+
+Complete: `/portfolio` now loads up to 100 VN30-first instruments, presents the same nine advanced
+market fields plus per-row trade actions, supports local search and 15-row paging, and only exposes a
+sell action when the dashboard confirms ownership. The confirmation ticket bounds a sale by the owned
+quantity. Purchased positions have a separate management table with quantity, cost, observed price,
+value, daily change, unrealized result, weight, history, buy-more and sell actions. Component coverage
+proves owned/unowned actions and the CSRF order boundary. Frontend lint, TypeScript, the focused tests,
+and all 51 frontend tests pass; the authenticated running `/portfolio` route and its BFF both return
+HTTP 200. No production build or deployment was run.
+
 ## Beginner paper-trading portfolio - 2026-10-08 (complete; DB execution pending)
 
 Build an authenticated, private paper-trading experience for beginners. Each user receives one

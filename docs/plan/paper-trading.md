@@ -13,6 +13,12 @@ from the configured canonical market provider. Every fill records the provider, 
 received timestamp, delay class, price, quantity, modeled fee, modeled sell tax, and idempotency key.
 The UI must always display that source/freshness context.
 
+The portfolio uses the same advanced market columns as the Market workspace as its stock picker.
+Every row offers a simulated buy action, owned symbols additionally offer a sell action, and either
+action opens a quantity confirmation ticket before the order is sent. Owned positions are managed in
+a separate table showing quantity, average cost, observed price/value, daily move, unrealized result,
+portfolio weight, price history, and buy-more/sell controls.
+
 ## Financial rules
 
 - Currency is VND. Money uses `NUMERIC`/`Decimal` and API decimal strings; no authoritative
@@ -94,6 +100,8 @@ must not label content sentiment as a price forecast or emit prescriptive buy/se
 - Retrying one idempotency key cannot create a second fill; reusing it for a different order fails.
 - All money and quantity invariants are enforced both in application code and PostgreSQL constraints.
 - The dashboard handles anonymous, loading, empty, stale, error, and populated states accessibly.
+- The advanced stock table exposes buy actions on every row, sell actions only for owned symbols,
+  and a distinct owned-position management table without bypassing order confirmation.
 - Unit tests cover calculations and order decisions. API/repository integration tests cover auth,
   ownership, migration, idempotency, and transaction behavior. Frontend component tests cover the
   primary buy/sell journey and financial summaries.
