@@ -12,7 +12,7 @@ import math
 import os
 import re
 from collections.abc import Callable
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from datetime import UTC, datetime
 from decimal import Decimal, InvalidOperation
 from threading import RLock, Thread
@@ -52,6 +52,7 @@ class VnstockConfig:
     api_key: str | None
     refresh_seconds: int
     candle_cache_seconds: int
+    fundamental_cache_seconds: int
     max_symbols: int
 
 
@@ -62,12 +63,16 @@ class VnstockGateway(Protocol):
 
     def quote_rows(self, symbols: list[str]) -> list[dict[str, object]]: ...
 
+    def previous_session_rows(self, symbols: list[str]) -> list[dict[str, object]]: ...
+
     def candle_rows(
         self,
         symbol: str,
         interval: str,
         count: int,
     ) -> list[dict[str, object]]: ...
+
+    def fundamental_rows(self, symbol: str) -> list[dict[str, object]]: ...
 
 
 def _frame_records(value: object) -> list[dict[str, object]]:
@@ -100,10 +105,12 @@ class OfficialVnstockGateway:
     def __init__(self, api_key: str | None) -> None:
         if api_key:
             os.environ["VNSTOCK_API_KEY"] = api_key
-        from vnstock import Market, Reference  # type: ignore[import-not-found]
+        from vnstock import Finance, Market, Reference, Trading  # type: ignore[import-untyped]
 
         self._market = Market()
         self._reference = Reference()
+        self._finance_type = Finance
+        self._trading_type = Trading
 
     def reference_rows(self) -> tuple[list[dict[str, object]], set[str], dict[str, str]]:
         try:
@@ -113,7 +120,7 @@ class OfficialVnstockGateway:
             vn30 = _series_strings(
                 self._reference.equity.list_by_group(group="VN30", source="kbs")
             )
-        except Exception as exc:
+        except (Exception, SystemExit) as exc:
             raise RuntimeError("Vnstock reference request failed") from exc
         sectors: dict[str, str] = {}
         try:
@@ -124,7 +131,7 @@ class OfficialVnstockGateway:
                 name = _text(row.get("icb_name"))
                 if symbol and name and (level == 2 or symbol not in sectors):
                     sectors[symbol] = name
-        except Exception:
+        except (Exception, SystemExit):
             logger.warning("vnstock_sector_reference_unavailable")
         return references, vn30, sectors
 
@@ -132,8 +139,35 @@ class OfficialVnstockGateway:
         try:
             value = self._market.quote(symbol=symbols, source="kbs", get_all=True)
             return _frame_records(value)
-        except Exception as exc:
+        except (Exception, SystemExit) as exc:
             raise RuntimeError("Vnstock quote request failed") from exc
+
+    def previous_session_rows(self, symbols: list[str]) -> list[dict[str, object]]:
+        """Load the latest completed-session prices in one batch request.
+
+        KBS resets its live board to zero before the next session. VCI keeps both
+        the new reference (the last close) and the preceding reference, avoiding
+        one historical request per stock when the live board has not opened yet.
+        """
+
+        try:
+            frame = self._trading_type(source="vci").price_board(
+                symbols,
+                flatten_columns=True,
+            )
+            rows = _frame_records(frame)
+        except (Exception, SystemExit) as exc:
+            raise RuntimeError("Vnstock previous-session request failed") from exc
+        return [
+            {
+                "symbol": row.get("listing_symbol"),
+                "close_price": row.get("listing_ref_price"),
+                "reference_price": row.get("match_reference_price"),
+            }
+            for row in rows
+            if _price(row.get("listing_ref_price")) > 0
+            and _price(row.get("match_reference_price")) > 0
+        ]
 
     def candle_rows(
         self,
@@ -157,8 +191,21 @@ class OfficialVnstockGateway:
                     get_all=True,
                 )
             return _frame_records(frame)
-        except Exception as exc:
+        except (Exception, SystemExit) as exc:
             raise RuntimeError("Vnstock candle request failed") from exc
+
+    def fundamental_rows(self, symbol: str) -> list[dict[str, object]]:
+        try:
+            frame = self._finance_type(
+                source="kbs",
+                symbol=symbol,
+                period="quarter",
+                get_all=False,
+                show_log=False,
+            ).ratio(lang="en", dropna=False)
+            return _frame_records(frame)
+        except (Exception, SystemExit) as exc:
+            raise RuntimeError("Vnstock fundamental request failed") from exc
 
 
 def _text(value: object) -> str:
@@ -177,6 +224,17 @@ def _decimal(value: object, default: Decimal = Decimal()) -> Decimal:
     except InvalidOperation:
         return default
     return default if not parsed.is_finite() else parsed
+
+
+def _optional_decimal(value: object) -> Decimal | None:
+    text = _text(value).replace(",", "")
+    if not text:
+        return None
+    try:
+        parsed = Decimal(text)
+    except InvalidOperation:
+        return None
+    return parsed if parsed.is_finite() else None
 
 
 def _integer(value: object) -> int:
@@ -213,6 +271,38 @@ def _price(value: object) -> Decimal:
     return _decimal(value)
 
 
+def _latest_ratio(row: dict[str, object]) -> Decimal | None:
+    periods: list[tuple[int, int, Decimal]] = []
+    for key, raw_value in row.items():
+        matched = re.fullmatch(r"(\d{4})(?:-Q([1-4]))?(?:_\d+)?", key)
+        if matched is None:
+            continue
+        value = _optional_decimal(raw_value)
+        if value is None:
+            continue
+        periods.append((int(matched.group(1)), int(matched.group(2) or 4), value))
+    if not periods:
+        return None
+    latest = max(periods, key=lambda item: (item[0], item[1]))
+    return latest[2]
+
+
+def _fundamental_values(
+    rows: list[dict[str, object]],
+) -> tuple[Decimal | None, Decimal | None, Decimal | None, Decimal | None]:
+    values = {
+        _text(row.get("item_id")): _latest_ratio(row)
+        for row in rows
+        if _text(row.get("item_id"))
+    }
+    return (
+        values.get("pe_ratio"),
+        values.get("pb_ratio"),
+        values.get("trailing_eps"),
+        values.get("roe"),
+    )
+
+
 def _candle(row: dict[str, object], symbol: str, fallback: datetime) -> Candle | None:
     opened = _decimal(row.get("open"))
     high = _decimal(row.get("high"))
@@ -235,7 +325,7 @@ class VnstockMarketProvider:
     """Cached Vnstock/KBS snapshot normalized to InvestIQ's canonical contract."""
 
     slug = "vnstock-kbs"
-    display_name = "Vnstock · nguồn KBS (có độ trễ)"
+    display_name = "Vnstock · nguồn KBS/VCI (có độ trễ)"
     delay_class = "source_delayed"
     partial = True
 
@@ -256,6 +346,13 @@ class VnstockMarketProvider:
         self._stale = False
         self._refreshing = False
         self._candle_cache: dict[tuple[str, str], tuple[float, tuple[Candle, ...]]] = {}
+        self._fundamental_cache: dict[
+            str,
+            tuple[
+                float,
+                tuple[Decimal | None, Decimal | None, Decimal | None, Decimal | None],
+            ],
+        ] = {}
 
     @property
     def market_time(self) -> str:
@@ -289,9 +386,14 @@ class VnstockMarketProvider:
     def people(self) -> tuple[MarketPerson, ...]:
         return ()
 
-    def instrument(self, symbol: str) -> MarketInstrument | None:
+    def instrument(
+        self, symbol: str, *, include_fundamentals: bool = False
+    ) -> MarketInstrument | None:
         normalized = symbol.upper()
-        return next((item for item in self.instruments() if item.symbol == normalized), None)
+        value = next((item for item in self.instruments() if item.symbol == normalized), None)
+        if value is None or not include_fundamentals:
+            return value
+        return self._with_fundamentals(value)
 
     def index(self, symbol: str) -> MarketIndex | None:
         normalized = symbol.upper()
@@ -324,6 +426,30 @@ class VnstockMarketProvider:
             values,
         )
         return values
+
+    def _with_fundamentals(self, value: MarketInstrument) -> MarketInstrument:
+        now = self._clock()
+        cached = self._fundamental_cache.get(value.symbol)
+        if cached and cached[0] > now:
+            fundamentals = cached[1]
+        else:
+            try:
+                fundamentals = _fundamental_values(
+                    self._gateway.fundamental_rows(value.symbol)
+                )
+                ttl = self._config.fundamental_cache_seconds
+            except (RuntimeError, TypeError, ValueError):
+                logger.warning(
+                    "vnstock_fundamentals_unavailable",
+                    extra={"symbol": value.symbol},
+                )
+                fundamentals = (None, None, None, None)
+                ttl = min(300, self._config.fundamental_cache_seconds)
+            if len(self._fundamental_cache) >= self._config.max_symbols:
+                self._fundamental_cache.clear()
+            self._fundamental_cache[value.symbol] = (now + ttl, fundamentals)
+        pe, pb, eps, roe_percent = fundamentals
+        return replace(value, pe=pe, pb=pb, eps=eps, roe_percent=roe_percent)
 
     def _ensure_snapshot(self) -> None:
         now = self._clock()
@@ -378,6 +504,33 @@ class VnstockMarketProvider:
             for row in quote_rows
             if _text(row.get("symbol"))
         }
+        has_live_matches = any(
+            _price(row.get("close_price")) > 0 for row in quote_by_symbol.values()
+        )
+        if quote_by_symbol and not has_live_matches:
+            try:
+                previous_rows = self._gateway.previous_session_rows(symbols)
+                previous_by_symbol = {
+                    _text(row.get("symbol")).upper(): row
+                    for row in previous_rows
+                    if _text(row.get("symbol"))
+                }
+                quote_by_symbol = {
+                    symbol: {**quote, **previous_by_symbol.get(symbol, {})}
+                    for symbol, quote in quote_by_symbol.items()
+                }
+            except (RuntimeError, TypeError, ValueError):
+                logger.warning("vnstock_previous_session_unavailable")
+        elif has_live_matches:
+            quote_by_symbol = {
+                symbol: (
+                    {**quote, "close_price": quote.get("reference_price")}
+                    if _price(quote.get("close_price")) <= 0
+                    and _price(quote.get("reference_price")) > 0
+                    else quote
+                )
+                for symbol, quote in quote_by_symbol.items()
+            }
         instruments = tuple(
             item
             for symbol in symbols
@@ -409,6 +562,12 @@ class VnstockMarketProvider:
                 logger.warning("vnstock_index_unavailable", extra={"symbol": symbol})
 
         timestamps = [item.timestamp for index in indices for item in index.candles[-1:]]
+        if has_live_matches:
+            timestamps.extend(
+                _timestamp(row.get("time"), fetched_at)
+                for row in quote_rows
+                if _text(row.get("time"))
+            )
         self._instruments = instruments
         self._indices = tuple(indices)
         self._market_time = max(timestamps, default=fetched_at)
@@ -427,8 +586,6 @@ class VnstockMarketProvider:
             return None
         price = _price(quote.get("close_price"))
         reference = _price(quote.get("reference_price"))
-        if price <= 0:
-            price = reference
         if price <= 0:
             return None
         volume = _decimal(quote.get("volume_accumulated"))
@@ -454,9 +611,9 @@ class VnstockMarketProvider:
             reference_price=reference or price,
             ceiling_price=_price(quote.get("ceiling_price")),
             floor_price=_price(quote.get("floor_price")),
-            open_price=_price(quote.get("open_price")) or price,
-            high_price=_price(quote.get("high_price")) or price,
-            low_price=_price(quote.get("low_price")) or price,
+            open_price=_price(quote.get("open_price")),
+            high_price=_price(quote.get("high_price")),
+            low_price=_price(quote.get("low_price")),
             volume=volume,
             matched_value=matched_value,
             foreign_net_value=foreign_delta * price,

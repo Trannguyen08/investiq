@@ -1,5 +1,180 @@
 # Current Task
 
+## Comparison metric legibility - 2026-10-08 (complete)
+
+Fix the stock-comparison dialog's cramped metric layout: each label/value pair must occupy a clearly
+separated metric tile, numeric values and headline price/change must be visually prominent, and the
+two-column layout must remain readable inside each of the three side-by-side stock cards. Add a
+component regression assertion for the semantic metric grouping and re-run frontend validation.
+
+Complete: the collision came from placing two flex-row label/value pairs inside each narrow grid row.
+Each metric is now an independent two-row tile with a label above a larger tabular value; odd final
+metrics span the card width, while headline price/change use a separate high-contrast summary panel.
+The regression test asserts seven distinct metric groups per compared stock. All 48 frontend tests,
+ESLint, TypeScript, and `git diff --check` passed; no production build or deployment ran.
+
+## Market filter controls and comparison dialog - 2026-10-08 (complete)
+
+Refine the Market stock-table controls from user feedback: place one advanced-filter button directly
+beside the sort-direction field, remove browser-saved views, remove the separator above the four
+overview presets, and make each preset's threshold visually explicit. Replace row checkboxes and the
+inline comparison block with an accessible modal that accepts up to three symbols, loads canonical
+detail/candle data through server-owned API calls, presents charts, market/fundamental metrics and an
+observed-data status, allows symbols to be removed/replaced, and labels AI development outlook as
+unavailable until a validated prediction model exists. Preserve shareable URL state and explicit
+missing-data semantics, then add interaction coverage and browser validation.
+
+Complete: advanced filters now open from one button immediately after the sort-direction control;
+browser-saved views and row comparison checkboxes were removed. The preset cards no longer have a
+heading separator and emphasize their numeric thresholds. A focus-trapped, Escape-dismissible dialog
+selects, removes, and replaces up to three symbols, persists loaded selections in `compare=`, and shows
+90-session charts, market/fundamental metrics, observed session status, and an honest unavailable AI
+state. Both the base and two-symbol comparison development routes returned HTTP 200. All 48 frontend
+tests, ESLint, TypeScript, and `git diff --check` passed; no production build or deployment ran.
+
+## Home and Market decision-support UX - 2026-10-08 (complete)
+
+Extend the existing beginner-first Home and Market experience with features that are useful on the
+currently available, source-delayed data and do not fabricate licensed history or corporate events.
+Add URL-addressable whole-universe stock screening with practical presets, browser-saved filter
+views (subsequently removed by the comparison-dialog refinement above), a bounded side-by-side comparison flow, clearer trading-session context, and a Home daily
+focus block derived only from observed breadth, sector, event, and database-backed news data. Keep
+pagination counts consistent with filters, preserve explicit unavailable states, add backend/API and
+frontend interaction coverage, and validate the running development routes without a production
+build.
+
+Complete: the Market screener now applies bounded daily-change, matched-value, market-cap,
+volume-versus-20-day, and VN30 conditions to the provider's complete snapshot before cursor
+pagination. Its validated URL state powers practical presets, up to six browser-local named views,
+and a bounded three-stock comparison; controls that the current source cannot support are hidden with
+an explicit explanation. Home adds an observed-data-only “Nên xem gì tiếp theo?” block and the shared
+status bar explains open/closed session context. Mobile header flex sizing was tightened while the
+stock table retains its no-horizontal-scroll card layout. Live Home and three filtered Market routes
+returned HTTP 200, the screener API enforced its constraints, and desktop/mobile Chromium screenshots
+were reviewed. All 110 backend tests passed with 11 database skips; registered market-data reports
+passed 22 unit tests at 67.35% branch coverage and six integration tests at 62.05%; all 46 frontend
+tests, ESLint, TypeScript, Ruff, and `git diff --check` passed. Targeted mypy remains blocked by the
+existing `vnstock` missing-stub/obsolete-ignore error reached through the API composition import; no
+production build or deployment ran.
+
+## Market stock table fit and volatility colors - 2026-10-08 (complete)
+
+Remove horizontal scrolling from the Market stock table by fitting both basic and advanced columns
+inside their enclosing card, with a compact card layout on narrow screens instead of an oversized
+minimum-width table. Keep every value readable or deliberately truncated with context, and map the
+requested volatility levels to Low red, Medium yellow, and High green. Add component coverage and
+measure table `clientWidth` versus `scrollWidth` on the running basic and advanced routes.
+
+Complete: basic and advanced tables now use fixed, explicit column proportions inside a clipped
+wrapper; long company text wraps or truncates within its own cell. Below 760 px, each row becomes a
+two-column labeled card while retaining the semantic table and headers for assistive technology.
+Volatility badges map Low to red, Medium to yellow, and High to green. Chromium measurements at
+desktop show both modes at `clientWidth = scrollWidth = 992 px`; the narrow layout reports
+`clientWidth = scrollWidth = 471 px` and no document-width overflow. The route returns HTTP 200,
+ESLint and TypeScript pass, and all 44 frontend tests pass.
+
+## Stock-detail trailing empty space regression - 2026-10-08 (complete)
+
+Remove the large unused dark area after the stock-detail source footer. The regression was introduced
+by the detail-only viewport `min-height` added during the metric-panel follow-up; preserve the scoped
+dark page background and compact footer, then verify the document ends immediately after its content
+at desktop and narrow widths.
+
+The first hypothesis was wrong: removing the detail `min-height` did not change the reported scroll
+region. Browser layout measurement showed visible content ending at 1,152 px and `body.scrollHeight`
+at 1,200 px, but `documentElement.scrollHeight` at 2,990 px. The overflowing element is the chart's
+2048-px-tall `table.sr-only`; CSS table layout ignores the generic one-pixel hidden-element height.
+Move the accessible table inside a normal clipped wrapper, preserve its table semantics for screen
+readers, add regression coverage, and re-measure the running page before completion.
+
+Complete: the accessible OHLCV table now sits inside the normal one-pixel clipped wrapper instead of
+carrying `sr-only` on the table itself. Chromium measurement on the running VCB route reduced
+`documentElement.scrollHeight` from 2,990 px to 1,200 px, equal to `body.scrollHeight`; visible
+content ends at 1,152 px, leaving only the intentional 48 px combined page/shell padding. The table
+remains exposed to assistive technology. The targeted regression test, full 42-test frontend suite,
+ESLint, TypeScript, the HTTP route smoke check, and `git diff --check` pass.
+
+## Stock-detail metric panel and live quote completeness - 2026-10-08 (complete)
+
+Make the stock-detail right column one enclosing panel with the same visual height as the chart,
+place the individual metric cards and plain-language definitions inside it, and remove the trailing
+empty dark area below the detail content. Reproduce current Vnstock price/volume/value fields for VCB
+during the live session, fix confirmed normalization or refresh defects without fabricating trades,
+add regression/component coverage, and validate the running VCB detail route.
+
+Root cause confirmed: before HOSE's opening auction completed, KBS and VCI exposed an indicative
+VCB price but no executed OHLC, volume, or value; the adapter then incorrectly copied that price
+into all three OHLC fields, and its five-minute snapshot cache kept the pre-match state visible.
+The adapter now preserves zero/unavailable execution fields, derives market time from live quote
+timestamps, and refreshes snapshots every minute by default. The stock header and metric panel merge
+WebSocket snapshots, pre-match zeros render as explicit unavailable states, and the right column is
+one equal-height enclosing panel whose compact cards explain every metric. At 09:17 the running API
+returned VCB 57,000; open 57,000; high 57,100; low 56,900; volume 37,500; value 2.13748 billion VND;
+fresh market time 09:17:17. Targeted Ruff, ESLint, TypeScript, nine provider tests, and four component
+tests pass; the live stock-detail route returns HTTP 200 with the new panel and explanations.
+
+## Complete sector universe instead of a 100-stock sample - 2026-10-08 (complete)
+
+Fix Home and Market sector counts/moves that currently aggregate only the 100-row instrument summary
+sample. Add one bounded server-side sector aggregate over the provider's full instrument snapshot,
+keep the stock table independently paginated, update both pages to consume the aggregate, and add
+backend/API/frontend regression coverage proving the Banking count is not truncated by list paging.
+
+Root cause confirmed: Home and Market requested an instrument summary with `limit=100` and grouped
+that page client-side. With zero pre-open liquidity, symbol tie-breaking made the sample especially
+unrepresentative. Added `/api/v1/market/sectors`, a bounded server-side aggregate over the complete
+provider snapshot, and switched both heatmaps plus Market breadth/liquidity/foreign-flow and sector
+strength to it while leaving the stock table cursor-paginated. The 09:00 smoke exposed an adjacent
+provider defect: as soon as some stocks matched, zero-close unmatched stocks were dropped. They now
+remain at reference price as unchanged for the current session. Live validation reports 1,399
+instruments across 19 sectors and 28 Banking members; the Banking filter returns 28 rows with 15 on
+page one. Full validation passed 108 backend tests with 11 database skips and 41 frontend tests;
+Ruff, targeted strict mypy, ESLint, and TypeScript passed. No production build or deployment ran.
+
+## Pre-open market snapshot showing zero movement - 2026-10-08 (complete)
+
+Reproduce and fix the local Home dashboard state where every sector reports 0%, breadth reports no
+gainers or losers, and market-data requests can stall during an upstream refresh. Verify the raw KBS
+quote fields before changing normalization, preserve honest freshness/source labels, add regression
+coverage for the confirmed pre-open payload shape, and validate the running frontend against the
+corrected backend.
+
+Root cause confirmed from the 08:44 KBS board: all live OHLC/volume fields were reset to zero for the
+new session while `reference_price` had advanced to the prior close. The adapter incorrectly used
+that reference as both current and comparison prices, manufacturing 0% everywhere. A fully reset
+board now uses one VCI batch whose new reference is the latest completed close and whose match
+reference is the preceding session reference; zero rows are no longer promoted to synthetic quotes.
+FPT was cross-checked at 59,700 versus 60,400 (-1.16%) against its daily candles. Vnstock quota
+`SystemExit` is also normalized to a provider failure instead of escaping through ASGI. The live API
+now reports VN-Index -0.32% and non-zero exchange breadth, and the running Home HTML contains varied
+positive and negative sector percentages. PostgreSQL, Redis, and Docker Desktop remain stopped, so
+database-backed Home news correctly remains unavailable in this host runtime. Validation: all 105
+backend tests passed with 11 database skips, all 40 frontend tests passed, Ruff, strict mypy, ESLint,
+TypeScript, and `git diff --check` passed; Home and FPT detail returned HTTP 200 with FPT P/E 15.53
+and P/B 3.7. No production build or deployment was run.
+
+## Sector navigation, stock fundamentals, daily news, and data timestamp - 2026-10-08 (complete)
+
+Extend the public Home and Market experience so sector heatmap area is proportional to the absolute
+daily percentage move, each sector tile links to its filtered Market stock view, stock-detail metrics
+sit beside the candlestick chart, P/E and P/B are populated from the active market source when
+available, Home highlights current-day articles already stored in PostgreSQL, and users can see one
+clear last-data-update timestamp. Preserve source/freshness disclosure and explicit unavailable
+states. Add focused backend and frontend tests, then run affected lint, type, and test checks.
+
+Implemented shared clickable Home/Market sector heatmaps whose relative area follows absolute weighted
+daily movement, URL-addressable `sector` filtering, a two-column stock-detail chart/metrics layout,
+and lazy one-hour KBS fundamental caching for Vnstock P/E, P/B, EPS, and ROE. Home now requests four
+database-backed articles from the latest 24 hours and highlights the newest, while Market status
+shows one explicit latest-data timestamp. Real smoke checks returned HTTP 200 for Home, a sector link
+(`Y tế`) and FPT detail, with FPT P/E 15.53 and P/B 3.7. Local PostgreSQL did not respond, so the Home
+news smoke exercised the honest empty state; the database-backed UI path has component coverage.
+Validation: full backend suite passed 103 tests with 11 database skips; registered market-data reports
+passed 17 unit tests at 65.58% branch coverage and four integration tests at 61.28%; Ruff and targeted
+strict mypy passed; all 40 frontend tests, ESLint, TypeScript, Compose rendering, and `git diff --check`
+passed. The first uncached Vnstock snapshot took about 127 seconds; subsequent smoke pages returned in
+2-5 seconds. No production build or deployment was run.
+
 ## Market contrast and non-blocking navigation - 2026-10-07 (complete)
 
 Fix the reproduced Market readability and navigation defects. Heatmap labels currently inherit the

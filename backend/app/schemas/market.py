@@ -154,6 +154,23 @@ class InstrumentsResponse(StrictModel):
     meta: MarketMeta
 
 
+class SectorResponse(StrictModel):
+    name: str
+    change_percent: str
+    member_count: int
+    advances: int
+    declines: int
+    unchanged: int
+    matched_value: str
+    foreign_net_value: str
+    market_cap: str
+
+
+class SectorsResponse(StrictModel):
+    data: list[SectorResponse]
+    meta: MarketMeta
+
+
 class InstrumentEnvelope(StrictModel):
     data: InstrumentResponse
     meta: MarketMeta

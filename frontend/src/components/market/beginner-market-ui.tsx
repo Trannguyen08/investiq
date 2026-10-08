@@ -1,8 +1,43 @@
 "use client";
 
+import Link from "next/link";
 import { useId } from "react";
 
-import type { MarketCandle } from "@/types/market";
+import { changeTone, formatPercent } from "@/components/market/formatters";
+import type { MarketCandle, MarketSector } from "@/types/market";
+
+export function SectorHeatmap({ sectors: values, headingId }: { sectors: MarketSector[]; headingId: string }) {
+  const sectors = values.slice(0, 16);
+  const totalMove = sectors.reduce((sum, sector) => sum + Math.max(Math.abs(Number(sector.change_percent)), 0.05), 0) || 1;
+  return (
+    <section className="sector-heatmap" aria-labelledby={headingId}>
+      <div className="beginner-card-title">
+        <h2 id={headingId}>Ngành nào đang biến động mạnh?</h2>
+        <InfoTip term="Bản đồ nhiệt">Diện tích ô tỷ lệ với độ lớn phần trăm tăng hoặc giảm bình quân có trọng số. Màu cho biết chiều biến động.</InfoTip>
+      </div>
+      <p>Chọn một ô để mở bảng cổ phiếu đã lọc theo ngành đó.</p>
+      {sectors.length ? <div className="heatmap-grid">
+        {sectors.map((sector) => {
+          const change = Number(sector.change_percent);
+          const magnitude = Math.max(Math.abs(change), 0.05);
+          const relativeWidth = magnitude / totalMove * 100;
+          return <Link
+            aria-label={`${sector.name}: ${formatPercent(sector.change_percent)}, mở thị trường ngành`}
+            className={changeTone(sector.change_percent)}
+            href={`/market/stocks?sector=${encodeURIComponent(sector.name)}`}
+            prefetch={false}
+            style={{ flexGrow: magnitude, flexBasis: `${Math.max(12, relativeWidth)}%` }}
+            key={sector.name}
+          >
+            <strong>{sector.name}</strong>
+            <span>{formatPercent(sector.change_percent)}</span>
+            <small>{sector.member_count} mã</small>
+          </Link>;
+        })}
+      </div> : <div className="market-empty"><p>Chưa có phân loại ngành trong dữ liệu hiện tại.</p></div>}
+    </section>
+  );
+}
 
 export function InfoTip({ term, children }: { term: string; children: string }) {
   return (

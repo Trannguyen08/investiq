@@ -66,9 +66,20 @@ Next.js BFF and remains `private, no-store`.
 The dark navy Home and Market experience defaults to beginner language: a one-sentence conclusion,
 VN-Index line chart, explicitly derived sentiment gauge, breadth/liquidity/foreign-flow explanations,
 five-color Vietnamese price legend, learning path, glossary, and source/delay disclaimer. Market adds
-a sector heatmap, relative sector-strength bars, explained top lists, a 15-row VN30-first simplified
-table, and a right-hand stock drawer. `mode=advanced` reveals candlesticks and detailed financial
-columns. Each stock also links to `/market/stocks/<symbol>` for the full range-based OHLCV view.
+clickable Home/Market sector heatmaps sized by absolute weighted daily movement, relative
+sector-strength bars, explained top lists, a 15-row VN30-first simplified table, a right-hand stock
+drawer, database-backed news from the latest 24 hours, and an explicit latest-data timestamp.
+Sector tiles, breadth, liquidity, and foreign-flow totals come from the bounded
+`/api/v1/market/sectors` aggregate over the provider's complete snapshot; the stock table remains
+independently paginated and does not truncate sector member counts.
+The stock screener applies URL-addressable daily-change, liquidity, market-cap, volume-baseline, and
+VN30 filters to the complete provider snapshot before cursor pagination. Practical preset links show
+their numeric thresholds directly, while an accessible URL-backed comparison dialog loads charts and
+fundamentals for up to three replaceable symbols without turning unavailable ratios into zero. Its AI
+outlook remains explicitly unavailable until a validated prediction model is active. Home adds an observed-data-only daily focus block, while
+the shared status bar explains whether the displayed snapshot is inside or outside trading hours.
+`mode=advanced` reveals candlesticks and detailed financial columns. Each stock also links to
+`/market/stocks/<symbol>` for a two-column range-based OHLCV and market/fundamental metrics view.
 
 Market data fails closed by default. For local UI development only, set:
 
@@ -88,15 +99,19 @@ optional for Guest access and remains server-only when supplied:
 ```env
 MARKET_DATA_MODE=vnstock
 VNSTOCK_API_KEY=
-VNSTOCK_REFRESH_SECONDS=300
+VNSTOCK_REFRESH_SECONDS=60
 VNSTOCK_CANDLE_CACHE_SECONDS=300
+VNSTOCK_FUNDAMENTAL_CACHE_SECONDS=3600
 ```
 
-The adapter uses Vnstock's unified API with KBS quotes/OHLCV and VCI industry classification, caches
-bounded snapshots, and falls back to a clearly labeled stale snapshot. Vnstock is a connector to
-third-party sources, not a grant to redistribute exchange data. Treat this mode as local/private
-evaluation until Vnstock and the original source confirm public display, caching, and redistribution
-rights in writing.
+The adapter uses Vnstock's unified API with KBS quotes/OHLCV and financial ratios plus VCI industry
+classification. When KBS resets its board to zero before a new session, one VCI batch supplies the
+latest completed close and preceding reference instead of presenting a fabricated 0% move or issuing
+per-symbol history requests. It caches bounded snapshots and per-symbol fundamentals, converts
+Vnstock quota exits into ordinary provider failures, and falls back to a clearly labeled stale
+snapshot. Vnstock is a connector to third-party sources, not a grant to redistribute
+exchange data. Treat this mode as local/private evaluation until Vnstock and the original source
+confirm public display, caching, and redistribution rights in writing.
 
 The TCBS iFlash adapter is ready behind the same provider port. After TCBS confirms display/cache
 rights, use one of the following server-only credential modes:

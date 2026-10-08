@@ -180,11 +180,13 @@ export function MarketCandlestickChart({
         <span className="ma-long">MA20 {ma20.at(-1) === null ? "—" : formatDecimal(String(ma20.at(-1)))}</span>
         <span>Khối lượng · Asia/Ho_Chi_Minh</span>
       </div>
-      <table className="sr-only">
-        <caption>{label}</caption>
-        <thead><tr><th>Thời gian</th><th>Mở</th><th>Cao</th><th>Thấp</th><th>Đóng</th><th>Khối lượng</th></tr></thead>
-        <tbody>{values.map((item) => <tr key={item.source.timestamp}><td>{item.source.timestamp}</td><td>{item.source.open}</td><td>{item.source.high}</td><td>{item.source.low}</td><td>{item.source.close}</td><td>{item.source.volume}</td></tr>)}</tbody>
-      </table>
+      <div className="sr-only">
+        <table>
+          <caption>{label}</caption>
+          <thead><tr><th>Thời gian</th><th>Mở</th><th>Cao</th><th>Thấp</th><th>Đóng</th><th>Khối lượng</th></tr></thead>
+          <tbody>{values.map((item) => <tr key={item.source.timestamp}><td>{item.source.timestamp}</td><td>{item.source.open}</td><td>{item.source.high}</td><td>{item.source.low}</td><td>{item.source.close}</td><td>{item.source.volume}</td></tr>)}</tbody>
+        </table>
+      </div>
     </div>
   );
 }

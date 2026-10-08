@@ -781,7 +781,10 @@ class TcbsMarketProvider:
             for timestamp, values in sorted(buckets.items())
         )
 
-    def instrument(self, symbol: str) -> MarketInstrument | None:
+    def instrument(
+        self, symbol: str, *, include_fundamentals: bool = False
+    ) -> MarketInstrument | None:
+        del include_fundamentals
         self._refresh_quotes()
         with self._state_lock:
             return self._instruments.get(symbol.upper())

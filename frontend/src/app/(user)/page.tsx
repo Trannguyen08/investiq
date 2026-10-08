@@ -1,16 +1,19 @@
 import Link from "next/link";
 
 import { HomeMarketDashboard } from "@/components/market/home-market-dashboard";
-import { getMarketOverview, getNews } from "@/lib/api-client";
+import { getMarketOverview, getMarketSectors, getNews } from "@/lib/api-client";
 import type { NewsSummary } from "@/lib/api-client";
+import type { MarketSector } from "@/types/market";
 
 export default async function OverviewPage() {
-  const query = new URLSearchParams({ limit: "3" });
-  const [overviewResult, newsResult] = await Promise.allSettled([
+  const newsQuery = new URLSearchParams({ limit: "4", window_days: "1" });
+  const [overviewResult, sectorResult, newsResult] = await Promise.allSettled([
     getMarketOverview(),
-    getNews(query, 800),
+    getMarketSectors(),
+    getNews(newsQuery, 800),
   ]);
   const overview = overviewResult.status === "fulfilled" ? overviewResult.value : null;
+  const sectors: MarketSector[] = sectorResult.status === "fulfilled" ? sectorResult.value.data : [];
   const news: NewsSummary[] = newsResult.status === "fulfilled" ? newsResult.value.data : [];
   if (!overview) {
     return (
@@ -22,5 +25,5 @@ export default async function OverviewPage() {
       </main>
     );
   }
-  return <HomeMarketDashboard overview={overview} news={news} />;
+  return <HomeMarketDashboard overview={overview} sectors={sectors} news={news} />;
 }

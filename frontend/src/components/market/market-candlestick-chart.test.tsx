@@ -19,7 +19,10 @@ describe("MarketCandlestickChart", () => {
     expect(screen.getByRole("img", { name: /3 nến giá xanh đỏ/ })).toBeInTheDocument();
     expect(container.querySelectorAll(".financial-chart-candles .up")).toHaveLength(2);
     expect(container.querySelectorAll(".financial-chart-candles .down")).toHaveLength(1);
-    expect(screen.getByRole("table", { name: "Biểu đồ nến VN-Index" })).toBeInTheDocument();
+    const accessibleTable = screen.getByRole("table", { name: "Biểu đồ nến VN-Index" });
+    expect(accessibleTable).toBeInTheDocument();
+    expect(accessibleTable.parentElement).toHaveClass("sr-only");
+    expect(accessibleTable).not.toHaveClass("sr-only");
     expect(screen.getByText(/MA5/)).toBeInTheDocument();
   });
 

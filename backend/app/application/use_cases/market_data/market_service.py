@@ -182,6 +182,12 @@ class MarketService:
         direction: str,
         limit: int,
         offset: int,
+        min_change: Decimal | None = None,
+        max_change: Decimal | None = None,
+        min_matched_value: Decimal | None = None,
+        min_market_cap: Decimal | None = None,
+        min_volume_ratio: Decimal | None = None,
+        vn30_only: bool = False,
     ) -> dict[str, object]:
         values = list(self._provider.instruments())
         folded_query = _fold(query.strip())
@@ -195,6 +201,18 @@ class MarketService:
             values = [item for item in values if item.exchange == exchange]
         if sector:
             values = [item for item in values if item.sector == sector]
+        if min_change is not None:
+            values = [item for item in values if item.change_percent >= min_change]
+        if max_change is not None:
+            values = [item for item in values if item.change_percent <= max_change]
+        if min_matched_value is not None:
+            values = [item for item in values if item.matched_value >= min_matched_value]
+        if min_market_cap is not None:
+            values = [item for item in values if item.market_cap >= min_market_cap]
+        if min_volume_ratio is not None:
+            values = [item for item in values if item.volume_vs_20d >= min_volume_ratio]
+        if vn30_only:
+            values = [item for item in values if item.is_vn30]
         sorters: dict[str, Callable[[MarketInstrument], Any]] = {
             "vn30": lambda item: (item.is_vn30, item.matched_value),
             "symbol": lambda item: item.symbol,
@@ -204,6 +222,7 @@ class MarketService:
             "matched_value": lambda item: item.matched_value,
             "trending": lambda item: item.interest_score,
             "market_cap": lambda item: item.market_cap,
+            "volume_vs_20d": lambda item: item.volume_vs_20d,
         }
         values.sort(
             key=lambda item: (sorters[sort](item), item.symbol), reverse=direction == "desc"
@@ -226,8 +245,56 @@ class MarketService:
             "meta": self.meta(),
         }
 
-    def instrument(self, symbol: str) -> dict[str, object] | None:
-        value = self._provider.instrument(symbol)
+    def sectors(self) -> dict[str, object]:
+        groups: dict[str, list[MarketInstrument]] = {}
+        for item in self._provider.instruments():
+            groups.setdefault(item.sector or "Chưa phân loại", []).append(item)
+
+        sectors: list[dict[str, object]] = []
+        for name, members in groups.items():
+            matched_value = sum(
+                (max(item.matched_value, Decimal()) for item in members),
+                Decimal(),
+            )
+            if matched_value > 0:
+                change_percent = sum(
+                    (
+                        item.change_percent * max(item.matched_value, Decimal())
+                        for item in members
+                    ),
+                    Decimal(),
+                ) / matched_value
+            else:
+                change_percent = sum(
+                    (item.change_percent for item in members), Decimal()
+                ) / Decimal(len(members))
+            sectors.append(
+                {
+                    "name": name,
+                    "change_percent": _decimal(change_percent.quantize(Decimal("0.01"))),
+                    "member_count": len(members),
+                    "advances": sum(item.change > 0 for item in members),
+                    "declines": sum(item.change < 0 for item in members),
+                    "unchanged": sum(item.change == 0 for item in members),
+                    "matched_value": _decimal(matched_value),
+                    "foreign_net_value": _decimal(
+                        sum((item.foreign_net_value for item in members), Decimal())
+                    ),
+                    "market_cap": _decimal(
+                        sum((item.market_cap for item in members), Decimal())
+                    ),
+                }
+            )
+        sectors.sort(
+            key=lambda item: (abs(Decimal(str(item["change_percent"]))), str(item["name"])),
+            reverse=True,
+        )
+        return {"data": sectors, "meta": self.meta()}
+
+    def instrument(
+        self, symbol: str, *, include_fundamentals: bool = True
+    ) -> dict[str, object] | None:
+        value = self._provider.instrument(symbol, include_fundamentals=include_fundamentals)
         return {"data": _instrument(value), "meta": self.meta()} if value else None
 
     def indices(self) -> dict[str, object]:

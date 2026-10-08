@@ -6,6 +6,7 @@ import type {
   MarketCandles,
   MarketOverview,
   PeopleCollection,
+  SectorCollection,
 } from "@/types/market";
 
 export type Source = {
@@ -196,6 +197,10 @@ export function getMarketCandles(
 
 export function getMarketIndices(): Promise<IndexCollection> {
   return requestJson<IndexCollection>("/v1/market/indices", 5);
+}
+
+export function getMarketSectors(): Promise<SectorCollection> {
+  return requestJson<SectorCollection>("/v1/market/sectors", 5);
 }
 
 export function getMarketEvents(query = new URLSearchParams()): Promise<EventCollection> {

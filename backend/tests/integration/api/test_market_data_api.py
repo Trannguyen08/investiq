@@ -6,6 +6,7 @@ import pytest
 from fastapi.testclient import TestClient
 
 from app.api.v1 import market_data
+from app.infrastructure.external.market_fixture_provider import FixtureMarketProvider
 from app.infrastructure.external.tcbs_market_provider import (
     TcbsConfig,
     TcbsMarketProvider,
@@ -115,6 +116,51 @@ def test_market_list_and_intraday_chart_contracts(monkeypatch: pytest.MonkeyPatc
     assert candles.json()["instrument"] == "FPT"
     assert candles.json()["interval"] == "5m"
     assert candles.json()["data"][0]["close"] == "102000"
+
+
+def test_sector_endpoint_aggregates_the_complete_provider_snapshot(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    provider = FixtureMarketProvider()
+    monkeypatch.setattr(market_data, "_provider", lambda: provider)
+
+    with TestClient(app) as client:
+        response = client.get("/api/v1/market/sectors")
+
+    assert response.status_code == 200
+    rows = response.json()["data"]
+    assert sum(row["member_count"] for row in rows) == len(provider.instruments())
+    assert next(row for row in rows if row["name"] == "Ngân hàng")["member_count"] > 1
+
+
+def test_market_instrument_screener_contract_and_invalid_range(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(market_data, "_provider", lambda: FixtureMarketProvider())
+
+    with TestClient(app) as client:
+        response = client.get(
+            "/api/v1/market/instruments",
+            params={
+                "vn30": "true",
+                "min_change": "0",
+                "min_matched_value_billion": "0",
+                "min_market_cap_billion": "0",
+                "min_volume_ratio": "0.75",
+                "sort": "volume_vs_20d",
+                "direction": "desc",
+            },
+        )
+        invalid = client.get(
+            "/api/v1/market/instruments",
+            params={"min_change": "5", "max_change": "1"},
+        )
+
+    assert response.status_code == 200
+    assert response.json()["data"]
+    assert all(row["is_vn30"] for row in response.json()["data"])
+    assert all(float(row["change_percent"]) >= 0 for row in response.json()["data"])
+    assert invalid.status_code == 422
 
 
 def test_index_endpoint_exposes_accumulated_stream_candles(

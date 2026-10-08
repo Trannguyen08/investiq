@@ -86,9 +86,16 @@ investiq/
   public people/holding snapshots, engagement retention, and current private watchlists.
 - Vnstock is a local/private evaluation adapter behind the same port. It uses source-delayed KBS
   reference/quote/OHLCV data plus VCI industry labels, normalizes equity candles to VND, caches
-  snapshots and candles, and serves labeled stale data after a transient upstream failure. Its
-  optional key stays server-side. Because the client aggregates third-party sources, this adapter is
-  not evidence of public redistribution rights and is not a production licensing substitute.
+  snapshots and candles, and lazily loads per-symbol KBS P/E, P/B, EPS, and ROE for stock detail with
+  a bounded one-hour cache and null fallback. A fully reset pre-open KBS board is replaced by one
+  VCI batch containing the latest completed close and preceding reference, so sector moves and
+  breadth remain meaningful without per-symbol history fan-out. Vnstock quota `SystemExit` signals
+  are normalized as provider failures. It serves labeled stale price data after a transient upstream
+  failure. Live quote timestamps drive the displayed market time, snapshots refresh every minute by
+  default, and opening-auction OHLC/volume remain unavailable until the source reports an execution
+  rather than being copied from the indicative price. Its optional key stays server-side. Because the client aggregates third-party
+  sources, this adapter is not evidence of public redistribution rights and is not a production
+  licensing substitute.
 - Stock discovery defaults to VN30-first ordering with 15-row cursor pages. The path-addressable
   `/market/stocks/<symbol>` view aggregates documented current-session TCBS trades into five-minute
   candles. Week/month/year controls disclose unavailable multi-session history rather than deriving
@@ -97,11 +104,24 @@ investiq/
   candlestick renderer serves the Home VN-Index chart and stock detail pages with red/green OHLC,
   volume, MA5/MA20, axes, and a table alternative. The TCBS adapter accumulates bounded five-minute
   VN-Index candles from real index stream ticks in process; absent historical ticks remain absent.
+  Stock detail merges its subscribed quote stream into both the headline and its equal-height metric
+  panel; the panel explains each metric and distinguishes no trade yet from a numeric zero.
 - The default beginner presentation uses plain-language summaries, an estimated sentiment gauge,
-  line charts, inline definitions, a fixed five-color price legend, sector heatmap, relative
-  sector-strength indicator, and a simplified stock table. `mode=advanced` is URL-addressable and
-  reveals candlesticks and detailed columns; a URL-addressable stock drawer provides a 90-session
-  line chart without inventing community posts or causal news explanations.
+  line charts, inline definitions, a fixed five-color price legend, clickable sector heatmaps sized
+  by absolute percentage movement, relative sector-strength indicator, database-backed 24-hour Home
+  news, a visible authoritative data timestamp, and a simplified stock table. `mode=advanced` is
+  URL-addressable and reveals candlesticks and detailed columns; a URL-addressable stock drawer
+  provides a 90-session line chart without inventing community posts or causal news explanations.
+  The bounded `/api/v1/market/sectors` read model aggregates the provider's complete in-memory
+  instrument snapshot for sector counts, movement, breadth, liquidity, foreign flow, and market cap;
+  instrument tables retain separate cursor pagination, so UI summary counts are not page samples.
+  Instrument screening applies bounded numeric/VN30 conditions to that complete in-memory universe
+  before sorting and cursor pagination. Filter and comparison state remain in the URL. An accessible
+  modal loads canonical instrument detail and 90-session candles for at most three replaceable symbols,
+  preserves null fundamentals as unavailable, and does not claim an AI outlook while prediction remains
+  unvalidated. Home daily-focus cards
+  are deterministic links derived from observed breadth, sector movement, provider events, and stored
+  news, without claiming a causal explanation.
 - `/ws/v1/market` sends versioned hello/heartbeat/snapshot/quote events with bounded symbol
   subscriptions and local sequence numbers. Clients deduplicate event IDs and reconnect for a REST-
   backed snapshot after a sequence gap. It is an ephemeral delivery path; REST remains the resync

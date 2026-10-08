@@ -53,10 +53,32 @@
   unsupported events, people, fundamentals or multi-session daily candles. The dark navy UI now has
   a 15-row VN30-first stock table, centered numeric columns, a large VN-Index red/green candlestick
   chart, and `/market/stocks/<symbol>` detail pages using the same volume-and-MA chart renderer with
-  honest current-session five-minute data. Activation still
+  honest current-session five-minute data. Home and Market share clickable sector heatmaps sized by
+  absolute daily sector movement computed server-side across the complete provider snapshot rather
+  than a 100-row instrument page, Home highlights database-backed news from the latest 24 hours, and
+  every market view exposes a clear last-data-update time. In Vnstock mode, stock detail lazily loads
+  and caches KBS P/E, P/B, EPS, and ROE while preserving explicit unavailable states. A reset pre-open
+  KBS board uses VCI's batch latest-close/preceding-reference fields rather than presenting every
+  stock and sector as 0%; after the session begins, unmatched symbols remain in the snapshot at their
+  reference price instead of disappearing. The detail headline and enclosing metric panel consume
+  WebSocket snapshots, label auction fields as unavailable until a trade occurs, explain each metric,
+  and show quote-based market time; Vnstock snapshots refresh every minute by default. Quota exits
+  degrade through the provider failure path. Activation still
   requires a current token or API key plus Smart OTP and explicit redistribution rights. FiinGroup
   remains recommended for corporate/event/people coverage. Provider failover, licensed history
   backfill and traffic-derived production popularity are not active.
+- The Market stock table fits both basic and nine-column advanced data inside its card without a
+  horizontal scrollbar; narrow screens use labeled two-column stock cards. Its volatility scale uses
+  the product-requested Low red, Medium yellow, and High green mapping.
+- Market stock screening is URL-addressable and runs over the complete provider snapshot before
+  cursor pagination. It supports bounded daily-change, matched-value, market-cap, volume-versus-20-day,
+  and VN30 conditions plus compatible sort keys. The UI provides practical presets with prominent
+  thresholds and an accessible URL-backed dialog that compares charts and metrics for up to three
+  replaceable stocks while preserving explicit unavailable ratios. AI outlook is labeled unavailable
+  until a validated prediction model exists.
+  Volume-baseline controls are hidden when the active source does not provide that field. Home also
+  derives a daily focus block only from observed breadth, sectors, provider events, and database news;
+  the shared status bar explains the current trading-session context.
 
 ## Local development
 

@@ -11,11 +11,25 @@ details.
   Python client over multiple upstream sources, but its package access is not an exchange-data
   redistribution license.
 - **Decision:** Add Vnstock behind the existing canonical provider port, use KBS for reference/quotes/
-  OHLCV and VCI for industry labels, keep its optional key server-side, cache snapshots/candles, and
-  identify all results as source-delayed and partial. Derived foreign value and sector strength must
-  be labeled as estimates/relative indicators rather than official net flow.
+  OHLCV plus financial ratios and VCI for industry labels, keep its optional key server-side, cache
+  snapshots/candles, and identify all results as source-delayed and partial. Load P/E, P/B, EPS, and
+  ROE lazily only for detail reads with a bounded one-hour per-symbol cache; list, watchlist, and
+  WebSocket snapshots stay on the lightweight quote path. If the entire KBS board is reset before a
+  new session, use one VCI price-board batch for the latest completed close and preceding reference;
+  do not fan out historical calls or turn the new reference into a synthetic 0% move. Normalize the
+  library's quota `SystemExit` as a provider failure so it cannot cancel an ASGI request. Once any
+  current-session match exists, retain unmatched symbols at their current reference as unchanged so
+  market breadth and sector membership do not collapse during the opening auction. Preserve an
+  upstream indicative auction price while leaving not-yet-executed open/high/low/volume/value at
+  zero for the UI to label as unavailable; do not synthesize trades. Use live quote timestamps as
+  market time and a one-minute default snapshot refresh, while stock detail merges the bounded
+  WebSocket quote stream. Derived
+  foreign value and sector strength
+  must be labeled as estimates/relative indicators rather than official net flow.
 - **Consequences:** Local Home, Market, and stock charts can use real source data without coupling the
-  frontend to Vnstock. Public/commercial deployment remains blocked until Vnstock and each relevant
+  frontend to Vnstock, and detail pages expose current provider fundamentals without multiplying
+  requests across the market universe. A failed ratio request leaves quote/chart data available with
+  null fundamentals. Public/commercial deployment remains blocked until Vnstock and each relevant
   upstream owner confirm display, cache, retention, and redistribution rights in writing.
 
 ## 2026-10-06 — Bounded Docker container logs

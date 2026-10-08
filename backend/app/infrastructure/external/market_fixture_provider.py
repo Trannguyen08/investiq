@@ -550,7 +550,10 @@ class FixtureMarketProvider:
         index = self.index(symbol)
         return index.candles if index else ()
 
-    def instrument(self, symbol: str) -> MarketInstrument | None:
+    def instrument(
+        self, symbol: str, *, include_fundamentals: bool = False
+    ) -> MarketInstrument | None:
+        del include_fundamentals
         normalized = symbol.upper()
         return next((item for item in self._instruments if item.symbol == normalized), None)
 

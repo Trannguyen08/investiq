@@ -2,13 +2,13 @@
 
 import Link from "next/link";
 
-import { InfoTip, MarketColorLegend, MarketLineChart, SentimentGauge } from "@/components/market/beginner-market-ui";
+import { InfoTip, MarketColorLegend, MarketLineChart, SectorHeatmap, SentimentGauge } from "@/components/market/beginner-market-ui";
 import { changeTone, formatMoney, formatPercent } from "@/components/market/formatters";
 import { mergeLiveIndex, mergeLiveInstrument } from "@/components/market/live-market";
 import { MarketStatus } from "@/components/market/market-status";
 import { MarketStreamProvider, useMarketStreamState } from "@/hooks/use-realtime-price";
 import type { NewsSummary } from "@/lib/api-client";
-import type { MarketIndex, MarketOverview } from "@/types/market";
+import type { MarketIndex, MarketOverview, MarketSector } from "@/types/market";
 
 const lessons = [
   "Cổ phiếu là gì?",
@@ -45,15 +45,22 @@ function plainNewsImpact(item: NewsSummary) {
   return "Chưa có đủ dữ liệu để xác nhận nhóm cổ phiếu chịu tác động trực tiếp.";
 }
 
-export function HomeMarketDashboard({ overview, news }: { overview: MarketOverview; news: NewsSummary[] }) {
+export function DailyFeaturedNews({ news }: { news: NewsSummary[] }) {
+  return <section className="beginner-news" aria-labelledby="news-title">
+    <div className="beginner-heading"><div><p className="eyebrow">TIN TỪ CƠ SỞ DỮ LIỆU INVESTIQ</p><h2 id="news-title">Tin nổi bật trong ngày</h2><p>Các bài mới nhất trong 24 giờ, ưu tiên bài mới cập nhật.</p></div><Link href="/news">Xem tất cả tin →</Link></div>
+    {news.length ? <div className="plain-news-grid">{news.map((item, index) => <article className={index === 0 ? "featured" : undefined} key={item.id}><div className="plain-news-meta"><span>{index === 0 ? "Nổi bật · " : ""}{item.source.name}</span><time dateTime={item.published_at ?? item.feed_at}>{new Intl.DateTimeFormat("vi-VN", { timeZone: "Asia/Ho_Chi_Minh", hour: "2-digit", minute: "2-digit", day: "2-digit", month: "2-digit" }).format(new Date(item.published_at ?? item.feed_at))}</time></div><h3><Link href={`/news/${item.id}`}>{item.title}</Link></h3><dl><div><dt>Chuyện gì xảy ra?</dt><dd>{item.description ?? "Mở bài viết để xem thông tin gốc."}</dd></div><div><dt>Ảnh hưởng gì?</dt><dd>{plainNewsImpact(item)}</dd></div><div><dt>Người mới nên hiểu gì?</dt><dd>Một tin riêng lẻ chưa đủ để mua hoặc bán. Hãy kiểm tra nguồn, thời điểm và rủi ro trước.</dd></div></dl></article>)}</div> : <div className="market-empty"><h3>Chưa có tin trong 24 giờ qua</h3><p>Khối này chỉ dùng bài đã lưu trong cơ sở dữ liệu; InvestIQ không tạo tin giả để lấp chỗ trống.</p></div>}
+  </section>;
+}
+
+export function HomeMarketDashboard({ overview, sectors, news }: { overview: MarketOverview; sectors: MarketSector[]; news: NewsSummary[] }) {
   const symbols = [
     ...overview.data.indices.map((item) => item.symbol),
     ...overview.data.trending.slice(0, 6).map((item) => item.symbol),
   ];
-  return <MarketStreamProvider symbols={symbols}><HomeMarketContent overview={overview} news={news} /></MarketStreamProvider>;
+  return <MarketStreamProvider symbols={symbols}><HomeMarketContent overview={overview} sectors={sectors} news={news} /></MarketStreamProvider>;
 }
 
-function HomeMarketContent({ overview, news }: { overview: MarketOverview; news: NewsSummary[] }) {
+function HomeMarketContent({ overview, sectors, news }: { overview: MarketOverview; sectors: MarketSector[]; news: NewsSummary[] }) {
   const stream = useMarketStreamState();
   const indices = overview.data.indices.map((item) => mergeLiveIndex(item, stream.items[item.symbol]));
   const instruments = overview.data.trending.map((item) => mergeLiveInstrument(item, stream.items[item.symbol]));
@@ -69,6 +76,9 @@ function HomeMarketContent({ overview, news }: { overview: MarketOverview; news:
   const sentiment = 50 + (breadth.advances - breadth.declines) / breadthTotal * 38 + Number(primary?.change_percent ?? 0) * 3;
   const liquidity = liquidityComparison(primary);
   const foreignNet = instruments.reduce((sum, item) => sum + Number(item.foreign_net_value), 0);
+  const strongestSector = [...sectors].sort((left, right) => Math.abs(Number(right.change_percent)) - Math.abs(Number(left.change_percent)))[0];
+  const nextEvent = overview.data.upcoming_events[0];
+  const newestArticle = news[0];
 
   return (
     <main id="main-content" className="market-home beginner-home">
@@ -89,6 +99,15 @@ function HomeMarketContent({ overview, news }: { overview: MarketOverview; news:
       </section>
       <MarketStatus meta={overview.meta} />
 
+      <section className="today-focus" aria-labelledby="today-focus-title">
+        <div className="beginner-heading"><div><p className="eyebrow">ĐIỂM CẦN CHÚ Ý</p><h2 id="today-focus-title">Nên xem gì tiếp theo?</h2><p>Ba lối đi được tạo từ dữ liệu đang hiển thị, không suy diễn nguyên nhân biến động.</p></div></div>
+        <div className="today-focus-grid">
+          <article><span>Độ rộng thị trường</span><h3>{breadth.declines > breadth.advances ? "Kiểm tra nhóm đang giảm" : "Kiểm tra mức lan tỏa của đà tăng"}</h3><p>{breadth.advances} mã tăng so với {breadth.declines} mã giảm trong phạm vi hiện có.</p><Link href={`/market/stocks?sort=change_percent&direction=${breadth.declines > breadth.advances ? "asc" : "desc"}`}>Mở danh sách đã sắp xếp →</Link></article>
+          {strongestSector && <article><span>Ngành biến động nổi bật</span><h3>{strongestSector.name} · {formatPercent(strongestSector.change_percent)}</h3><p>Biến động tổng hợp từ {strongestSector.member_count} mã; mở ngành để kiểm tra cổ phiếu dẫn dắt.</p><Link href={`/market/stocks?sector=${encodeURIComponent(strongestSector.name)}`}>Xem ngành {strongestSector.name} →</Link></article>}
+          <article><span>{nextEvent ? "Sự kiện gần nhất" : newestArticle ? "Tin mới nhất" : "Lịch và tin tức"}</span>{nextEvent ? <><h3>{nextEvent.symbol} · {nextEvent.title}</h3><p>{nextEvent.summary}</p><Link href={`/market/events?symbol=${encodeURIComponent(nextEvent.symbol)}`}>Mở lịch sự kiện →</Link></> : newestArticle ? <><h3>{newestArticle.title}</h3><p>{newestArticle.mentioned_symbols.length ? `Có nhắc tới ${newestArticle.mentioned_symbols.slice(0, 3).join(", ")}.` : "Đọc nguồn gốc trước khi đánh giá tác động."}</p><Link href={`/news/${newestArticle.id}`}>Đọc tin và nguồn →</Link></> : <><h3>Chưa có mục mới được xác minh</h3><p>InvestIQ không tạo sự kiện hoặc tin giả để lấp chỗ trống.</p><Link href="/market/events">Kiểm tra lịch sự kiện →</Link></>}</article>
+        </div>
+      </section>
+
       <section className="beginner-section" aria-labelledby="one-minute-title">
         <div className="beginner-heading"><div><p className="eyebrow">THỊ TRƯỜNG TRONG 1 PHÚT</p><h2 id="one-minute-title">Ba điều nên biết trước tiên</h2></div></div>
         <div className="one-minute-grid">
@@ -97,6 +116,8 @@ function HomeMarketContent({ overview, news }: { overview: MarketOverview; news:
           <article><div className="beginner-card-title"><h3>Khối ngoại</h3><InfoTip term="Khối ngoại">Nhà đầu tư nước ngoài mua và bán cổ phiếu. Mua ròng nghĩa là giá trị mua lớn hơn giá trị bán.</InfoTip></div><strong className={changeTone(String(foreignNet))}>{foreignNet >= 0 ? "Mua ròng" : "Bán ròng"} {formatMoney(String(Math.abs(foreignNet)))}</strong><p>Phạm vi các mã nổi bật đang tải; đây là ước tính nếu nguồn không có giá trị ròng chính thức.</p></article>
         </div>
       </section>
+
+      <SectorHeatmap sectors={sectors} headingId="home-sector-heatmap-title" />
 
       <section className="beginner-learning" aria-labelledby="learning-title">
         <div><p className="eyebrow">LỘ TRÌNH CHO NGƯỜI MỚI</p><h2 id="learning-title">Đi từng bước, không cần học mọi thứ cùng lúc</h2><p>Hoàn thành năm bài nền tảng trước khi thử ra quyết định với tiền thật.</p><div className="learning-progress"><span style={{ width: "20%" }} /></div></div>
@@ -109,10 +130,7 @@ function HomeMarketContent({ overview, news }: { overview: MarketOverview; news:
         <section className="beginner-community" aria-labelledby="community-title"><p className="eyebrow">CỘNG ĐỒNG HỌC CÙNG NHAU</p><h2 id="community-title">Hỏi điều bạn chưa rõ</h2><p>Khu thảo luận đang được hoàn thiện. Mỗi bài phân tích sẽ phải nêu rõ rủi ro và người viết có đang giữ mã hay không.</p><div><span>🌱 Dễ hiểu</span><span>🙋 Câu hỏi chưa có trả lời</span><span>🛡️ Bắt buộc nêu rủi ro</span></div></section>
       </div>
 
-      <section className="beginner-news" aria-labelledby="news-title">
-        <div className="beginner-heading"><div><p className="eyebrow">TIN TỨC DỊCH RA TIẾNG NGƯỜI</p><h2 id="news-title">Hiểu tin trước khi nhìn giá</h2></div><Link href="/news">Xem tất cả tin →</Link></div>
-        {news.length ? <div className="plain-news-grid">{news.map((item) => <article key={item.id}><span>{item.source.name}</span><h3><Link href={`/news/${item.id}`}>{item.title}</Link></h3><dl><div><dt>Chuyện gì xảy ra?</dt><dd>{item.description ?? "Mở bài viết để xem thông tin gốc."}</dd></div><div><dt>Ảnh hưởng gì?</dt><dd>{plainNewsImpact(item)}</dd></div><div><dt>Người mới nên hiểu gì?</dt><dd>Một tin riêng lẻ chưa đủ để mua hoặc bán. Hãy kiểm tra nguồn, thời điểm và rủi ro trước.</dd></div></dl></article>)}</div> : <div className="market-empty"><h3>Chưa có tin mới để diễn giải</h3><p>InvestIQ không tạo nội dung giả khi nguồn tin chưa sẵn sàng.</p></div>}
-      </section>
+      <DailyFeaturedNews news={news} />
 
       <footer className="beginner-disclaimer"><strong>Thông tin tham khảo, không phải khuyến nghị đầu tư.</strong><span>Nguồn: {overview.meta.provider_name} · trạng thái độ trễ: {overview.meta.delay_class} · cập nhật theo thời gian ghi trên dữ liệu.</span></footer>
     </main>

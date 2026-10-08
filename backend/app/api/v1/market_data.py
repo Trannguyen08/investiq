@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import asyncio
 import json
+from decimal import Decimal
 from functools import lru_cache
 from typing import Annotated, Literal
 from uuid import UUID, uuid4
@@ -47,6 +48,7 @@ from app.schemas.market import (
     OverviewResponse,
     PeopleResponse,
     PersonEnvelope,
+    SectorsResponse,
     WatchlistResponse,
     WatchlistsResponse,
 )
@@ -97,6 +99,7 @@ def _provider() -> IMarketProvider:
                 ),
                 refresh_seconds=settings.vnstock_refresh_seconds,
                 candle_cache_seconds=settings.vnstock_candle_cache_seconds,
+                fundamental_cache_seconds=settings.vnstock_fundamental_cache_seconds,
                 max_symbols=settings.vnstock_max_symbols,
             )
         )
@@ -181,12 +184,26 @@ def instruments(
         "matched_value",
         "trending",
         "market_cap",
+        "volume_vs_20d",
     ] = "vn30",
     direction: Literal["asc", "desc"] = "desc",
+    min_change: Annotated[Decimal | None, Query(ge=-100, le=100)] = None,
+    max_change: Annotated[Decimal | None, Query(ge=-100, le=100)] = None,
+    min_matched_value_billion: Annotated[
+        Decimal | None, Query(ge=0, le=1_000_000_000)
+    ] = None,
+    min_market_cap_billion: Annotated[Decimal | None, Query(ge=0, le=1_000_000_000)] = None,
+    min_volume_ratio: Annotated[Decimal | None, Query(ge=0, le=1000)] = None,
+    vn30: bool = False,
     limit: Annotated[int, Query(ge=1, le=100)] = 15,
     cursor: Annotated[str | None, Query(max_length=512)] = None,
 ) -> dict[str, object]:
     _public_headers(response)
+    if min_change is not None and max_change is not None and min_change > max_change:
+        raise HTTPException(
+            status_code=422,
+            detail="Minimum daily change cannot exceed maximum daily change",
+        )
     try:
         offset = decode_cursor(cursor)
     except ValueError as exc:
@@ -197,6 +214,16 @@ def instruments(
         "sector": sector or "",
         "sort": sort,
         "direction": direction,
+        "min_change": str(min_change) if min_change is not None else "",
+        "max_change": str(max_change) if max_change is not None else "",
+        "min_matched_value_billion": (
+            str(min_matched_value_billion) if min_matched_value_billion is not None else ""
+        ),
+        "min_market_cap_billion": (
+            str(min_market_cap_billion) if min_market_cap_billion is not None else ""
+        ),
+        "min_volume_ratio": str(min_volume_ratio) if min_volume_ratio is not None else "",
+        "vn30": vn30,
         "limit": limit,
         "offset": offset,
     }
@@ -212,9 +239,29 @@ def instruments(
             direction=direction,
             limit=limit,
             offset=offset,
+            min_change=min_change,
+            max_change=max_change,
+            min_matched_value=(
+                min_matched_value_billion * Decimal("1000000000")
+                if min_matched_value_billion is not None
+                else None
+            ),
+            min_market_cap=(
+                min_market_cap_billion * Decimal("1000000000")
+                if min_market_cap_billion is not None
+                else None
+            ),
+            min_volume_ratio=min_volume_ratio,
+            vn30_only=vn30,
         ),
         get_market_read_cache(),
     )
+
+
+@router.get("/sectors", response_model=SectorsResponse)
+def sectors(response: Response) -> dict[str, object]:
+    _public_headers(response)
+    return _cached("sectors", {}, _service().sectors, get_market_read_cache())
 
 
 @router.get("/instruments/{symbol}", response_model=InstrumentEnvelope)
@@ -447,7 +494,7 @@ def _stream_snapshots(symbols: list[str]) -> list[dict[str, object]]:
     snapshots: list[dict[str, object]] = []
     service = _service()
     for symbol in symbols:
-        value = service.instrument(symbol) or service.index(symbol)
+        value = service.instrument(symbol, include_fundamentals=False) or service.index(symbol)
         if value:
             data = value.get("data")
             if isinstance(data, dict):

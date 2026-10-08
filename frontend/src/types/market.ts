@@ -129,6 +129,20 @@ export type InstrumentCollection = {
   meta: MarketMeta;
 };
 
+export type MarketSector = {
+  name: string;
+  change_percent: string;
+  member_count: number;
+  advances: number;
+  declines: number;
+  unchanged: number;
+  matched_value: string;
+  foreign_net_value: string;
+  market_cap: string;
+};
+
+export type SectorCollection = { data: MarketSector[]; meta: MarketMeta };
+
 export type MarketCandles = {
   data: MarketCandle[];
   instrument: string;

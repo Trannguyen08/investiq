@@ -55,8 +55,9 @@ class Settings(BaseSettings):
     market_data_mode: Literal["disabled", "fixture", "tcbs", "vnstock"] = "disabled"
     market_public_cache_seconds: int = Field(default=30, ge=1, le=300)
     vnstock_api_key: SecretStr | None = None
-    vnstock_refresh_seconds: int = Field(default=300, ge=30, le=900)
+    vnstock_refresh_seconds: int = Field(default=60, ge=30, le=900)
     vnstock_candle_cache_seconds: int = Field(default=300, ge=60, le=3600)
+    vnstock_fundamental_cache_seconds: int = Field(default=3600, ge=300, le=86400)
     vnstock_max_symbols: int = Field(default=1800, ge=30, le=3000)
     tcbs_api_base_url: str = "https://openapi.tcbs.com.vn"
     tcbs_ws_url: str = "wss://openapi.tcbs.com.vn/ws/thesis/v1/stream/normal"
