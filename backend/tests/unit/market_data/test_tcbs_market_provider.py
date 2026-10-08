@@ -157,9 +157,11 @@ def test_tcbs_rows_are_normalized_to_decimal_financial_entities() -> None:
 
     response = MarketService(provider).instrument("FPT")
     assert response is not None
-    assert response["meta"]["provider"] == "tcbs-iflash"
-    assert response["meta"]["freshness"] == "fresh"
-    assert response["meta"]["partial"] is True
+    meta = response["meta"]
+    assert isinstance(meta, dict)
+    assert meta["provider"] == "tcbs-iflash"
+    assert meta["freshness"] == "fresh"
+    assert meta["partial"] is True
 
 
 def test_index_stream_frames_update_a_canonical_snapshot() -> None:
@@ -284,7 +286,10 @@ def test_overview_breadth_does_not_double_count_vn30() -> None:
             )
         )
 
-    breadth = MarketService(provider).overview()["data"]["breadth"]
+    data = MarketService(provider).overview()["data"]
+    assert isinstance(data, dict)
+    breadth = data["breadth"]
+    assert isinstance(breadth, dict)
 
     assert breadth["advances"] == 350
     assert breadth["declines"] == 30

@@ -255,7 +255,7 @@ def test_vnstock_system_exit_is_normalized_as_provider_failure() -> None:
             raise SystemExit("rate limit")
 
     gateway = OfficialVnstockGateway.__new__(OfficialVnstockGateway)
-    gateway._market = QuotaLimitedMarket()  # type: ignore[attr-defined]
+    gateway._market = QuotaLimitedMarket()
 
     with pytest.raises(RuntimeError, match="quote request failed"):
         gateway.quote_rows(["FPT"])
