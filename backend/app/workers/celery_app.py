@@ -1,7 +1,7 @@
 """Celery configuration using Redis for task delivery and result storage."""
 
 from celery import Celery
-from celery.signals import setup_logging
+from celery.signals import beat_init, setup_logging
 
 from app.infrastructure.config.logging_config import configure_logging
 from app.infrastructure.config.settings import settings
@@ -40,6 +40,12 @@ celery_app.conf.update(
                     "args": ("hnx", 50),
                     "options": {"queue": "news-ingestion"},
                 },
+                "discover-stockbiz": {
+                    "task": "investiq.news.discover.v1",
+                    "schedule": 300.0,
+                    "args": ("stockbiz", 50),
+                    "options": {"queue": "news-ingestion"},
+                },
                 "discover-vneconomy": {
                     "task": "investiq.news.discover.v1",
                     "schedule": 300.0,
@@ -55,6 +61,11 @@ celery_app.conf.update(
                 "dispatch-persisted-news-jobs": {
                     "task": "investiq.news.dispatch.v1",
                     "schedule": 60.0,
+                    "options": {"queue": "news-ingestion"},
+                },
+                "resume-news-backfills": {
+                    "task": "investiq.news.resume-backfills.v1",
+                    "schedule": 300.0,
                     "options": {"queue": "news-ingestion"},
                 },
             }
@@ -75,6 +86,20 @@ celery_app.conf.update(
     },
     worker_prefetch_multiplier=1,
 )
+
+
+@beat_init.connect  # type: ignore[untyped-decorator]
+def discover_news_on_beat_start(sender: object, **_: object) -> None:
+    """Queue an initial discovery when the single Beat scheduler starts."""
+    if not settings.news_ingestion_enabled:
+        return
+    for source_slug in ("vietstock", "cafef", "hnx", "stockbiz", "vneconomy", "vnexpress"):
+        celery_app.send_task(
+            "investiq.news.discover.v1",
+            args=(source_slug, 50, "scheduled"),
+            queue="news-ingestion",
+            countdown=5,
+        )
 
 
 def configure_worker_logging(**_: object) -> None:

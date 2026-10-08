@@ -1,6 +1,7 @@
 import Link from "next/link";
 
 import { NewsCard, formatNewsTime } from "@/components/news/news-card";
+import { NewsFilterForm } from "@/components/news/news-filter-form";
 import { getNews, getNewsSources } from "@/lib/api-client";
 
 type SearchParams = Promise<Record<string, string | string[] | undefined>>;
@@ -12,8 +13,8 @@ function first(value: string | string[] | undefined) {
 export default async function NewsPage({ searchParams }: { searchParams: SearchParams }) {
   const raw = await searchParams;
   const query = new URLSearchParams();
-  query.set("limit", "30");
-  for (const key of ["q", "source", "symbol", "sentiment", "window_days", "cursor"] as const) {
+  query.set("limit", "10");
+  for (const key of ["q", "source", "symbol", "sentiment", "window_days", "page"] as const) {
     const value = first(raw[key]);
     if (value) query.set(key, value);
   }
@@ -34,11 +35,6 @@ export default async function NewsPage({ searchParams }: { searchParams: SearchP
   }
 
   const activeSources = sources.data.filter((source) => source.status === "active");
-  const currentQuery = first(raw.q) ?? "";
-  const currentSource = first(raw.source) ?? "";
-  const currentSymbol = first(raw.symbol) ?? "";
-  const currentSentiment = first(raw.sentiment) ?? "";
-  const currentWindow = first(raw.window_days) ?? "7";
   const symbolCounts = new Map<string, number>();
   for (const article of result.data) {
     for (const mention of article.symbols) {
@@ -47,8 +43,15 @@ export default async function NewsPage({ searchParams }: { searchParams: SearchP
     }
   }
   const popularSymbols = [...symbolCounts.entries()].sort((a, b) => b[1] - a[1]).slice(0, 8);
-  const nextQuery = new URLSearchParams(query);
-  if (result.pagination.next_cursor) nextQuery.set("cursor", result.pagination.next_cursor);
+  const pageUrl = (page: number) => {
+    const params = new URLSearchParams(query);
+    params.set("page", String(page));
+    return `/news?${params.toString()}`;
+  };
+  const { page, total_pages: totalPages } = result.pagination;
+  const pageNumbers = Array.from({ length: Math.min(totalPages, 5) }, (_, index) =>
+    Math.max(1, Math.min(page - 2, totalPages - 4)) + index,
+  );
 
   return (
     <main id="main-content" className="news-page">
@@ -64,45 +67,7 @@ export default async function NewsPage({ searchParams }: { searchParams: SearchP
         </div>
       </section>
 
-      <form action="/news" className="news-filters" role="search">
-        <label className="search-wide">
-          <span className="sr-only">Tìm kiếm tin</span>
-          <input name="q" defaultValue={currentQuery} placeholder="Tìm tiêu đề, nội dung hoặc doanh nghiệp…" minLength={2} maxLength={200} />
-        </label>
-        <label>
-          <span>Nguồn</span>
-          <select name="source" defaultValue={currentSource}>
-            <option value="">Tất cả nguồn</option>
-            {activeSources.map((source) => <option value={source.slug} key={source.slug}>{source.name}</option>)}
-          </select>
-        </label>
-        <label>
-          <span>Mã chứng khoán</span>
-          <input name="symbol" defaultValue={currentSymbol} placeholder="HOSE:FPT" pattern="(HOSE|HNX|UPCOM):[A-Za-z0-9]{3,8}" />
-        </label>
-        <label>
-          <span>Thời gian</span>
-          <select name="window_days" defaultValue={currentWindow}>
-            <option value="1">24 giờ qua</option>
-            <option value="7">7 ngày qua</option>
-            <option value="30">30 ngày qua</option>
-            <option value="90">90 ngày qua</option>
-          </select>
-        </label>
-        <label>
-          <span>Sắc thái toàn bài</span>
-          <select name="sentiment" defaultValue={currentSentiment}>
-            <option value="">Tất cả</option>
-            <option value="positive">Tích cực</option>
-            <option value="negative">Tiêu cực</option>
-            <option value="neutral">Trung tính</option>
-            <option value="mixed">Trái chiều</option>
-            <option value="unknown">Chưa đủ cơ sở</option>
-          </select>
-        </label>
-        <button type="submit">Áp dụng</button>
-        {(currentQuery || currentSource || currentSymbol || currentSentiment || currentWindow !== "7") && <Link className="clear-filters" href="/news">Xóa lọc</Link>}
-      </form>
+      <NewsFilterForm sources={activeSources} />
 
       {result.data.length === 0 ? (
         <section className="state-panel empty-state">
@@ -115,7 +80,11 @@ export default async function NewsPage({ searchParams }: { searchParams: SearchP
         <div className="news-layout">
           <section className="news-feed" aria-label="Danh sách tin">
             {result.data.map((article, index) => <NewsCard article={article} featured={index === 0} key={article.id} />)}
-            {result.pagination.has_more && <Link className="load-more" href={`/news?${nextQuery.toString()}`}>Xem thêm tin</Link>}
+            {totalPages > 1 && <nav className="news-pagination" aria-label="Phân trang tin tức">
+              {page > 1 && <Link href={pageUrl(page - 1)}>Trang trước</Link>}
+              {pageNumbers.map((number) => <Link key={number} href={pageUrl(number)} aria-current={number === page ? "page" : undefined}>{number}</Link>)}
+              {page < totalPages && <Link href={pageUrl(page + 1)}>Trang sau</Link>}
+            </nav>}
           </section>
           <aside className="news-sidebar">
             <section>

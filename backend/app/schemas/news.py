@@ -105,6 +105,10 @@ class NewsDetailResponse(NewsSummaryResponse):
 class PaginationResponse(StrictModel):
     next_cursor: str | None
     has_more: bool
+    page: int = Field(ge=1)
+    page_size: int = Field(ge=1, le=50)
+    total_items: int = Field(ge=0)
+    total_pages: int = Field(ge=0)
 
 
 class ResponseMeta(StrictModel):

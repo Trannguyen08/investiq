@@ -10,7 +10,7 @@ describe("news API client", () => {
   it("forwards URL filters through the single API boundary", async () => {
     const payload = {
       data: [],
-      pagination: { next_cursor: null, has_more: false },
+      pagination: { next_cursor: null, has_more: false, page: 1, page_size: 10, total_items: 0, total_pages: 0 },
       meta: { request_id: "test", as_of: "2026-09-29T00:00:00Z", last_ingested_at: null, freshness: "unavailable" },
     };
     const fetchMock = vi.fn().mockResolvedValue(new Response(JSON.stringify(payload), { status: 200 }));
@@ -20,7 +20,7 @@ describe("news API client", () => {
     await expect(getNews(query)).resolves.toEqual(payload);
     expect(fetchMock).toHaveBeenCalledWith(
       "http://localhost:8000/api/v1/news?symbol=HOSE%3AFPT&sentiment=positive",
-      { cache: "no-store" },
+      { next: { revalidate: 30 } },
     );
   });
 

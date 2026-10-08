@@ -1,9 +1,11 @@
 """Official HNX disclosure RSS adapter."""
 
+import ssl
 import unicodedata
 import xml.etree.ElementTree as ET
 from dataclasses import replace
 from datetime import UTC, datetime
+from pathlib import Path
 from urllib.parse import urlsplit, urlunsplit
 from zoneinfo import ZoneInfo
 
@@ -13,6 +15,7 @@ from app.application.dto.news_dto import ParsedArticle
 from app.domain.entities.news_article import ArticleAsset
 from app.infrastructure.external.crawlers.base import (
     BaseNewsCrawler,
+    BoundedHttpClient,
     NewsProviderError,
     UnsafeProviderUrl,
     canonicalize_url,
@@ -44,6 +47,15 @@ class HnxCrawler(BaseNewsCrawler):
     title_selectors = (".Box-TieuDe label", "title")
     content_selectors = ()
     description_selectors = (".Box-Tomtat label",)
+
+    def __init__(self, client: BoundedHttpClient | None = None) -> None:
+        if client is None:
+            context = ssl.create_default_context()
+            context.load_verify_locations(
+                cafile=Path(__file__).with_name("hnx_intermediate.pem")
+            )
+            client = BoundedHttpClient(self.allowed_domains, ssl_context=context)
+        super().__init__(client)
 
     def discover(self, limit: int = 50) -> tuple[str, ...]:
         """Round-robin official and issuer disclosures so neither feed starves."""

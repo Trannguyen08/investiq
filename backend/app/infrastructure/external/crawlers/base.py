@@ -8,6 +8,7 @@ import ipaddress
 import json
 import re
 import socket
+import ssl
 import urllib.error
 import urllib.parse
 import urllib.request
@@ -142,10 +143,14 @@ class BoundedHttpClient:
         self,
         allowed_domains: tuple[str, ...],
         guard: ProviderGuard | None = None,
+        ssl_context: ssl.SSLContext | None = None,
     ) -> None:
         self._allowed_domains = allowed_domains
         self._guard = guard or get_provider_guard()
-        self._opener = urllib.request.build_opener(_SafeRedirectHandler(allowed_domains))
+        handlers: list[urllib.request.BaseHandler] = [_SafeRedirectHandler(allowed_domains)]
+        if ssl_context is not None:
+            handlers.append(urllib.request.HTTPSHandler(context=ssl_context))
+        self._opener = urllib.request.build_opener(*handlers)
 
     def get_text(self, url: str) -> str:
         safe_url = validate_provider_url(url, self._allowed_domains, resolve_dns=True)

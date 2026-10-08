@@ -56,9 +56,11 @@ Apply database migrations as a dedicated step before opening the news routes:
 docker compose run --rm backend python -m app.infrastructure.db.base
 ```
 
-The public pages are `/news` and `/news/<article-id>`. Live ingestion is off by default. Before
-enabling it, approve each source's storage/display policy and import a reviewed UTF-8 security
-master CSV with columns `exchange,symbol,issuer_name,valid_from`:
+The public pages are `/news` and `/news/<article-id>`. Celery Beat queues an initial crawl of the
+six configured sources whenever the scheduler starts, then discovers new stories every five
+minutes. `NEWS_INGESTION_ENABLED` defaults to `true`; set it to `false` to pause automatic crawling.
+Before production ingestion, approve each source's storage/display policy and import a reviewed
+UTF-8 security master CSV with columns `exchange,symbol,issuer_name,valid_from`:
 
 ```sh
 docker compose run --rm backend python -m app.infrastructure.db.import_securities \
@@ -93,9 +95,19 @@ reviewers. A rollback deploys a previous immutable backend/frontend tag with the
 database migrations must include their own compatibility and rollback plan once migrations are
 introduced.
 
-News ingestion accepts only publisher-dated articles within `NEWS_INGESTION_MAX_AGE_HOURS` (72 by
-default). Public feeds are limited to `NEWS_RETENTION_DAYS` (90 by default). Provider requests use a
-Redis-coordinated per-domain rate limit and circuit breaker. The protected news operations endpoints
+News ingestion accepts publisher-dated articles within `NEWS_INGESTION_MAX_AGE_HOURS` (2160, or 90
+days, by default). Public feeds are limited to `NEWS_RETENTION_DAYS` (90 by default). Vietstock archive
+backfill scans one page at a time and checkpoints progress in PostgreSQL; Beat resumes interrupted runs.
+Start a local 90-day backfill after migrations with:
+
+```powershell
+docker compose exec -T celery-worker python -c "from datetime import UTC, datetime, timedelta; from app.workers.news_ingestion_worker import backfill_news; today=datetime.now(UTC); backfill_news.apply_async(args=(1,(today-timedelta(days=90)).date().isoformat(),today.date().isoformat()),queue='news-ingestion')"
+```
+
+The public news API supports numbered pages and accent-insensitive partial search. A 30-second Redis
+read cache is invalidated after successful ingestion. The news worker joins a dedicated outbound
+network for publisher requests. Provider requests use a Redis-coordinated per-domain rate limit and
+circuit breaker. The protected news operations endpoints
 under `/api/v1/admin/news` remain disabled until `NEWS_ADMIN_TOKEN` is configured; retention deletion
 also requires an explicit non-dry-run request with `confirm=true`.
 
@@ -144,5 +156,10 @@ credentials, and automatic session refresh. The implementation is available behi
 the fail-closed `AUTH_ENABLED` flag; configure the blank auth entries in `.env` before enabling it.
 The
 [Vietnamese stock-market news plan](docs/plan/vietnam-stock-news.md) now has an implemented,
-tested five-source MVP; the [implementation report](docs/plan/news-implementation-report.md)
+tested six-source MVP; the [implementation report](docs/plan/news-implementation-report.md)
 records research evidence, validation results, activation gates, and remaining source limitations.
+The next product phase is defined in the
+[market and investment-community roadmap](docs/plan/community-market-roadmap.md): licensed market
+data, private watchlists, structured evidence-backed theses, outcome-based reputation, moderation,
+and source-linked AI assistance. It targets a differentiated MVP in 12 weeks and public beta in 28
+weeks; implementation has not started.

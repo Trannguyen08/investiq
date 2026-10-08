@@ -5,7 +5,7 @@
 - Name: InvestIQ
 - Repository: `C:\investiq`
 - Application type: FastAPI and Next.js monorepo
-- Status: Runnable operational baseline with a hardened, tested five-source stock-news module and
+- Status: Runnable operational baseline with a six-source stock-news module and
   feature-flagged end-user authentication; most other finance and ML modules remain placeholders.
 
 ## Confirmed stack
@@ -25,17 +25,22 @@
 
 ## Goals
 
-- Implemented MVP: Vietnamese stock-market news aggregation for Vietstock, CafeF, HNX, VnEconomy,
-  and VnExpress with article history, stock-symbol identification, rule sentiment, public list/detail
+- Implemented MVP: Vietnamese stock-market news aggregation for Vietstock, CafeF, HNX, StockBiz,
+  VnEconomy, and VnExpress with article history, stock-symbol identification, rule sentiment, public list/detail
   pages, freshness/retention policy, exact-title cross-source grouping, topic/event classification,
   provider rate limiting/circuit breaking, protected operational APIs, and an authenticated Admin
   workspace for source status, manual crawl, crawl-run history, and retention cleanup. HNX,
-  VnEconomy, and VnExpress are metadata-only sources.
+  StockBiz, VnEconomy, and VnExpress are metadata-only sources.
 - User confirmed periodic database backups only; no database replica in this feature scope.
 - Feature plans live in `docs/plan/`; see `docs/plan/vietnam-stock-news.md` and its database/API/UI
   companion documents. `docs/plan/news-implementation-report.md` records implemented behavior,
-  validation, activation gates, and the six sources that remain pending/blocked. No deployment
-  has been performed and live ingestion is disabled by default.
+  validation, activation gates, and the five sources that remain pending/blocked. No deployment
+  has been performed; Celery Beat now starts news discovery automatically by default.
+- The accepted next product direction is documented in `docs/plan/community-market-roadmap.md`:
+  licensed EOD/delayed market data, private watchlists, moderated community posts, structured
+  evidence-backed investment theses, immutable updates, outcome-based contextual reputation, and
+  source-linked AI counter-analysis. Target: differentiated MVP in 12 weeks and public beta in 28
+  weeks. This roadmap is planned only; implementation has not started.
 
 ## Local development
 

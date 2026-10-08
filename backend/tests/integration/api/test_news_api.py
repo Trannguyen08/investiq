@@ -85,7 +85,11 @@ class FakeNewsRepository:
     def list_articles(self, query: NewsQuery) -> tuple[tuple[NewsArticle, ...], bool]:
         if query.cursor_id:
             return (self.articles[1],), False
-        return self.articles[: query.limit], len(self.articles) > query.limit
+        start = (query.page - 1) * query.limit
+        return self.articles[start : start + query.limit], len(self.articles) > start + query.limit
+
+    def count_articles(self, query: NewsQuery) -> int:
+        return len(self.articles)
 
     def get_article(self, article_id: str) -> NewsArticle | None:
         return next((article for article in self.articles if article.id == article_id), None)
@@ -135,6 +139,23 @@ def test_news_collection_has_signed_cursor_and_filter_contract() -> None:
     assert response.json()["meta"]["request_id"] == "news-list"
     assert next_response.status_code == 200
     assert next_response.json()["pagination"]["has_more"] is False
+
+
+def test_numbered_news_pages_include_total_and_previous_page_contract() -> None:
+    app.dependency_overrides[get_news_repository] = repository_override
+    try:
+        with TestClient(app) as client:
+            response = client.get("/api/v1/news?limit=1&page=2")
+            invalid = client.get("/api/v1/news?limit=1&page=2&cursor=bad")
+    finally:
+        app.dependency_overrides.clear()
+
+    assert response.status_code == 200
+    assert response.json()["data"][0]["id"] == "22222222-2222-4222-8222-222222222222"
+    assert response.json()["pagination"]["page"] == 2
+    assert response.json()["pagination"]["total_pages"] == 2
+    assert response.json()["pagination"]["total_items"] == 2
+    assert invalid.status_code == 422
 
 
 def test_cursor_cannot_be_reused_with_different_filters() -> None:

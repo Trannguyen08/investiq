@@ -1,5 +1,55 @@
 # Current Task
 
+## News crawl backend CI repair — 2026-10-08 (complete)
+
+Reproduced pull request #5's Backend CI failure with the workflow's strict mypy command. Updated
+the news repository and crawler HTTP test doubles to satisfy their expanded type contracts. Strict
+mypy, Ruff, 21 focused news tests, the full backend suite (82 passed, 11 database tests skipped
+without `TEST_DATABASE_URL`), and Compose model validation pass. Docker image validation remains
+assigned to GitHub Actions because the local Docker Desktop engine is unavailable.
+
+## Community and market product roadmap — 2026-10-04 (complete)
+
+Added `docs/plan/community-market-roadmap.md` as the accepted direction after auth and news. The
+roadmap positions InvestIQ as an evidence-based investment community instead of a FireAnt clone. It
+covers licensed EOD/delayed market data, market context, private watchlists, community moderation,
+structured and versioned theses, outcome-based contextual reputation, source-linked AI critique,
+privacy/security constraints, a prioritized backlog, success metrics, risks, decision gates, and a
+12-week differentiated MVP / 28-week public-beta timeline. Linked it from the plan index and root
+README, and synchronized project/architecture memory. No application code or runtime was changed.
+
+## News crawl completion — 2026-10-04 (complete)
+
+Implemented numbered 10-item news pages, partial accent-insensitive search with trigram index,
+30-second versioned Redis list caching, StockBiz metadata-only RSS ingestion, and Vietstock
+90-day archive scanning with PostgreSQL page checkpoints and Beat recovery. Local migrations
+0007–0010 were applied locally. The 90-day Vietstock archive scan completed and its PostgreSQL
+checkpoint is marked complete; persisted fetch jobs continue automatically at the provider rate limit.
+The local database includes articles back to 2026-07-07, within the 90-day filter. HNX TLS verification
+now uses the publisher's missing GlobalSign intermediate locally; live feed discovery and ingest
+succeeded. A transient CafeF provider failure was recovered with a new successful ingestion job.
+Backend Ruff, mypy, and 44 focused tests passed; frontend lint and typecheck passed. The development
+news page and numbered page 2 return HTTP 200; the API demonstrated Redis MISS then HIT. Docker
+backend, worker, and Beat remain running for queued historical fetches.
+
+## Latest follow-up - Automatic news crawling, 2026-10-02
+
+Implemented startup discovery for the five configured news sources when the single Celery Beat
+scheduler starts, in addition to the existing five-minute schedule. Ingestion now defaults to
+enabled in application settings, Compose, and `.env.example`; operators can pause it with
+`NEWS_INGESTION_ENABLED=false`. Updated README, architecture memory, project memory, and the news
+implementation report. No deployment or tests were run.
+
+## Latest follow-up — News feed population, 2026-10-02
+
+Investigated the empty news feed. The active local database initially had configured sources but
+zero articles, revisions, crawl runs, or ingestion jobs. `/news` and `/api/v1/news` are public.
+Using the existing ingestion pipeline, a bounded manual crawl stored 41 published articles with
+revisions: 3 CafeF, 15 Vietstock, 15 VnEconomy, and 8 VnExpress. One CafeF fetch failed. HNX could
+not be crawled because its TLS certificate chain failed verification; verification stayed enabled.
+The API returns 20 items on its first page with `freshness=fresh`, and guest `/news` returns HTTP
+Ingestion was disabled at the time of this earlier follow-up. The temporary worker was removed and the normal worker restarted.
+
 # Latest follow-up — auth account feedback and validation, 2026-10-02
 
 Complete: duplicate registration now returns 409 before issuing an OTP, including a concurrent
@@ -228,3 +278,9 @@ Complete: implemented role-protected account search, filters, pagination, role/s
 ## Latest task — Local Google login startup issue (2026-10-02)
 
 Complete: the Google callback first reached FastAPI before local migrations were applied; the new PostgreSQL volume lacked auth tables and account persistence returned HTTP 500 (`AUTH_FAILED`). Applied migrations 0001–0006 without deleting the volume. A later browser screenshot showed Google login succeeded but the BFF redirected to invalid `0.0.0.0:3000` because it derived callback redirects from the incoming request URL. The callback now derives success/error redirect origins from `AUTH_GOOGLE_REDIRECT_URI`. A subsequent logout attempt returned 403 because CSRF validation compared the browser origin with the proxy's internal request URL; it now validates against the configured public auth origin. Rebuilt the frontend and verified a same-origin CSRF logout request returns HTTP 204, `/login` returns HTTP 200, and all Compose services are healthy. README documents applying migrations before UI/API use. Full browser retries remain user driven.
+
+## News search and feed follow-up - 2026-10-02
+
+Implemented automatic URL-backed news filters (search debounce, immediate select/input changes), reduced the feed page size to 10, added PostgreSQL accent-insensitive substring matching alongside full-text search, and constrained article thumbnails to prevent tall source images stretching a single result card. Frontend ESLint and TypeScript checks passed.
+
+Not completed: numbered/previous-page pagination, query cache, expanded crawler integrations, and three-month historical ingestion. The API currently exposes signed forward cursors; ingestion rejects articles older than the configured 72-hour freshness window. FireAnt's crawler module is a placeholder, so its pending source cannot safely be activated. No database crawl/backfill was run.

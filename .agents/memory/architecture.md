@@ -3,7 +3,7 @@
 ## Current state
 
 The monorepo has a runnable container and delivery baseline. FastAPI health/status endpoints, the
-Next.js shell, Celery configuration, Docker Compose, Nginx, and CI/CD are implemented. A five-source
+Next.js shell, Celery configuration, Docker Compose, Nginx, and CI/CD are implemented. A six-source
 Vietnamese stock-news vertical slice is implemented and tested; most other product, data, and ML
 modules remain placeholders. End-user authentication is implemented behind a fail-closed feature
 flag and remains separate from the existing Admin News session boundary.
@@ -49,13 +49,15 @@ investiq/
 - Backend and frontend images are built from service-local Dockerfiles. Deployment overrides their
   Compose image names with immutable GHCR tags.
 - PostgreSQL and Redis are private to the Compose network and persist in named volumes.
-- Backend services use an internal-only network. The authentication notification worker also joins
-  a dedicated outbound network so it can reach the configured SMTP server; other backend services
-  remain isolated from external egress.
+- Backend services use an internal-only network. The notification worker joins a mail outbound
+  network for SMTP; the news worker joins a separate news outbound network for publishers.
 - News articles, immutable revisions, source policies, verified symbols, publisher-explicit symbol
   candidates, versioned sentiment/market-impact analysis, crawl runs, and durable
   ingestion jobs are stored in PostgreSQL. Celery/Redis deliver work; a PostgreSQL dispatcher
   recovers pending and expired-lease jobs.
+- Vietstock archive backfill checkpoints scanned pages in PostgreSQL; Beat resumes stale runs.
+  Public news lists use a versioned Redis read cache with a 30-second TTL and invalidation after
+  article ingestion. Numbered pagination uses bounded SQL offsets and filtered counts.
 - Redis database 0 is reserved for application caching, database 1 is the Celery broker, and database
   2 is the Celery result backend. Redis database 3 stores encrypted Next.js BFF sessions,
   pre-authentication state, CSRF context, and refresh locks. No Kafka, RabbitMQ, or generic event bus
@@ -74,7 +76,7 @@ investiq/
   Browser actions execute as server actions, while the FastAPI operations token remains server-only;
   both layers fail closed when their independent runtime secrets are absent.
 - Celery news worker, isolated authentication notification worker, and Beat reuse the backend image.
-  Only the notification worker has external network access, for SMTP delivery.
+  The news worker has publisher outbound access; the notification worker has SMTP outbound access.
   Each environment must run only one Beat scheduler.
 - FastAPI, Celery, and Nginx produce sanitized structured runtime fields. Health access logs and
   image-build output are excluded from the viewer to limit operational noise.
@@ -107,10 +109,18 @@ The existing Admin News authentication remains a separate boundary pending a sco
 News ingestion, database/backups, and API/UI specifications are documented under `docs/plan/`,
 starting at `docs/plan/vietnam-stock-news.md`; implementation evidence is in
 `docs/plan/news-implementation-report.md`. Vietstock and CafeF full-article adapters plus HNX,
-VnEconomy, and VnExpress metadata-only adapters, public news APIs/UI, and backup/restore scripts are
-implemented. Live ingestion remains disabled by default pending source policy approval and reviewed
-security-master input. The user selected periodic backups only, with no database replica; backup
-scheduling is an external script and adds no runtime service here.
+StockBiz, VnEconomy, and VnExpress metadata-only adapters, public news APIs/UI, and backup/restore scripts are
+implemented. Celery Beat queues initial discovery for the six configured sources at scheduler
+startup and continues five-minute discovery; `NEWS_INGESTION_ENABLED` defaults to true and can pause
+all ingestion. Production operation still requires source storage/display policy approval and a
+reviewed security-master import. The user selected periodic backups only, with no database replica;
+backup scheduling is an external script and adds no runtime service here.
+
+The planned post-news product phase is specified in `docs/plan/community-market-roadmap.md`.
+It keeps the existing FastAPI/Next.js/PostgreSQL/Redis/Celery boundaries and begins with licensed
+EOD or delayed market data. It plans private watchlists, a moderated community, versioned investment
+theses with market snapshots, outcome tracking, contextual reputation, and source-linked AI
+counter-analysis. These are product and architecture intentions, not implemented runtime facts.
 
 This file is the canonical architectural overview. Every path or boundary change updates this file
 and all affected references in the same task, following `.agents/rules/project-structure.md`.
