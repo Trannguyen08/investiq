@@ -1,5 +1,13 @@
 # Current Task
 
+## News crawl backend CI repair — 2026-10-08 (complete)
+
+Reproduced pull request #5's Backend CI failure with the workflow's strict mypy command. Updated
+the news repository and crawler HTTP test doubles to satisfy their expanded type contracts. Strict
+mypy, Ruff, 21 focused news tests, the full backend suite (82 passed, 11 database tests skipped
+without `TEST_DATABASE_URL`), and Compose model validation pass. Docker image validation remains
+assigned to GitHub Actions because the local Docker Desktop engine is unavailable.
+
 ## Community and market product roadmap — 2026-10-04 (complete)
 
 Added `docs/plan/community-market-roadmap.md` as the accepted direction after auth and news. The
