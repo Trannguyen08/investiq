@@ -14,8 +14,20 @@ from redis.asyncio import Redis
 from app.api.v1.admin import router as news_admin_router
 from app.api.v1.admin_users import router as admin_users_router
 from app.api.v1.auth import router as auth_router
+from app.api.v1.market_data import (
+    close_market_provider,
+    start_market_provider,
+    watchlist_router,
+)
+from app.api.v1.market_data import (
+    router as market_router,
+)
+from app.api.v1.market_data import (
+    stream_router as market_stream_router,
+)
 from app.api.v1.news import router as news_router
 from app.application.use_cases.auth.auth_service import AuthError
+from app.application.use_cases.market_data.errors import MarketDataUnavailable
 from app.infrastructure.config.logging_config import configure_logging
 from app.infrastructure.config.settings import settings
 from app.infrastructure.db.session import close_pool
@@ -27,8 +39,12 @@ configure_logging()
 
 @asynccontextmanager
 async def lifespan(_: FastAPI) -> AsyncIterator[None]:
-    yield
-    close_pool()
+    await start_market_provider()
+    try:
+        yield
+    finally:
+        await close_market_provider()
+        close_pool()
 
 
 app = FastAPI(title=settings.app_name, version="0.1.0", lifespan=lifespan)
@@ -37,6 +53,9 @@ app.include_router(news_router)
 app.include_router(news_admin_router)
 app.include_router(admin_users_router)
 app.include_router(auth_router)
+app.include_router(market_router)
+app.include_router(market_stream_router)
+app.include_router(watchlist_router)
 
 
 def _request_id(request: Request) -> str:
@@ -108,6 +127,22 @@ async def jwt_error(request: Request, _: JwtError) -> JSONResponse:
             }
         },
         headers={"Cache-Control": "no-store", "WWW-Authenticate": "Bearer"},
+    )
+
+
+@app.exception_handler(MarketDataUnavailable)
+async def market_data_error(request: Request, _: MarketDataUnavailable) -> JSONResponse:
+    return JSONResponse(
+        status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+        content={
+            "error": {
+                "code": "MARKET_DATA_UNAVAILABLE",
+                "message": "Market data provider is temporarily unavailable.",
+                "request_id": _request_id(request),
+                "details": [],
+            }
+        },
+        headers={"Cache-Control": "no-store", "Retry-After": "15"},
     )
 
 

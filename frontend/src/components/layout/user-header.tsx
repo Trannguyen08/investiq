@@ -10,6 +10,7 @@ import { useAuth } from "@/hooks/use-auth";
 
 const links = [
   ["/", "Tổng quan"],
+  ["/market/stocks", "Thị trường"],
   ["/portfolio", "Danh mục"],
   ["/predictions", "Dự báo AI"],
   ["/backtesting", "Kiểm thử chiến lược"],
@@ -82,7 +83,7 @@ function MobileMenu() {
       <summary aria-label="Mở menu"><span /><span /><span /></summary>
       <nav aria-label="Điều hướng di động">
         {user && status === "authenticated" && <div className="mobile-account"><UserAvatar name={user.display_name} url={user.avatar_url} /><strong>{user.display_name}</strong></div>}
-        {links.map(([href, label]) => <Link href={href} key={href}>{label}</Link>)}
+        {links.map(([href, label]) => <Link href={href} prefetch={false} key={href}>{label}</Link>)}
         {user && status === "authenticated" ? <button type="button" onClick={signOut}>Đăng xuất</button> : <Link href="/login">Đăng nhập</Link>}
         {error && <p role="alert">{error}</p>}
       </nav>
@@ -95,9 +96,9 @@ export function UserHeader() {
   return (
     <>
       <header className="site-header"><div className="header-inner">
-        <Link className="brand" href="/" aria-label="InvestIQ — trang tổng quan"><img src="/investiq-logo.svg" width="118" height="32" alt="InvestIQ" /></Link>
-        <nav className="desktop-nav" aria-label="Điều hướng chính">{links.map(([href, label]) => { const active = href === "/" ? pathname === "/" : pathname.startsWith(href); return <Link className={active ? "nav-link active" : "nav-link"} href={href} key={href} aria-current={active ? "page" : undefined}>{label}</Link>; })}</nav>
-        <form action="/news" className="header-search" role="search"><label className="sr-only" htmlFor="header-search">Tìm mã cổ phiếu hoặc tin tức</label><svg aria-hidden="true" viewBox="0 0 24 24"><path d="m21 21-4.4-4.4m2.4-5.1A7.5 7.5 0 1 1 4 11.5a7.5 7.5 0 0 1 15 0Z" /></svg><input id="header-search" name="q" placeholder="Tìm mã cổ phiếu, tin tức" /></form>
+        <Link className="brand" href="/" prefetch={false} aria-label="InvestIQ — trang tổng quan"><img src="/investiq-logo.svg" width="118" height="32" alt="InvestIQ" /></Link>
+        <nav className="desktop-nav" aria-label="Điều hướng chính">{links.map(([href, label]) => { const active = href === "/" ? pathname === "/" : href.startsWith("/market/") ? pathname.startsWith("/market") : pathname.startsWith(href); return <Link className={active ? "nav-link active" : "nav-link"} href={href} prefetch={false} key={href} aria-current={active ? "page" : undefined}>{label}</Link>; })}</nav>
+        <form action="/market/stocks" className="header-search" role="search"><label className="sr-only" htmlFor="header-search">Tìm mã cổ phiếu hoặc công ty</label><svg aria-hidden="true" viewBox="0 0 24 24"><path d="m21 21-4.4-4.4m2.4-5.1A7.5 7.5 0 1 1 4 11.5a7.5 7.5 0 0 1 15 0Z" /></svg><input id="header-search" name="q" placeholder="Tìm mã cổ phiếu, công ty" /></form>
         <AccountMenu /><MobileMenu />
       </div></header>
       <Suspense fallback={null}><AuthMessage /></Suspense>

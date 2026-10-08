@@ -3,6 +3,87 @@
 Record durable decisions in reverse chronological order. Do not record routine implementation
 details.
 
+## 2026-10-07 — Vnstock is a source-delayed evaluation adapter
+
+- **Status:** Accepted for local/private evaluation; public redistribution remains gated.
+- **Context:** The beginner experience needs real quote breadth, industry classification, and
+  multi-session OHLCV that the current TCBS integration does not provide. Vnstock exposes a unified
+  Python client over multiple upstream sources, but its package access is not an exchange-data
+  redistribution license.
+- **Decision:** Add Vnstock behind the existing canonical provider port, use KBS for reference/quotes/
+  OHLCV plus financial ratios and VCI for industry labels, keep its optional key server-side, cache
+  snapshots/candles, and identify all results as source-delayed and partial. Load P/E, P/B, EPS, and
+  ROE lazily only for detail reads with a bounded one-hour per-symbol cache; list, watchlist, and
+  WebSocket snapshots stay on the lightweight quote path. If the entire KBS board is reset before a
+  new session, use one VCI price-board batch for the latest completed close and preceding reference;
+  do not fan out historical calls or turn the new reference into a synthetic 0% move. Normalize the
+  library's quota `SystemExit` as a provider failure so it cannot cancel an ASGI request. Once any
+  current-session match exists, retain unmatched symbols at their current reference as unchanged so
+  market breadth and sector membership do not collapse during the opening auction. Preserve an
+  upstream indicative auction price while leaving not-yet-executed open/high/low/volume/value at
+  zero for the UI to label as unavailable; do not synthesize trades. Use live quote timestamps as
+  market time and a one-minute default snapshot refresh, while stock detail merges the bounded
+  WebSocket quote stream. Derived
+  foreign value and sector strength
+  must be labeled as estimates/relative indicators rather than official net flow.
+- **Consequences:** Local Home, Market, and stock charts can use real source data without coupling the
+  frontend to Vnstock, and detail pages expose current provider fundamentals without multiplying
+  requests across the market universe. A failed ratio request leaves quote/chart data available with
+  null fundamentals. Public/commercial deployment remains blocked until Vnstock and each relevant
+  upstream owner confirm display, cache, retention, and redistribution rights in writing.
+
+## 2026-10-06 — Bounded Docker container logs
+
+- **Status:** Accepted and implemented.
+- **Context:** Docker's `json-file` driver is unbounded unless the daemon or container declares
+  rotation, so a repeated application failure can exhaust host storage.
+- **Decision:** Apply a shared Compose logging policy to every service with `max-size=10m` and
+  `max-file=3`. Keep the policy in the deployment artifact rather than relying on mutable host-wide
+  daemon configuration.
+- **Consequences:** Each recreated InvestIQ container retains approximately 30 MB of Docker logs.
+  Existing containers must be recreated before the new policy applies; unrelated host containers
+  remain governed by their own configuration or the daemon default.
+
+## 2026-10-06 — Credential-gated TCBS adapter and path-addressable market tabs
+
+- **Status:** Accepted and implemented behind an activation gate.
+- **Context:** Market UI and contracts existed only against a fixture, and query-only tabs made the
+  selected workspace less explicit across reloads and shared links. TCBS iFlash now documents REST
+  quote/security APIs plus a pipe-delimited WebSocket, but token issuance requires API key + Smart OTP,
+  lasts at most eight hours, and has no documented refresh token.
+- **Decision:** Add TCBS as an infrastructure adapter behind the existing canonical provider port.
+  Keep credentials server-only, reuse tokens only in memory, accept either a current access token or
+  API key plus one-time OTP, and fail closed when renewal is required. Use REST as snapshot/resync truth,
+  one official index stream with text heartbeat, bounded retry/circuit/reconnect, and partial responses
+  for unsupported data classes. Make `/market/<tab>` canonical, preserving `/market?tab=...` only as a
+  compatibility redirect that retains filters.
+- **Consequences:** Supplying an API key alone cannot provide unattended operation; an operator must
+  rotate the access token or OTP before expiry. TCBS mode provides live quotes/index context but does
+  not fabricate daily candles, events, people or fundamentals. Public activation remains gated by
+  field-level display/cache/redistribution rights and live-session validation.
+
+## 2026-10-04 — Canonical licensed market data and explainable popularity
+
+- **Status:** Foundation implemented; licensed production adapters pending.
+- **Context:** The home and market pages need replaceable realtime/delayed providers, reliable
+  freshness, popular-stock ranking, events and public businessperson data without coupling UI to a
+  vendor or misrepresenting financial/person data.
+- **Decision:** Put licensed provider SDKs behind canonical market-data adapters and expose only
+  InvestIQ REST/WebSocket contracts. Stamp every value with source, market/received time, delay and
+  freshness; reconcile stream gaps with REST snapshots. Rank popular stocks from privacy-safe
+  InvestIQ engagement plus normalized market activity and show human-readable reason codes. Treat
+  matched volume as two-sided; show active buy/sell only when the provider defines it. For people,
+  minimize public professional/holding fields and label the computed metric “estimated listed-equity
+  value,” never total net worth.
+- **Consequences:** Production launch is gated by field-level storage/display/redistribution rights.
+  A provider can be replaced per data class without changing domain/UI contracts, but failover may
+  occur only between semantically compatible feeds. Engagement needs retention and anti-abuse
+  controls; people imagery and holdings need source dates and usage rights. The full specification is
+  `docs/plan/home-market-pages.md`.
+- **Refines:** “Evidence-based market community as the next product phase” below. The MVP baseline
+  remains licensed EOD/delayed data, while the canonical transport may accept realtime data earlier
+  when rights and budget are approved; a professional tick-by-tick board remains deferred.
+
 ## 2026-10-04 — Evidence-based market community as the next product phase
 
 - **Status:** Accepted as roadmap; not implemented.

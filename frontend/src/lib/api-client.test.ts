@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 
-import { getNews, getNewsArticle } from "@/lib/api-client";
+import { getMarketInstruments, getNews, getNewsArticle } from "@/lib/api-client";
 
 afterEach(() => {
   vi.unstubAllGlobals();
@@ -28,5 +28,50 @@ describe("news API client", () => {
     vi.stubGlobal("fetch", vi.fn().mockResolvedValue(new Response(null, { status: 503 })));
 
     await expect(getNewsArticle("article-id")).rejects.toThrow("InvestIQ API returned 503");
+  });
+
+  it("supports a short timeout for optional news blocks", async () => {
+    const fetchMock = vi.fn().mockResolvedValue(new Response(JSON.stringify({ data: [] }), { status: 200 }));
+    vi.stubGlobal("fetch", fetchMock);
+
+    await getNews(new URLSearchParams({ limit: "3" }), 800);
+
+    expect(fetchMock).toHaveBeenCalledWith(
+      "http://localhost:8000/api/v1/news?limit=3",
+      expect.objectContaining({
+        next: { revalidate: 30 },
+        signal: expect.any(AbortSignal),
+      }),
+    );
+  });
+});
+
+describe("market API client compatibility", () => {
+  it("falls back only when an older backend rejects the VN30 sort contract", async () => {
+    const legacyPayload = {
+      data: [{ symbol: "FPT", candles: [] }],
+      pagination: {
+        next_cursor: null,
+        has_more: false,
+        limit: 15,
+        total_items: 1,
+      },
+      meta: {},
+    };
+    const fetchMock = vi.fn()
+      .mockResolvedValueOnce(new Response(null, { status: 422 }))
+      .mockResolvedValueOnce(new Response(JSON.stringify(legacyPayload), { status: 200 }));
+    vi.stubGlobal("fetch", fetchMock);
+    const query = new URLSearchParams({ sort: "vn30", direction: "desc", limit: "15" });
+
+    const result = await getMarketInstruments(query);
+
+    expect(fetchMock).toHaveBeenNthCalledWith(
+      2,
+      "http://localhost:8000/api/v1/market/instruments?sort=matched_value&direction=desc&limit=15",
+      { next: { revalidate: 5 } },
+    );
+    expect(result.data[0].is_vn30).toBe(false);
+    expect(result.pagination).toMatchObject({ previous_cursor: null, page: 1, total_pages: 1 });
   });
 });

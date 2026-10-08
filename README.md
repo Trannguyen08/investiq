@@ -9,7 +9,7 @@ baseline is runnable; most finance and ML feature modules remain intentional pla
 | --- | --- | --- |
 | `nginx` | Public reverse proxy for the UI, API, and WebSockets | Host port `HTTP_PORT` |
 | `frontend` | Next.js standalone server | Internal port 3000 |
-| `backend` | FastAPI application and health endpoints | Internal port 8000 |
+| `backend` | FastAPI application, health endpoints, and isolated market-provider egress | Internal port 8000 |
 | `db` | PostgreSQL persistence | Internal only |
 | `redis` | Cache plus Celery broker/result backend | Internal only |
 | `celery-worker` | Asynchronous task execution | Internal only |
@@ -45,8 +45,102 @@ Redis databases 1 and 2 for delivery/results; application caching uses Redis dat
 6. Stop containers with `docker compose down`. Add `--volumes` only when intentionally deleting the
    local PostgreSQL and Redis data.
 
+All Compose services use Docker's `json-file` log driver with `max-size=10m` and `max-file=3`.
+This caps Docker-managed logs at approximately 30 MB per container. The setting takes effect when a
+container is created or recreated; it does not retroactively change an existing container.
+
 Liveness is available at `/healthz` inside the backend container; `/readyz` verifies PostgreSQL and
 Redis without returning connection details.
+
+## Home and market center
+
+The home dashboard and `/market` center are implemented with stable `/market/stocks`,
+`/market/watchlist`, `/market/indices`, `/market/events`, and `/market/people` routes. Legacy
+`/market?tab=...` links redirect without dropping filters. Public FastAPI routes live under
+`/api/v1/market`; the versioned snapshot/quote stream is `/ws/v1/market`. PostgreSQL migration
+`0011_market_foundation` adds canonical instrument/candle,
+event, public professional/holding, privacy-bounded engagement, and private watchlist storage.
+Public market read models use a bounded Redis cache; watchlist traffic crosses the authenticated
+Next.js BFF and remains `private, no-store`.
+
+The dark navy Home and Market experience defaults to beginner language: a one-sentence conclusion,
+VN-Index line chart, explicitly derived sentiment gauge, breadth/liquidity/foreign-flow explanations,
+five-color Vietnamese price legend, learning path, glossary, and source/delay disclaimer. Market adds
+clickable Home/Market sector heatmaps sized by absolute weighted daily movement, relative
+sector-strength bars, explained top lists, a 15-row VN30-first simplified table, a right-hand stock
+drawer, database-backed news from the latest 24 hours, and an explicit latest-data timestamp.
+Sector tiles, breadth, liquidity, and foreign-flow totals come from the bounded
+`/api/v1/market/sectors` aggregate over the provider's complete snapshot; the stock table remains
+independently paginated and does not truncate sector member counts.
+The stock screener applies URL-addressable daily-change, liquidity, market-cap, volume-baseline, and
+VN30 filters to the complete provider snapshot before cursor pagination. Practical preset links show
+their numeric thresholds directly, while an accessible URL-backed comparison dialog loads charts and
+fundamentals for up to three replaceable symbols without turning unavailable ratios into zero. Its AI
+outlook remains explicitly unavailable until a validated prediction model is active. Home adds an observed-data-only daily focus block, while
+the shared status bar explains whether the displayed snapshot is inside or outside trading hours.
+`mode=advanced` reveals candlesticks and detailed financial columns. Each stock also links to
+`/market/stocks/<symbol>` for a two-column range-based OHLCV and market/fundamental metrics view.
+
+Market data fails closed by default. For local UI development only, set:
+
+```env
+MARKET_DATA_MODE=fixture
+MARKET_PUBLIC_CACHE_SECONDS=30
+```
+
+The fixture is deterministic and every page labels it **Dữ liệu minh họa**. Keep
+`MARKET_DATA_MODE=disabled` in shared or production environments until a licensed provider contract,
+field catalog, credentials, redistribution rights, and SLA are approved. The provider port keeps the
+domain, API, cache, WebSocket, and UI independent from SSI, DNSE, FiinGroup, or another approved feed.
+
+For local evaluation with source-delayed real quotes and daily/intraday OHLCV, use Vnstock. A key is
+optional for Guest access and remains server-only when supplied:
+
+```env
+MARKET_DATA_MODE=vnstock
+VNSTOCK_API_KEY=
+VNSTOCK_REFRESH_SECONDS=60
+VNSTOCK_CANDLE_CACHE_SECONDS=300
+VNSTOCK_FUNDAMENTAL_CACHE_SECONDS=3600
+```
+
+The adapter uses Vnstock's unified API with KBS quotes/OHLCV and financial ratios plus VCI industry
+classification. When KBS resets its board to zero before a new session, one VCI batch supplies the
+latest completed close and preceding reference instead of presenting a fabricated 0% move or issuing
+per-symbol history requests. It caches bounded snapshots and per-symbol fundamentals, converts
+Vnstock quota exits into ordinary provider failures, and falls back to a clearly labeled stale
+snapshot. Vnstock is a connector to third-party sources, not a grant to redistribute
+exchange data. Treat this mode as local/private evaluation until Vnstock and the original source
+confirm public display, caching, and redistribution rights in writing.
+
+The TCBS iFlash adapter is ready behind the same provider port. After TCBS confirms display/cache
+rights, use one of the following server-only credential modes:
+
+```env
+MARKET_DATA_MODE=tcbs
+MARKET_PUBLIC_CACHE_SECONDS=5
+
+# Preferred when TCBS has already issued a token:
+TCBS_ACCESS_TOKEN=replace-with-current-access-token
+
+# Or exchange a key once at startup with the current Smart OTP:
+TCBS_API_KEY=replace-with-api-key
+TCBS_OTP=replace-with-current-smart-otp
+```
+
+TCBS documents an eight-hour maximum token lifetime and no refresh token. An API key alone therefore
+cannot renew access unattended: replace `TCBS_ACCESS_TOKEN`, or supply a new one-time `TCBS_OTP` and
+restart before expiry. The backend reuses the issued token in memory, never exposes it to the browser,
+and provides bounded REST retries/circuit breaking plus one upstream index WebSocket with TCBS text
+heartbeat and reconnect. TCBS currently supplies prices, security metadata, foreign quantities,
+current-session trade history, and index streaming; Events, People, fundamentals, and multi-session
+daily candles remain empty or partial until a licensed source for those data classes is connected.
+
+The public TCBS documentation reviewed on 2026-10-07 does not provide an explicit grant to redistribute,
+cache, or display iFlash data to third-party users. Public deployment therefore remains blocked until
+TCBS confirms those rights in writing. Render is technically compatible with the long-running backend,
+worker, and outbound WebSocket; Vercel should be limited to the Next.js frontend for this topology.
+No deployment is part of the repository setup documented here.
 
 ## Stock news MVP
 
@@ -162,4 +256,9 @@ The next product phase is defined in the
 [market and investment-community roadmap](docs/plan/community-market-roadmap.md): licensed market
 data, private watchlists, structured evidence-backed theses, outcome-based reputation, moderation,
 and source-linked AI assistance. It targets a differentiated MVP in 12 weeks and public beta in 28
-weeks; implementation has not started.
+weeks. The implementation-ready [home and market pages plan](docs/plan/home-market-pages.md) defines
+the home dashboard, five `/market` tabs, provider strategy, canonical data model, REST/WebSocket
+contracts, caching, freshness, privacy, acceptance criteria, and a 12-week delivery sequence.
+The local vertical slice is implemented with a clearly labeled deterministic fixture and private
+watchlists. Production market data, ingestion/reconciliation jobs, and provider failover remain
+gated by licensing, credentials, redistribution approval, and source-specific field mapping.
