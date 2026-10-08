@@ -90,6 +90,23 @@ FEATURES: dict[str, FeatureTests] = {
             "app.infrastructure.external.tcbs_market_provider",
         ),
     ),
+    "paper-trading": FeatureTests(
+        unit_paths=("tests/unit/portfolio",),
+        integration_paths=(
+            "tests/integration/api/test_paper_portfolio_api.py",
+            "tests/integration/db/test_paper_portfolio_repository.py",
+        ),
+        unit_coverage_modules=(
+            "app.application.use_cases.portfolio",
+            "app.domain.entities.portfolio",
+            "app.domain.entities.holding",
+        ),
+        integration_coverage_modules=(
+            "app.api.v1.portfolio",
+            "app.infrastructure.db.repositories.sql_portfolio_repository",
+            "app.schemas.portfolio",
+        ),
+    ),
 }
 
 

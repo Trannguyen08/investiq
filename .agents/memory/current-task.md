@@ -1,5 +1,36 @@
 # Current Task
 
+## Beginner paper-trading portfolio - 2026-10-08 (complete; DB execution pending)
+
+Build an authenticated, private paper-trading experience for beginners. Each user receives one
+VND simulation account with a documented starting balance; market orders fill immediately at the
+latest observed provider price, never place a broker order, and record immutable execution/source
+metadata plus idempotency. Show cash, invested cost, marked market value, realized/unrealized and
+total profit/loss, holdings, bounded trade history, and a portfolio value curve. Add beginner-facing
+market opportunities and risk notices derived only from observed price/liquidity plus the existing
+news analysis, with explicit unavailable/educational labels instead of invented forecasts. Protect
+all personalized API/cache paths through the existing BFF session and database ownership boundary.
+Add a forward-only migration, domain/application/repository/API/UI coverage, a delivery plan, and
+focused validation. Production deployment remains gated by an explicit target environment and by
+market-data display/redistribution rights.
+
+Complete: `/portfolio` now provides one private 100-million-VND simulation account per authenticated
+user, immediate idempotent buy/sell fills at the latest observed canonical price, weighted-average
+cost, modeled fees/tax, immutable history, cash/current/realized/unrealized totals, per-holding price
+history, an estimated 90-session curve, observed gainers, positive tagged news, and deterministic
+stale/decline/concentration notices. Missing quotes produce partial/null valuations instead of zero.
+Migration `0012_paper_trading` uses row locks and database constraints; `/portfolio-api` applies CSRF
+and server-held credentials while FastAPI re-verifies the BFF secret, active session, and user scope.
+The delivery and follow-up plan is `docs/plan/paper-trading.md`.
+
+Validation: all 115 backend tests passed with 13 environment-dependent skips; full Ruff passed.
+The paper-trading feature runner passed two unit tests at 85.41% branch coverage and three API
+integration tests; its two PostgreSQL repository tests were skipped because `TEST_DATABASE_URL` is
+unset and Docker Desktop is stopped. Targeted strict mypy passed seven core files. All 51 frontend
+tests, ESLint, TypeScript, Compose rendering, and `git diff --check` passed. No production build,
+migration execution, browser smoke, or deployment ran; an explicit environment plus approved market
+data rights are still required.
+
 ## Comparison metric legibility - 2026-10-08 (complete)
 
 Fix the stock-comparison dialog's cramped metric layout: each label/value pair must occupy a clearly

@@ -26,6 +26,7 @@ from app.api.v1.market_data import (
     stream_router as market_stream_router,
 )
 from app.api.v1.news import router as news_router
+from app.api.v1.portfolio import router as paper_portfolio_router
 from app.application.use_cases.auth.auth_service import AuthError
 from app.application.use_cases.market_data.errors import MarketDataUnavailable
 from app.infrastructure.config.logging_config import configure_logging
@@ -56,15 +57,27 @@ app.include_router(auth_router)
 app.include_router(market_router)
 app.include_router(market_stream_router)
 app.include_router(watchlist_router)
+app.include_router(paper_portfolio_router)
 
 
 def _request_id(request: Request) -> str:
     return str(getattr(request.state, "request_id", "unknown"))
 
 
+def _private_error_headers(request: Request) -> dict[str, str]:
+    private_prefixes = (
+        "/api/v1/auth",
+        "/api/v1/admin/users",
+        "/api/v1/watchlists",
+        "/api/v1/paper-portfolio",
+    )
+    return {"Cache-Control": "no-store"} if request.url.path.startswith(private_prefixes) else {}
+
+
 @app.exception_handler(HTTPException)
 async def http_error(request: Request, exc: HTTPException) -> JSONResponse:
     code = "NOT_FOUND" if exc.status_code == 404 else "REQUEST_REJECTED"
+    headers = {**dict(exc.headers or {}), **_private_error_headers(request)}
     return JSONResponse(
         status_code=exc.status_code,
         content={
@@ -75,7 +88,7 @@ async def http_error(request: Request, exc: HTTPException) -> JSONResponse:
                 "details": [],
             }
         },
-        headers=exc.headers,
+        headers=headers,
     )
 
 
@@ -95,6 +108,7 @@ async def validation_error(request: Request, exc: RequestValidationError) -> JSO
                 "details": details,
             }
         },
+        headers=_private_error_headers(request),
     )
 
 

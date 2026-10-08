@@ -3,6 +3,26 @@
 Record durable decisions in reverse chronological order. Do not record routine implementation
 details.
 
+## 2026-10-08 — Private immediate-fill paper trading for beginners
+
+- **Status:** Accepted and implemented as an educational simulation.
+- **Context:** Beginners need a safe way to practice buying, holding, reviewing performance, and
+  selling without real money. The current provider contract supplies observed prices and daily
+  candles but not an exchange order book, broker account, settlement engine, or active buy/sell-side
+  classifications.
+- **Decision:** Give each authenticated user one private 100-million-VND account. Simulated market
+  orders fill immediately at the latest observed canonical price and persist immutable source/time/
+  delay metadata. Serialize cash and holding mutations with a PostgreSQL row lock, require a
+  per-account idempotency key, use weighted-average cost including a disclosed 0.15% modeled fee,
+  and record a separate 0.1% modeled sell tax. Protect browser access through the existing
+  CSRF-checked BFF plus verified active bearer session. Derive only observable risk notices and show
+  null/partial valuation when a price is unavailable; do not invent active buy/sell counts, future
+  news, broker matching, or personalized advice.
+- **Consequences:** Users can practice and retain an auditable ledger without exposing portfolio data
+  to public caches or logs. The experience is not exchange-identical: partial fills, limit/ATO/ATC
+  orders, settlement, dividends, splits, margin, short sales, deposits, and broker connectivity need
+  separately specified future work. Public operation still requires approved market-data rights.
+
 ## 2026-10-07 — Vnstock is a source-delayed evaluation adapter
 
 - **Status:** Accepted for local/private evaluation; public redistribution remains gated.

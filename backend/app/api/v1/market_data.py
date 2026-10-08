@@ -106,6 +106,11 @@ def _provider() -> IMarketProvider:
     raise RuntimeError("Market data is disabled until a licensed provider is configured")
 
 
+def get_market_provider() -> IMarketProvider:
+    """Expose the configured canonical provider to adjacent authenticated use cases."""
+    return _provider()
+
+
 async def start_market_provider() -> None:
     if settings.market_data_mode == "tcbs":
         provider = _provider()

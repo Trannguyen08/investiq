@@ -224,4 +224,7 @@ backend/app/infrastructure/ml/artifacts/*
 !backend/app/infrastructure/ml/artifacts/.gitkeep
 DEVELOPMENT_GUIDE.md
 docs/plan/
+!docs/plan/
+docs/plan/*
+!docs/plan/paper-trading.md
 docs/tutorial/

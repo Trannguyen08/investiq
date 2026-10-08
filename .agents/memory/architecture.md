@@ -4,9 +4,9 @@
 
 The monorepo has a runnable container and delivery baseline. FastAPI health/status endpoints, the
 Next.js shell, Celery configuration, Docker Compose, Nginx, and CI/CD are implemented. Six-source
-Vietnamese stock news, a fixture-backed home/market vertical slice, and a credential-gated TCBS
-iFlash adapter are implemented; most
-portfolio and ML modules remain placeholders. End-user authentication is implemented behind a
+Vietnamese stock news, a fixture-backed home/market vertical slice, a credential-gated TCBS
+iFlash adapter, and a private paper-trading portfolio are implemented; ML modules remain placeholders.
+End-user authentication is implemented behind a
 fail-closed feature flag and remains separate from the existing Admin News session boundary.
 
 ## Repository layout
@@ -130,6 +130,13 @@ investiq/
 - Private watchlists use the existing Next.js server-held user session. The browser calls the
   same-origin `/market-api/watchlists` BFF; FastAPI independently verifies the BFF secret, bearer
   session, active user, and row ownership. Personalized responses are never shared-cacheable.
+- Private paper trading reuses that BFF/session boundary at `/portfolio-api` and
+  `/api/v1/paper-portfolio`. PostgreSQL migration `0012_paper_trading` owns one account per user,
+  row-locked cash and holdings, and immutable provider-stamped fills with a per-account idempotency
+  key. Buy cost basis includes the modeled fee; sales allocate weighted-average basis and persist
+  modeled fee/tax plus realized profit or loss. Dashboard reads mark holdings against the canonical
+  market provider, return null/partial valuation when a price is unavailable, and derive bounded
+  current-holdings history and educational notices without shared caching or personal-data logging.
 - The Next.js Admin News workspace uses a server-validated, HMAC-signed HttpOnly session cookie.
   Browser actions execute as server actions, while the FastAPI operations token remains server-only;
   both layers fail closed when their independent runtime secrets are absent.
@@ -193,6 +200,12 @@ documents no refresh token, so unattended key-only renewal is impossible. Licens
 provider-level sequence reconciliation, secondary-provider failover and Events/People sources remain
 future work. Every market response carries provider, market time, received time, delay class,
 freshness and partial state.
+
+`docs/plan/paper-trading.md` defines the implemented beginner simulation boundary. It deliberately
+uses immediate fills at the latest observed provider price rather than claiming exchange matching.
+Production activation remains gated by authentication configuration, migration `0012`, and approved
+market-data display/redistribution rights; limit orders, settlement, corporate actions, margin, short
+sales, and broker connectivity remain outside this slice.
 
 This file is the canonical architectural overview. Every path or boundary change updates this file
 and all affected references in the same task, following `.agents/rules/project-structure.md`.

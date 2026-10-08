@@ -7,8 +7,8 @@
 - Application type: FastAPI and Next.js monorepo
 - Status: Runnable operational baseline with six-source stock news, feature-flagged end-user
   authentication, a beginner-first home/market vertical slice, a source-delayed Vnstock evaluation
-  adapter, and a credential-gated TCBS iFlash adapter; production market redistribution and most
-  portfolio/ML modules remain gated or placeholders.
+  adapter, a credential-gated TCBS iFlash adapter, and an authenticated beginner paper-trading
+  vertical slice; production market redistribution and ML modules remain gated or placeholders.
 
 ## Confirmed stack
 
@@ -79,6 +79,13 @@
   Volume-baseline controls are hidden when the active source does not provide that field. Home also
   derives a daily focus block only from observed breadth, sectors, provider events, and database news;
   the shared status bar explains the current trading-session context.
+- `/portfolio` is an authenticated paper-trading workspace with one private 100-million-VND
+  simulation account per user. Migration `0012_paper_trading` stores row-locked cash, weighted-average
+  holdings, and immutable idempotent fills. The API/UI expose modeled fees/tax, current and realized/
+  unrealized performance, bounded price/equity history, observed gainers, positive tagged news, and
+  deterministic risk notices without placing broker orders or presenting predictions as facts. The
+  same-origin `/portfolio-api` BFF enforces CSRF while FastAPI independently verifies the BFF secret,
+  bearer session, active user, and resource ownership. See `docs/plan/paper-trading.md`.
 
 ## Local development
 

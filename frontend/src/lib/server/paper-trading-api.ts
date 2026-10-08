@@ -1,0 +1,21 @@
+import "server-only";
+
+import { authenticatedSession } from "@/lib/server/user-auth";
+
+const allowedPath = /^(?:|orders)$/;
+
+export async function paperTradingRequest(path: string, init?: RequestInit) {
+  if (!allowedPath.test(path)) throw new Error("Invalid paper-trading API path");
+  const session = await authenticatedSession();
+  const base = process.env.API_INTERNAL_BASE_URL ?? "http://localhost:8000/api";
+  return fetch(`${base}/v1/paper-portfolio${path ? `/${path}` : ""}`, {
+    ...init,
+    cache: "no-store",
+    headers: {
+      "Content-Type": "application/json",
+      "X-BFF-Secret": process.env.AUTH_BFF_SECRET ?? "",
+      Authorization: `Bearer ${session.value.credentials.access_token}`,
+      ...(init?.headers ?? {}),
+    },
+  });
+}
