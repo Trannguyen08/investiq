@@ -34,7 +34,7 @@ investiq/
 |   |-- nginx/nginx.conf      # Public reverse proxy and structured access logs
 |   `-- scripts/              # Operational scripts
 |-- .github/workflows/        # Service CI and staging/production delivery
-|-- test-results/             # Ignored local JUnit and feature coverage reports
+|-- test-results/             # Ignored local Allure JSON plus single-file HTML reports
 |-- DEVELOPMENT_GUIDE.md      # Docker, ports, and feature-test command reference
 `-- docker-compose.yml        # Ten-service topology
 ```
@@ -86,8 +86,9 @@ investiq/
   public people/holding snapshots, engagement retention, and current private watchlists.
 - Vnstock is a local/private evaluation adapter behind the same port. It uses source-delayed KBS
   reference/quote/OHLCV data plus VCI industry labels, normalizes equity candles to VND, caches
-  snapshots and candles, and lazily loads per-symbol KBS P/E, P/B, EPS, and ROE for stock detail with
-  a bounded one-hour cache and null fallback. A fully reset pre-open KBS board is replaced by one
+  snapshots and candles, and lazily loads per-symbol KBS P/E, P/B, EPS, and ROE for stock detail or
+  the portfolio's visible 15-row page with a bounded one-hour cache, three-call concurrency ceiling,
+  and null fallback. A fully reset pre-open KBS board is replaced by one
   VCI batch containing the latest completed close and preceding reference, so sector moves and
   breadth remain meaningful without per-symbol history fan-out. Vnstock quota `SystemExit` signals
   are normalized as provider failures. It serves labeled stale price data after a transient upstream
@@ -131,14 +132,19 @@ investiq/
   same-origin `/market-api/watchlists` BFF; FastAPI independently verifies the BFF secret, bearer
   session, active user, and row ownership. Personalized responses are never shared-cacheable.
 - Private paper trading reuses that BFF/session boundary at `/portfolio-api` and
-  `/api/v1/paper-portfolio`. PostgreSQL migration `0012_paper_trading` owns one account per user,
-  row-locked cash and holdings, and immutable provider-stamped fills with a per-account idempotency
-  key. Buy cost basis includes the modeled fee; sales allocate weighted-average basis and persist
+  `/api/v1/paper-portfolio`. PostgreSQL migrations `0012_paper_trading` and `0013_paper_orders` own
+  one account per user, row-locked cash/share validation, durable audit orders, and immutable
+  provider-stamped fills with a per-account idempotency key. Buy cost basis includes the modeled fee;
+  sales allocate weighted-average basis and persist
   modeled fee/tax plus realized profit or loss. Dashboard reads mark holdings against the canonical
   market provider, return null/partial valuation when a price is unavailable, and derive bounded
   current-holdings history and educational notices without shared caching or personal-data logging.
-  The UI reuses the advanced market data fields as a searchable, paged trade picker; row actions open
-  a quantity-confirmation ticket, and a separate private table manages owned positions.
+  The UI reuses the advanced market data fields as a searchable, paged trade picker. The board,
+  stock detail, and owned-position table open one observed-price-and-quantity dialog. Accepted
+  practice orders automatically fill in full at the latest authoritative observed price whenever
+  provider freshness is acceptable; closed-session practice uses the latest valid trading session.
+  Legacy pending/open rows are reconciled during dashboard reads, and the UI explains that real
+  exchange execution can differ; partial fills remain out of scope for the simulator.
 - The Next.js Admin News workspace uses a server-validated, HMAC-signed HttpOnly session cookie.
   Browser actions execute as server actions, while the FastAPI operations token remains server-only;
   both layers fail closed when their independent runtime secrets are absent.
@@ -165,8 +171,11 @@ investiq/
   commit/version tags in addition to convenience tags.
 - Deployment runs Compose on environment-specific self-hosted Linux runners. GitHub environments own
   runtime secrets and production approval policy.
-- Backend feature tests are registered in `backend/tests/run_feature_tests.py`; generated JUnit and
-  branch-coverage reports are written by feature and test level under ignored `test-results/` paths.
+- Backend feature tests are registered in `backend/tests/run_feature_tests.py`; branch coverage is
+  printed in the terminal, Python `allure-pytest` writes JSON by feature and level, and the pinned
+  official Allure Commandline creates a sibling single-file `allure-report/index.html` after passed
+  or failed suites. Both stay under ignored `test-results/` paths. Legacy `pytest-html`, JUnit,
+  coverage XML, and coverage Markdown files are not generated.
 
 ## Structure maintenance
 
@@ -203,11 +212,15 @@ provider-level sequence reconciliation, secondary-provider failover and Events/P
 future work. Every market response carries provider, market time, received time, delay class,
 freshness and partial state.
 
+Market-data tasks follow `.agents/rules/market-data-freshness.md`: agents compare runtime timestamps
+with the latest valid `Asia/Ho_Chi_Minh` trading session, use bounded revalidation when stale, and do
+not fabricate weekend/holiday candles to match the current calendar date.
+
 `docs/plan/paper-trading.md` defines the implemented beginner simulation boundary. It deliberately
-uses immediate fills at the latest observed provider price rather than claiming exchange matching.
-Production activation remains gated by authentication configuration, migration `0012`, and approved
-market-data display/redistribution rights; limit orders, settlement, corporate actions, margin, short
-sales, and broker connectivity remain outside this slice.
+uses automatic full fills at a qualifying observed provider price and discloses that this is not
+exchange order-book matching. Production activation remains gated by authentication configuration,
+migrations through `0013`, and approved market-data display/redistribution rights; partial fills,
+settlement, corporate actions, margin, short sales, and broker connectivity remain outside this slice.
 
 This file is the canonical architectural overview. Every path or boundary change updates this file
 and all affected references in the same task, following `.agents/rules/project-structure.md`.

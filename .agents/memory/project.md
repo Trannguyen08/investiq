@@ -80,14 +80,20 @@
   derives a daily focus block only from observed breadth, sectors, provider events, and database news;
   the shared status bar explains the current trading-session context.
 - `/portfolio` is an authenticated paper-trading workspace with one private 100-million-VND
-  simulation account per user. Migration `0012_paper_trading` stores row-locked cash, weighted-average
-  holdings, and immutable idempotent fills. The API/UI expose modeled fees/tax, current and realized/
+  simulation account per user. Migrations `0012_paper_trading` and `0013_paper_orders` store
+  row-locked cash/share validation, durable audit orders, weighted-average holdings, and immutable
+  idempotent fills. The API/UI expose modeled fees/tax, current and realized/
   unrealized performance, bounded price/equity history, observed gainers, positive tagged news, and
   deterministic risk notices without placing broker orders or presenting predictions as facts. Its
-  advanced market table now starts confirmed buy/sell tickets per row, with sell limited to owned
-  symbols, while a separate position table manages purchased stocks and their observed performance. The
+  advanced market table, stock detail, and owned-position table use one automatic observed-price
+  dialog; accepted practice trades fill in full and explain how real execution differs. Sell appears
+  only for available owned quantities. The visible 15-row market page lazily enriches P/E and P/B
+  through bounded detail calls, while a separate position table manages purchased stocks. The
   same-origin `/portfolio-api` BFF enforces CSRF while FastAPI independently verifies the BFF secret,
   bearer session, active user, and resource ownership. See `docs/plan/paper-trading.md`.
+- Market-data work must follow `.agents/rules/market-data-freshness.md`: verify runtime provider
+  timestamps against the latest valid Vietnam trading session, refresh only bounded relevant caches,
+  and never manufacture calendar-day candles for weekends or holidays.
 
 ## Local development
 
@@ -106,7 +112,8 @@
 - Keep `frontend/package-lock.json` synchronized with `package.json` and backend requirement pins
   synchronized with the Docker image.
 - Use `DEVELOPMENT_GUIDE.md` for Docker/port commands and `backend/tests/run_feature_tests.py` for
-  per-feature unit, integration, and branch-coverage reports.
+  per-feature unit/integration Allure JSON, automatic single-file Allure HTML, and terminal branch
+  coverage.
 - Follow `.agents/rules/project-structure.md` for every path or boundary change.
 
 ## Admin account management

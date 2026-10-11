@@ -14,8 +14,10 @@ class StrictModel(BaseModel):
 
 class PlacePaperOrderRequest(StrictModel):
     side: Literal["buy", "sell"]
+    order_type: Literal["LO"] = "LO"
     symbol: str = Field(min_length=1, max_length=24, pattern=r"^[A-Za-z0-9._-]+$")
     quantity: int = Field(ge=1, le=1_000_000)
+    limit_price: str = Field(pattern=r"^(?:0|[1-9][0-9]{0,23})(?:\.[0-9]{1,8})?$")
 
 
 class PaperAccountResponse(StrictModel):
@@ -23,6 +25,8 @@ class PaperAccountResponse(StrictModel):
     currency: Literal["VND"]
     starting_cash: str
     cash_balance: str
+    available_cash: str
+    reserved_cash: str
     invested_cost: str
     market_value: str | None
     total_value: str | None
@@ -52,6 +56,7 @@ class PaperHoldingResponse(StrictModel):
     exchange: str
     sector: str | None
     quantity: int
+    available_quantity: int
     average_cost: str
     total_cost_basis: str
     current_price: str | None
@@ -83,6 +88,29 @@ class PaperTradeResponse(StrictModel):
     created_at: datetime
 
 
+class PaperOrderResponse(StrictModel):
+    id: str
+    side: Literal["buy", "sell"]
+    order_type: Literal["LO"]
+    status: Literal["pending", "open", "filled", "cancelled", "rejected", "expired"]
+    symbol: str
+    name: str
+    exchange: str
+    quantity: int
+    filled_quantity: int
+    limit_price: str
+    reserved_cash: str
+    reserved_quantity: int
+    provider: str
+    price_at: datetime
+    received_at: datetime
+    delay_class: str
+    created_at: datetime
+    updated_at: datetime
+    expires_at: datetime
+    cancelled_at: datetime | None
+
+
 class PaperNoticeResponse(StrictModel):
     level: Literal["info", "warning"]
     symbol: str
@@ -104,7 +132,7 @@ class PaperAssumptionsResponse(StrictModel):
     starting_cash: str
     broker_fee_rate: str
     sell_tax_rate: str
-    fill_model: Literal["latest_observed_price"]
+    fill_model: Literal["automatic_latest_observed_price"]
     max_holdings: int
     disclaimer: str
 
@@ -123,6 +151,7 @@ class PaperMarketMetaResponse(StrictModel):
 class PaperDashboardResponse(StrictModel):
     account: PaperAccountResponse
     holdings: list[PaperHoldingResponse]
+    orders: list[PaperOrderResponse]
     trades: list[PaperTradeResponse]
     equity_curve: list[EquityPointResponse]
     equity_curve_method: Literal["current_holdings_replay"]
@@ -133,5 +162,11 @@ class PaperDashboardResponse(StrictModel):
 
 
 class PlacePaperOrderResponse(StrictModel):
-    trade: PaperTradeResponse
+    order: PaperOrderResponse
+    trade: PaperTradeResponse | None
+    data: PaperDashboardResponse
+
+
+class CancelPaperOrderResponse(StrictModel):
+    order: PaperOrderResponse
     data: PaperDashboardResponse

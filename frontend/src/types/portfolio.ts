@@ -3,6 +3,8 @@ export type PaperAccount = {
   currency: "VND";
   starting_cash: string;
   cash_balance: string;
+  available_cash: string;
+  reserved_cash: string;
   invested_cost: string;
   market_value: string | null;
   total_value: string | null;
@@ -24,6 +26,7 @@ export type PaperHolding = {
   exchange: string;
   sector: string | null;
   quantity: number;
+  available_quantity: number;
   average_cost: string;
   total_cost_basis: string;
   current_price: string | null;
@@ -55,6 +58,31 @@ export type PaperTrade = {
   created_at: string;
 };
 
+export type PaperOrderStatus = "pending" | "open" | "filled" | "cancelled" | "rejected" | "expired";
+
+export type PaperOrder = {
+  id: string;
+  side: "buy" | "sell";
+  order_type: "LO";
+  status: PaperOrderStatus;
+  symbol: string;
+  name: string;
+  exchange: string;
+  quantity: number;
+  filled_quantity: number;
+  limit_price: string;
+  reserved_cash: string;
+  reserved_quantity: number;
+  provider: string;
+  price_at: string;
+  received_at: string;
+  delay_class: string;
+  created_at: string;
+  updated_at: string;
+  expires_at: string;
+  cancelled_at: string | null;
+};
+
 export type PaperNotice = {
   level: "info" | "warning";
   symbol: string;
@@ -75,6 +103,7 @@ export type PaperOpportunity = {
 export type PaperDashboard = {
   account: PaperAccount;
   holdings: PaperHolding[];
+  orders: PaperOrder[];
   trades: PaperTrade[];
   equity_curve: { timestamp: string; value: string }[];
   equity_curve_method: "current_holdings_replay";
@@ -84,7 +113,7 @@ export type PaperDashboard = {
     starting_cash: string;
     broker_fee_rate: string;
     sell_tax_rate: string;
-    fill_model: "latest_observed_price";
+    fill_model: "automatic_latest_observed_price";
     max_holdings: number;
     disclaimer: string;
   };

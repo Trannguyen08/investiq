@@ -1,3 +1,7 @@
+"use client";
+
+import { useState } from "react";
+
 import { formatCompact, formatDecimal } from "@/components/market/formatters";
 import type { MarketCandle } from "@/types/market";
 
@@ -65,13 +69,29 @@ function chartTime(timestamp: string, includeDate: boolean) {
   }).format(new Date(timestamp));
 }
 
+function candleTime(timestamp: string, intraday: boolean) {
+  return new Intl.DateTimeFormat("vi-VN", {
+    timeZone: "Asia/Ho_Chi_Minh",
+    dateStyle: "medium",
+    ...(intraday ? { timeStyle: "short" as const } : {}),
+  }).format(new Date(timestamp));
+}
+
+function candleLabel(item: NumericCandle, intraday: boolean) {
+  const direction = item.close >= item.open ? "tăng" : "giảm";
+  return `${candleTime(item.source.timestamp, intraday)}: mở ${formatDecimal(item.source.open)}, cao ${formatDecimal(item.source.high)}, thấp ${formatDecimal(item.source.low)}, đóng ${formatDecimal(item.source.close)}, khối lượng ${formatCompact(item.source.volume)}, nến ${direction}`;
+}
+
 export function MarketCandlestickChart({
   candles,
   label,
+  explain = false,
 }: {
   candles: MarketCandle[];
   label: string;
+  explain?: boolean;
 }) {
+  const [selectedIndex, setSelectedIndex] = useState<number | null>(null);
   const values = numericCandles(candles);
   if (values.length < 2) {
     return (
@@ -106,80 +126,142 @@ export function MarketCandlestickChart({
   const ma5 = movingAverage(values, 5);
   const ma20 = movingAverage(values, 20);
   const latest = values.at(-1)!;
+  const selected = selectedIndex === null ? null : values[selectedIndex];
+  const displayed = selected ?? latest;
   const gridPrices = Array.from({ length: 5 }, (_, index) => maximum - priceRange * index / 4);
   const labelIndexes = [...new Set([0, Math.floor((values.length - 1) / 3), Math.floor((values.length - 1) * 2 / 3), values.length - 1])];
   const includeDate = values.some((item) => item.source.timestamp.slice(0, 10) !== values[0].source.timestamp.slice(0, 10));
+  const intraday = values.some((item, index) => index > 0
+    && Math.abs(new Date(item.source.timestamp).getTime() - new Date(values[index - 1].source.timestamp).getTime()) < 20 * 60 * 60 * 1000);
+  const changePercent = (displayed.close - displayed.open) / displayed.open * 100;
+  const tooltipSide = selectedIndex !== null && selectedIndex > values.length * 0.66
+    ? "right"
+    : selectedIndex !== null && selectedIndex < values.length * 0.33
+      ? "left"
+      : "center";
 
   return (
     <div className="financial-candlestick-chart">
-      <div className="financial-chart-quote" aria-hidden="true">
-        <span>O <strong>{formatDecimal(latest.source.open)}</strong></span>
-        <span>H <strong>{formatDecimal(latest.source.high)}</strong></span>
-        <span>L <strong>{formatDecimal(latest.source.low)}</strong></span>
-        <span>C <strong>{formatDecimal(latest.source.close)}</strong></span>
-        <span>Vol <strong>{formatCompact(latest.source.volume)}</strong></span>
+      <div className="financial-chart-quote" aria-live="polite">
+        <span>{selected ? candleTime(selected.source.timestamp, intraday) : "Nến mới nhất"}</span>
+        <span>O <strong>{formatDecimal(displayed.source.open)}</strong></span>
+        <span>H <strong>{formatDecimal(displayed.source.high)}</strong></span>
+        <span>L <strong>{formatDecimal(displayed.source.low)}</strong></span>
+        <span>C <strong>{formatDecimal(displayed.source.close)}</strong></span>
+        <span>Vol <strong>{formatCompact(displayed.source.volume)}</strong></span>
       </div>
-      <svg viewBox={`0 0 ${width} ${height}`} role="img" aria-label={`${label}, ${values.length} nến giá xanh đỏ`}>
-        <g className="financial-chart-grid">
-          {gridPrices.map((price) => (
-            <g key={price}>
-              <line x1={left} x2={width - right} y1={priceY(price)} y2={priceY(price)} />
-              <text x={width - right + 10} y={priceY(price) + 4}>{formatDecimal(String(price))}</text>
-            </g>
-          ))}
-          <line x1={left} x2={width - right} y1={volumeBottom} y2={volumeBottom} />
-        </g>
-        <g className="financial-chart-volume">
+      <div className="financial-chart-stage">
+        <svg viewBox={`0 0 ${width} ${height}`} role="img" aria-label={`${label}, ${values.length} nến giá xanh đỏ`}>
+          <g className="financial-chart-grid">
+            {gridPrices.map((price) => (
+              <g key={price}>
+                <line x1={left} x2={width - right} y1={priceY(price)} y2={priceY(price)} />
+                <text x={width - right + 10} y={priceY(price) + 4}>{formatDecimal(String(price))}</text>
+              </g>
+            ))}
+            <line x1={left} x2={width - right} y1={volumeBottom} y2={volumeBottom} />
+          </g>
+          <g className="financial-chart-volume">
+            {values.map((item, index) => (
+              <rect
+                className={item.close >= item.open ? "up" : "down"}
+                key={`volume-${item.source.timestamp}`}
+                x={x(index) - bodyWidth / 2}
+                y={volumeY(item.volume)}
+                width={bodyWidth}
+                height={Math.max(1, volumeBottom - volumeY(item.volume))}
+              />
+            ))}
+          </g>
+          <g className="financial-chart-candles">
+            {values.map((item, index) => {
+              const rising = item.close >= item.open;
+              const top = priceY(Math.max(item.open, item.close));
+              const bottom = priceY(Math.min(item.open, item.close));
+              return (
+                <g className={rising ? "up" : "down"} key={item.source.timestamp}>
+                  <line x1={x(index)} x2={x(index)} y1={priceY(item.high)} y2={priceY(item.low)} />
+                  <rect
+                    x={x(index) - bodyWidth / 2}
+                    y={top}
+                    width={bodyWidth}
+                    height={Math.max(1.5, bottom - top)}
+                    rx="0.7"
+                  />
+                </g>
+              );
+            })}
+          </g>
+          <path className="financial-chart-ma ma-short" d={linePath(ma5, x, priceY)} />
+          <path className="financial-chart-ma ma-long" d={linePath(ma20, x, priceY)} />
+          <line className="financial-chart-current" x1={left} x2={width - right} y1={priceY(latest.close)} y2={priceY(latest.close)} />
+          <g className={latest.close >= latest.open ? "financial-price-tag up" : "financial-price-tag down"}>
+            <rect x={width - right + 4} y={priceY(latest.close) - 12} width={88} height={24} rx="4" />
+            <text x={width - right + 48} y={priceY(latest.close) + 4}>{formatDecimal(latest.source.close)}</text>
+          </g>
+          {selectedIndex !== null && (
+            <line className="financial-chart-crosshair" x1={x(selectedIndex)} x2={x(selectedIndex)} y1={priceTop} y2={volumeBottom} />
+          )}
+          <g className="financial-chart-axis">
+            {labelIndexes.map((index) => (
+              <text key={index} x={x(index)} y={510} textAnchor="middle">
+                {chartTime(values[index].source.timestamp, includeDate)}
+              </text>
+            ))}
+          </g>
+        </svg>
+        <div className="financial-chart-hit-layer">
           {values.map((item, index) => (
-            <rect
-              className={item.close >= item.open ? "up" : "down"}
-              key={`volume-${item.source.timestamp}`}
-              x={x(index) - bodyWidth / 2}
-              y={volumeY(item.volume)}
-              width={bodyWidth}
-              height={Math.max(1, volumeBottom - volumeY(item.volume))}
+            <button
+              type="button"
+              className="financial-chart-hit-target"
+              aria-label={`Xem nến ${candleLabel(item, intraday)}`}
+              key={item.source.timestamp}
+              style={{
+                left: `${(left + slot * index) / width * 100}%`,
+                top: `${priceTop / height * 100}%`,
+                width: `${slot / width * 100}%`,
+                height: `${(volumeBottom - priceTop) / height * 100}%`,
+              }}
+              onMouseEnter={() => setSelectedIndex(index)}
+              onMouseLeave={() => setSelectedIndex(null)}
+              onFocus={() => setSelectedIndex(index)}
+              onBlur={() => setSelectedIndex(null)}
+              onClick={() => setSelectedIndex((current) => current === index ? null : index)}
             />
           ))}
-        </g>
-        <g className="financial-chart-candles">
-          {values.map((item, index) => {
-            const rising = item.close >= item.open;
-            const top = priceY(Math.max(item.open, item.close));
-            const bottom = priceY(Math.min(item.open, item.close));
-            return (
-              <g className={rising ? "up" : "down"} key={item.source.timestamp}>
-                <line x1={x(index)} x2={x(index)} y1={priceY(item.high)} y2={priceY(item.low)} />
-                <rect
-                  x={x(index) - bodyWidth / 2}
-                  y={top}
-                  width={bodyWidth}
-                  height={Math.max(1.5, bottom - top)}
-                  rx="0.7"
-                />
-              </g>
-            );
-          })}
-        </g>
-        <path className="financial-chart-ma ma-short" d={linePath(ma5, x, priceY)} />
-        <path className="financial-chart-ma ma-long" d={linePath(ma20, x, priceY)} />
-        <line className="financial-chart-current" x1={left} x2={width - right} y1={priceY(latest.close)} y2={priceY(latest.close)} />
-        <g className={latest.close >= latest.open ? "financial-price-tag up" : "financial-price-tag down"}>
-          <rect x={width - right + 4} y={priceY(latest.close) - 12} width={88} height={24} rx="4" />
-          <text x={width - right + 48} y={priceY(latest.close) + 4}>{formatDecimal(latest.source.close)}</text>
-        </g>
-        <g className="financial-chart-axis">
-          {labelIndexes.map((index) => (
-            <text key={index} x={x(index)} y={510} textAnchor="middle">
-              {chartTime(values[index].source.timestamp, includeDate)}
-            </text>
-          ))}
-        </g>
-      </svg>
+        </div>
+        {selected && selectedIndex !== null && (
+          <aside
+            className={`financial-chart-tooltip ${tooltipSide}`}
+            style={{ left: `${x(selectedIndex) / width * 100}%` }}
+            aria-label="Thông tin cây nến đang chọn"
+          >
+            <strong>{candleTime(selected.source.timestamp, intraday)}</strong>
+            <dl>
+              <div><dt>Mở</dt><dd>{formatDecimal(selected.source.open)}</dd></div>
+              <div><dt>Cao</dt><dd>{formatDecimal(selected.source.high)}</dd></div>
+              <div><dt>Thấp</dt><dd>{formatDecimal(selected.source.low)}</dd></div>
+              <div><dt>Đóng</dt><dd>{formatDecimal(selected.source.close)}</dd></div>
+              <div><dt>Khối lượng</dt><dd>{formatCompact(selected.source.volume)}</dd></div>
+              <div><dt>Trong nến</dt><dd className={changePercent >= 0 ? "positive" : "negative"}>{changePercent >= 0 ? "+" : ""}{changePercent.toFixed(2)}%</dd></div>
+            </dl>
+          </aside>
+        )}
+      </div>
       <div className="financial-chart-legend">
         <span className="ma-short">MA5 {ma5.at(-1) === null ? "—" : formatDecimal(String(ma5.at(-1)))}</span>
         <span className="ma-long">MA20 {ma20.at(-1) === null ? "—" : formatDecimal(String(ma20.at(-1)))}</span>
         <span>Khối lượng · Asia/Ho_Chi_Minh</span>
       </div>
+      {explain && (
+        <section className="financial-chart-guide" aria-label="Giải thích biểu đồ">
+          <p><i className="candle" aria-hidden="true" /><span><strong>Nến xanh / đỏ:</strong> thân nến nối giá mở và đóng; râu nến cho biết giá cao nhất và thấp nhất trong khoảng thời gian.</span></p>
+          <p><i className="ma-short" aria-hidden="true" /><span><strong>MA5 màu vàng:</strong> giá đóng cửa trung bình của 5 nến gần nhất, phản ứng nhanh với xu hướng ngắn hạn.</span></p>
+          <p><i className="ma-long" aria-hidden="true" /><span><strong>MA20 màu xanh:</strong> giá đóng cửa trung bình của 20 nến gần nhất, mượt hơn để quan sát xu hướng dài hơn.</span></p>
+          <p><i className="current" aria-hidden="true" /><span><strong>Đường ngang nét đứt:</strong> mức giá đóng cửa của nến mới nhất; các cột phía dưới là khối lượng giao dịch của từng nến.</span></p>
+        </section>
+      )}
       <div className="sr-only">
         <table>
           <caption>{label}</caption>

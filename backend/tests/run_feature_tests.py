@@ -1,4 +1,4 @@
-"""Run registered feature suites and write isolated test/coverage reports."""
+"""Run registered feature suites and write Allure results plus a viewable report."""
 
 from __future__ import annotations
 
@@ -112,11 +112,60 @@ FEATURES: dict[str, FeatureTests] = {
 
 def _parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(
-        description="Run one feature's tests and generate JUnit plus coverage reports.",
+        description="Run one feature's tests and generate terminal coverage plus Allure reports.",
     )
     parser.add_argument("feature", choices=sorted(FEATURES))
     parser.add_argument("suite", choices=("unit", "integration", "all"))
     return parser.parse_args()
+
+
+def _allure_executable(repository_root: Path) -> str | None:
+    executable_name = "allure.cmd" if sys.platform == "win32" else "allure"
+    project_executable = repository_root / "frontend" / "node_modules" / ".bin" / executable_name
+    if project_executable.is_file():
+        return str(project_executable)
+    return shutil.which("allure")
+
+
+def _generate_allure_report(
+    allure_directory: Path,
+    report_directory: Path,
+    repository_root: Path,
+) -> int:
+    allure_executable = _allure_executable(repository_root)
+    if allure_executable is None:
+        print(
+            "Allure Commandline is unavailable. Run `npm --prefix frontend ci` "
+            "and ensure Java is installed.",
+            file=sys.stderr,
+            flush=True,
+        )
+        return 2
+
+    completed = subprocess.run(
+        [
+            allure_executable,
+            "generate",
+            str(allure_directory),
+            "--clean",
+            "--single-file",
+            "--output",
+            str(report_directory),
+        ],
+        cwd=repository_root,
+        check=False,
+        capture_output=True,
+        text=True,
+    )
+    if completed.returncode == 0:
+        print(f"Allure report: {report_directory / 'index.html'}", flush=True)
+    else:
+        if completed.stdout.strip():
+            print(completed.stdout.strip(), file=sys.stderr, flush=True)
+        if completed.stderr.strip():
+            print(completed.stderr.strip(), file=sys.stderr, flush=True)
+        print("Allure HTML report generation failed.", file=sys.stderr, flush=True)
+    return completed.returncode
 
 
 def _run_suite(
@@ -138,8 +187,8 @@ def _run_suite(
         raise ValueError("Feature report path must stay inside test-results")
     if report_directory.exists():
         shutil.rmtree(report_directory)
-    html_directory = report_directory / "html"
-    report_directory.mkdir(parents=True, exist_ok=True)
+    allure_directory = report_directory / "allure-results"
+    allure_directory.mkdir(parents=True, exist_ok=True)
 
     command = [
         sys.executable,
@@ -150,10 +199,8 @@ def _run_suite(
         "--cov-context=test",
         "--no-cov-on-fail",
         "--cov-report=term-missing",
-        f"--cov-report=markdown:{report_directory / 'coverage.md'}",
-        f"--cov-report=xml:{report_directory / 'coverage.xml'}",
-        f"--cov-report=html:{html_directory}",
-        f"--junitxml={report_directory / 'junit.xml'}",
+        f"--alluredir={allure_directory}",
+        "--clean-alluredir",
     ]
     for module in coverage_modules:
         command.append(f"--cov={module}")
@@ -161,8 +208,13 @@ def _run_suite(
     print(f"\nRunning {feature_name} {suite_name} tests", flush=True)
     completed = subprocess.run(command, cwd=backend_root, check=False)
     if completed.returncode == 0:
-        print(f"Reports: {report_directory}", flush=True)
-    return completed.returncode
+        print(f"Allure results: {allure_directory}", flush=True)
+    report_returncode = _generate_allure_report(
+        allure_directory,
+        report_directory / "allure-report",
+        repository_root,
+    )
+    return completed.returncode or report_returncode
 
 
 def main() -> int:

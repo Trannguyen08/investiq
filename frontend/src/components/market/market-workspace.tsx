@@ -9,6 +9,7 @@ import { MiniCandles } from "@/components/market/mini-candles";
 import { mergeLiveIndex, mergeLiveInstrument } from "@/components/market/live-market";
 import { WatchlistPanel } from "@/components/market/watchlist-panel";
 import { MarketStreamProvider, useMarketStreamState } from "@/hooks/use-realtime-price";
+import { useVisibleFundamentals } from "@/hooks/use-visible-fundamentals";
 import { marketPath, type MarketTab } from "@/lib/market-routes";
 import type { EventCollection, IndexCollection, InstrumentCollection, MarketMeta, PeopleCollection } from "@/types/market";
 
@@ -44,6 +45,9 @@ function stockPageHref(filters: Record<string, string>, cursor: string | null) {
 export function StocksView({ collection, filters }: { collection: InstrumentCollection; filters: Record<string, string> }) {
   const stream = useMarketStreamState();
   const rows = collection.data.map((item) => mergeLiveInstrument(item, stream.items[item.symbol]));
+  const fundamentalsBySymbol = useVisibleFundamentals(
+    rows.filter((item) => item.pe === null && item.pb === null).map((item) => item.symbol),
+  );
   const isTcbs = collection.meta.provider === "tcbs-iflash";
   return <section className="market-tab-panel">
     <div className="market-tab-heading"><div><h2>Bảng giá cổ phiếu</h2><p>{collection.pagination.total_items} mã · 15 mã mỗi trang · VN30 hiển thị trước.</p></div><span className="table-preset">Ưu tiên VN30</span></div>
@@ -56,15 +60,15 @@ export function StocksView({ collection, filters }: { collection: InstrumentColl
     </form>
     <div className="market-table-wrap"><table className="market-table stock-table">
       <thead><tr><th>Mã / Công ty</th><th>Giá</th><th>Thay đổi</th><th>Mở · Cao · Thấp</th><th>Khối lượng</th><th>GTGD</th><th>So TB20</th><th>{isTcbs ? "GT ngoại ròng ước tính" : "Khối ngoại ròng"}</th><th>Vốn hóa</th><th>P/E · P/B</th><th>Biểu đồ</th></tr></thead>
-      <tbody>{rows.map((item) => <tr className={item.is_vn30 ? "vn30-row" : undefined} key={item.symbol}>
+      <tbody>{rows.map((item) => { const fundamentals = fundamentalsBySymbol[item.symbol]; return <tr className={item.is_vn30 ? "vn30-row" : undefined} key={item.symbol}>
         <td className="stock-identity"><div><Link href={`/market/stocks/${item.symbol}`}>{item.symbol}</Link>{item.is_vn30 && <span className="vn30-badge">VN30</span>}</div><span>{item.name}</span><small>{item.exchange} · {item.sector}</small></td>
         <td><strong>{formatChange(item.price)}</strong><small>TC {formatChange(item.reference_price)}</small></td>
         <td className={changeTone(item.change_percent)}><strong>{formatPercent(item.change_percent)}</strong><small>{formatChange(item.change)}</small></td>
         <td>{formatChange(item.open_price)} · {formatChange(item.high_price)} · {formatChange(item.low_price)}</td>
         <td>{formatCompact(item.volume)}</td><td>{formatMoney(item.matched_value)}</td><td>{isTcbs ? "—" : `${item.volume_vs_20d}×`}</td>
-        <td className={changeTone(item.foreign_net_value)}>{formatMoney(item.foreign_net_value)}</td><td>{formatMoney(item.market_cap)}</td><td>{item.pe ?? "—"} · {item.pb ?? "—"}</td>
+        <td className={changeTone(item.foreign_net_value)}>{formatMoney(item.foreign_net_value)}</td><td>{formatMoney(item.market_cap)}</td><td>{fundamentals?.pe ?? item.pe ?? "—"} · {fundamentals?.pb ?? item.pb ?? "—"}</td>
         <td className="table-chart"><Link href={`/market/stocks/${item.symbol}`} aria-label={`Xem biểu đồ và chi tiết ${item.symbol}`}><MiniCandles candles={item.candles} label={`Nến ngày ${item.symbol}`} /><span>Xem chi tiết →</span></Link></td>
-      </tr>)}</tbody>
+      </tr>; })}</tbody>
     </table></div>
     {!collection.data.length && <div className="market-empty"><h3>Không tìm thấy cổ phiếu</h3><p>Thử bỏ bớt bộ lọc hoặc tìm bằng mã khác.</p></div>}
     {collection.data.length > 0 && <nav className="market-pagination" aria-label="Phân trang cổ phiếu">

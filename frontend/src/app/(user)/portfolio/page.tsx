@@ -5,9 +5,12 @@ import type { PositivePaperNews } from "@/types/portfolio";
 export default async function PortfolioPage() {
   const newsQuery = new URLSearchParams({ sentiment: "positive", window_days: "1", limit: "12" });
   const marketQuery = new URLSearchParams({ sort: "vn30", direction: "desc", limit: "100" });
-  const [collection, market] = await Promise.all([
+  const [collection, marketResult] = await Promise.all([
     getNews(newsQuery, 800).catch(() => null),
-    getMarketInstruments(marketQuery).catch(() => null),
+    getMarketInstruments(marketQuery).then(
+      (value) => ({ ok: true as const, value }),
+      () => ({ ok: false as const }),
+    ),
   ]);
   const positiveNews: PositivePaperNews[] = (collection?.data ?? []).flatMap((article) => {
     const symbols = [
@@ -24,5 +27,9 @@ export default async function PortfolioPage() {
       symbols,
     }];
   }).slice(0, 6);
-  return <PaperTradingDashboard positiveNews={positiveNews} marketInstruments={market?.data ?? []} />;
+  return <PaperTradingDashboard
+    positiveNews={positiveNews}
+    marketInstruments={marketResult.ok ? marketResult.value.data : []}
+    marketLoadError={!marketResult.ok}
+  />;
 }

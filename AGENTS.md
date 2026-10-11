@@ -51,6 +51,7 @@ Always read `.agents/rules/general.md`, then load only the modules matching the 
 | Personal or financial user data | `privacy.md` |
 | Model training, inference, features, artifacts | `machine-learning.md` |
 | Money, portfolios, holdings, signals, backtests | `finance-domain.md` |
+| Market quotes, candles, provider/session freshness | `market-data-freshness.md` |
 | Latency, throughput, memory, large datasets | `performance.md` |
 
 If a task spans multiple areas, read every applicable module. Do not load unrelated modules.

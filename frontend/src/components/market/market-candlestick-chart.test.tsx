@@ -1,4 +1,4 @@
-import { render, screen } from "@testing-library/react";
+import { fireEvent, render, screen, within } from "@testing-library/react";
 import { describe, expect, it } from "vitest";
 
 import { MarketCandlestickChart } from "@/components/market/market-candlestick-chart";
@@ -13,7 +13,7 @@ const candles: MarketCandle[] = [
 describe("MarketCandlestickChart", () => {
   it("renders rising and falling candles, volume, and a textual alternative", () => {
     const { container } = render(
-      <MarketCandlestickChart candles={candles} label="Biểu đồ nến VN-Index" />,
+      <MarketCandlestickChart candles={candles} label="Biểu đồ nến VN-Index" explain />,
     );
 
     expect(screen.getByRole("img", { name: /3 nến giá xanh đỏ/ })).toBeInTheDocument();
@@ -23,7 +23,29 @@ describe("MarketCandlestickChart", () => {
     expect(accessibleTable).toBeInTheDocument();
     expect(accessibleTable.parentElement).toHaveClass("sr-only");
     expect(accessibleTable).not.toHaveClass("sr-only");
-    expect(screen.getByText(/MA5/)).toBeInTheDocument();
+    expect(screen.getAllByText(/MA5/)).toHaveLength(2);
+    expect(screen.getByRole("region", { name: "Giải thích biểu đồ" })).toHaveTextContent("MA5 màu vàng");
+    expect(screen.getByRole("region", { name: "Giải thích biểu đồ" })).toHaveTextContent("Đường ngang nét đứt");
+  });
+
+  it("shows OHLC, volume, and candle movement on hover and keyboard focus", () => {
+    render(<MarketCandlestickChart candles={candles} label="Biểu đồ nến VN-Index" />);
+
+    const candleTargets = screen.getAllByRole("button", { name: /Xem nến/ });
+    fireEvent.mouseEnter(candleTargets[0]);
+
+    const tooltip = screen.getByLabelText("Thông tin cây nến đang chọn");
+    expect(within(tooltip).getByText("100")).toBeInTheDocument();
+    expect(within(tooltip).getByText("104")).toBeInTheDocument();
+    expect(within(tooltip).getByText("99")).toBeInTheDocument();
+    expect(within(tooltip).getByText("103")).toBeInTheDocument();
+    expect(within(tooltip).getByText("1 N")).toBeInTheDocument();
+    expect(within(tooltip).getByText("+3.00%")).toBeInTheDocument();
+
+    fireEvent.mouseLeave(candleTargets[0]);
+    expect(screen.queryByLabelText("Thông tin cây nến đang chọn")).not.toBeInTheDocument();
+    fireEvent.focus(candleTargets[1]);
+    expect(screen.getByLabelText("Thông tin cây nến đang chọn")).toBeInTheDocument();
   });
 
   it("shows an honest empty state when fewer than two candles are available", () => {

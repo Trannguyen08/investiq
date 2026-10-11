@@ -1,5 +1,149 @@
 # Current Task
 
+## Automatically viewable Allure reports - 2026-10-11 (complete)
+
+Keep `allure-pytest` as the Python result adapter, but make every registered backend feature-suite
+run automatically convert its JSON into a directly openable official Allure HTML report. Generate
+the report for failing as well as passing suites, lock the report generator in the existing npm
+toolchain, keep all generated output ignored, and synchronize testing rules and developer docs.
+
+Complete: the feature runner still uses Python `allure-pytest` for source results, then invokes the
+locked official Allure Commandline 2.46.1 with `--single-file` to create the sibling
+`allure-report/index.html`. Report generation runs unconditionally after pytest, so failed suites
+also retain inspectable evidence; missing Java/CLI is a visible runner failure. Generated JSON and
+HTML remain ignored, while legacy `pytest-html`, JUnit, coverage XML, and coverage Markdown stay
+disabled. Testing rules, architecture/project memory, decision log, result README, and development
+guide now describe the same contract.
+
+Validation: a real `logging-viewer unit` run passed 8 tests at 100% branch coverage and produced nine
+Allure JSON files plus a 2.66 MB single-file report. A real `auth integration` run passed four tests,
+skipped four database-dependent tests, and created
+`test-results/auth/integration/allure-report/index.html`. Ruff and strict mypy pass for the runner,
+the locked npm tree resolves `allure-commandline@2.46.1`, and `git diff --check` is clean. The current
+local Python environment was synchronized with `backend/requirements-dev.txt` so `allure-pytest`
+2.16.2 is active.
+
+## Interactive stock candles and closed-session paper buy - 2026-10-11 (complete)
+
+Add pointer and keyboard inspection to the stock-detail candlestick chart so each candle exposes its
+time, OHLC values, volume, and direction. Explain candlestick anatomy, MA5, MA20, volume bars, and the
+latest-price guide directly below the chart. Diagnose the reported Buy-button issue and preserve the
+educational automatic-fill rule outside the live exchange session, including weekends, with focused
+frontend and backend regression evidence.
+
+Complete: every candle now has a full-height pointer target and keyboard focus target. Hovering,
+focusing, or tapping reveals Vietnam-local time, open/high/low/close, volume, and the candle's
+percentage movement, while a crosshair and the compact quote row track the selected candle. Stock
+detail charts explain candlestick anatomy, MA5, MA20, the latest-close guide, and volume immediately
+below the plot. The detail action area explicitly states that paper orders remain available while the
+real exchange is closed, including weekends; symbol-specific Buy/Sell labels and regression coverage
+confirm the stock-detail flow. The reported behavior was not a weekend backend block: runtime account
+requests were HTTP 200 and the automatic-fill service deliberately ignores live-session state while
+still rejecting stale provider data.
+
+Validation: all 59 frontend tests, ESLint, and TypeScript pass. The four focused backend paper-trading
+service tests pass, including the closed-session automatic-fill case, and `git diff --check` is clean.
+After restarting only the frontend development container so Windows bind-mount changes were picked
+up, `/market/stocks/FPT?range=year` returns HTTP 200 and its rendered HTML contains the candle targets,
+chart guide, and weekend execution note. Runtime provider metadata is `vnstock-kbs`,
+`freshness=fresh`, `session=closed`, with market time/latest daily candle 2026-10-09 and receive time
+2026-10-11; this is valid because 2026-10-11 is Sunday. No weekend candle or price was fabricated.
+
+## Market-table fundamentals and Allure results - 2026-10-11 (complete)
+
+Fix the remaining P/E and P/B gap in the main `/market/stocks` advanced table. The root cause is that
+list reads intentionally omit expensive per-symbol fundamentals while only stock detail and the
+portfolio table consumed the bounded enrichment route. Reuse one shared client hook so both visible
+15-row tables fetch ratios through the existing three-concurrent-call BFF without market-wide fan-out.
+Add a regression component test.
+
+Replace repository-local pytest HTML/JUnit/coverage report artifacts with Python `allure-pytest`
+result data. Remove all generated legacy directories under `test-results/`, keep only its tracked
+README/ignore policy, pin the dependency in pip and uv manifests, and update the feature runner plus
+all structure/rule/developer documentation. Branch coverage remains visible in the terminal; Allure
+JSON is written below each feature/suite `allure-results/` directory.
+
+Complete: all legacy generated result directories were removed. The shared fundamentals hook is wired
+into the market, portfolio, and legacy market table components; 16 focused frontend tests pass. Allure
+2.16.2 is pinned in pip and uv manifests, and the runner/documentation migration is implemented.
+
+Validation: all 57 frontend tests, ESLint, and TypeScript pass. All 117 backend tests pass with 15
+environment-dependent skips; Ruff and strict mypy pass for the changed runner. A real
+`logging-viewer unit` feature run passed 8 tests at 100% branch coverage and created only Allure
+`*-result.json`/`*-container.json`; no generated HTML, XML, Markdown, or JUnit report remains. The uv
+lock is current and its 65 installed packages pass compatibility checks. Runtime `/market/stocks`
+advanced mode returns HTTP 200, and the bounded route returns live ratios for FPT (15.53 / 3.7), HPG
+(13.05 / 1.69), and VCB (12.38 / 2.33). Provider `vnstock-kbs` reports `freshness=fresh`,
+`session=closed`, market time 2026-10-09 and receive time 2026-10-11; 09/10 remains the latest valid
+session because 11/10 is Sunday. Backend and frontend development services remain running.
+
+## Automatic paper fills and session-aware market freshness - 2026-10-11 (complete)
+
+Refine the completed paper-trading workflow for a beginner practice environment: accepted simulated
+buys/sells should automatically fill in full at the latest authoritative observed price, the order
+history should not expose status/cancellation filters, and the UI must explain that real exchange
+execution differs. Show Sell only for an available owned quantity, load P/E and P/B for the current
+15-row portfolio page without market-wide fan-out, balance pagination controls, and improve the
+observed-gainers text size. Add a repository rule requiring every agent touching market data to
+verify runtime freshness against the latest valid Vietnam trading session rather than the calendar
+date; do not fabricate weekend or holiday candles.
+
+Complete: application and repository fills no longer depend on an editable LO threshold or
+open-session state, while stale provider data still fails closed. The shared dialog now confirms an
+automatic observed-price fill and discloses real-market waiting/partial/non-fill behavior. Order
+history filters only side/symbol, unowned Sell actions are hidden on both board and detail, and the
+visible market page uses a public bounded fundamentals BFF (15 symbols, three concurrent detail
+reads). CSS corrects pagination sizing and observed-gainer legibility. The new
+`.agents/rules/market-data-freshness.md` rule and routing/documentation changes are in place.
+
+Validation: all 117 backend tests pass with 15 environment-dependent skips; the four paper-portfolio
+repository/migration tests also pass against an isolated disposable PostgreSQL database. Focused Ruff
+and strict mypy pass. All 56 frontend tests, ESLint, and TypeScript pass, and `git diff --check` is
+clean. The restarted development backend/frontend are healthy; `/portfolio`, `/market/stocks`, and
+`/market/stocks/FPT?range=day` return HTTP 200. The bounded fundamentals route returns live FPT/HPG
+P/E and P/B. Runtime market evidence is provider `vnstock-kbs`, `freshness=fresh`, `session=closed`,
+with `market_time=2026-10-09T08:33:23.586Z` and a 2026-10-11 receive time. This is correct because
+2026-10-11 is Sunday and 2026-10-09 is the latest valid Vietnamese trading session; no weekend candle
+was fabricated. No production build, deployment, or production data reset was run.
+
+## Advanced stock board and durable paper orders - 2026-10-11 (complete)
+
+Fix the `/portfolio` advanced-board failure that currently converts a server-side market-data
+request error into an indistinguishable empty result. Add explicit loading/error/empty recovery and
+keep symbol navigation stable across reloads and client navigation. Extend the existing private
+immediate-fill simulation into one shared LO workflow used by the portfolio board, stock detail,
+and owned-position table: durable order states, atomic cash/share reservations, idempotent placement,
+market-price re-evaluation, cancellation, order filters/history, and consistent portfolio accounting.
+Preserve the existing authenticated BFF, provider provenance, decimal money, row-locking, and
+no-fabricated-data boundaries.
+
+Complete: the hidden-board defect was the portfolio Server Component converting every market-data
+failure to `null` and then an empty array. The route now distinguishes loading, source error with
+retry, and a valid empty result without fallback fixtures. Migration `0013_paper_orders` adds durable
+day-valid LO states and atomic cash/share reservations. Fresh open-session quotes fill qualifying
+orders at the observed market price; other orders remain pending/open, re-evaluate on dashboard reads
+and 30-second open-page refreshes, and release reservations on cancellation or expiry. The board,
+stock detail, and owned-position table use one accessible order dialog. The dashboard exposes
+available versus reserved capacity, status/side/symbol filters, cancellation, persistent orders, and
+immutable fills. Partial fills, exchange holidays, ATO/ATC, settlement, and broker connectivity stay
+explicitly outside this educational model.
+
+Validation: all 117 backend tests passed with 14 environment-dependent skips; full Ruff and strict
+mypy on the seven changed backend contract/core files passed. The paper-trading feature runner passed
+4 unit and 3 API tests, with its 3 database tests skipped when `TEST_DATABASE_URL` was unset; those
+same 3 repository/migration tests then passed against a disposable PostgreSQL 17 container. All 54
+frontend tests, full ESLint, and TypeScript passed. Compose rendered successfully, `git diff --check`
+passed, and the Next 16 development route `/portfolio` returned HTTP 200 with its loading fallback;
+the API was intentionally not running during that final anonymous route smoke, so market fetches
+logged expected connection refusals. No production build, persistent deployment, or production
+migration was run.
+
+Local runtime follow-up: the non-root backend image inherited `HOME=/nonexistent`, so Vnstock could
+not create its private `.vnstock` profile and every market/portfolio provider dependency failed.
+The image now provisions writable `/home/app`, exports it as `HOME`, and verifies writability during
+the build without relaxing the `USER app` boundary. The rebuilt development backend serves market
+overview/instruments and `/market/stocks` successfully; 15 focused Vnstock/API tests pass.
+
 ## Portfolio market-table trading workflow - 2026-10-08 (complete)
 
 Replace the standalone symbol-entry order card with the advanced Market stock table. Every displayed

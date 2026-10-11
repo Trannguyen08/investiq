@@ -2,19 +2,26 @@
 
 from __future__ import annotations
 
-from datetime import UTC, datetime
+from datetime import UTC, datetime, time, timedelta
 from decimal import Decimal
+from zoneinfo import ZoneInfo
 
 from app.application.dto.portfolio_dto import PlacePaperOrder
-from app.domain.entities.portfolio import PaperPortfolio, PaperTrade
+from app.domain.entities.market import MarketInstrument
+from app.domain.entities.portfolio import PaperOrder, PaperPortfolio, PaperTrade
 from app.domain.repositories.i_market_provider import IMarketProvider
-from app.domain.repositories.i_portfolio_repository import IPortfolioRepository, PaperExecution
+from app.domain.repositories.i_portfolio_repository import (
+    IPortfolioRepository,
+    PaperExecution,
+    PaperOrderSubmission,
+)
 from app.domain.value_objects.money import decimal_text, round_vnd
 
 STARTING_CASH = Decimal("100000000")
 BROKER_FEE_RATE = Decimal("0.0015")
 SELL_TAX_RATE = Decimal("0.001")
 MAX_HOLDINGS = 20
+_MARKET_TZ = ZoneInfo("Asia/Ho_Chi_Minh")
 
 
 class PaperOrderError(ValueError):
@@ -57,12 +64,82 @@ def _trade_payload(trade: PaperTrade) -> dict[str, object]:
     }
 
 
+def _order_payload(order: PaperOrder) -> dict[str, object]:
+    return {
+        "id": order.id,
+        "side": order.side,
+        "order_type": order.order_type,
+        "status": order.status,
+        "symbol": order.symbol,
+        "name": order.name,
+        "exchange": order.exchange,
+        "quantity": order.quantity,
+        "filled_quantity": order.filled_quantity,
+        "limit_price": decimal_text(order.limit_price),
+        "reserved_cash": decimal_text(order.reserved_cash),
+        "reserved_quantity": order.reserved_quantity,
+        "provider": order.provider,
+        "price_at": _iso(order.price_at),
+        "received_at": _iso(order.received_at),
+        "delay_class": order.delay_class,
+        "created_at": _iso(order.created_at),
+        "updated_at": _iso(order.updated_at),
+        "expires_at": _iso(order.expires_at),
+        "cancelled_at": _iso(order.cancelled_at) if order.cancelled_at else None,
+    }
+
+
+def _day_order_expiry(now: datetime) -> datetime:
+    local = now.astimezone(_MARKET_TZ)
+    candidate = datetime.combine(local.date(), time(15, 0), tzinfo=_MARKET_TZ)
+    if local >= candidate or local.weekday() >= 5:
+        candidate += timedelta(days=1)
+    while candidate.weekday() >= 5:
+        candidate += timedelta(days=1)
+    return candidate.astimezone(UTC)
+
+
 class PaperTradingService:
     def __init__(self, repository: IPortfolioRepository, provider: IMarketProvider) -> None:
         self._repository = repository
         self._provider = provider
 
-    def place_order(self, user_id: str, command: PlacePaperOrder) -> PaperTrade:
+    def _execution(
+        self,
+        order: PaperOrder,
+        instrument: MarketInstrument,
+    ) -> PaperExecution:
+        gross = round_vnd(instrument.price * Decimal(order.quantity))
+        fee = round_vnd(gross * BROKER_FEE_RATE)
+        tax_rate = SELL_TAX_RATE if order.side == "sell" else Decimal()
+        return PaperExecution(
+            idempotency_key=f"order:{order.id}",
+            side=order.side,
+            symbol=instrument.symbol,
+            name=instrument.name,
+            exchange=instrument.exchange,
+            sector=instrument.sector,
+            quantity=order.quantity,
+            execution_price=instrument.price,
+            gross_amount=gross,
+            fee_rate=BROKER_FEE_RATE,
+            fee_amount=fee,
+            tax_rate=tax_rate,
+            tax_amount=round_vnd(gross * tax_rate),
+            provider=self._provider.slug,
+            price_at=_market_datetime(self._provider.market_time),
+            received_at=datetime.now(UTC),
+            delay_class=self._provider.delay_class,
+        )
+
+    def _can_simulate_fill(self) -> bool:
+        return self._provider.freshness in {"fresh", "fixture"}
+
+    def place_order(
+        self,
+        user_id: str,
+        command: PlacePaperOrder,
+    ) -> tuple[PaperOrder, PaperTrade | None]:
         instrument = self._provider.instrument(command.symbol, include_fundamentals=False)
         if instrument is None:
             raise PaperOrderError("UNKNOWN_INSTRUMENT", "Không tìm thấy mã cổ phiếu này.")
@@ -71,33 +148,103 @@ class PaperTradingService:
                 "PRICE_UNAVAILABLE",
                 "Chưa có giá quan sát hợp lệ để mô phỏng khớp lệnh.",
             )
-        gross = round_vnd(instrument.price * Decimal(command.quantity))
-        fee = round_vnd(gross * BROKER_FEE_RATE)
-        tax_rate = SELL_TAX_RATE if command.side == "sell" else Decimal()
-        tax = round_vnd(gross * tax_rate)
-        execution = PaperExecution(
+        if command.order_type != "LO":
+            raise PaperOrderError("UNSUPPORTED_ORDER_TYPE", "Hiện chỉ hỗ trợ lệnh LO.")
+        if command.limit_price <= 0:
+            raise PaperOrderError("INVALID_LIMIT_PRICE", "Giá đặt lệnh phải lớn hơn 0.")
+        if not self._can_simulate_fill():
+            raise PaperOrderError(
+                "STALE_MARKET_PRICE",
+                "Giá quan sát đang cũ; chưa thể tự động khớp giao dịch mô phỏng.",
+            )
+        reserved_gross = round_vnd(instrument.price * Decimal(command.quantity))
+        reserved_fee = round_vnd(reserved_gross * BROKER_FEE_RATE)
+        now = datetime.now(UTC)
+        submission = PaperOrderSubmission(
             idempotency_key=command.idempotency_key,
             side=command.side,
+            order_type=command.order_type,
             symbol=instrument.symbol,
             name=instrument.name,
             exchange=instrument.exchange,
             sector=instrument.sector,
             quantity=command.quantity,
-            execution_price=instrument.price,
-            gross_amount=gross,
-            fee_rate=BROKER_FEE_RATE,
-            fee_amount=fee,
-            tax_rate=tax_rate,
-            tax_amount=tax,
+            limit_price=instrument.price,
+            reserved_cash=(
+                reserved_gross + reserved_fee if command.side == "buy" else Decimal()
+            ),
+            reserved_quantity=command.quantity if command.side == "sell" else 0,
             provider=self._provider.slug,
             price_at=_market_datetime(self._provider.market_time),
-            received_at=datetime.now(UTC),
+            received_at=now,
             delay_class=self._provider.delay_class,
+            initial_status="open",
+            expires_at=_day_order_expiry(now),
         )
-        return self._repository.execute(user_id, STARTING_CASH, execution, MAX_HOLDINGS)
+        self._repository.expire_orders(user_id, now)
+        order = self._repository.place_order(
+            user_id,
+            STARTING_CASH,
+            submission,
+            MAX_HOLDINGS,
+        )
+        if order.status == "filled":
+            return self._repository.fill_order(
+                user_id,
+                order.id,
+                self._execution(order, instrument),
+                MAX_HOLDINGS,
+            )
+        if order.status in {"pending", "open"}:
+            if order.status == "pending":
+                order = self._repository.activate_order(user_id, order.id)
+            return self._repository.fill_order(
+                user_id,
+                order.id,
+                self._execution(order, instrument),
+                MAX_HOLDINGS,
+            )
+        return order, None
+
+    def cancel_order(self, user_id: str, order_id: str) -> PaperOrder:
+        return self._repository.cancel_order(user_id, order_id)
+
+    def _refresh_orders(self, user_id: str) -> PaperPortfolio:
+        now = datetime.now(UTC)
+        self._repository.expire_orders(user_id, now)
+        portfolio = self._repository.get_or_create(user_id, STARTING_CASH)
+        if not self._can_simulate_fill():
+            return portfolio
+        for order in portfolio.orders:
+            if order.status not in {"pending", "open"}:
+                continue
+            instrument = self._provider.instrument(order.symbol, include_fundamentals=False)
+            if instrument is None or instrument.price <= 0:
+                continue
+            active = (
+                self._repository.activate_order(user_id, order.id)
+                if order.status == "pending"
+                else order
+            )
+            self._repository.fill_order(
+                user_id,
+                active.id,
+                self._execution(active, instrument),
+                MAX_HOLDINGS,
+            )
+        return self._repository.get_or_create(user_id, STARTING_CASH)
 
     def dashboard(self, user_id: str) -> dict[str, object]:
-        portfolio = self._repository.get_or_create(user_id, STARTING_CASH)
+        portfolio = self._refresh_orders(user_id)
+        open_orders = tuple(
+            order for order in portfolio.orders if order.status in {"pending", "open"}
+        )
+        reserved_cash = sum((order.reserved_cash for order in open_orders), Decimal())
+        reserved_shares: dict[str, int] = {}
+        for order in open_orders:
+            reserved_shares[order.symbol] = (
+                reserved_shares.get(order.symbol, 0) + order.reserved_quantity
+            )
         holdings: list[dict[str, object]] = []
         total_market_value = Decimal()
         missing_prices = 0
@@ -168,6 +315,9 @@ class PaperTradingService:
                     "exchange": holding.exchange,
                     "sector": holding.sector,
                     "quantity": holding.quantity,
+                    "available_quantity": max(
+                        0, holding.quantity - reserved_shares.get(holding.symbol, 0)
+                    ),
                     "average_cost": decimal_text(holding.average_cost),
                     "total_cost_basis": decimal_text(holding.total_cost_basis),
                     "current_price": decimal_text(price) if price is not None else None,
@@ -263,6 +413,8 @@ class PaperTradingService:
                 "currency": portfolio.currency,
                 "starting_cash": decimal_text(portfolio.starting_cash),
                 "cash_balance": decimal_text(portfolio.cash_balance),
+                "available_cash": decimal_text(portfolio.cash_balance - reserved_cash),
+                "reserved_cash": decimal_text(reserved_cash),
                 "invested_cost": decimal_text(
                     sum((item.total_cost_basis for item in portfolio.holdings), Decimal())
                 ),
@@ -291,6 +443,7 @@ class PaperTradingService:
                 "updated_at": _iso(portfolio.updated_at),
             },
             "holdings": holdings,
+            "orders": [_order_payload(item) for item in portfolio.orders],
             "trades": [_trade_payload(item) for item in portfolio.trades],
             "equity_curve": equity_curve,
             "equity_curve_method": "current_holdings_replay",
@@ -311,10 +464,11 @@ class PaperTradingService:
                 "starting_cash": decimal_text(STARTING_CASH),
                 "broker_fee_rate": decimal_text(BROKER_FEE_RATE),
                 "sell_tax_rate": decimal_text(SELL_TAX_RATE),
-                "fill_model": "latest_observed_price",
+                "fill_model": "automatic_latest_observed_price",
                 "max_holdings": MAX_HOLDINGS,
                 "disclaimer": (
-                    "Mô phỏng giáo dục, không đặt lệnh thật và không phải khuyến nghị đầu tư."
+                    "Mô phỏng giáo dục tự động khớp theo giá quan sát mới nhất; không đặt lệnh "
+                    "thật và không phải khuyến nghị đầu tư."
                 ),
             },
             "market": {

@@ -23,9 +23,9 @@ function unavailable(error: unknown) {
   );
 }
 
-async function proxy(request: Request, context: Context, method: "GET" | "POST") {
+async function proxy(request: Request, context: Context, method: "GET" | "POST" | "DELETE") {
   try {
-    if (method === "POST") await verifyCsrf(request);
+    if (method !== "GET") await verifyCsrf(request);
     const path = (await context.params).path?.join("/") ?? "";
     const text = method === "POST" ? await request.text() : undefined;
     if (text && new TextEncoder().encode(text).length > 16_384) {
@@ -60,4 +60,8 @@ export function GET(request: Request, context: Context) {
 
 export function POST(request: Request, context: Context) {
   return proxy(request, context, "POST");
+}
+
+export function DELETE(request: Request, context: Context) {
+  return proxy(request, context, "DELETE");
 }

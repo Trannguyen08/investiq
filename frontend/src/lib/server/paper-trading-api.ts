@@ -2,7 +2,7 @@ import "server-only";
 
 import { authenticatedSession } from "@/lib/server/user-auth";
 
-const allowedPath = /^(?:|orders)$/;
+const allowedPath = /^(?:|orders|orders\/[a-f0-9-]{1,64})$/;
 
 export async function paperTradingRequest(path: string, init?: RequestInit) {
   if (!allowedPath.test(path)) throw new Error("Invalid paper-trading API path");

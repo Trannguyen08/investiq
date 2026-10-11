@@ -4,6 +4,7 @@ import { notFound } from "next/navigation";
 import { formatMarketTime } from "@/components/market/formatters";
 import { MarketStatus } from "@/components/market/market-status";
 import { StockLivePrice, StockMetricsPanel, StockPriceChart, type StockChartRange } from "@/components/market/stock-price-chart";
+import { StockTradeActions } from "@/components/portfolio/stock-trade-actions";
 import { MarketStreamProvider } from "@/hooks/use-realtime-price";
 import { getMarketCandles, getMarketInstrument } from "@/lib/api-client";
 import type { InstrumentEnvelope } from "@/types/market";
@@ -38,7 +39,7 @@ export default async function StockDetailPage({ params, searchParams }: { params
 
   return <MarketStreamProvider symbols={[symbol]}><main id="main-content" className="market-page stock-detail-page">
     <Link className="stock-detail-back" href="/market/stocks">← Quay lại bảng giá</Link>
-    <header className="stock-detail-hero"><div><p className="eyebrow">{item.exchange} · {item.is_vn30 ? "THÀNH PHẦN VN30" : "CỔ PHIẾU"}</p><h1>{item.symbol}</h1><p>{item.name} · {item.sector}</p></div><StockLivePrice item={item} /></header>
+    <header className="stock-detail-hero"><div><p className="eyebrow">{item.exchange} · {item.is_vn30 ? "THÀNH PHẦN VN30" : "CỔ PHIẾU"}</p><h1>{item.symbol}</h1><p>{item.name} · {item.sector}</p><StockTradeActions symbol={item.symbol} name={item.name} price={item.price} /></div><StockLivePrice item={item} /></header>
     <MarketStatus meta={envelope.meta} />
     <div className="stock-detail-market-layout"><StockPriceChart symbol={symbol} range={range} candles={candles?.data ?? []} /><StockMetricsPanel item={item} /></div>
     <footer className="stock-detail-source"><span>Nguồn: {envelope.meta.provider_name}</span><span>Thời điểm thị trường: {formatMarketTime(envelope.meta.market_time)}</span><span>Giá chưa điều chỉnh · VND</span></footer>

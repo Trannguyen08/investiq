@@ -34,6 +34,31 @@ class PaperTrade:
 
 
 @dataclass(frozen=True)
+class PaperOrder:
+    id: str
+    idempotency_key: str
+    side: str
+    order_type: str
+    status: str
+    symbol: str
+    name: str
+    exchange: str
+    quantity: int
+    filled_quantity: int
+    limit_price: Decimal
+    reserved_cash: Decimal
+    reserved_quantity: int
+    provider: str
+    price_at: datetime
+    received_at: datetime
+    delay_class: str
+    created_at: datetime
+    updated_at: datetime
+    expires_at: datetime
+    cancelled_at: datetime | None
+
+
+@dataclass(frozen=True)
 class PaperPortfolio:
     id: str
     user_id: str
@@ -45,4 +70,5 @@ class PaperPortfolio:
     created_at: datetime
     updated_at: datetime
     holdings: tuple[PaperHolding, ...]
+    orders: tuple[PaperOrder, ...]
     trades: tuple[PaperTrade, ...]

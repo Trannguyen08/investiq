@@ -3,6 +3,79 @@
 Record durable decisions in reverse chronological order. Do not record routine implementation
 details.
 
+## 2026-10-11 — Automatic single-file Allure presentation
+
+- **Status:** Accepted and implemented.
+- **Context:** `allure-pytest` correctly produced Allure JSON, but raw result files are not a
+  developer-readable report. Requiring a separate manual `allure serve` step meant a feature run did
+  not leave an immediately viewable result artifact.
+- **Decision:** Keep Python `allure-pytest` as the test adapter and source-result format. After every
+  feature suite, whether pytest passes or fails, invoke the exact locked official Allure Commandline
+  package to generate `allure-report/index.html` with `--single-file`. Keep both generated result and
+  report directories ignored. Continue prohibiting legacy `pytest-html`, JUnit, coverage XML, and
+  coverage Markdown artifacts.
+- **Consequences:** Every completed feature-suite invocation leaves one directly openable Allure HTML
+  file plus its machine-readable JSON. Local setup now requires Java and the frontend npm development
+  dependencies; the runner fails visibly if presentation generation is unavailable.
+- **Refines:** “Allure-only local backend test artifacts” below; Allure remains the only report
+  system, but its official HTML presentation is now retained locally.
+
+## 2026-10-11 — Allure-only local backend test artifacts
+
+- **Status:** Refined by “Automatic single-file Allure presentation” above.
+- **Context:** Repository-local HTML/JUnit/coverage files created noisy generated trees and forced
+  developers to inspect several report formats. The requested standard is the Python Allure adapter.
+- **Decision:** Pin `allure-pytest` in both the uv development lock and pip development requirements.
+  Feature runs keep branch coverage in the terminal and write only Allure JSON under
+  `test-results/<feature>/<level>/allure-results/`. Do not retain generated pytest HTML, JUnit,
+  coverage XML, or coverage Markdown in the repository workspace. Use the separately installed
+  Allure CLI only to serve a temporary presentation when needed.
+- **Consequences:** One machine-readable result format covers local test-case inspection, and old
+  HTML artifacts are removed. Developers need the Allure CLI to view the interactive report, while
+  test execution itself needs only the Python dependency.
+- **Supersedes:** The local report formats in “Feature-level test evidence and local reports”; its
+  per-feature registration, unit/integration separation, and branch-coverage requirements remain.
+
+## 2026-10-11 — Automatic observed-price fills and session-aware freshness
+
+- **Status:** Accepted and implemented as the current educational simulation model.
+- **Context:** The product is a beginner practice environment, so a persistent waiting/limit-order
+  workflow obscured portfolio learning and implied exchange behavior that the provider cannot model.
+  Market dates also need to distinguish the current calendar day from the latest valid Vietnamese
+  trading session.
+- **Decision:** Keep durable orders and immutable fills for audit/idempotency, but automatically fill
+  every accepted simulated buy or sell in full at the authoritative latest observed price whenever
+  provider freshness is accepted. Closed-session practice uses the latest valid completed-session
+  snapshot; no weekend or holiday candle is fabricated. Remove status/cancellation controls from the
+  learner UI and disclose that real orders may wait, partially fill, or not fill. Enrich P/E and P/B
+  only for the currently visible market page, capped at 15 symbols with three concurrent detail calls
+  and provider caching. Require market-data work to follow `.agents/rules/market-data-freshness.md`.
+- **Consequences:** Learners get immediate position and cash feedback without mistaking the simulator
+  for an exchange. Existing order tables and cancellation API remain compatible with legacy records,
+  while dashboard reads convert eligible legacy pending/open orders. Price staleness still fails
+  closed, and fundamentals enrichment cannot fan out across the full market universe.
+- **Supersedes:** “Durable day-valid LO paper orders” below. Its persistence, locking, provenance,
+  privacy, and immutable-fill decisions remain valid.
+
+## 2026-10-11 — Durable day-valid LO paper orders
+
+- **Status:** Superseded by automatic observed-price fills; retained as migration history.
+- **Context:** The immediate-fill slice could not represent a successful placement that had not yet
+  matched, reserve cash or shares across concurrent orders, cancel waiting orders, or expose one
+  consistent workflow from the market board, stock detail, and owned positions.
+- **Decision:** Persist LO orders separately from immutable fills. A buy matches at the fresh observed
+  market price only when it is at or below the limit; a sell matches only at or above the limit, and
+  matching is disabled outside an open session. Pending/open orders reserve limit cash plus modeled
+  fee or owned shares under the existing portfolio row lock. Dashboard reads and a 30-second open-page
+  refresh re-evaluate orders; cancellation and day expiry release unfilled reservations. Keep partial
+  fills, exchange holiday calendars, ATO/ATC, settlement, and broker connectivity out of scope.
+- **Consequences:** Placement and execution are now distinct durable events, and concurrent orders
+  cannot reuse reserved capacity. Matching is still an educational observed-price model, not an
+  exchange order book; an order is re-evaluated when the private dashboard is read rather than by a
+  continuously running exchange engine.
+- **Supersedes:** The immediate-fill lifecycle in “Private immediate-fill paper trading for
+  beginners”; its account, fee/tax, privacy, provenance, and immutable-fill decisions remain valid.
+
 ## 2026-10-08 — Private immediate-fill paper trading for beginners
 
 - **Status:** Accepted and implemented as an educational simulation.
@@ -33,8 +106,9 @@ details.
 - **Decision:** Add Vnstock behind the existing canonical provider port, use KBS for reference/quotes/
   OHLCV plus financial ratios and VCI for industry labels, keep its optional key server-side, cache
   snapshots/candles, and identify all results as source-delayed and partial. Load P/E, P/B, EPS, and
-  ROE lazily only for detail reads with a bounded one-hour per-symbol cache; list, watchlist, and
-  WebSocket snapshots stay on the lightweight quote path. If the entire KBS board is reset before a
+  ROE lazily for detail reads with a bounded one-hour per-symbol cache; the portfolio may enrich only
+  its current 15-row page through bounded detail calls, while watchlist and WebSocket snapshots stay
+  on the lightweight quote path. If the entire KBS board is reset before a
   new session, use one VCI price-board batch for the latest completed close and preceding reference;
   do not fan out historical calls or turn the new reference into a synthetic 0% move. Normalize the
   library's quota `SystemExit` as a provider failure so it cannot cancel an ASGI request. Once any
@@ -222,7 +296,7 @@ details.
 
 ## 2026-09-26 — Feature-level test evidence and local reports
 
-- **Status:** Accepted
+- **Status:** Superseded for local artifact formats by the Allure-only decision above.
 - **Context:** Test pass counts alone do not show which feature lines and branches were exercised,
   and developers need one repeatable location for unit and integration evidence.
 - **Decision:** Every feature carries meaningful unit and integration tests. Backend features are

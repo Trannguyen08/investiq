@@ -145,19 +145,23 @@ No deployment is part of the repository setup documented here.
 ## Beginner paper trading
 
 The authenticated `/portfolio` workspace provides one private educational simulation account per
-user with 100,000,000 VND of virtual cash. Users can buy and sell whole shares at the latest observed
-canonical provider price, review cash, cost basis, current value, realized/unrealized profit or loss,
-price history, an estimated portfolio curve, and the last 100 immutable simulated fills. The page also
+user with 100,000,000 VND of virtual cash. Users confirm simulated buys/sells against the latest
+observed canonical price. Accepted practice trades automatically fill in full so users can review
+cash, holdings, cost basis, current value, realized/unrealized profit or loss, price history, an
+estimated portfolio curve, and the last 100 immutable simulated fills. The UI explains that real
+orders can wait, partially fill, or fail to fill. The page also
 shows observed daily gainers, existing positive news tagged to symbols, and deterministic risk notices
 for sharp/continuous declines, stale prices, or portfolio concentration. It never connects to a broker
 or places a real order.
 
-Migration `0012_paper_trading` owns the account, holding, and trade ledger. Private browser traffic
+Migrations `0012_paper_trading` and `0013_paper_orders` own the account, holding, durable order,
+reservation, and trade ledgers. Private browser traffic
 uses the CSRF-protected `/portfolio-api` Next.js BFF; FastAPI exposes
 `GET /api/v1/paper-portfolio` and idempotent `POST /api/v1/paper-portfolio/orders` only after verifying
-the BFF secret and active user session. Personalized responses and errors are `no-store`. The model
-assumes a disclosed 0.15% simulated broker fee and 0.1% simulated sell tax; it does not yet model
-partial fills, limit/ATO/ATC orders, settlement, dividends, splits, margin, or short sales. See the
+the BFF secret and active user session. Eligible legacy pending orders are reconciled on dashboard
+reads. Personalized responses and errors are `no-store`.
+The model assumes a disclosed 0.15% simulated broker fee and 0.1% simulated sell tax; it does not yet
+model partial fills, ATO/ATC orders, settlement, dividends, splits, margin, or short sales. See the
 [paper-trading plan](docs/plan/paper-trading.md) for calculations, privacy, rollout, and test criteria.
 
 ## Stock news MVP

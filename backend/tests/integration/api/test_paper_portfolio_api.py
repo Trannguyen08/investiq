@@ -8,7 +8,7 @@ from fastapi.testclient import TestClient
 from app.api import deps
 from app.api.v1 import portfolio as portfolio_api
 from app.application.dto.portfolio_dto import PlacePaperOrder
-from app.domain.entities.portfolio import PaperTrade
+from app.domain.entities.portfolio import PaperOrder, PaperTrade
 from app.main import app
 
 
@@ -20,6 +20,8 @@ def dashboard_payload() -> dict[str, object]:
             "currency": "VND",
             "starting_cash": "100000000",
             "cash_balance": "100000000",
+            "available_cash": "100000000",
+            "reserved_cash": "0",
             "invested_cost": "0",
             "market_value": "0",
             "total_value": "100000000",
@@ -33,6 +35,7 @@ def dashboard_payload() -> dict[str, object]:
             "updated_at": now,
         },
         "holdings": [],
+        "orders": [],
         "trades": [],
         "equity_curve": [],
         "equity_curve_method": "current_holdings_replay",
@@ -49,7 +52,7 @@ def dashboard_payload() -> dict[str, object]:
             "starting_cash": "100000000",
             "broker_fee_rate": "0.0015",
             "sell_tax_rate": "0.001",
-            "fill_model": "latest_observed_price",
+            "fill_model": "automatic_latest_observed_price",
             "max_holdings": 20,
             "disclaimer": "Mô phỏng giáo dục.",
         },
@@ -68,16 +71,40 @@ def dashboard_payload() -> dict[str, object]:
 
 class FakeService:
     command: object | None = None
+    cancelled_id: str | None = None
 
     def dashboard(self, user_id: str) -> dict[str, object]:
         assert user_id == "user-1"
         return dashboard_payload()
 
-    def place_order(self, user_id: str, command: object) -> PaperTrade:
+    def place_order(self, user_id: str, command: object) -> tuple[PaperOrder, PaperTrade | None]:
         assert user_id == "user-1"
         self.command = command
         now = datetime(2026, 10, 8, 2, tzinfo=UTC)
-        return PaperTrade(
+        order = PaperOrder(
+            id="order-1",
+            idempotency_key="12345678-1234-4234-8234-123456789012",
+            side="buy",
+            order_type="LO",
+            status="filled",
+            symbol="FPT",
+            name="CTCP FPT",
+            exchange="HOSE",
+            quantity=100,
+            filled_quantity=100,
+            limit_price=Decimal("100000"),
+            reserved_cash=Decimal(),
+            reserved_quantity=0,
+            provider="fixture",
+            price_at=now,
+            received_at=now,
+            delay_class="development_fixture",
+            created_at=now,
+            updated_at=now,
+            expires_at=now,
+            cancelled_at=None,
+        )
+        trade = PaperTrade(
             id="trade-1",
             idempotency_key="12345678-1234-4234-8234-123456789012",
             side="buy",
@@ -99,6 +126,35 @@ class FakeService:
             delay_class="development_fixture",
             created_at=now,
         )
+        return order, trade
+
+    def cancel_order(self, user_id: str, order_id: str) -> PaperOrder:
+        assert user_id == "user-1"
+        self.cancelled_id = order_id
+        now = datetime(2026, 10, 8, 2, tzinfo=UTC)
+        return PaperOrder(
+            id=order_id,
+            idempotency_key="cancel-key-123456",
+            side="buy",
+            order_type="LO",
+            status="cancelled",
+            symbol="FPT",
+            name="CTCP FPT",
+            exchange="HOSE",
+            quantity=100,
+            filled_quantity=0,
+            limit_price=Decimal("99000"),
+            reserved_cash=Decimal(),
+            reserved_quantity=0,
+            provider="fixture",
+            price_at=now,
+            received_at=now,
+            delay_class="development_fixture",
+            created_at=now,
+            updated_at=now,
+            expires_at=now,
+            cancelled_at=now,
+        )
 
 
 def test_paper_portfolio_requires_the_private_bff_boundary() -> None:
@@ -119,7 +175,16 @@ def test_paper_dashboard_and_order_contracts_are_private_and_authenticated() -> 
             order = client.post(
                 "/api/v1/paper-portfolio/orders",
                 headers={"Idempotency-Key": "12345678-1234-4234-8234-123456789012"},
-                json={"side": "buy", "symbol": "fpt", "quantity": 100},
+                json={
+                    "side": "buy",
+                    "order_type": "LO",
+                    "symbol": "fpt",
+                    "quantity": 100,
+                    "limit_price": "100000",
+                },
+            )
+            cancelled = client.delete(
+                "/api/v1/paper-portfolio/orders/12345678-1234-4234-8234-123456789012"
             )
     finally:
         app.dependency_overrides.clear()
@@ -128,9 +193,13 @@ def test_paper_dashboard_and_order_contracts_are_private_and_authenticated() -> 
     assert dashboard.headers["cache-control"] == "private, no-store, max-age=0"
     assert dashboard.json()["account"]["cash_balance"] == "100000000"
     assert order.status_code == 201
+    assert order.json()["order"]["status"] == "filled"
     assert order.json()["trade"]["symbol"] == "FPT"
     assert isinstance(service.command, PlacePaperOrder)
     assert service.command.idempotency_key == "12345678-1234-4234-8234-123456789012"
+    assert cancelled.status_code == 200
+    assert cancelled.json()["order"]["status"] == "cancelled"
+    assert service.cancelled_id == "12345678-1234-4234-8234-123456789012"
 
 
 def test_paper_order_rejects_missing_idempotency_key() -> None:
@@ -140,7 +209,13 @@ def test_paper_order_rejects_missing_idempotency_key() -> None:
     try:
         response = TestClient(app).post(
             "/api/v1/paper-portfolio/orders",
-            json={"side": "buy", "symbol": "FPT", "quantity": 100},
+            json={
+                "side": "buy",
+                "order_type": "LO",
+                "symbol": "FPT",
+                "quantity": 100,
+                "limit_price": "100000",
+            },
         )
     finally:
         app.dependency_overrides.clear()

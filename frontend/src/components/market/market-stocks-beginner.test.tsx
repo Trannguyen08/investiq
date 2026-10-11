@@ -85,8 +85,17 @@ const index: MarketIndex = {
 };
 
 describe("StocksView navigation", () => {
-  beforeEach(() => { push.mockReset(); });
-  afterEach(cleanup);
+  beforeEach(() => {
+    push.mockReset();
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue({
+      ok: true,
+      json: async () => ({ data: [{ symbol: "FPT", pe: "15.53", pb: "3.7" }] }),
+    }));
+  });
+  afterEach(() => {
+    cleanup();
+    vi.unstubAllGlobals();
+  });
 
   it("uses App Router navigation when a stock row is clicked", () => {
     render(<StocksView collection={collection} summary={collection} sectors={sectors} filters={{ q: "", exchange: "", sort: "vn30", direction: "desc", mode: "basic" }} selected="" selectedCandles={[]} index={index} />);
@@ -134,6 +143,16 @@ describe("StocksView navigation", () => {
     render(<StocksView collection={collection} summary={collection} sectors={sectors} filters={{ q: "", exchange: "", sort: "vn30", direction: "desc", mode: "advanced" }} selected="" selectedCandles={[]} index={index} />);
 
     expect(screen.getByRole("table", { name: "Bảng cổ phiếu nâng cao" })).toHaveClass("simple-stock-table", "advanced");
+  });
+
+  it("loads P/E and P/B for the visible advanced-table symbols", async () => {
+    render(<StocksView collection={collection} summary={collection} sectors={sectors} filters={{ q: "", exchange: "", sort: "vn30", direction: "desc", mode: "advanced" }} selected="" selectedCandles={[]} index={index} />);
+
+    expect(await screen.findByText("15.53 · 3.7")).toBeInTheDocument();
+    expect(fetch).toHaveBeenCalledWith(
+      "/market-data-api/fundamentals?symbols=FPT",
+      expect.objectContaining({ cache: "no-store" }),
+    );
   });
 
   it("shows explicit thresholds in shareable presets and removes saved browser views", () => {

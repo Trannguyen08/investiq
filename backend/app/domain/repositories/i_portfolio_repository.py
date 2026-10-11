@@ -7,7 +7,7 @@ from datetime import datetime
 from decimal import Decimal
 from typing import Protocol
 
-from app.domain.entities.portfolio import PaperPortfolio, PaperTrade
+from app.domain.entities.portfolio import PaperOrder, PaperPortfolio, PaperTrade
 
 
 class PortfolioConflictError(ValueError):
@@ -23,6 +23,10 @@ class InsufficientSharesError(ValueError):
 
 
 class HoldingLimitError(ValueError):
+    pass
+
+
+class OrderNotCancellableError(ValueError):
     pass
 
 
@@ -47,6 +51,27 @@ class PaperExecution:
     delay_class: str
 
 
+@dataclass(frozen=True)
+class PaperOrderSubmission:
+    idempotency_key: str
+    side: str
+    order_type: str
+    symbol: str
+    name: str
+    exchange: str
+    sector: str | None
+    quantity: int
+    limit_price: Decimal
+    reserved_cash: Decimal
+    reserved_quantity: int
+    provider: str
+    price_at: datetime
+    received_at: datetime
+    delay_class: str
+    initial_status: str
+    expires_at: datetime
+
+
 class IPortfolioRepository(Protocol):
     def get_or_create(self, user_id: str, starting_cash: Decimal) -> PaperPortfolio: ...
 
@@ -57,3 +82,25 @@ class IPortfolioRepository(Protocol):
         execution: PaperExecution,
         max_holdings: int,
     ) -> PaperTrade: ...
+
+    def place_order(
+        self,
+        user_id: str,
+        starting_cash: Decimal,
+        submission: PaperOrderSubmission,
+        max_holdings: int,
+    ) -> PaperOrder: ...
+
+    def fill_order(
+        self,
+        user_id: str,
+        order_id: str,
+        execution: PaperExecution,
+        max_holdings: int,
+    ) -> tuple[PaperOrder, PaperTrade | None]: ...
+
+    def cancel_order(self, user_id: str, order_id: str) -> PaperOrder: ...
+
+    def activate_order(self, user_id: str, order_id: str) -> PaperOrder: ...
+
+    def expire_orders(self, user_id: str, now: datetime) -> int: ...
