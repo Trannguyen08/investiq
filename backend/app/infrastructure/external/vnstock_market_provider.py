@@ -23,6 +23,8 @@ from zoneinfo import ZoneInfo
 from app.application.use_cases.market_data.errors import MarketDataUnavailable
 from app.domain.entities.market import (
     Candle,
+    IntradayTrade,
+    MarketDepthLevel,
     MarketEvent,
     MarketIndex,
     MarketInstrument,
@@ -73,6 +75,8 @@ class VnstockGateway(Protocol):
     ) -> list[dict[str, object]]: ...
 
     def fundamental_rows(self, symbol: str) -> list[dict[str, object]]: ...
+
+    def trade_rows(self, symbol: str, limit: int) -> list[dict[str, object]]: ...
 
 
 def _frame_records(value: object) -> list[dict[str, object]]:
@@ -207,6 +211,18 @@ class OfficialVnstockGateway:
         except (Exception, SystemExit) as exc:
             raise RuntimeError("Vnstock fundamental request failed") from exc
 
+    def trade_rows(self, symbol: str, limit: int) -> list[dict[str, object]]:
+        try:
+            frame = self._market.equity(symbol=symbol).trades(
+                source="kbs",
+                page_size=limit,
+                page=1,
+                get_all=True,
+            )
+            return _frame_records(frame)
+        except (Exception, SystemExit) as exc:
+            raise RuntimeError("Vnstock intraday trade request failed") from exc
+
 
 def _text(value: object) -> str:
     if value is None:
@@ -303,6 +319,11 @@ def _fundamental_values(
     )
 
 
+def _match_side(value: object) -> str:
+    normalized = _text(value).lower()
+    return normalized if normalized in {"buy", "sell", "ato", "atc"} else "unknown"
+
+
 def _candle(row: dict[str, object], symbol: str, fallback: datetime) -> Candle | None:
     opened = _decimal(row.get("open"))
     high = _decimal(row.get("high"))
@@ -353,6 +374,7 @@ class VnstockMarketProvider:
                 tuple[Decimal | None, Decimal | None, Decimal | None, Decimal | None],
             ],
         ] = {}
+        self._intraday_cache: dict[str, tuple[float, tuple[IntradayTrade, ...]]] = {}
 
     @property
     def market_time(self) -> str:
@@ -401,15 +423,17 @@ class VnstockMarketProvider:
 
     def candles(self, symbol: str, interval: str) -> tuple[Candle, ...]:
         normalized = symbol.upper()
-        if interval not in {"1d", "5m"}:
+        if interval not in {"1d", "1h", "30m", "5m"}:
             return ()
         key = (normalized, interval)
         now = self._clock()
         cached = self._candle_cache.get(key)
         if cached and cached[0] > now:
+            if interval == "1d":
+                return self._with_current_daily_candle(normalized, cached[1])
             return cached[1]
-        source_interval = "1D" if interval == "1d" else "5m"
-        count = 500 if interval == "1d" else 160
+        source_interval = {"1d": "1D", "1h": "1H", "30m": "30m", "5m": "5m"}[interval]
+        count = 500 if interval in {"1d", "1h"} else 200
         try:
             rows = self._gateway.candle_rows(normalized, source_interval, count)
             fetched_at = datetime.now(UTC)
@@ -425,7 +449,71 @@ class VnstockMarketProvider:
             now + self._config.candle_cache_seconds,
             values,
         )
-        return values
+        return self._with_current_daily_candle(normalized, values) if interval == "1d" else values
+
+    def intraday_trades(self, symbol: str, limit: int) -> tuple[IntradayTrade, ...]:
+        normalized = symbol.upper()
+        now = self._clock()
+        cached = self._intraday_cache.get(normalized)
+        if cached and cached[0] > now:
+            return cached[1][-limit:]
+        try:
+            fetched_at = datetime.now(UTC)
+            values = tuple(
+                IntradayTrade(
+                    timestamp=_timestamp(row.get("time"), fetched_at),
+                    price=_decimal(row.get("price")) * Decimal("1000"),
+                    volume=_decimal(row.get("volume")),
+                    match_side=_match_side(row.get("match_type")),
+                )
+                for row in self._gateway.trade_rows(normalized, max(limit, 100))
+                if _decimal(row.get("price")) > 0 and _decimal(row.get("volume")) > 0
+            )
+            values = tuple(sorted(values, key=lambda item: item.timestamp))
+        except (RuntimeError, TypeError, ValueError):
+            logger.warning("vnstock_intraday_trades_unavailable", extra={"symbol": normalized})
+            return cached[1][-limit:] if cached else ()
+        if len(self._intraday_cache) >= self._config.max_symbols:
+            self._intraday_cache.clear()
+        self._intraday_cache[normalized] = (
+            now + min(60, self._config.candle_cache_seconds),
+            values,
+        )
+        return values[-limit:]
+
+    def _with_current_daily_candle(
+        self,
+        symbol: str,
+        values: tuple[Candle, ...],
+    ) -> tuple[Candle, ...]:
+        instrument = next((item for item in self.instruments() if item.symbol == symbol), None)
+        if (
+            instrument is None
+            or instrument.volume <= 0
+            or min(
+                instrument.open_price,
+                instrument.high_price,
+                instrument.low_price,
+                instrument.price,
+            )
+            <= 0
+        ):
+            return values
+        market_day = self._market_time.astimezone(_MARKET_TZ).date()
+        timestamp = datetime.combine(market_day, datetime.min.time(), _MARKET_TZ).astimezone(UTC)
+        observed = Candle(
+            timestamp=timestamp,
+            open=instrument.open_price,
+            high=instrument.high_price,
+            low=instrument.low_price,
+            close=instrument.price,
+            volume=instrument.volume,
+        )
+        if values and values[-1].timestamp.astimezone(_MARKET_TZ).date() == market_day:
+            return (*values[:-1], observed)
+        if values and values[-1].timestamp > observed.timestamp:
+            return values
+        return (*values, observed)
 
     def _with_fundamentals(self, value: MarketInstrument) -> MarketInstrument:
         now = self._clock()
@@ -602,6 +690,24 @@ class VnstockMarketProvider:
         reasons = ["Thanh khoản trong phiên"] if matched_value > 0 else []
         if is_vn30:
             reasons.append("Thuộc rổ VN30")
+        bid_levels = tuple(
+            MarketDepthLevel(
+                price=_price(quote.get(f"bid_price_{level}")),
+                volume=_decimal(quote.get(f"bid_vol_{level}")),
+            )
+            for level in range(1, 4)
+            if _price(quote.get(f"bid_price_{level}")) > 0
+            and _decimal(quote.get(f"bid_vol_{level}")) > 0
+        )
+        ask_levels = tuple(
+            MarketDepthLevel(
+                price=_price(quote.get(f"ask_price_{level}")),
+                volume=_decimal(quote.get(f"ask_vol_{level}")),
+            )
+            for level in range(1, 4)
+            if _price(quote.get(f"ask_price_{level}")) > 0
+            and _decimal(quote.get(f"ask_vol_{level}")) > 0
+        )
         return MarketInstrument(
             symbol=symbol,
             name=_text(metadata.get("organ_name")) or symbol,
@@ -627,6 +733,8 @@ class VnstockMarketProvider:
             interest_reasons=tuple(reasons),
             candles=(),
             is_vn30=is_vn30,
+            bid_levels=bid_levels,
+            ask_levels=ask_levels,
         )
 
     @staticmethod

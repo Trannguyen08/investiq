@@ -86,9 +86,12 @@ investiq/
   public people/holding snapshots, engagement retention, and current private watchlists.
 - Vnstock is a local/private evaluation adapter behind the same port. It uses source-delayed KBS
   reference/quote/OHLCV data plus VCI industry labels, normalizes equity candles to VND, caches
-  snapshots and candles, and lazily loads per-symbol KBS P/E, P/B, EPS, and ROE for stock detail or
-  the portfolio's visible 15-row page with a bounded one-hour cache, three-call concurrency ceiling,
-  and null fallback. A fully reset pre-open KBS board is replaced by one
+  snapshots, candles, and recent KBS executions, and lazily loads per-symbol KBS P/E, P/B, EPS, and
+  ROE for stock detail or a bounded table universe in sequential 15-symbol batches with a one-hour
+  cache, three-call concurrency ceiling, and null fallback. Detail responses preserve up to three
+  provider-observed resting bid/ask levels; recent executions retain the source's aggressive
+  buy/sell/ATO/ATC classification, and the API derives each execution's Decimal change from the
+  canonical reference price. A fully reset pre-open KBS board is replaced by one
   VCI batch containing the latest completed close and preceding reference, so sector moves and
   breadth remain meaningful without per-symbol history fan-out. Vnstock quota `SystemExit` signals
   are normalized as provider failures. It serves labeled stale price data after a transient upstream
@@ -97,16 +100,32 @@ investiq/
   rather than being copied from the indicative price. Its optional key stays server-side. Because the client aggregates third-party
   sources, this adapter is not evidence of public redistribution rights and is not a production
   licensing substitute.
-- Stock discovery defaults to VN30-first ordering with 15-row cursor pages. The path-addressable
-  `/market/stocks/<symbol>` view aggregates documented current-session TCBS trades into five-minute
-  candles. Week/month/year controls disclose unavailable multi-session history rather than deriving
-  or fabricating OHLC data. Home and Market share a scoped dark navy visual system, and Home derives
+- Stock discovery defaults to VN30-first ordering with 15-row cursor pages and one advanced-only
+  nine-column presentation; the removed Basic display mode is not part of route state. The path-addressable
+  `/market/stocks/<symbol>` view aggregates documented current-session TCBS trades into five-minute,
+  30-minute, or hourly candles and exposes bounded recent executions through `/api/v1/market/intraday-trades`.
+  Vnstock also maps KBS `5m`, `30m`, `1H`, and `1D` OHLCV into the canonical candle endpoint. For daily
+  history, an observed current-session snapshot with real OHLC and volume replaces or appends only
+  that market day's candle, so a lagging cache does not hide a valid session and pre-open data is not
+  fabricated. Stock-detail Day, Week, Month, and Year views choose current-session, trailing-seven-day,
+  previous-month-start, and same-month-prior-year windows respectively from observed source bars.
+  The shared chart keeps hover/focus OHLC detail, ends pointer panning on release/cancel, and clamps
+  drag/button panning so users may reveal older fetched history but cannot move beyond the newest
+  observation. The Month and Year views additionally use a chart-local non-passive wheel listener for
+  pointer-anchored zoom, prevent handled gestures from scrolling the enclosing page, and expose
+  accessible zoom buttons between 40 candles and the selected range's full source window. Home and
+  Market share a scoped dark navy visual system; their common movement-weighted sector heatmap packs
+  at most eight sectors per desktop row and normalizes each row using absolute percentage movement,
+  so widths stay proportional while the bounded 16-sector view occupies exactly two rows. Home derives
   its market-wide breadth summary from canonical exchange snapshots. One shared accessible SVG
   candlestick renderer serves the Home VN-Index chart and stock detail pages with red/green OHLC,
   volume, MA5/MA20, axes, and a table alternative. The TCBS adapter accumulates bounded five-minute
   VN-Index candles from real index stream ticks in process; absent historical ticks remain absent.
   Stock detail merges its subscribed quote stream into both the headline and its equal-height metric
-  panel; the panel explains each metric and distinguishes no trade yet from a numeric zero.
+  panel; the panel explains each metric and distinguishes no trade yet from a numeric zero. Market
+  and Portfolio pagination, sector filters, and stock-detail return links retain an explicit table
+  anchor. The paper-order modal is an accessible application overlay and does not depend on the
+  browser's native dialog API.
 - The default beginner presentation uses plain-language summaries, an estimated sentiment gauge,
   line charts, inline definitions, a fixed five-color price legend, clickable sector heatmaps sized
   by absolute percentage movement, relative sector-strength indicator, database-backed 24-hour Home
@@ -143,6 +162,8 @@ investiq/
   stock detail, and owned-position table open one observed-price-and-quantity dialog. Accepted
   practice orders automatically fill in full at the latest authoritative observed price whenever
   provider freshness is acceptable; closed-session practice uses the latest valid trading session.
+  After a valid filled response, the shared dialog updates its owning dashboard, emits a visible
+  page-level success notice, and closes; failed responses remain in the dialog for correction/retry.
   Legacy pending/open rows are reconciled during dashboard reads, and the UI explains that real
   exchange execution can differ; partial fills remain out of scope for the simulator.
 - The Next.js Admin News workspace uses a server-validated, HMAC-signed HttpOnly session cookie.

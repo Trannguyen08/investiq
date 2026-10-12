@@ -1,5 +1,205 @@
 # Current Task
 
+## Proportional two-row heatmap and advanced-only market - 2026-10-12 (complete)
+
+Keep each sector tile visibly proportional to the absolute percentage movement while packing the
+bounded 16-sector heatmap into two complete rows instead of inflating a low-movement orphan tile.
+Make the Market stock experience permanently advanced: remove the Basic switch/table path, ignore
+legacy `mode=basic` query input, and keep advanced candles, columns, and fundamentals as the default.
+Add regression coverage and visually verify both Home and Market at the reported desktop viewport.
+
+Complete: the heatmap now caps each desktop row at eight sectors and assigns each tile a zero basis
+plus a flex-grow equal to `max(abs(change_percent), 0.05)`. Each row therefore normalizes its own
+observed movement weights across the full width: the 16-sector runtime renders as two 8-tile rows,
+the 5.71% tile is visibly widest, and the 0.39% tile is visibly smallest without becoming an orphan
+third row. On narrow screens each eight-tile row may wrap into readable weighted pairs.
+
+The Stocks route no longer parses or emits a display mode. Stocks always render the VN-Index
+candlestick, nine-column advanced table, and bounded P/E/P/B enrichment. The Basic/Nâng cao switch,
+basic table branch, volatility badges, hidden mode field, mode-bearing reset/preset links, and their
+dead CSS were removed. Legacy `?mode=basic` input is ignored and no generated link propagates it.
+
+Validation: the two focused component files pass 17 tests, including a 16-sector 8/8 proportional
+layout and a legacy-basic advanced-only regression. All 15 non-auth frontend files pass 63 tests;
+ESLint, TypeScript, and `git diff --check` pass. The generated Next development cache was moved to a
+recoverable temp quarantine and rebuilt. Runtime `/` renders two rows with exact grow weights from
+5.71 through 0.39; default `/market/stocks` and legacy `?mode=basic` both render the advanced heading
+without a Basic switch or mode-bearing links. Chrome screenshots at 1920 px visually confirm Home's
+two proportional rows and Market's advanced chart/table. No production build ran.
+
+## Sector heatmap final-row fit - 2026-10-12 (complete)
+
+Fix the Home/Market sector heatmap so every wrapped row, especially the final row, consumes the
+full available width for any sector count and movement distribution. Replace the incorrect odd-count
+heuristic with a flex-layout invariant, add a 16-sector regression matching the reported runtime,
+and verify the live Home page at the reported desktop viewport without rebuilding production assets.
+
+Complete: the previous implementation guessed the last-row shape from whether the total sector
+count was odd. The reported snapshot had 16 sectors, but movement-weighted bases wrapped the last
+tile onto its own row with `flex-grow: 0.39`; because a flex line whose total grow factor is below one
+may retain unused free space, more than half the row remained empty. Every tile now receives a grow
+factor of `1 + absolute movement`, preserving movement-based relative sizing while guaranteeing that
+each independently wrapped row has enough total growth to consume its available width. The shared
+component applies this behavior to both Home and Market.
+
+Validation: the new 16-sector regression failed against the old heuristic and passes with the new
+layout invariant; all 15 non-auth frontend test files pass 63 tests, and ESLint, TypeScript, and
+`git diff --check` pass. The stale generated Next development cache was moved to a recoverable temp
+quarantine and rebuilt. Runtime HTML for both `/` and `/market/stocks` contains 16 tiles with a
+minimum grow factor of 1.39. A 1920 px Chrome screenshot confirms the final `Du lịch và Giải trí`
+tile fills the complete final row with no right-side gap. No production build ran.
+
+## Paper-order success completion and notification - 2026-10-12 (complete)
+
+Close the simulated-order popup after the API returns a valid filled trade, update the parent
+dashboard, and show an unmistakable success notification outside the popup. Prevent the successful
+button from becoming available for accidental duplicate purchases, preserve idempotency and error
+recovery, and add regression coverage for both Portfolio and stock-detail entry points.
+
+Complete: the order API and backend were already succeeding; runtime logs showed two HTTP 201 order
+responses about five seconds apart. The shared dialog kept its success result inside the still-open
+form and re-enabled Submit, which made the first fill look unfinished and allowed a duplicate click.
+The dialog now accepts success only when the response includes a filled trade, updates its owning
+dashboard, emits a fixed page-level confirmation with side, quantity, symbol, and execution price,
+then closes immediately. Errors remain in the open dialog for correction and retry, and the existing
+in-flight/idempotency guards remain intact.
+
+Validation: both Portfolio and stock-detail regression tests assert that a successful request shows
+the external confirmation and removes the dialog; all 12 focused portfolio tests and the other 15
+non-auth frontend test files pass (63 tests). Full ESLint, TypeScript, and `git diff --check` pass.
+The generated Next development cache was moved to a recoverable temp quarantine and rebuilt; the
+running `/portfolio` route returns HTTP 200 and its client/server bundles contain the new success UI.
+At 21:47 +07 the runtime VPB response remained `fresh`, `source_delayed`, and `closed`, with provider
+market time 16:08 +07 on 2026-10-12. No production build or additional paper order was run.
+
+## Chart-local wheel zoom for Month and Year - 2026-10-12 (complete)
+
+Prevent page scrolling whenever a wheel gesture is handled over a zoomable stock chart, and extend
+the existing bounded, pointer-anchored wheel zoom from Year to Month. Preserve historical panning,
+hover detail, newest-observation clamping, accessible keyboard controls, and observed candle data;
+add regression coverage for browser-default prevention and Month zoom.
+
+Complete: Month and Year now share bounded, pointer-anchored wheel and `+`/`-` zoom from 40 candles
+through the full selected-range window. The chart installs a native `wheel` listener with
+`passive: false`, calls both `preventDefault()` and `stopPropagation()` for handled vertical wheel
+gestures, and removes the listener on rerender/unmount. The page therefore remains fixed while the
+pointer is over either zoomable chart, including when the zoom limit has already been reached.
+
+Validation: all 7 candlestick component tests pass, including explicit assertions that a Month wheel
+event is default-prevented, does not reach `window`, and changes the visible candle count. The other
+15 frontend test files pass 63 tests; TypeScript, full ESLint, and `git diff --check` pass. The complete
+suite run had 69 passing tests and one unrelated pre-existing auth countdown failure: its immediate
+assertion observed the Countdown component's initial `00:00` before its effect set `01:30`. That auth
+test was not changed or masked. After refreshing only the generated Next dev cache, the live VPB
+Month page returned HTTP 200, rendered 140 observed hourly candles with Month zoom controls, and was
+visually inspected at 1920 px. Runtime `vnstock-kbs` metadata remained fresh/source-delayed/closed at
+21:31 +07 with market time 16:08 +07 on the latest valid 2026-10-12 session. No production build ran.
+
+## Candlestick drag release, denser ranges, and yearly wheel zoom - 2026-10-12 (complete)
+
+Stop chart panning immediately when the pointer is released or cancelled, increase observed candle
+density for Week and Month without synthesizing bars, and add bounded mouse-wheel plus keyboard
+zoom for the Year chart. Preserve hover details, historical panning, the newest-observation clamp,
+and current market-data freshness semantics; add interaction regression coverage and validate the
+live VPB development page without a production build.
+
+Complete: pointer release, cancellation, or capture loss now clears the active drag, while a separate
+click-suppression flag prevents a completed drag from selecting a candle. Week requests observed
+30-minute bars and Month requests observed hourly bars, yielding denser windows without synthesized
+market activity. The Year view supports pointer-anchored mouse-wheel zoom plus accessible `+`/`-`
+controls, bounded from 40 candles to the full one-year source window and clamped at the newest
+observation. Existing hover/focus OHLC detail and horizontal history navigation remain intact.
+
+Validation: all 69 frontend tests and all 120 backend tests pass with 15 environment-gated skips;
+frontend TypeScript and ESLint plus focused backend Ruff/mypy and registered market-data suites pass.
+The live backend returned 200 observed VPB 30-minute candles from 2026-09-10 through 2026-10-12 and
+170 hourly candles from 2026-08-14 through 2026-10-12. After clearing a stale generated Next dev
+cache, `/market/stocks/VPB?range=year` returned HTTP 200 with the wheel/keyboard zoom controls and was
+visually inspected alongside the 54-candle Week chart at 1920 px. No production build was run.
+
+## Stock-detail depth statistics and interactive chart ranges - 2026-10-12 (complete)
+
+Replace the stock-detail buy/matched/sell presentation with provider-observed top-of-book depth,
+depth totals/visualization, and a richer execution tape. Refine Day, Week, Month, and Year chart
+windows and axis labels, retain candle hover detail, increase useful candle density, and add bounded
+horizontal panning into older history without allowing navigation beyond the current market time.
+Preserve all previously completed market UX and freshness behavior, add focused regression coverage,
+and validate against the active VPB development runtime without running a production build.
+
+Complete: instrument detail now carries up to three real provider bid/ask levels and renders them as
+a compact depth table, bounded imbalance/totals, and depth bars beside a six-column execution tape.
+Execution price changes are calculated with backend Decimal arithmetic from the observed reference
+price. Day uses five-minute candles with hour labels, Week uses hourly candles over seven calendar
+days, Month begins at the opening of the prior month, and Year begins in the same month last year
+with January/year plus alternating-month labels. The chart keeps hover/focus OHLC detail, uses wider
+dense candle bodies, and supports pointer dragging plus accessible buttons into older fetched history;
+both paths clamp at the newest observation.
+
+Validation: the full backend suite passes 120 tests with 15 environment-gated skips; registered
+market-data suites pass 25 unit and 6 integration tests and regenerate their Allure reports. The full
+frontend suite passes 67 tests; TypeScript, ESLint, Ruff, strict focused mypy, and `git diff --check`
+pass. A clean single Docker Next dev runtime returns HTTP 200 and was visually inspected at 1920px:
+the VPB chart, navigation controls, depth bars, and execution tape render without an error overlay.
+At 21:01 +07 the runtime `vnstock-kbs` response was fresh and closed with market time 16:08 +07;
+VPB exposed real bid levels 24,400/24,350/24,300, ask levels 24,450/24,500/24,550, 170 hourly
+candles through the valid 2026-10-12 session, and an ATC execution at 14:45:18 +07. No order-book
+level, execution, or calendar candle was fabricated. No production build was run.
+
+## Stock-detail hydration and missing intraday table - 2026-10-12 (complete)
+
+Reproduce and fix the reported React hydration mismatch on sector/detail navigation and ensure the
+new intraday execution table is actually rendered on the stock-detail page served at localhost:3000.
+Keep one authoritative Next development runtime/cache, add regression coverage if a code defect is
+found, and revalidate the live VPB detail response plus market-data freshness before handoff.
+
+Complete: the source component and API were already correct; the failing boundary was the active
+development runtime. A Docker Next dev server and a host Next dev server had written concurrently to
+the same bind-mounted `frontend/.next` Turbopack database. Runtime logs showed missing cache SST files,
+and the resulting server HTML omitted `#stock-table` while the client bundle included it, producing
+the hydration overlay and serving the pre-table stock-detail bundle. The generated cache was moved to
+a recoverable temp quarantine, then one Docker development server was recreated on localhost:3000
+with separate edge/backend networking and a clean cache. No application source change was needed for
+this follow-up, and existing regression tests already assert both the anchored sector navigation and
+the intraday table contract.
+
+Validation: a real Chrome headless hydration pass for the reported VPB URL contains the intraday card
+and buy/sell columns with no React hydration message or Next error overlay. The server response is
+HTTP 200 and contains buy/matched/sell columns, ATC data, and the filtered `#stock-table` return link;
+the clean frontend log has zero hydration errors and zero Turbopack compaction failures. All 19 focused
+market navigation/table tests pass and `git diff --check` remains clean. At 20:35 +07, runtime provider
+metadata was `vnstock-kbs`, `source_delayed`, `session=closed`, and honestly labeled `stale`; VPB's
+latest candle is still the valid 2026-10-12 session and its latest observed execution is ATC at
+14:45:18 +07. No calendar-day or intraday value was fabricated.
+
+## Market trading, fundamentals, navigation, and stock-detail UX - 2026-10-12 (complete)
+
+Fix the non-responsive stock Buy action, extend P/E and P/B enrichment beyond only the current
+15-row page while keeping provider work bounded, preserve the stock-table viewport across Market and
+Portfolio pagination, and return from stock detail directly to the originating table. Ensure today's
+valid trading-session candle is shown when the provider supplies it. Add an honest intraday
+buy/matched/sell view to stock detail using only provider-observed data, make the Home sector heatmap
+fill its card without a trailing gap, and navigate sector selections directly to the filtered stock
+table. Add focused regression coverage, verify runtime freshness against the latest valid Vietnamese
+trading session, and run the affected frontend/backend checks without a production build.
+
+Complete: the stock Buy action now opens an accessible application modal without relying on the
+browser-native dialog API. Market and Portfolio progressively load missing P/E and P/B values across
+their bounded 100-symbol universes in sequential 15-symbol requests. Pagination, sector selection,
+stock-detail ranges, and detail-return links retain explicit table anchors; Portfolio also scrolls its
+client-paged table into view. Odd Home heatmaps let the final sector fill the remaining row. Stock
+detail now exposes recent provider-observed executions in buy/matched/sell columns, clearly labels
+buy/sell as the aggressive matched side rather than order-book depth, and merges a real current-session
+OHLCV snapshot into lagging daily history without fabricating pre-open or non-session candles.
+
+Validation: backend full suite passes with 120 tests and 15 environment-gated skips; frontend full
+suite passes all 66 tests after one unrelated OTP fake-clock test was rerun and confirmed flaky. Ruff,
+strict focused mypy, ESLint, TypeScript, and `git diff --check` pass. At 20:27:12 +07 on 2026-10-12,
+runtime `vnstock-kbs` metadata was `fresh` and `closed`; FPT's latest daily candle was the valid
+2026-10-12 session (O/H/L/C 58,100/58,800/57,100/57,100, volume 5,930,000), and the latest execution
+was ATC at 14:45:07 +07, price 57,100, volume 350,900. The Next development UI returned HTTP 200 and
+contained the Buy action, buy/sell execution columns, ATC row, current-session candle, and anchored
+return destination. No production build was run.
+
 ## Automatically viewable Allure reports - 2026-10-11 (complete)
 
 Keep `allure-pytest` as the Python result adapter, but make every registered backend feature-suite

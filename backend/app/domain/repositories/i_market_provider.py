@@ -6,6 +6,7 @@ from typing import Protocol
 
 from app.domain.entities.market import (
     Candle,
+    IntradayTrade,
     MarketEvent,
     MarketIndex,
     MarketInstrument,
@@ -44,6 +45,8 @@ class IMarketProvider(Protocol):
     def people(self) -> tuple[MarketPerson, ...]: ...
 
     def candles(self, symbol: str, interval: str) -> tuple[Candle, ...]: ...
+
+    def intraday_trades(self, symbol: str, limit: int) -> tuple[IntradayTrade, ...]: ...
 
     def instrument(
         self, symbol: str, *, include_fundamentals: bool = False

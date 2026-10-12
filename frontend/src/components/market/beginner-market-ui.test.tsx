@@ -44,9 +44,26 @@ describe("beginner market UI", () => {
 
     const technology = screen.getByRole("link", { name: /Công nghệ: \+4%/ });
     const banking = screen.getByRole("link", { name: /Ngân hàng: -1%/ });
-    expect(technology).toHaveAttribute("href", "/market/stocks?sector=C%C3%B4ng%20ngh%E1%BB%87");
+    expect(technology).toHaveAttribute("href", "/market/stocks?sector=C%C3%B4ng%20ngh%E1%BB%87#stock-table");
     expect(Number(technology.style.flexGrow)).toBeGreaterThan(Number(banking.style.flexGrow));
     expect(screen.getByText("20 mã")).toBeInTheDocument();
+  });
+
+  it("packs 16 movement-weighted tiles into two proportional rows", () => {
+    const sectors = Array.from({ length: 15 }, (_, index) => (
+      sector(`Ngành ${index + 1}`, String(index + 1), index + 1)
+    ));
+    sectors.push(sector("Du lịch và Giải trí", "-0.39", 46));
+
+    const { container } = render(<SectorHeatmap sectors={sectors} headingId="sectors" />);
+
+    const rows = Array.from(container.querySelectorAll<HTMLElement>(".heatmap-row"));
+    const tiles = Array.from(container.querySelectorAll<HTMLElement>(".heatmap-row > a"));
+    expect(rows).toHaveLength(2);
+    expect(rows.map((row) => row.children.length)).toEqual([8, 8]);
+    expect(tiles).toHaveLength(16);
+    expect(screen.getByRole("link", { name: /Ngành 15: \+15%/ }).style.flexGrow).toBe("15");
+    expect(screen.getByRole("link", { name: /Du lịch và Giải trí: -0,39%/ }).style.flexGrow).toBe("0.39");
   });
 
   it("shows one explicit timestamp for the latest market data", () => {

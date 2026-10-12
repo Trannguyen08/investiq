@@ -53,11 +53,23 @@
   unsupported events, people, fundamentals or multi-session daily candles. The dark navy UI now has
   a 15-row VN30-first stock table, centered numeric columns, a large VN-Index red/green candlestick
   chart, and `/market/stocks/<symbol>` detail pages using the same volume-and-MA chart renderer with
-  honest current-session five-minute data. Home and Market share clickable sector heatmaps sized by
+  honest current-session data. Stock detail merges a provider-observed current-session daily candle
+  into lagging cached history. Stock detail now presents the provider-observed three best resting
+  bid/ask levels with bounded depth totals and bars beside a recent execution tape whose price change
+  is derived server-side from the reference price; it keeps resting depth distinct from the source's
+  aggressive buy/sell/auction classification. Its Day/Week/Month/Year candlestick windows use
+  five-minute, 30-minute, hourly, and daily source bars with market-time axis labels, dense bodies,
+  hover detail, and bounded horizontal panning into older fetched history. Pointer panning stops on
+  release/cancel, and the Month/Year views support bounded pointer-anchored wheel and keyboard zoom
+  without scrolling the enclosing page while a wheel gesture is handled over the chart. Home
+  and Market share clickable sector heatmaps sized by
   absolute daily sector movement computed server-side across the complete provider snapshot rather
-  than a 100-row instrument page, Home highlights database-backed news from the latest 24 hours, and
+  than a 100-row instrument page. The bounded 16 sectors pack into two desktop rows of at most eight;
+  each row fills the card while retaining tile widths proportional to absolute movement. Home highlights database-backed news from the latest 24 hours, and
   every market view exposes a clear last-data-update time. In Vnstock mode, stock detail lazily loads
-  and caches KBS P/E, P/B, EPS, and ROE while preserving explicit unavailable states. A reset pre-open
+  and caches KBS P/E, P/B, EPS, and ROE while preserving explicit unavailable states; stock tables
+  preload the bounded visible universe in sequential batches of 15 rather than stopping after the
+  first page. A reset pre-open
   KBS board uses VCI's batch latest-close/preceding-reference fields rather than presenting every
   stock and sector as 0%; after the session begins, unmatched symbols remain in the snapshot at their
   reference price instead of disappearing. The detail headline and enclosing metric panel consume
@@ -67,9 +79,9 @@
   requires a current token or API key plus Smart OTP and explicit redistribution rights. FiinGroup
   remains recommended for corporate/event/people coverage. Provider failover, licensed history
   backfill and traffic-derived production popularity are not active.
-- The Market stock table fits both basic and nine-column advanced data inside its card without a
-  horizontal scrollbar; narrow screens use labeled two-column stock cards. Its volatility scale uses
-  the product-requested Low red, Medium yellow, and High green mapping.
+- The Market stock page is advanced-only: its default VN-Index view is a candlestick chart and its
+  nine-column stock table fits inside the card without a horizontal scrollbar; narrow screens use
+  labeled two-column stock cards. Legacy display-mode query parameters are ignored.
 - Market stock screening is URL-addressable and runs over the complete provider snapshot before
   cursor pagination. It supports bounded daily-change, matched-value, market-cap, volume-versus-20-day,
   and VN30 conditions plus compatible sort keys. The UI provides practical presets with prominent
@@ -86,9 +98,11 @@
   unrealized performance, bounded price/equity history, observed gainers, positive tagged news, and
   deterministic risk notices without placing broker orders or presenting predictions as facts. Its
   advanced market table, stock detail, and owned-position table use one automatic observed-price
-  dialog; accepted practice trades fill in full and explain how real execution differs. Sell appears
-  only for available owned quantities. The visible 15-row market page lazily enriches P/E and P/B
-  through bounded detail calls, while a separate position table manages purchased stocks. The
+  dialog; accepted practice trades fill in full, close the dialog, and surface a fixed confirmation
+  outside it so users cannot mistake a completed request for an idle form. Real execution differences
+  remain explicit. Sell appears only for available owned quantities. The market picker lazily enriches P/E and P/B across its
+  bounded universe through sequential 15-symbol calls, while a separate position table manages
+  purchased stocks. Pagination and detail-return links keep the originating table in view. The
   same-origin `/portfolio-api` BFF enforces CSRF while FastAPI independently verifies the BFF secret,
   bearer session, active user, and resource ownership. See `docs/plan/paper-trading.md`.
 - Market-data work must follow `.agents/rules/market-data-freshness.md`: verify runtime provider

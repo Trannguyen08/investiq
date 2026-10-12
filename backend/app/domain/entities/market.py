@@ -18,6 +18,20 @@ class Candle:
 
 
 @dataclass(frozen=True, slots=True)
+class IntradayTrade:
+    timestamp: datetime
+    price: Decimal
+    volume: Decimal
+    match_side: str
+
+
+@dataclass(frozen=True, slots=True)
+class MarketDepthLevel:
+    price: Decimal
+    volume: Decimal
+
+
+@dataclass(frozen=True, slots=True)
 class MarketInstrument:
     symbol: str
     name: str
@@ -43,6 +57,8 @@ class MarketInstrument:
     interest_reasons: tuple[str, ...]
     candles: tuple[Candle, ...]
     is_vn30: bool = False
+    bid_levels: tuple[MarketDepthLevel, ...] = ()
+    ask_levels: tuple[MarketDepthLevel, ...] = ()
 
     @property
     def change(self) -> Decimal:

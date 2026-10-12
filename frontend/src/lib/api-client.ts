@@ -4,6 +4,7 @@ import type {
   InstrumentCollection,
   InstrumentEnvelope,
   MarketCandles,
+  MarketIntradayTrades,
   MarketOverview,
   PeopleCollection,
   SectorCollection,
@@ -188,11 +189,19 @@ export function getMarketInstrument(symbol: string): Promise<InstrumentEnvelope>
 
 export function getMarketCandles(
   symbol: string,
-  interval: "1d" | "5m",
+  interval: "1d" | "1h" | "30m" | "5m",
   limit: number,
 ): Promise<MarketCandles> {
   const query = new URLSearchParams({ symbol, interval, limit: String(limit) });
   return requestJson<MarketCandles>(`/v1/market/candles?${query.toString()}`, 5);
+}
+
+export function getMarketIntradayTrades(
+  symbol: string,
+  limit = 100,
+): Promise<MarketIntradayTrades> {
+  const query = new URLSearchParams({ symbol, limit: String(limit) });
+  return requestJson<MarketIntradayTrades>(`/v1/market/intraday-trades?${query.toString()}`, 5);
 }
 
 export function getMarketIndices(): Promise<IndexCollection> {

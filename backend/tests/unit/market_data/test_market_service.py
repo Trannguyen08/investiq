@@ -53,6 +53,18 @@ def test_sector_aggregate_uses_every_instrument_not_one_page() -> None:
     assert banking["member_count"] > 1
 
 
+def test_intraday_trade_contract_keeps_observed_values_and_provenance() -> None:
+    response = MarketService(FixtureMarketProvider()).intraday_trades("FPT", 5)
+
+    assert response["instrument"] == "FPT"
+    assert len(response["data"]) == 5
+    assert response["data"][-1]["price"]
+    assert response["data"][-1]["match_side"] == "unknown"
+    assert response["data"][-1]["change"] is not None
+    assert response["data"][-1]["change_percent"] is not None
+    assert response["meta"]["provider"] == "investiq-fixture"
+
+
 def test_stock_screening_filters_the_complete_universe_before_pagination() -> None:
     provider = FixtureMarketProvider()
     expected = [

@@ -45,6 +45,23 @@ describe("StockTradeActions", () => {
     expect(screen.getByRole("link", { name: "Đăng nhập" })).toHaveAttribute("href", "/login");
   });
 
+  it("opens without depending on the browser native dialog API", () => {
+    const nativeShowModal = HTMLDialogElement.prototype.showModal;
+    Object.defineProperty(HTMLDialogElement.prototype, "showModal", {
+      configurable: true,
+      value: () => { throw new Error("native dialog unavailable"); },
+    });
+
+    render(<StockTradeActions symbol="FPT" name="CTCP FPT" price="102000" />);
+    fireEvent.click(screen.getByRole("button", { name: "Mua FPT" }));
+
+    expect(screen.getByRole("dialog", { name: "Mua FPT" })).toBeVisible();
+    Object.defineProperty(HTMLDialogElement.prototype, "showModal", {
+      configurable: true,
+      value: nativeShowModal,
+    });
+  });
+
   it("only shows sell when the authenticated user owns available shares", async () => {
     useAuth.mockReturnValue({ status: "authenticated", user: { id: "user-1" } });
     vi.stubGlobal("fetch", vi.fn().mockResolvedValue({
@@ -80,7 +97,8 @@ describe("StockTradeActions", () => {
     expect(confirm).toBeEnabled();
     fireEvent.click(confirm);
 
-    expect(await screen.findByText(/Đã tự động khớp 100 FPT/)).toBeInTheDocument();
+    expect(await screen.findByRole("status")).toHaveTextContent(/Mua thành công: Đã tự động khớp 100 FPT/);
+    expect(screen.queryByRole("dialog", { name: "Mua FPT" })).not.toBeInTheDocument();
     expect(fetchMock.mock.calls[2][0]).toBe("/portfolio-api/orders");
   });
 });

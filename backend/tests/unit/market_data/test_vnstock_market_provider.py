@@ -64,6 +64,14 @@ class FakeVnstockGateway:
                 "foreign_buy_volume": 50_000,
                 "foreign_sell_volume": 40_000,
                 "listed_shares": 1_000_000,
+                "bid_price_1": 101_900,
+                "bid_vol_1": 123_400,
+                "bid_price_2": 101_800,
+                "bid_vol_2": 98_700,
+                "ask_price_1": 102_100,
+                "ask_vol_1": 76_500,
+                "ask_price_2": 102_200,
+                "ask_vol_2": 88_800,
                 "time": "2026-10-08 09:10:00",
             },
             {
@@ -130,8 +138,8 @@ class FakeVnstockGateway:
         interval: str,
         count: int,
     ) -> list[dict[str, object]]:
-        assert interval in {"1D", "5m"}
-        assert count in {90, 160, 500}
+        assert interval in {"1D", "1H", "30m", "5m"}
+        assert count in {90, 200, 500}
         if symbol in {"VNINDEX", "VN30", "HNXINDEX", "UPCOMINDEX"}:
             return [
                 {
@@ -176,6 +184,14 @@ class FakeVnstockGateway:
             {"item_id": "roe", "2026-Q2": 5.89},
         ]
 
+    def trade_rows(self, symbol: str, limit: int) -> list[dict[str, object]]:
+        assert symbol == "FPT"
+        assert limit >= 2
+        return [
+            {"time": "2026-10-08 09:10:01", "price": 102, "volume": 200, "match_type": "buy"},
+            {"time": "2026-10-08 09:10:02", "price": 101.9, "volume": 300, "match_type": "sell"},
+        ]
+
 
 def config() -> VnstockConfig:
     return VnstockConfig(
@@ -204,6 +220,14 @@ def test_vnstock_rows_are_normalized_without_claiming_realtime() -> None:
     assert fpt.pb == Decimal("3.7")
     assert fpt.eps == Decimal("6500")
     assert fpt.roe_percent == Decimal("5.89")
+    assert [(level.price, level.volume) for level in fpt.bid_levels] == [
+        (Decimal("101900"), Decimal("123400")),
+        (Decimal("101800"), Decimal("98700")),
+    ]
+    assert [(level.price, level.volume) for level in fpt.ask_levels] == [
+        (Decimal("102100"), Decimal("76500")),
+        (Decimal("102200"), Decimal("88800")),
+    ]
     assert provider.delay_class == "source_delayed"
     assert provider.partial is True
     assert provider.market_time == "2026-10-08T02:10:00Z"
@@ -296,10 +320,23 @@ def test_stock_history_is_scaled_from_vnstock_thousands_to_vnd_and_cached() -> N
 
     candles = provider.candles("FPT", "1d")
 
-    assert len(candles) == 1
+    assert len(candles) == 2
     assert candles[0].open == 100_000
     assert candles[0].close == 102_000
-    assert provider.candles("FPT", "1d") is candles
+    assert candles[-1].close == 102_000
+    assert provider.candles("FPT", "1d") == candles
+    assert provider.candles("FPT", "1h")[0].close == 102_000
+    assert provider.candles("FPT", "30m")[0].close == 102_000
+
+
+def test_intraday_trades_preserve_observed_side_and_vnd_price() -> None:
+    provider = VnstockMarketProvider(config(), gateway=FakeVnstockGateway())
+
+    trades = provider.intraday_trades("FPT", 100)
+
+    assert [item.match_side for item in trades] == ["buy", "sell"]
+    assert [item.price for item in trades] == [Decimal("102000"), Decimal("101900.0")]
+    assert trades[-1].volume == 300
 
 
 def test_refresh_failure_serves_a_labeled_stale_snapshot() -> None:

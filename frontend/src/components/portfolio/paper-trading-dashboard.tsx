@@ -143,6 +143,7 @@ export function PaperTradingDashboard({
   );
   const fundamentalsBySymbol = useVisibleFundamentals(
     visibleMarket.filter((item) => item.pe === null && item.pb === null).map((item) => item.symbol),
+    marketInstruments.filter((item) => item.pe === null && item.pb === null).map((item) => item.symbol),
   );
 
   const filteredOrders = useMemo(() => (dashboard?.orders ?? []).filter((order) => (
@@ -175,11 +176,19 @@ export function PaperTradingDashboard({
     const holding = dashboard.holdings.find((item) => item.symbol === selectedSymbol);
     const marketInstrument = marketInstruments.find((item) => item.symbol === selectedSymbol);
     const opportunity = dashboard.opportunities.find((item) => item.symbol === selectedSymbol);
+    setNotice("");
     setSide(selectedSide);
     setSelectedInstrument({
       symbol: selectedSymbol,
       name: marketInstrument?.name ?? holding?.name ?? opportunity?.name ?? selectedSymbol,
       price: marketInstrument?.price ?? holding?.current_price ?? opportunity?.price ?? null,
+    });
+  }
+
+  function changeMarketPage(nextPage: number) {
+    setMarketPage(Math.max(1, Math.min(marketPageCount, nextPage)));
+    globalThis.requestAnimationFrame?.(() => {
+      document.getElementById("paper-market-table")?.scrollIntoView({ block: "start" });
     });
   }
 
@@ -206,14 +215,15 @@ export function PaperTradingDashboard({
         <article><span>Lãi/lỗ đã chốt</span><strong className={tone(dashboard.account.realized_pnl)}>{money(dashboard.account.realized_pnl)}</strong><small>Sau phí và thuế mô phỏng</small></article>
       </section>
 
-      {(notice || error) && <p className={`paper-inline-message ${error ? "error" : "success"}`} role={error ? "alert" : "status"}>{error || notice}</p>}
+      {error && <p className="paper-inline-message error" role="alert">{error}</p>}
+      {notice && <p className="paper-trade-toast" role="status">{notice}</p>}
 
       <section className="paper-card paper-chart-card">
         <header><div><p className="eyebrow">HIỆU SUẤT ƯỚC TÍNH</p><h2>Biến động giá trị danh mục</h2></div><span>Tối đa 90 phiên</span></header>
         <EquityChart dashboard={dashboard} />
       </section>
 
-      <section className="paper-section paper-market-section" aria-labelledby="paper-market-title">
+      <section id="paper-market-table" className="paper-section paper-market-section" aria-labelledby="paper-market-title">
         <div className="paper-section-heading">
           <div><p className="eyebrow">BẢNG GIÁ NÂNG CAO</p><h2 id="paper-market-title">Chọn cổ phiếu để giao dịch mô phỏng</h2></div>
           <span>{filteredMarket.length} mã</span>
@@ -238,7 +248,7 @@ export function PaperTradingDashboard({
                 <tbody>{visibleMarket.map((item) => {
                   const holding = holdingBySymbol.get(item.symbol);
                   return <tr className={item.is_vn30 ? "vn30-row" : undefined} key={item.symbol}>
-                    <td className="stock-identity"><div><Link href={`/market/stocks/${item.symbol}`} prefetch={false}>{item.symbol}</Link>{item.is_vn30 && <span className="vn30-badge">VN30</span>}</div><span>{item.name}</span><small>{item.exchange} · {item.sector}</small></td>
+                    <td className="stock-identity"><div><Link href={`/market/stocks/${item.symbol}?from=${encodeURIComponent("/portfolio#paper-market-table")}`} prefetch={false}>{item.symbol}</Link>{item.is_vn30 && <span className="vn30-badge">VN30</span>}</div><span>{item.name}</span><small>{item.exchange} · {item.sector}</small></td>
                     <td data-label="Giá"><strong>{formatChange(item.price)}</strong><small>TC {formatChange(item.reference_price)}</small></td>
                     <td data-label="% hôm nay" className={changeTone(item.change_percent)}><strong>{formatPercent(item.change_percent)}</strong><small>{formatChange(item.change)}</small></td>
                     <td data-label="Mở · Cao · Thấp">{formatChange(item.open_price)} · {formatChange(item.high_price)} · {formatChange(item.low_price)}</td>
@@ -252,14 +262,14 @@ export function PaperTradingDashboard({
                 })}</tbody>
               </table>
             </div>
-            {marketPageCount > 1 && <nav className="paper-market-pagination" aria-label="Phân trang bảng cổ phiếu"><button type="button" disabled={marketPage === 1} onClick={() => setMarketPage((page) => Math.max(1, page - 1))}>← Trang trước</button><strong>Trang {marketPage} / {marketPageCount}</strong><button type="button" disabled={marketPage === marketPageCount} onClick={() => setMarketPage((page) => Math.min(marketPageCount, page + 1))}>Trang sau →</button></nav>}
+            {marketPageCount > 1 && <nav className="paper-market-pagination" aria-label="Phân trang bảng cổ phiếu"><button type="button" disabled={marketPage === 1} onClick={() => changeMarketPage(marketPage - 1)}>← Trang trước</button><strong>Trang {marketPage} / {marketPageCount}</strong><button type="button" disabled={marketPage === marketPageCount} onClick={() => changeMarketPage(marketPage + 1)}>Trang sau →</button></nav>}
           </>
         ) : <div className="paper-empty compact"><strong>Chưa có dữ liệu cổ phiếu</strong><p>Nguồn hiện tại trả về danh sách rỗng hoặc không có mã phù hợp với từ khóa.</p></div>}
       </section>
 
       <section className="paper-section">
         <div className="paper-section-heading"><div><p className="eyebrow">ĐANG SỞ HỮU</p><h2>Quản lý cổ phiếu đã mua</h2></div><span>{dashboard.holdings.length} mã</span></div>
-        {dashboard.holdings.length ? <div className="paper-holdings-wrap"><table aria-label="Bảng quản lý cổ phiếu đã mua"><thead><tr><th>Mã &amp; công ty</th><th>Sở hữu / khả dụng</th><th>Giá vốn TB</th><th>Giá hiện tại</th><th>Giá trị</th><th>Hôm nay</th><th>Lãi/lỗ chưa chốt</th><th>Tỷ trọng</th><th>Xu hướng</th><th>Thao tác</th></tr></thead><tbody>{dashboard.holdings.map((holding) => <tr key={holding.symbol}><td><Link href={`/market/stocks/${holding.symbol}`} prefetch={false}>{holding.symbol}</Link><span>{holding.name}</span><small>{holding.exchange} · {holding.sector ?? "Chưa phân loại"}</small></td><td data-label="Sở hữu / khả dụng">{numberFormat.format(holding.quantity)} / {numberFormat.format(holding.available_quantity)} CP</td><td data-label="Giá vốn TB">{money(holding.average_cost)}</td><td data-label="Giá hiện tại">{holding.current_price ? money(holding.current_price) : "Chưa có"}</td><td data-label="Giá trị">{moneyOrUnavailable(holding.market_value)}</td><td data-label="Hôm nay" className={tone(holding.daily_change_percent ?? 0)}>{holding.daily_change_percent === null ? "—" : `${Number(holding.daily_change_percent) > 0 ? "+" : ""}${holding.daily_change_percent}%`}</td><td data-label="Lãi/lỗ" className={tone(holding.unrealized_pnl ?? 0)}>{holding.unrealized_pnl === null ? "Chưa đủ giá" : `${money(holding.unrealized_pnl)} · ${holding.unrealized_pnl_percent}%`}</td><td data-label="Tỷ trọng">{holding.portfolio_weight_percent === null ? "Chưa đủ giá" : `${holding.portfolio_weight_percent}%`}</td><td data-label="Xu hướng"><Sparkline points={holding.price_history} label={`Lịch sử giá ${holding.symbol}`} /></td><td data-label="Thao tác"><div className="paper-stock-actions"><button type="button" onClick={() => prepareOrder("buy", holding.symbol)} aria-label={`Mua thêm ${holding.symbol}`}>Mua thêm</button><button type="button" className="sell" disabled={holding.available_quantity === 0} onClick={() => prepareOrder("sell", holding.symbol)} aria-label={`Bán ${holding.symbol}`}>Bán</button></div></td></tr>)}</tbody></table></div> : <div className="paper-empty"><strong>Chưa có cổ phiếu nào</strong><p>Chọn “Mua” ở bảng giá phía trên. Chỉ lệnh đã khớp mới được tính vào danh mục.</p></div>}
+        {dashboard.holdings.length ? <div className="paper-holdings-wrap"><table aria-label="Bảng quản lý cổ phiếu đã mua"><thead><tr><th>Mã &amp; công ty</th><th>Sở hữu / khả dụng</th><th>Giá vốn TB</th><th>Giá hiện tại</th><th>Giá trị</th><th>Hôm nay</th><th>Lãi/lỗ chưa chốt</th><th>Tỷ trọng</th><th>Xu hướng</th><th>Thao tác</th></tr></thead><tbody>{dashboard.holdings.map((holding) => <tr key={holding.symbol}><td><Link href={`/market/stocks/${holding.symbol}?from=${encodeURIComponent("/portfolio#paper-market-table")}`} prefetch={false}>{holding.symbol}</Link><span>{holding.name}</span><small>{holding.exchange} · {holding.sector ?? "Chưa phân loại"}</small></td><td data-label="Sở hữu / khả dụng">{numberFormat.format(holding.quantity)} / {numberFormat.format(holding.available_quantity)} CP</td><td data-label="Giá vốn TB">{money(holding.average_cost)}</td><td data-label="Giá hiện tại">{holding.current_price ? money(holding.current_price) : "Chưa có"}</td><td data-label="Giá trị">{moneyOrUnavailable(holding.market_value)}</td><td data-label="Hôm nay" className={tone(holding.daily_change_percent ?? 0)}>{holding.daily_change_percent === null ? "—" : `${Number(holding.daily_change_percent) > 0 ? "+" : ""}${holding.daily_change_percent}%`}</td><td data-label="Lãi/lỗ" className={tone(holding.unrealized_pnl ?? 0)}>{holding.unrealized_pnl === null ? "Chưa đủ giá" : `${money(holding.unrealized_pnl)} · ${holding.unrealized_pnl_percent}%`}</td><td data-label="Tỷ trọng">{holding.portfolio_weight_percent === null ? "Chưa đủ giá" : `${holding.portfolio_weight_percent}%`}</td><td data-label="Xu hướng"><Sparkline points={holding.price_history} label={`Lịch sử giá ${holding.symbol}`} /></td><td data-label="Thao tác"><div className="paper-stock-actions"><button type="button" onClick={() => prepareOrder("buy", holding.symbol)} aria-label={`Mua thêm ${holding.symbol}`}>Mua thêm</button><button type="button" className="sell" disabled={holding.available_quantity === 0} onClick={() => prepareOrder("sell", holding.symbol)} aria-label={`Bán ${holding.symbol}`}>Bán</button></div></td></tr>)}</tbody></table></div> : <div className="paper-empty"><strong>Chưa có cổ phiếu nào</strong><p>Chọn “Mua” ở bảng giá phía trên. Chỉ lệnh đã khớp mới được tính vào danh mục.</p></div>}
       </section>
 
       <section className="paper-section" aria-labelledby="paper-orders-title">
@@ -296,7 +306,7 @@ export function PaperTradingDashboard({
       </section>
 
       <footer className="paper-disclaimer"><strong>Đây là môi trường học tập.</strong><span>{dashboard.assumptions.disclaimer} Giá có thể trễ; mô phỏng chưa bao gồm khớp lệnh từng phần, T+2, cổ tức hoặc chia tách.</span></footer>
-      <PaperOrderDialog open={selectedInstrument !== null} side={side} instrument={selectedInstrument} dashboard={dashboard} onClose={() => setSelectedInstrument(null)} onDashboard={(value) => { setDashboard(value); setNotice("Sổ lệnh và sức mua đã được cập nhật."); }} />
+      <PaperOrderDialog open={selectedInstrument !== null} side={side} instrument={selectedInstrument} dashboard={dashboard} onClose={() => setSelectedInstrument(null)} onDashboard={(value) => { setDashboard(value); setError(""); }} onSuccess={setNotice} />
     </main>
   );
 }

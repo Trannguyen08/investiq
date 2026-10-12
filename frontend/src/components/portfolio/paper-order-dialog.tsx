@@ -45,6 +45,7 @@ type PaperOrderDialogProps = {
   dashboard?: PaperDashboard | null;
   onClose: () => void;
   onDashboard?: (dashboard: PaperDashboard) => void;
+  onSuccess?: (message: string) => void;
 };
 
 export function PaperOrderDialog(props: PaperOrderDialogProps) {
@@ -56,6 +57,7 @@ export function PaperOrderDialog(props: PaperOrderDialogProps) {
     suppliedDashboard={props.dashboard}
     onClose={props.onClose}
     onDashboard={props.onDashboard}
+    onSuccess={props.onSuccess}
   />;
 }
 
@@ -65,15 +67,17 @@ function PaperOrderDialogContent({
   suppliedDashboard,
   onClose,
   onDashboard,
+  onSuccess,
 }: {
   side: "buy" | "sell";
   instrument: Instrument;
   suppliedDashboard?: PaperDashboard | null;
   onClose: () => void;
   onDashboard?: (dashboard: PaperDashboard) => void;
+  onSuccess?: (message: string) => void;
 }) {
   const auth = useAuth();
-  const dialogRef = useRef<HTMLDialogElement>(null);
+  const dialogRef = useRef<HTMLElement>(null);
   const submittingRef = useRef(false);
   const idempotencyKeyRef = useRef<string | null>(null);
   const [loadedDashboard, setLoadedDashboard] = useState<PaperDashboard | null>(null);
@@ -83,7 +87,6 @@ function PaperOrderDialogContent({
     side === "sell" ? String(initialHolding?.available_quantity ?? 0) : "100",
   );
   const [error, setError] = useState("");
-  const [result, setResult] = useState("");
   const dashboard = suppliedDashboard ?? loadedDashboard;
   const holding = dashboard?.holdings.find((item) => item.symbol === instrument.symbol) ?? null;
   const executionPrice = instrument.price ?? holding?.current_price ?? "";
@@ -92,18 +95,41 @@ function PaperOrderDialogContent({
   useEffect(() => {
     const dialog = dialogRef.current;
     if (!dialog) return;
+    const previousOverflow = document.body.style.overflow;
     const returnFocus = document.activeElement instanceof HTMLElement
       ? document.activeElement
       : null;
-    if (!dialog.open) {
-      if (typeof dialog.showModal === "function") dialog.showModal();
-      else dialog.setAttribute("open", "");
+    document.body.style.overflow = "hidden";
+    const focusables = () => Array.from(dialog.querySelectorAll<HTMLElement>(
+      "button:not([disabled]), input:not([disabled]), select:not([disabled]), a[href]",
+    ));
+    focusables()[0]?.focus();
+    function handleKeyDown(event: KeyboardEvent) {
+      if (event.key === "Escape") {
+        event.preventDefault();
+        onClose();
+        return;
+      }
+      if (event.key !== "Tab") return;
+      const elements = focusables();
+      const first = elements[0];
+      const last = elements.at(-1);
+      if (!first || !last) return;
+      if (event.shiftKey && document.activeElement === first) {
+        event.preventDefault();
+        last.focus();
+      } else if (!event.shiftKey && document.activeElement === last) {
+        event.preventDefault();
+        first.focus();
+      }
     }
+    document.addEventListener("keydown", handleKeyDown);
     return () => {
-      if (dialog.open && typeof dialog.close === "function") dialog.close();
+      document.body.style.overflow = previousOverflow;
+      document.removeEventListener("keydown", handleKeyDown);
       returnFocus?.focus();
     };
-  }, []);
+  }, [onClose]);
 
   useEffect(() => {
     if (suppliedDashboard || auth.status !== "authenticated") return;
@@ -152,7 +178,6 @@ function PaperOrderDialogContent({
     submittingRef.current = true;
     setPending(true);
     setError("");
-    setResult("");
     try {
       const csrf = await csrfToken();
       const idempotencyKey = idempotencyKeyRef.current ?? crypto.randomUUID();
@@ -182,11 +207,13 @@ function PaperOrderDialogContent({
       if (!response.ok || !body.data || !body.order) {
         throw new Error(body.error?.message ?? "Không thể đặt lệnh mô phỏng.");
       }
+      if (!body.trade) throw new Error("Giao dịch chưa được tự động khớp. Vui lòng tải lại dữ liệu giá và thử lại.");
+      const successMessage = `${side === "buy" ? "Mua" : "Bán"} thành công: Đã tự động khớp ${body.trade.quantity} ${body.trade.symbol} tại ${money(body.trade.execution_price)}.`;
       setLoadedDashboard(body.data);
       idempotencyKeyRef.current = null;
       onDashboard?.(body.data);
-      if (!body.trade) throw new Error("Giao dịch chưa được tự động khớp. Vui lòng tải lại dữ liệu giá và thử lại.");
-      setResult(`Đã tự động khớp ${body.trade.quantity} ${body.trade.symbol} tại ${money(body.trade.execution_price)}.`);
+      onSuccess?.(successMessage);
+      onClose();
     } catch (reason) {
       setError(reason instanceof Error ? reason.message : "Không thể đặt lệnh mô phỏng.");
     } finally {
@@ -196,13 +223,9 @@ function PaperOrderDialogContent({
   }
 
   return (
-    <dialog
-      ref={dialogRef}
-      className={`paper-order-dialog ${side}`}
-      aria-labelledby="paper-order-dialog-title"
-      onCancel={(event) => { event.preventDefault(); onClose(); }}
-      onClose={onClose}
-    >
+    <div className="paper-order-modal" role="presentation">
+      <button className="paper-order-backdrop" type="button" aria-label="Đóng phiếu đặt lệnh" onClick={onClose} />
+      <section ref={dialogRef} className={`paper-order-dialog ${side}`} role="dialog" aria-modal="true" aria-labelledby="paper-order-dialog-title">
       <header>
         <div><p className="eyebrow">GIAO DỊCH MÔ PHỎNG TỰ ĐỘNG</p><h2 id="paper-order-dialog-title">{side === "buy" ? "Mua" : "Bán"} {instrument.symbol}</h2><span>{instrument.name}</span></div>
         <button type="button" aria-label="Đóng phiếu đặt lệnh" onClick={onClose}>×</button>
@@ -225,11 +248,12 @@ function PaperOrderDialogContent({
           <div className="paper-order-capacity">
             {side === "buy" ? <><span>Tiền khả dụng</span><strong>{money(dashboard.account.available_cash)}</strong><small>Giao dịch mô phỏng được ghi nhận ngay sau xác nhận.</small></> : <><span>Cổ phiếu khả dụng</span><strong>{holding?.available_quantity ?? 0} CP</strong><small>Đang sở hữu: {holding?.quantity ?? 0} CP</small></>}
           </div>
-          {(error || result) && <p className={`paper-order-feedback ${error ? "error" : "success"}`} role={error ? "alert" : "status"}>{error || result}</p>}
+          {error && <p className="paper-order-feedback error" role="alert">{error}</p>}
           <p className="paper-order-rule">Trong InvestIQ, giao dịch luyện tập được tự động khớp toàn bộ theo giá quan sát hợp lệ mới nhất, kể cả khi thị trường thật đang đóng cửa. Trên hệ thống giao dịch thật, lệnh có thể chờ, khớp một phần hoặc không khớp do giá, thanh khoản và trạng thái phiên.</p>
           <footer><button type="submit" className={`paper-submit ${side}`} disabled={pending || !executionPrice || (side === "sell" && !holding?.available_quantity)}>{pending ? "Đang ghi nhận…" : `Xác nhận ${side === "buy" ? "mua" : "bán"}`}</button><button type="button" onClick={onClose}>Đóng</button></footer>
         </form>
       )}
-    </dialog>
+      </section>
+    </div>
   );
 }

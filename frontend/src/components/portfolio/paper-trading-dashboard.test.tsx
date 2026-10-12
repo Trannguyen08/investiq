@@ -149,7 +149,8 @@ describe("PaperTradingDashboard", () => {
     fireEvent.click(screen.getByRole("button", { name: "Mua HPG" }));
     fireEvent.click(screen.getByRole("button", { name: "Xác nhận mua" }));
 
-    expect(await screen.findByText(/Đã tự động khớp 100 HPG/)).toBeInTheDocument();
+    expect(await screen.findByRole("status")).toHaveTextContent(/Mua thành công: Đã tự động khớp 100 HPG/);
+    expect(screen.queryByRole("dialog", { name: "Mua HPG" })).not.toBeInTheDocument();
     await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(3));
     expect(fetchMock.mock.calls[2][0]).toBe("/portfolio-api/orders");
     expect(fetchMock.mock.calls[2][1].headers["X-CSRF-Token"]).toBe("csrf");
@@ -193,6 +194,50 @@ describe("PaperTradingDashboard", () => {
 
     expect(await screen.findByText("18.5 · 4.2")).toBeInTheDocument();
     expect(fetchMock.mock.calls[1][0]).toContain("/market-data-api/fundamentals?symbols=FPT");
+  });
+
+  it("loads fundamental ratios in bounded batches beyond the first 15 stocks", async () => {
+    const instruments = Array.from({ length: 16 }, (_, index) => ({
+      ...marketInstrument,
+      symbol: `S${String(index).padStart(2, "0")}`,
+      pe: null,
+      pb: null,
+    }));
+    const fetchMock = vi.fn()
+      .mockResolvedValueOnce({ ok: true, json: async () => dashboard })
+      .mockResolvedValue({ ok: true, json: async () => ({ data: [] }) });
+    vi.stubGlobal("fetch", fetchMock);
+
+    render(<PaperTradingDashboard positiveNews={[]} marketInstruments={instruments} />);
+
+    await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(3));
+    const fundamentalRequests = fetchMock.mock.calls.slice(1).map((call) => String(call[0]));
+    expect(fundamentalRequests).toHaveLength(2);
+    expect(decodeURIComponent(fundamentalRequests[0]).split(",")).toHaveLength(15);
+    expect(fundamentalRequests[1]).toContain("S15");
+  });
+
+  it("keeps the market table in view when changing pages", async () => {
+    const instruments = Array.from({ length: 16 }, (_, index) => ({
+      ...marketInstrument,
+      symbol: `S${String(index).padStart(2, "0")}`,
+    }));
+    const scrollIntoView = vi.fn();
+    Object.defineProperty(Element.prototype, "scrollIntoView", {
+      configurable: true,
+      value: scrollIntoView,
+    });
+    vi.stubGlobal("requestAnimationFrame", (callback: FrameRequestCallback) => {
+      callback(0);
+      return 1;
+    });
+
+    render(<PaperTradingDashboard positiveNews={[]} marketInstruments={instruments} />);
+    await screen.findByRole("heading", { name: /Danh mục mô phỏng/ });
+    fireEvent.click(screen.getByRole("button", { name: /Trang sau/ }));
+
+    expect(screen.getByText("S15")).toBeInTheDocument();
+    expect(scrollIntoView).toHaveBeenCalledWith({ block: "start" });
   });
 
   it("requires login before creating a private simulation account", () => {

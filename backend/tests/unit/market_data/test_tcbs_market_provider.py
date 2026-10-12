@@ -266,6 +266,18 @@ def test_intraday_trades_are_aggregated_into_five_minute_candles() -> None:
     assert provider.candles("FPT", "1d") == ()
 
 
+def test_intraday_trades_remain_available_when_provider_does_not_classify_side() -> None:
+    def transport(request: TcbsRequest) -> object:
+        assert request.path == "/nyx/v1/intraday/FPT/his/paging"
+        return {"d": "07/10", "data": [{"p": 102_000, "v": 200, "t": "09:04:30"}]}
+
+    trades = TcbsMarketProvider(config(), transport=transport).intraday_trades("FPT", 20)
+
+    assert len(trades) == 1
+    assert trades[0].price == Decimal("102000")
+    assert trades[0].match_side == "unknown"
+
+
 def test_overview_breadth_does_not_double_count_vn30() -> None:
     provider = TcbsMarketProvider(config(), transport=market_transport)
     for board, advances, value in ((1, 200, 1000), (2, 20, 300), (3, 100, 500), (5, 50, 200)):

@@ -121,22 +121,12 @@ describe("StocksView navigation", () => {
     expect(screen.getByText("9 tăng")).toBeInTheDocument();
   });
 
-  it("fits the basic table in its frame and maps volatility levels to the requested tones", () => {
-    const low = { ...instrument, symbol: "LOW", change_percent: "0.5" };
-    const medium = { ...instrument, symbol: "MID", change_percent: "2" };
-    const high = { ...instrument, symbol: "HIG", change_percent: "4" };
-    const values = {
-      ...collection,
-      data: [low, medium, high],
-      pagination: { ...collection.pagination, total_items: 3 },
-    };
+  it("ignores legacy basic mode and only renders the advanced market view", () => {
+    render(<StocksView collection={collection} summary={collection} sectors={sectors} filters={{ q: "", exchange: "", sort: "vn30", direction: "desc", mode: "basic" }} selected="" selectedCandles={[]} index={index} />);
 
-    render(<StocksView collection={values} summary={values} sectors={sectors} filters={{ q: "", exchange: "", sort: "vn30", direction: "desc", mode: "basic" }} selected="" selectedCandles={[]} index={index} />);
-
-    expect(screen.getByRole("table", { name: "Bảng cổ phiếu dễ đọc" })).toHaveClass("simple-stock-table", "basic");
-    expect(screen.getByText("Thấp")).toHaveClass("low");
-    expect(screen.getByText("Vừa")).toHaveClass("medium");
-    expect(screen.getByText("Cao")).toHaveClass("high");
+    expect(screen.getByRole("table", { name: "Bảng cổ phiếu nâng cao" })).toHaveClass("simple-stock-table", "advanced");
+    expect(screen.queryByRole("link", { name: "Cơ bản" })).not.toBeInTheDocument();
+    expect(screen.queryByLabelText("Chọn mức độ chi tiết")).not.toBeInTheDocument();
   });
 
   it("marks the advanced table for the compact nine-column layout", () => {
@@ -153,6 +143,17 @@ describe("StocksView navigation", () => {
       "/market-data-api/fundamentals?symbols=FPT",
       expect.objectContaining({ cache: "no-store" }),
     );
+  });
+
+  it("keeps numbered navigation anchored at the stock table", () => {
+    const paged = {
+      ...collection,
+      pagination: { ...collection.pagination, next_cursor: "next-page", has_more: true, total_items: 30, total_pages: 2 },
+    };
+    render(<StocksView collection={paged} summary={collection} sectors={sectors} filters={{ q: "", exchange: "", sort: "vn30", direction: "desc", mode: "basic" }} selected="" selectedCandles={[]} index={index} />);
+
+    expect(screen.getByRole("link", { name: "Trang sau →" })).toHaveAttribute("href", expect.stringMatching(/#stock-table$/));
+    expect(document.getElementById("stock-table")).toBeInTheDocument();
   });
 
   it("shows explicit thresholds in shareable presets and removes saved browser views", () => {

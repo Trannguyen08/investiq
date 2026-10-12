@@ -101,6 +101,10 @@ def test_market_list_and_intraday_chart_contracts(monkeypatch: pytest.MonkeyPatc
             "/api/v1/market/candles",
             params={"symbol": "FPT", "interval": "5m", "limit": 100},
         )
+        trades = client.get(
+            "/api/v1/market/intraday-trades",
+            params={"symbol": "FPT", "limit": 100},
+        )
 
     assert listing.status_code == 200
     assert listing.json()["pagination"] == {
@@ -116,6 +120,16 @@ def test_market_list_and_intraday_chart_contracts(monkeypatch: pytest.MonkeyPatc
     assert candles.json()["instrument"] == "FPT"
     assert candles.json()["interval"] == "5m"
     assert candles.json()["data"][0]["close"] == "102000"
+    assert trades.status_code == 200
+    assert trades.json()["instrument"] == "FPT"
+    assert trades.json()["data"][-1] == {
+        "timestamp": "2026-10-07T02:04:00Z",
+        "price": "102000",
+        "volume": "200",
+        "match_side": "unknown",
+        "change": "2000",
+        "change_percent": "2.00",
+    }
 
 
 def test_sector_endpoint_aggregates_the_complete_provider_snapshot(
