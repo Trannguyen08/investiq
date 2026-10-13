@@ -20,6 +20,20 @@ export type MarketCandle = {
   volume: string;
 };
 
+export type MarketIntradayTrade = {
+  timestamp: string;
+  price: string;
+  volume: string;
+  match_side: "buy" | "sell" | "ato" | "atc" | "unknown";
+  change: string | null;
+  change_percent: string | null;
+};
+
+export type MarketDepthLevel = {
+  price: string;
+  volume: string;
+};
+
 export type MarketInstrument = {
   symbol: string;
   name: string;
@@ -47,6 +61,8 @@ export type MarketInstrument = {
   interest_reasons: string[];
   is_vn30: boolean;
   candles: MarketCandle[];
+  bid_levels?: MarketDepthLevel[];
+  ask_levels?: MarketDepthLevel[];
 };
 
 export type MarketIndex = {
@@ -148,6 +164,12 @@ export type MarketCandles = {
   instrument: string;
   interval: string;
   adjusted: boolean;
+  meta: MarketMeta;
+};
+
+export type MarketIntradayTrades = {
+  data: MarketIntradayTrade[];
+  instrument: string;
   meta: MarketMeta;
 };
 

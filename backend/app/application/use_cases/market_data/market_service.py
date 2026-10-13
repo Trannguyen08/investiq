@@ -10,7 +10,13 @@ from datetime import UTC, datetime
 from decimal import Decimal
 from typing import Any
 
-from app.domain.entities.market import Candle, MarketIndex, MarketInstrument
+from app.domain.entities.market import (
+    Candle,
+    IntradayTrade,
+    MarketDepthLevel,
+    MarketIndex,
+    MarketInstrument,
+)
 from app.domain.repositories.i_market_provider import IMarketProvider
 
 
@@ -26,6 +32,30 @@ def _candle(value: Candle) -> dict[str, str]:
         "low": _decimal(value.low),
         "close": _decimal(value.close),
         "volume": _decimal(value.volume),
+    }
+
+
+def _intraday_trade(
+    value: IntradayTrade,
+    reference_price: Decimal | None,
+) -> dict[str, str | None]:
+    change = value.price - reference_price if reference_price and reference_price > 0 else None
+    change_percent = (
+        change * Decimal("100") / reference_price
+        if change is not None and reference_price is not None
+        else None
+    )
+    return {
+        "timestamp": value.timestamp.isoformat().replace("+00:00", "Z"),
+        "price": _decimal(value.price),
+        "volume": _decimal(value.volume),
+        "match_side": value.match_side,
+        "change": _decimal(change) if change is not None else None,
+        "change_percent": (
+            _decimal(change_percent.quantize(Decimal("0.01")))
+            if change_percent is not None
+            else None
+        ),
     }
 
 
@@ -62,6 +92,19 @@ def _instrument(value: MarketInstrument, include_candles: bool = True) -> dict[s
     return payload
 
 
+def _depth_levels(value: MarketInstrument) -> dict[str, object]:
+    def serialize(levels: tuple[MarketDepthLevel, ...]) -> list[dict[str, str]]:
+        return [
+            {"price": _decimal(level.price), "volume": _decimal(level.volume)}
+            for level in levels
+        ]
+
+    return {
+        "bid_levels": serialize(value.bid_levels),
+        "ask_levels": serialize(value.ask_levels),
+    }
+
+
 def _index(value: MarketIndex, include_candles: bool = True) -> dict[str, object]:
     payload: dict[str, object] = {
         "symbol": value.symbol,
@@ -82,7 +125,7 @@ def _index(value: MarketIndex, include_candles: bool = True) -> dict[str, object
         "floor_count": value.floor_count,
     }
     if include_candles:
-        payload["candles"] = [_candle(item) for item in value.candles[-30:]]
+        payload["candles"] = [_candle(item) for item in value.candles[-170:]]
     return payload
 
 
@@ -295,7 +338,11 @@ class MarketService:
         self, symbol: str, *, include_fundamentals: bool = True
     ) -> dict[str, object] | None:
         value = self._provider.instrument(symbol, include_fundamentals=include_fundamentals)
-        return {"data": _instrument(value), "meta": self.meta()} if value else None
+        if value is None:
+            return None
+        payload = _instrument(value)
+        payload.update(_depth_levels(value))
+        return {"data": payload, "meta": self.meta()}
 
     def indices(self) -> dict[str, object]:
         return {"data": [_index(item) for item in self._provider.indices()], "meta": self.meta()}
@@ -311,6 +358,16 @@ class MarketService:
             "instrument": symbol.upper(),
             "interval": interval,
             "adjusted": False,
+            "meta": self.meta(),
+        }
+
+    def intraday_trades(self, symbol: str, limit: int) -> dict[str, object]:
+        values = self._provider.intraday_trades(symbol, limit)[-limit:]
+        instrument = self._provider.instrument(symbol, include_fundamentals=False)
+        reference_price = instrument.reference_price if instrument is not None else None
+        return {
+            "data": [_intraday_trade(item, reference_price) for item in values],
+            "instrument": symbol.upper(),
             "meta": self.meta(),
         }
 

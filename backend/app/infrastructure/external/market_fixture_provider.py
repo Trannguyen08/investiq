@@ -7,6 +7,7 @@ from decimal import Decimal
 
 from app.domain.entities.market import (
     Candle,
+    IntradayTrade,
     MarketEvent,
     MarketIndex,
     MarketInstrument,
@@ -542,13 +543,27 @@ class FixtureMarketProvider:
         return self._people
 
     def candles(self, symbol: str, interval: str) -> tuple[Candle, ...]:
-        if interval not in {"1d", "5m"}:
+        if interval not in {"1d", "1h", "30m", "5m"}:
             return ()
         instrument = self.instrument(symbol)
         if instrument:
             return instrument.candles
         index = self.index(symbol)
         return index.candles if index else ()
+
+    def intraday_trades(self, symbol: str, limit: int) -> tuple[IntradayTrade, ...]:
+        instrument = self.instrument(symbol)
+        if instrument is None:
+            return ()
+        return tuple(
+            IntradayTrade(
+                timestamp=item.timestamp,
+                price=item.close,
+                volume=item.volume,
+                match_side="unknown",
+            )
+            for item in instrument.candles[-limit:]
+        )
 
     def instrument(
         self, symbol: str, *, include_fundamentals: bool = False

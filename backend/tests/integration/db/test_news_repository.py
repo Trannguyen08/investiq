@@ -35,6 +35,13 @@ ARTICLE_HTML = """
   <meta property="og:description" content="Lợi nhuận tăng so với cùng kỳ.">
 </head><body><article itemprop="articleBody">
   <p>Doanh nghiệp HOSE:FPT ghi nhận lợi nhuận tăng mạnh trong quý.</p>
+  <p>Doanh nghiệp cho biết doanh thu từ các thị trường trọng điểm tiếp tục tăng trưởng.</p>
+  <p>Biên lợi nhuận được duy trì và dòng tiền hoạt động cải thiện trong kỳ báo cáo.</p>
+  <p>Ban lãnh đạo tiếp tục đầu tư cho công nghệ, năng lực vận hành và chất lượng dịch vụ.</p>
+  <p>Kế hoạch từng mảng hướng tới hiệu quả sử dụng vốn và kiểm soát chi phí.</p>
+  <p>Công ty nhấn mạnh số liệu đã công bố không phải cam kết cho kết quả tương lai.</p>
+  <p>Nhà đầu tư cần tiếp tục đối chiếu báo cáo tài chính và thông tin doanh nghiệp công bố.</p>
+  <p>Các điều kiện thị trường có thể làm kết quả thực tế thay đổi trong những quý tiếp theo.</p>
   <img src="/images/fpt.jpg" alt="FPT">
 </article></body></html>
 """
@@ -82,6 +89,12 @@ def test_repository_keeps_idempotency_and_article_revision_history(
         "https://vietstock.vn/chung-khoan/fpt-ket-qua-123.htm",
         fetched_at=datetime(2026, 9, 29, 3, 0, tzinfo=UTC),
     )
+    parsed = replace(
+        parsed,
+        extraction_status=ExtractionStatus.COMPLETE,
+        quality_flags=(),
+        candidate_symbols=(*parsed.candidate_symbols, "VPB"),
+    )
     use_case = IngestNews(news_repository, VietnameseRuleSentimentAnalyzer())
 
     article_id, first_changed = use_case.execute(parsed)
@@ -111,11 +124,19 @@ def test_repository_keeps_idempotency_and_article_revision_history(
     items, has_more = news_repository.list_articles(
         NewsQuery(symbols=("HOSE:FPT",), sentiment="positive", limit=20)
     )
+    source_mentioned_items, _ = news_repository.list_articles(
+        NewsQuery(symbols=("HOSE:VPB",), limit=20)
+    )
+    source_mentioned_count = news_repository.count_articles(
+        NewsQuery(symbols=("HOSE:VPB",), limit=20)
+    )
     detail = news_repository.get_article(article_id)
 
     assert has_more is False
     assert len(items) == 1
     assert items[0].mentions[0].security.symbol == "FPT"
+    assert [item.id for item in source_mentioned_items] == [article_id]
+    assert source_mentioned_count == 1
     assert detail is not None
     assert detail.content_text and "vượt kế hoạch" in detail.content_text
     assert detail.sentiment and detail.sentiment.analyzer_version == "rules-vi-test"
@@ -130,6 +151,34 @@ def test_repository_keeps_idempotency_and_article_revision_history(
             (article_id,),
         ).fetchone()
     assert revision_count == (2,)
+
+
+def test_repository_withdraws_incomplete_articles_from_public_reads(
+    news_repository: SqlNewsRepository,
+) -> None:
+    parsed = VietstockCrawler().parse_article(
+        """
+        <html><head><meta property="og:title" content="Tin ngắn về FPT"></head>
+        <body><article itemprop="articleBody"><p>Cổ phiếu FPT tăng.</p></article></body></html>
+        """,
+        "https://vietstock.vn/chung-khoan/tin-ngan-fpt.htm",
+        fetched_at=datetime.now(UTC),
+    )
+
+    article_id, changed = IngestNews(
+        news_repository, VietnameseRuleSentimentAnalyzer()
+    ).execute(parsed)
+    items, _ = news_repository.list_articles(NewsQuery(limit=20, complete_only=True))
+
+    assert changed is True
+    assert parsed.extraction_status is ExtractionStatus.PARTIAL
+    assert items == ()
+    assert news_repository.get_article(article_id) is None
+    with news_repository._pool.connection() as connection:
+        visibility = connection.execute(
+            "SELECT visibility FROM news_articles WHERE id = %s", (article_id,)
+        ).fetchone()
+    assert visibility == ("withdrawn",)
 
 
 def test_dispatcher_recovers_pending_and_expired_jobs(
@@ -217,6 +266,39 @@ def test_discovery_persists_typed_url_payloads_and_run_counts(
     assert run == ("manual", "running", 2, 2)
 
 
+def test_discovery_canonicalizes_and_deduplicates_overlapping_runs(
+    news_repository: SqlNewsRepository, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    class FakeCrawler:
+        def discover(self, limit: int) -> tuple[str, ...]:
+            assert limit == 3
+            return (
+                "https://vietstock.vn/current.htm?utm_source=feed#top",
+                "https://vietstock.vn/current.htm",
+                "https://vietstock.vn/current.htm?fbclid=tracking",
+            )
+
+    monkeypatch.setattr(news_ingestion_worker, "get_pool", lambda: news_repository._pool)
+    monkeypatch.setattr(news_ingestion_worker, "_crawler", lambda _: FakeCrawler())
+    monkeypatch.setattr(settings, "news_ingestion_enabled", True)
+
+    first = news_ingestion_worker.discover_news.run("vietstock", 3, "scheduled")
+    overlapping = news_ingestion_worker.discover_news.run("vietstock", 3, "scheduled")
+
+    assert first == {"source": "vietstock", "queued": 1, "status": "succeeded"}
+    assert overlapping == {"source": "vietstock", "queued": 0, "status": "succeeded"}
+    with news_repository._pool.connection() as connection:
+        jobs = connection.execute(
+            "SELECT payload->>'url', job_key FROM ingestion_jobs ORDER BY created_at"
+        ).fetchall()
+        runs = connection.execute(
+            "SELECT discovered_count, queued_count FROM crawl_runs ORDER BY created_at"
+        ).fetchall()
+    assert len(jobs) == 1
+    assert jobs[0][0] == "https://vietstock.vn/current.htm"
+    assert runs == [(1, 1), (1, 0)]
+
+
 def test_source_migration_activates_three_metadata_only_rss_sources(
     news_repository: SqlNewsRepository,
 ) -> None:
@@ -262,7 +344,8 @@ def test_repository_enforces_metadata_only_storage_policy(
     with news_repository._pool.connection() as connection:
         stored = connection.execute(
             """
-            SELECT r.content_text, r.content_blocks, r.extraction_status, r.quality_flags
+            SELECT r.content_text, r.content_blocks, r.extraction_status, r.quality_flags,
+                   a.visibility
             FROM news_articles a
             JOIN article_revisions r ON r.id = a.current_revision_id
             WHERE a.id = %s::uuid
@@ -274,6 +357,7 @@ def test_repository_enforces_metadata_only_storage_policy(
     assert stored[1] == []
     assert stored[2] == "metadata_only"
     assert "storage_policy_metadata_only" in stored[3]
+    assert stored[4] == "withdrawn"
 
 
 def test_repository_groups_same_headline_across_sources(
@@ -303,8 +387,8 @@ def test_repository_groups_same_headline_across_sources(
     items, _ = news_repository.list_articles(
         NewsQuery(limit=20, published_after=datetime.now(UTC) - timedelta(days=1))
     )
-    assert len(items) == 2
-    assert {item.duplicate_source_count for item in items} == {2}
+    assert len(items) == 1
+    assert items[0].duplicate_source_count == 1
 
 
 def test_retention_cleanup_previews_then_deletes_only_stale_articles(

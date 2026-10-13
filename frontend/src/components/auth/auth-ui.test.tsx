@@ -1,10 +1,17 @@
 import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
+import type { AnchorHTMLAttributes, ReactNode } from "react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { ForgotPasswordForm, LoginForm, RegisterForm } from "@/components/auth/auth-ui";
 
 vi.mock("next/navigation", () => ({
   useRouter: () => ({ push: vi.fn(), refresh: vi.fn() }),
+}));
+
+vi.mock("next/link", () => ({
+  default: ({ children, ...props }: AnchorHTMLAttributes<HTMLAnchorElement> & { children: ReactNode }) => (
+    <a data-next-link="true" {...props}>{children}</a>
+  ),
 }));
 
 describe("authentication forms", () => {
@@ -19,6 +26,7 @@ describe("authentication forms", () => {
     expect(controls.indexOf("email")).toBeLessThan(controls.indexOf("password"));
     expect(controls.indexOf("Quên mật khẩu?")).toBeGreaterThan(controls.indexOf("password"));
     expect(controls.indexOf("Đăng nhập")).toBeLessThan(controls.indexOf("Đăng nhập với Google"));
+    expect(screen.getByRole("link", { name: "Đăng nhập với Google" })).not.toHaveAttribute("data-next-link");
 
     const password = screen.getByLabelText("Mật khẩu") as HTMLInputElement;
     expect(password.type).toBe("password");

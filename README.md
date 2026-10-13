@@ -9,6 +9,7 @@ baseline is runnable; most finance and ML feature modules remain intentional pla
 | --- | --- | --- |
 | `nginx` | Public reverse proxy for the UI, API, and WebSockets | Host port `HTTP_PORT` |
 | `frontend` | Next.js standalone server | Internal port 3000 |
+| `frontend-dev` | Next.js development server with HMR (local `development` profile) | Loopback port `FRONTEND_PORT` (3000 by default) |
 | `backend` | FastAPI application, health endpoints, and isolated market-provider egress | Internal port 8000 |
 | `db` | PostgreSQL persistence | Internal only |
 | `redis` | Cache plus Celery broker/result backend | Internal only |
@@ -37,7 +38,9 @@ Redis databases 1 and 2 for delivery/results; application caching uses Redis dat
    docker compose run --rm backend python -m app.infrastructure.db.base
    ```
 
-4. Open `http://localhost:8080` (or the configured `HTTP_PORT`). The API smoke endpoint is
+4. Open `http://localhost:3000`. The checked-in local environment enables the `development` profile
+   and fixes the HMR frontend to loopback port 3000. The production-like Nginx route remains at
+   `http://localhost:8080` (or the configured `HTTP_PORT`), and its API smoke endpoint is
    `http://localhost:8080/api/v1/status`.
 5. Open `http://localhost:9999` (or the configured `LOG_VIEWER_PORT`) for runtime logs. The port is
    bound to `127.0.0.1` only. The viewer includes every application runtime container while
@@ -104,8 +107,9 @@ VNSTOCK_CANDLE_CACHE_SECONDS=300
 VNSTOCK_FUNDAMENTAL_CACHE_SECONDS=3600
 ```
 
-The adapter uses Vnstock's unified API with KBS quotes/OHLCV and financial ratios plus VCI industry
-classification. When KBS resets its board to zero before a new session, one VCI batch supplies the
+The adapter uses Vnstock's unified API with KBS quotes/OHLCV and VCI industry plus current TTM
+P/E/P/B statistics. Visible stock pages request at most 15 cached ratios at a time and retain the
+last observed values across transient source failures. When KBS resets its board to zero before a new session, one VCI batch supplies the
 latest completed close and preceding reference instead of presenting a fabricated 0% move or issuing
 per-symbol history requests. It caches bounded snapshots and per-symbol fundamentals, converts
 Vnstock quota exits into ordinary provider failures, and falls back to a clearly labeled stale
@@ -142,6 +146,28 @@ TCBS confirms those rights in writing. Render is technically compatible with the
 worker, and outbound WebSocket; Vercel should be limited to the Next.js frontend for this topology.
 No deployment is part of the repository setup documented here.
 
+## Beginner paper trading
+
+The authenticated `/portfolio` workspace provides one private educational simulation account per
+user with 100,000,000 VND of virtual cash. Users confirm simulated buys/sells against the latest
+observed canonical price. Accepted practice trades automatically fill in full so users can review
+cash, holdings, cost basis, current value, realized/unrealized profit or loss, price history, an
+estimated portfolio curve, and the last 100 immutable simulated fills. The UI explains that real
+orders can wait, partially fill, or fail to fill. The page also
+shows observed daily gainers, existing positive news tagged to symbols, and deterministic risk notices
+for sharp/continuous declines, stale prices, or portfolio concentration. It never connects to a broker
+or places a real order.
+
+Migrations `0012_paper_trading` and `0013_paper_orders` own the account, holding, durable order,
+reservation, and trade ledgers. Private browser traffic
+uses the CSRF-protected `/portfolio-api` Next.js BFF; FastAPI exposes
+`GET /api/v1/paper-portfolio` and idempotent `POST /api/v1/paper-portfolio/orders` only after verifying
+the BFF secret and active user session. Eligible legacy pending orders are reconciled on dashboard
+reads. Personalized responses and errors are `no-store`.
+The model assumes a disclosed 0.15% simulated broker fee and 0.1% simulated sell tax; it does not yet
+model partial fills, ATO/ATC orders, settlement, dividends, splits, margin, or short sales. See the
+[paper-trading plan](docs/plan/paper-trading.md) for calculations, privacy, rollout, and test criteria.
+
 ## Stock news MVP
 
 Apply database migrations as a dedicated step before opening the news routes:
@@ -153,6 +179,16 @@ docker compose run --rm backend python -m app.infrastructure.db.base
 The public pages are `/news` and `/news/<article-id>`. Celery Beat queues an initial crawl of the
 six configured sources whenever the scheduler starts, then discovers new stories every five
 minutes. `NEWS_INGESTION_ENABLED` defaults to `true`; set it to `false` to pause automatic crawling.
+Only revisions with complete extracted content are published by the public news API. Migration
+`0014_withdraw_incomplete_news` withdraws existing partial and metadata-only articles without
+rewriting their immutable revision history; future incomplete revisions are stored as withdrawn.
+The default Compose topology treats the news worker and the single Beat scheduler as application
+readiness dependencies: starting the public `nginx` service also starts both, and local/staging/
+production `docker compose up` waits for their health checks. Starting only the Compose `backend`
+service also brings both ingestion processes up. Discovery URLs are canonicalized before
+their hourly idempotency key is stored; PostgreSQL additionally enforces one article per source and
+canonical URL, while later observations update that article's revision history instead of duplicating
+the feed.
 Before production ingestion, approve each source's storage/display policy and import a reviewed
 UTF-8 security master CSV with columns `exchange,symbol,issuer_name,valid_from`:
 
@@ -184,8 +220,9 @@ do not change the viewer bind address to a public interface without adding authe
 Deployment jobs require dedicated Linux self-hosted runners labelled `investiq-staging` and
 `investiq-production`. Configure GitHub environments with secrets `POSTGRES_PASSWORD`,
 `REDIS_PASSWORD`, and `SECRET_KEY`; optional variables include `HTTP_PORT`, `LOG_VIEWER_PORT`,
-`LOG_LEVEL`, `POSTGRES_DB`, and `POSTGRES_USER`. Protect the `production` environment with required
-reviewers. A rollback deploys a previous immutable backend/frontend tag with the same Compose file;
+`LOG_LEVEL`, `POSTGRES_DB`, `POSTGRES_USER`, and `NEWS_INGESTION_ENABLED` (defaults to `true`).
+Protect the `production` environment with required reviewers. A rollback deploys a previous immutable
+backend/frontend tag with the same Compose file;
 database migrations must include their own compatibility and rollback plan once migrations are
 introduced.
 
@@ -198,7 +235,7 @@ Start a local 90-day backfill after migrations with:
 docker compose exec -T celery-worker python -c "from datetime import UTC, datetime, timedelta; from app.workers.news_ingestion_worker import backfill_news; today=datetime.now(UTC); backfill_news.apply_async(args=(1,(today-timedelta(days=90)).date().isoformat(),today.date().isoformat()),queue='news-ingestion')"
 ```
 
-The public news API supports numbered pages and accent-insensitive partial search. A 30-second Redis
+The public news API supports numbered pages and accent-insensitive substring search. A 30-second Redis
 read cache is invalidated after successful ingestion. The news worker joins a dedicated outbound
 network for publisher requests. Provider requests use a Redis-coordinated per-domain rate limit and
 circuit breaker. The protected news operations endpoints

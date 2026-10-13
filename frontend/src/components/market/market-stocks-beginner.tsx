@@ -5,10 +5,19 @@ import { useRouter } from "next/navigation";
 import { type FormEvent, type RefObject, useEffect, useRef, useState } from "react";
 
 import { InfoTip, MarketColorLegend, MarketLineChart, SectorHeatmap } from "@/components/market/beginner-market-ui";
-import { changeTone, formatChange, formatCompact, formatMoney, formatPercent } from "@/components/market/formatters";
+import {
+  changeTone,
+  formatChange,
+  formatCompact,
+  formatMoney,
+  formatPercent,
+  formatRatioPair,
+  priceTone,
+} from "@/components/market/formatters";
 import { mergeLiveInstrument } from "@/components/market/live-market";
-import { MarketCandlestickChart } from "@/components/market/market-candlestick-chart";
+import { MARKET_OVERVIEW_INDEX_CHART_LIMITS, MarketCandlestickChart } from "@/components/market/market-candlestick-chart";
 import { useMarketStreamState } from "@/hooks/use-realtime-price";
+import { useVisibleFundamentals } from "@/hooks/use-visible-fundamentals";
 import type { InstrumentCollection, MarketCandle, MarketIndex, MarketInstrument, SectorCollection } from "@/types/market";
 
 type StocksViewProps = {
@@ -40,9 +49,11 @@ const screeningPresets: { label: string; metric: string; description: string; va
 function hrefWith(filters: Record<string, string>, changes: Record<string, string | null>) {
   const query = new URLSearchParams();
   for (const [key, value] of Object.entries(filters)) {
+    if (key === "mode") continue;
     if (value) query.set(key, value);
   }
   for (const [key, value] of Object.entries(changes)) {
+    if (key === "mode") continue;
     if (value) query.set(key, value);
     else query.delete(key);
   }
@@ -52,13 +63,6 @@ function hrefWith(filters: Record<string, string>, changes: Record<string, strin
 function companyActivity(item: MarketInstrument) {
   if (!item.sector || item.sector === "Chưa phân loại") return "Chưa có mô tả ngành";
   return `Hoạt động trong ngành ${item.sector.toLocaleLowerCase("vi-VN")}`;
-}
-
-function volatility(value: string) {
-  const amount = Math.abs(Number(value));
-  if (amount < 1) return { label: "Thấp", tone: "low" };
-  if (amount < 3) return { label: "Vừa", tone: "medium" };
-  return { label: "Cao", tone: "high" };
 }
 
 function reasonFor(item: MarketInstrument, kind: "gain" | "loss" | "liquidity") {
@@ -216,7 +220,7 @@ function StockComparisonDialog({
           if (!item) return <article className="comparison-card comparison-missing" key={symbol}><header><h3>{symbol}</h3><button type="button" aria-label={`Gỡ ${symbol} khỏi so sánh`} onClick={() => removeSymbol(symbol)}>×</button></header><p>Chưa tìm thấy dữ liệu cho mã này. Hãy kiểm tra mã hoặc gỡ để chọn mã khác.</p></article>;
           const situation = situationFor(item);
           return <article className="comparison-card" key={symbol}>
-            <header><div><Link href={`/market/stocks/${symbol}`} prefetch={false}>{symbol}</Link><p>{item.name}</p></div><button type="button" aria-label={`Gỡ ${symbol} khỏi so sánh`} onClick={() => removeSymbol(symbol)}>×</button></header>
+            <header><div><Link href={`/market/stocks/${symbol}?from=${encodeURIComponent(`${hrefWith(filters, { compare: null, selected: null })}#stock-table`)}`} prefetch={false}>{symbol}</Link><p>{item.name}</p></div><button type="button" aria-label={`Gỡ ${symbol} khỏi so sánh`} onClick={() => removeSymbol(symbol)}>×</button></header>
             <div className="comparison-price"><strong>{formatChange(item.price)}</strong><span className={changeTone(item.change_percent)}>{formatPercent(item.change_percent)}</span></div>
             <section><h4>Biểu đồ tổng quát</h4>{loaded ? <MarketLineChart candles={loaded.candles} label={`Đường giá 90 phiên của ${symbol}`} /> : <p className="comparison-loading-note">Bấm “Tải dữ liệu so sánh” để lấy biểu đồ 90 phiên.</p>}</section>
             <section className="comparison-metrics-section"><h4>Các chỉ số</h4><dl className="comparison-metrics"><div className="comparison-metric"><dt>Khối lượng</dt><dd>{formatCompact(item.volume)}</dd></div><div className="comparison-metric"><dt>GTGD</dt><dd>{formatMoney(item.matched_value)}</dd></div><div className="comparison-metric"><dt>Vốn hóa</dt><dd>{formatMoney(item.market_cap)}</dd></div><div className="comparison-metric"><dt>P/E</dt><dd>{metricValue(item.pe, " lần")}</dd></div><div className="comparison-metric"><dt>P/B</dt><dd>{metricValue(item.pb, " lần")}</dd></div><div className="comparison-metric"><dt>EPS</dt><dd>{metricValue(item.eps, " đ")}</dd></div><div className="comparison-metric"><dt>ROE</dt><dd>{metricValue(item.roe_percent, "%")}</dd></div></dl></section>
@@ -248,10 +252,12 @@ export function StocksView({
   const activeAdvancedFilterCount = [filters.min_change, filters.max_change, filters.min_matched_value_billion, filters.min_market_cap_billion, filters.min_volume_ratio, filters.vn30].filter(Boolean).length;
   const [advancedFilterOpen, setAdvancedFilterOpen] = useState(activeAdvancedFilterCount > 0);
   const rows = collection.data.map((item) => mergeLiveInstrument(item, stream.items[item.symbol]));
+  const fundamentalsBySymbol = useVisibleFundamentals(
+    rows.filter((item) => item.pe === null || item.pb === null).map((item) => item.symbol),
+  );
   const universe = summary.data.map((item) => mergeLiveInstrument(item, stream.items[item.symbol]));
   const sectorFlows = [...sectors.data].sort((left, right) => Number(right.market_cap) - Number(left.market_cap));
   const chosen = [...rows, ...universe].find((item) => item.symbol === selected);
-  const advanced = filters.mode === "advanced";
   const marketCount = sectors.data.reduce((sum, sector) => sum + sector.member_count, 0);
   const total = marketCount || 1;
   const advances = sectors.data.reduce((sum, sector) => sum + sector.advances, 0);
@@ -270,8 +276,8 @@ export function StocksView({
   return <section className="market-tab-panel beginner-market-page">
     <MarketColorLegend />
     <section className="market-summary-card">
-      <div><p className="eyebrow">TÓM TẮT TRONG MỘT CÂU</p><h2>{summaryText}</h2><p>Phạm vi: toàn bộ {marketCount} cổ phiếu trong snapshot của nguồn.</p><div className="market-mode-toggle" aria-label="Chọn mức độ chi tiết"><Link className={!advanced ? "active" : ""} href={hrefWith(filters, { mode: "basic", selected: null })} prefetch={false}>Cơ bản</Link><Link className={advanced ? "active" : ""} href={hrefWith(filters, { mode: "advanced", selected: null })} prefetch={false}>Nâng cao</Link></div></div>
-      <div><div className="beginner-card-title"><strong>VN-Index</strong><span className={changeTone(index?.change_percent ?? "0")}>{formatPercent(index?.change_percent ?? "0")}</span></div>{advanced ? <MarketCandlestickChart candles={index?.candles ?? []} label="Biểu đồ nến VN-Index" /> : <MarketLineChart candles={index?.candles ?? []} label="Đường giá VN-Index" />}</div>
+      <div><p className="eyebrow">TÓM TẮT TRONG MỘT CÂU</p><h2>{summaryText}</h2><p>Phạm vi: toàn bộ {marketCount} cổ phiếu trong snapshot của nguồn.</p></div>
+      <div><div className="beginner-card-title"><strong>VN-Index</strong><span className={changeTone(index?.change_percent ?? "0")}>{formatPercent(index?.change_percent ?? "0")}</span></div><MarketCandlestickChart candles={index?.candles ?? []} label="Biểu đồ nến VN-Index" range="month" minimumCandles={MARKET_OVERVIEW_INDEX_CHART_LIMITS.minimum} maximumCandles={MARKET_OVERVIEW_INDEX_CHART_LIMITS.maximum} /></div>
     </section>
 
     <div className="market-overview-layout">
@@ -283,18 +289,16 @@ export function StocksView({
 
     <section className="market-top-grid" aria-label="Cổ phiếu nổi bật"><TopList title="Top tăng" items={topGain} kind="gain" filters={filters} /><TopList title="Top giảm" items={topLoss} kind="loss" filters={filters} /><TopList title="Top thanh khoản" items={topLiquidity} kind="liquidity" filters={filters} /></section>
 
-    <div className="stocks-and-guide">
-      <section className="simple-stock-section" aria-labelledby="stock-table-title"><div className="market-tab-heading"><div><h2 id="stock-table-title">Bảng cổ phiếu {advanced ? "nâng cao" : "dễ đọc"}</h2><p>{collection.pagination.total_items} mã · 15 mã mỗi trang · VN30 ưu tiên đầu danh sách.</p>{filters.sector && <div className="active-market-filter"><span>Ngành: {filters.sector}</span><Link href={hrefWith(filters, { sector: null, cursor: null })} prefetch={false}>Bỏ lọc</Link></div>}</div><div className="stock-table-heading-actions"><span className="table-preset">VN30 trước</span><button ref={comparisonButtonRef} type="button" className="open-comparison-button" onClick={() => setComparisonOpen(true)}>So sánh cổ phiếu{comparisonSymbols.length ? ` (${comparisonSymbols.length})` : ""}</button></div></div>
-        <div className="screening-presets" aria-label="Bộ lọc nhanh">{screeningPresets.filter((preset) => hasVolumeBaseline || !preset.values.min_volume_ratio).map((preset) => <Link key={preset.label} href={hrefWith({ mode: filters.mode }, { ...preset.values, cursor: null })} prefetch={false}><b>{preset.metric}</b><strong>{preset.label}</strong><span>{preset.description}</span></Link>)}</div>
+    <section id="stock-table" className="simple-stock-section" aria-labelledby="stock-table-title"><div className="market-tab-heading"><div><h2 id="stock-table-title">Bảng cổ phiếu nâng cao</h2><p>{collection.pagination.total_items} mã · 15 mã mỗi trang · VN30 ưu tiên đầu danh sách.</p>{filters.sector && <div className="active-market-filter"><span>Ngành: {filters.sector}</span><Link href={`${hrefWith(filters, { sector: null, cursor: null })}#stock-table`} prefetch={false}>Bỏ lọc</Link></div>}</div><div className="stock-table-heading-actions"><span className="table-preset">VN30 trước</span><button ref={comparisonButtonRef} type="button" className="open-comparison-button" onClick={() => setComparisonOpen(true)}>So sánh cổ phiếu{comparisonSymbols.length ? ` (${comparisonSymbols.length})` : ""}</button></div></div>
+        <div className="screening-presets" aria-label="Bộ lọc nhanh">{screeningPresets.filter((preset) => hasVolumeBaseline || !preset.values.min_volume_ratio).map((preset) => <Link key={preset.label} href={hrefWith(filters, { ...preset.values, cursor: null })} prefetch={false}><b>{preset.metric}</b><strong>{preset.label}</strong><span>{preset.description}</span></Link>)}</div>
         <form className="stock-filter" action="/market/stocks">
-          <input type="hidden" name="mode" value={filters.mode} />
           {filters.sector && <input type="hidden" name="sector" value={filters.sector} />}
           <label>Tìm mã hoặc công ty<input name="q" defaultValue={filters.q} placeholder="Ví dụ: FPT, Hòa Phát" /></label>
           <label>Sàn<select name="exchange" defaultValue={filters.exchange}><option value="">Tất cả sàn</option><option value="HOSE">HOSE</option><option value="HNX">HNX</option><option value="UPCOM">UPCoM</option></select></label>
           <label>Sắp xếp<select name="sort" defaultValue={hasVolumeBaseline ? filters.sort : filters.sort === "volume_vs_20d" ? "vn30" : filters.sort}><option value="vn30">VN30 trước</option><option value="symbol">Mã</option><option value="change_percent">% hôm nay</option><option value="matched_value">Thanh khoản</option><option value="market_cap">Vốn hóa</option>{hasVolumeBaseline && <option value="volume_vs_20d">Khối lượng so với TB20</option>}</select></label>
           <label>Thứ tự<select name="direction" defaultValue={filters.direction}><option value="desc">Giảm dần</option><option value="asc">Tăng dần</option></select></label>
           <button type="button" className="advanced-filter-trigger" aria-expanded={advancedFilterOpen} aria-controls="advanced-stock-filter-panel" onClick={() => setAdvancedFilterOpen((current) => !current)}>Lọc nâng cao{activeAdvancedFilterCount ? <span>{activeAdvancedFilterCount}</span> : null}</button>
-          <div className="stock-filter-actions"><button type="submit">Áp dụng</button><Link href={`/market/stocks?mode=${filters.mode}`} prefetch={false}>Đặt lại</Link></div>
+          <div className="stock-filter-actions"><button type="submit">Áp dụng</button><Link href="/market/stocks" prefetch={false}>Đặt lại</Link></div>
           {advancedFilterOpen && <section id="advanced-stock-filter-panel" className="advanced-stock-filter" aria-label="Bộ lọc nâng cao">
             <div>
               <label>% tăng tối thiểu<input type="number" step="0.1" min="-100" max="100" name="min_change" defaultValue={filters.min_change} placeholder="Ví dụ: 1" /></label>
@@ -306,14 +310,12 @@ export function StocksView({
             </div>
           </section>}
         </form>
-        <div className="market-table-wrap simple-stock-table-wrap"><table aria-labelledby="stock-table-title" className={`market-table simple-stock-table ${advanced ? "advanced" : "basic"}`}><thead>{advanced ? <tr><th>Mã &amp; công ty</th><th>Giá</th><th>% hôm nay</th><th>Mở · Cao · Thấp</th><th>Khối lượng</th><th>GTGD</th><th>Khối ngoại</th><th>Vốn hóa</th><th>P/E · P/B</th></tr> : <tr><th>Mã &amp; tên công ty</th><th>Giá</th><th>% hôm nay</th><th>Công ty làm gì?</th><th>Mức biến động</th></tr>}</thead><tbody>{rows.map((item) => { const movement = volatility(item.change_percent); const rowHref = hrefWith(filters, { selected: item.symbol }); return <tr className={item.is_vn30 ? "vn30-row" : undefined} key={item.symbol} tabIndex={0} onClick={() => router.push(rowHref)} onKeyDown={(event) => { if (event.key === "Enter") router.push(rowHref); }}><td className="stock-identity"><div><Link href={rowHref} prefetch={false} onClick={(event) => event.stopPropagation()}>{item.symbol}</Link>{item.is_vn30 && <span className="vn30-badge">VN30</span>}</div><span>{item.name}</span><small>{item.exchange} · {item.sector}</small></td><td data-label="Giá"><strong>{formatChange(item.price)}</strong><small>TC {formatChange(item.reference_price)}</small></td><td data-label="% hôm nay" className={changeTone(item.change_percent)}><strong>{formatPercent(item.change_percent)}</strong><small>{formatChange(item.change)}</small></td>{advanced ? <><td data-label="Mở · Cao · Thấp">{formatChange(item.open_price)} · {formatChange(item.high_price)} · {formatChange(item.low_price)}</td><td data-label="Khối lượng">{formatCompact(item.volume)}</td><td data-label="GTGD">{formatMoney(item.matched_value)}</td><td data-label="Khối ngoại" className={changeTone(item.foreign_net_value)}>{formatMoney(item.foreign_net_value)}</td><td data-label="Vốn hóa">{formatMoney(item.market_cap)}</td><td data-label="P/E · P/B">{item.pe ?? "—"} · {item.pb ?? "—"}</td></> : <><td data-label="Công ty làm gì?">{companyActivity(item)}</td><td data-label="Mức biến động"><span className={`volatility-badge ${movement.tone}`}>{movement.label}</span></td></>}</tr>; })}</tbody></table></div>
+        <div className="market-table-wrap simple-stock-table-wrap"><table aria-labelledby="stock-table-title" className="market-table simple-stock-table advanced"><thead><tr><th>Mã &amp; công ty</th><th>Giá</th><th>% hôm nay</th><th>Mở · Cao · Thấp</th><th>Khối lượng</th><th>GTGD</th><th>Khối ngoại</th><th>Vốn hóa</th><th>P/E / P/B</th></tr></thead><tbody>{rows.map((item) => { const rowHref = hrefWith(filters, { selected: item.symbol }); const fundamentals = fundamentalsBySymbol[item.symbol]; const ratiosLoading = (item.pe === null || item.pb === null) && fundamentals === undefined; return <tr className={item.is_vn30 ? "vn30-row" : undefined} key={item.symbol} tabIndex={0} onClick={() => router.push(rowHref)} onKeyDown={(event) => { if (event.key === "Enter") router.push(rowHref); }}><td className="stock-identity"><div><Link href={rowHref} prefetch={false} onClick={(event) => event.stopPropagation()}>{item.symbol}</Link>{item.is_vn30 && <span className="vn30-badge">VN30</span>}</div><span>{item.name}</span><small>{item.exchange} · {item.sector}</small></td><td data-label="Giá"><strong className={priceTone(item.price, item.reference_price, item.ceiling_price, item.floor_price)}>{formatChange(item.price)}</strong><small className="price-reference">TC {formatChange(item.reference_price)}</small></td><td data-label="% hôm nay" className={changeTone(item.change_percent)}><strong>{formatPercent(item.change_percent)}</strong><small>{formatChange(item.change)}</small></td><td data-label="Mở · Cao · Thấp"><span className={priceTone(item.open_price, item.reference_price, item.ceiling_price, item.floor_price)}>{formatChange(item.open_price)}</span> · <span className={priceTone(item.high_price, item.reference_price, item.ceiling_price, item.floor_price)}>{formatChange(item.high_price)}</span> · <span className={priceTone(item.low_price, item.reference_price, item.ceiling_price, item.floor_price)}>{formatChange(item.low_price)}</span></td><td data-label="Khối lượng">{formatCompact(item.volume)}</td><td data-label="GTGD">{formatMoney(item.matched_value)}</td><td data-label="Khối ngoại" className={changeTone(item.foreign_net_value)}>{formatMoney(item.foreign_net_value)}</td><td data-label="Vốn hóa">{formatMoney(item.market_cap)}</td><td data-label="P/E / P/B" className="fundamental-ratios">{formatRatioPair(fundamentals?.pe ?? item.pe, fundamentals?.pb ?? item.pb, ratiosLoading)}</td></tr>; })}</tbody></table></div>
         {!rows.length && <div className="market-empty"><h3>Không tìm thấy cổ phiếu</h3><p>Thử bỏ bớt bộ lọc hoặc tìm bằng mã khác.</p></div>}
-        {!!rows.length && <nav className="market-pagination" aria-label="Phân trang cổ phiếu">{collection.pagination.previous_cursor ? <Link href={hrefWith(filters, { cursor: collection.pagination.previous_cursor, selected: null })} prefetch={false}>← Trang trước</Link> : <span />}<strong>Trang {collection.pagination.page} / {Math.max(1, collection.pagination.total_pages)}</strong>{collection.pagination.next_cursor ? <Link href={hrefWith(filters, { cursor: collection.pagination.next_cursor, selected: null })} prefetch={false}>Trang sau →</Link> : <span />}</nav>}
-      </section>
-      <aside className="how-to-read"><h2>Cách đọc trang này</h2><ol><li>Đọc câu kết luận ở đầu trang.</li><li>Nhìn bản đồ nhiệt để biết ngành nổi bật.</li><li>So sánh số mã tăng và giảm.</li><li>Chỉ mở Nâng cao khi cần nến và chỉ số chuyên sâu.</li></ol><MarketColorLegend /><p><strong>Lưu ý:</strong> dữ liệu thị trường có thể có độ trễ. Không dùng riêng một màu hoặc một chỉ số để quyết định đầu tư.</p></aside>
-    </div>
+        {!!rows.length && <nav className="market-pagination" aria-label="Phân trang cổ phiếu">{collection.pagination.previous_cursor ? <Link href={`${hrefWith(filters, { cursor: collection.pagination.previous_cursor, selected: null })}#stock-table`} prefetch={false}>← Trang trước</Link> : <span />}<strong>Trang {collection.pagination.page} / {Math.max(1, collection.pagination.total_pages)}</strong>{collection.pagination.next_cursor ? <Link href={`${hrefWith(filters, { cursor: collection.pagination.next_cursor, selected: null })}#stock-table`} prefetch={false}>Trang sau →</Link> : <span />}</nav>}
+    </section>
 
-    {chosen && <aside className="stock-drawer" aria-labelledby="drawer-title"><div className="stock-drawer-backdrop"><Link href={hrefWith(filters, { selected: null })} prefetch={false} aria-label="Đóng ngăn chi tiết" /></div><div className="stock-drawer-panel"><header><div><p>{chosen.exchange} · {chosen.sector}</p><h2 id="drawer-title">{chosen.symbol} <small>{chosen.name}</small></h2></div><Link href={hrefWith(filters, { selected: null })} prefetch={false} aria-label="Đóng">×</Link></header><div className="drawer-price"><strong>{formatChange(chosen.price)}</strong><span className={changeTone(chosen.change_percent)}>{formatPercent(chosen.change_percent)}</span></div><MarketLineChart candles={selectedCandles} label={`Đường giá 90 phiên của ${chosen.symbol}`} /><section><h3>Công ty làm gì?</h3><p>{companyActivity(chosen)}. Mô tả này dựa trên phân loại ngành của nguồn dữ liệu, chưa phải hồ sơ doanh nghiệp đầy đủ.</p></section><section><h3>Thảo luận cộng đồng</h3><p>Chưa có thảo luận đã kiểm duyệt cho mã này. Khi mở cộng đồng, bài viết phải nêu rủi ro và việc người viết có đang sở hữu cổ phiếu.</p></section><Link className="market-primary-link" href={`/market/stocks/${chosen.symbol}`} prefetch={false}>Mở trang chi tiết đầy đủ →</Link></div></aside>}
+    {chosen && <aside className="stock-drawer" aria-labelledby="drawer-title"><div className="stock-drawer-backdrop"><Link href={`${hrefWith(filters, { selected: null })}#stock-table`} prefetch={false} aria-label="Đóng ngăn chi tiết" /></div><div className="stock-drawer-panel"><header><div><p>{chosen.exchange} · {chosen.sector}</p><h2 id="drawer-title">{chosen.symbol} <small>{chosen.name}</small></h2></div><Link href={`${hrefWith(filters, { selected: null })}#stock-table`} prefetch={false} aria-label="Đóng">×</Link></header><div className="drawer-price"><strong>{formatChange(chosen.price)}</strong><span className={changeTone(chosen.change_percent)}>{formatPercent(chosen.change_percent)}</span></div><MarketLineChart candles={selectedCandles} label={`Đường giá 90 phiên của ${chosen.symbol}`} /><section><h3>Công ty làm gì?</h3><p>{companyActivity(chosen)}. Mô tả này dựa trên phân loại ngành của nguồn dữ liệu, chưa phải hồ sơ doanh nghiệp đầy đủ.</p></section><section><h3>Thảo luận cộng đồng</h3><p>Chưa có thảo luận đã kiểm duyệt cho mã này. Khi mở cộng đồng, bài viết phải nêu rủi ro và việc người viết có đang sở hữu cổ phiếu.</p></section><Link className="market-primary-link" href={`/market/stocks/${chosen.symbol}?from=${encodeURIComponent(`${hrefWith(filters, { selected: null })}#stock-table`)}`} prefetch={false}>Mở trang chi tiết đầy đủ →</Link></div></aside>}
 
     <StockComparisonDialog
       open={comparisonOpen}

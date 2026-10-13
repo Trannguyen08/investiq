@@ -25,6 +25,7 @@ from websockets.exceptions import ConnectionClosed
 from app.application.use_cases.market_data.errors import MarketDataUnavailable
 from app.domain.entities.market import (
     Candle,
+    IntradayTrade,
     MarketEvent,
     MarketIndex,
     MarketInstrument,
@@ -527,7 +528,7 @@ class TcbsMarketProvider:
                 unchanged=_integer(payload.get("notChange")),
                 ceiling_count=_integer(payload.get("ceilIncrease")),
                 floor_count=_integer(payload.get("floorDecrease")),
-                candles=tuple(previous_candles[-100:]),
+                candles=tuple(previous_candles[-170:]),
             )
             self._market_time = observed_at
         return True
@@ -731,13 +732,11 @@ class TcbsMarketProvider:
     def people(self) -> tuple[MarketPerson, ...]:
         return ()
 
-    def candles(self, symbol: str, interval: str) -> tuple[Candle, ...]:
-        if interval != "5m":
-            return ()
+    def intraday_trades(self, symbol: str, limit: int) -> tuple[IntradayTrade, ...]:
         normalized = symbol.upper()
         response = self._client.get(
             f"/nyx/v1/intraday/{normalized}/his/paging",
-            {"page": "0", "size": "100"},
+            {"page": "0", "size": str(limit)},
         )
         if not isinstance(response, dict):
             raise TcbsProviderError("TCBS price-history response was invalid")
@@ -752,7 +751,7 @@ class TcbsMarketProvider:
             raise TcbsProviderError("TCBS price-history date was invalid") from exc
         if trading_day > now.date():
             trading_day = trading_day.replace(year=trading_day.year - 1)
-        trades: list[tuple[datetime, Decimal, Decimal]] = []
+        trades: list[IntradayTrade] = []
         for item in rows:
             row = _row(item)
             clock_value = row.get("t") if row is not None else None
@@ -766,12 +765,32 @@ class TcbsMarketProvider:
             except ValueError:
                 continue
             timestamp = datetime.combine(trading_day, clock, _MARKET_TZ).astimezone(UTC)
-            trades.append((timestamp, price, _decimal(row.get("v"))))
-        trades.sort(key=lambda item: item[0])
+            raw_side = str(row.get("side") or row.get("a") or "").lower()
+            side = raw_side if raw_side in {"buy", "sell", "ato", "atc"} else "unknown"
+            trades.append(
+                IntradayTrade(
+                    timestamp=timestamp,
+                    price=price,
+                    volume=_decimal(row.get("v")),
+                    match_side=side,
+                )
+            )
+        trades.sort(key=lambda item: item.timestamp)
+        return tuple(trades[-limit:])
+
+    def candles(self, symbol: str, interval: str) -> tuple[Candle, ...]:
+        if interval not in {"5m", "30m", "1h"}:
+            return ()
+        trades = self.intraday_trades(symbol, 100)
         buckets: dict[datetime, list[tuple[Decimal, Decimal]]] = {}
-        for timestamp, price, volume in trades:
-            bucket = timestamp.replace(minute=timestamp.minute // 5 * 5, second=0, microsecond=0)
-            buckets.setdefault(bucket, []).append((price, volume))
+        for trade in trades:
+            bucket_minutes = {"5m": 5, "30m": 30, "1h": 60}[interval]
+            bucket = trade.timestamp.replace(
+                minute=trade.timestamp.minute // bucket_minutes * bucket_minutes,
+                second=0,
+                microsecond=0,
+            )
+            buckets.setdefault(bucket, []).append((trade.price, trade.volume))
         return tuple(
             Candle(
                 timestamp=timestamp,

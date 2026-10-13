@@ -68,11 +68,16 @@ export function StockMetricsPanel({ item }: { item: MarketInstrument }) {
   </aside>;
 }
 
-export function StockPriceChart({ symbol, range, candles }: { symbol: string; range: StockChartRange; candles: MarketCandle[] }) {
+export function StockPriceChart({ symbol, range, candles, returnTo }: { symbol: string; range: StockChartRange; candles: MarketCandle[]; returnTo?: string }) {
+  const rangeHref = (value: StockChartRange) => {
+    const query = new URLSearchParams({ range: value });
+    if (returnTo) query.set("from", returnTo);
+    return `/market/stocks/${symbol}?${query.toString()}`;
+  };
   return <section className="stock-chart-card" aria-labelledby="stock-chart-title">
-    <div className="stock-chart-heading"><div><p className="eyebrow">DIỄN BIẾN GIÁ</p><h2 id="stock-chart-title">Biểu đồ {symbol}</h2></div><nav aria-label="Khoảng thời gian biểu đồ">{ranges.map((item) => <Link className={item.value === range ? "active" : ""} href={`/market/stocks/${symbol}?range=${item.value}`} key={item.value}>{item.label}</Link>)}</nav></div>
+    <div className="stock-chart-heading"><div><p className="eyebrow">DIỄN BIẾN GIÁ</p><h2 id="stock-chart-title">Biểu đồ {symbol}</h2></div><nav aria-label="Khoảng thời gian biểu đồ">{ranges.map((item) => <Link className={item.value === range ? "active" : ""} href={rangeHref(item.value)} key={item.value}>{item.label}</Link>)}</nav></div>
     {candles.length > 1 ? <>
-      <MarketCandlestickChart candles={candles} label={`Biểu đồ nến ${symbol}`} />
+      <MarketCandlestickChart key={`${symbol}-${range}-${candles.at(-1)?.timestamp ?? "empty"}`} candles={candles} label={`Biểu đồ nến ${symbol}`} range={range} explain />
       <details className="stock-chart-data"><summary>Xem dữ liệu biểu đồ</summary><div className="market-table-wrap"><table className="market-table"><thead><tr><th>Thời gian</th><th>Mở</th><th>Cao</th><th>Thấp</th><th>Đóng</th><th>Khối lượng</th></tr></thead><tbody>{candles.slice(-20).map((item) => <tr key={item.timestamp}><td>{new Intl.DateTimeFormat("vi-VN", { timeZone: "Asia/Ho_Chi_Minh", dateStyle: "short", timeStyle: range === "day" ? "short" : undefined }).format(new Date(item.timestamp))}</td><td>{formatChange(item.open)}</td><td>{formatChange(item.high)}</td><td>{formatChange(item.low)}</td><td>{formatChange(item.close)}</td><td>{formatCompact(item.volume)}</td></tr>)}</tbody></table></div></details>
     </> : <div className="stock-chart-empty"><strong>Chưa có chuỗi giá cho khoảng này</strong><p>Nguồn dữ liệu hiện không cung cấp OHLC nhiều phiên hoặc chưa trả đủ dữ liệu cho khung đã chọn. InvestIQ không tạo dữ liệu giả để lấp khoảng trống.</p></div>}
   </section>;

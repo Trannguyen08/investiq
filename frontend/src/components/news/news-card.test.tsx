@@ -73,8 +73,10 @@ describe("NewsCard", () => {
       "/news?symbol=HOSE%3AFPT",
     );
     expect(screen.getByText("Tích cực")).toBeInTheDocument();
-    expect(screen.getByText("VPB · HOSE")).toBeInTheDocument();
-    expect(screen.getByText("LHC · HNX")).toBeInTheDocument();
+    expect(screen.getByText("Kết quả kinh doanh")).toBeInTheDocument();
+    expect(screen.queryByText("earnings result")).not.toBeInTheDocument();
+    expect(screen.getByRole("link", { name: "VPB · HOSE" })).toHaveAttribute("href", "/news?q=VPB");
+    expect(screen.getByRole("link", { name: "LHC · HNX" })).toHaveAttribute("href", "/news?q=LHC");
     expect(screen.queryByText("HND · UPCOM")).not.toBeInTheDocument();
     expect(screen.getByText("+2")).toBeInTheDocument();
   });
@@ -88,5 +90,16 @@ describe("NewsCard", () => {
 
     expect(screen.getByText("Đang phân tích")).toBeInTheDocument();
     expect(screen.queryByText("Trung tính")).not.toBeInTheDocument();
+  });
+
+  it("recovers a source-explicit ticker from article tags", () => {
+    render(
+      <NewsCard
+        article={{ ...article, symbols: [], mentioned_symbols: [], tags: ["KQKD TCB", "Techcombank"] }}
+      />,
+    );
+
+    expect(screen.getByRole("link", { name: "TCB" })).toHaveAttribute("href", "/news?q=TCB");
+    expect(screen.queryByText("KQKD")).not.toBeInTheDocument();
   });
 });

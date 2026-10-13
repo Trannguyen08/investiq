@@ -3,6 +3,170 @@
 Record durable decisions in reverse chronological order. Do not record routine implementation
 details.
 
+## 2026-10-13 — Bounded VCI event calendar for the evaluation adapter
+
+- **Status:** Accepted and implemented
+- **Context:** Vnstock exposes VCI corporate events per symbol, but the adapter returned an empty
+  calendar. Scanning all 30 VN30 members plus the quote/index calls exceeded the 20-request guest
+  minute budget and made first-load results depend on call order.
+- **Decision:** Build the local Home/Events calendar from published VCI milestones for the eight
+  highest-interest symbols in the current snapshot. Limit event fetches to six concurrent calls,
+  retain only the nearest milestone per source event within the next 30 Vietnam-market days, cache
+  the normalized calendar for 30 minutes, and serve the last observed calendar after refresh failure.
+  Use the paged VCI event endpoint through the adapter's owned request boundary, with an explicit
+  timeout, instead of consuming the shared Vnstock guest quota needed by quotes and indices. Label
+  the scope as partial; do not synthesize missing dates or claim full-market coverage.
+- **Consequences:** The Home calendar is populated from real provider observations without exhausting
+  the guest request budget. Coverage follows the current high-interest snapshot and is intentionally
+  incomplete; a licensed full-market corporate-actions feed remains the production path.
+- **Refines:** “Vnstock is a source-delayed evaluation adapter” below.
+
+## 2026-10-13 — Complete-only public news feed
+
+- **Status:** Accepted and implemented
+- **Context:** Partial and metadata-only records were presented beside full articles with a warning,
+  which made the public feed inconsistent and looked like broken content.
+- **Decision:** Publish only current revisions with `complete` extraction. Persist incomplete source
+  observations and immutable revisions for operations, but set their article visibility to
+  `withdrawn`; allow a later complete revision to republish the same canonical article. Translate
+  machine event identifiers at the presentation boundary and keep source-explicit ticker candidates
+  visually distinct from reviewed security-master mentions.
+- **Consequences:** Metadata-only sources remain operational inputs but no longer contribute public
+  cards or detail pages. Existing incomplete rows are recoverable rather than hard-deleted, while
+  the public API, pagination, homepage, and portfolio news consumers see complete articles only.
+
+## 2026-10-13 — Fixed local frontend port and VCI valuation reads
+
+- **Status:** Accepted and implemented.
+- **Context:** Ad-hoc frontend containers did not survive normal Compose lifecycle and made the
+  Google callback origin inconsistent. KBS financial-ratio calls also share a 20-request-per-minute
+  guest quota with other KBS operations, so a 15-row table could exhaust that quota before every
+  visible stock received P/E and P/B.
+- **Decision:** Enable a repository-owned `frontend-dev` Compose profile by default for local work,
+  bind it only to loopback port 3000, and keep its dependencies and `.next` cache in named volumes.
+  Use VCI's company ratio summary for the latest quarterly TTM P/E/P/B enrichment, retain the
+  one-hour per-symbol cache and last-observed fallback, and fetch only the currently visible 15-row
+  page. Keep unavailable ratios explicit rather than manufacturing values.
+- **Consequences:** A normal local `docker compose up` consistently provides HMR and the configured
+  Google callback at `http://localhost:3000`. The Market and Portfolio tables can fill one visible
+  page without competing with KBS quote quota; newly visited pages load on demand, and a genuinely
+  absent upstream ratio is shown as unavailable instead of as zero.
+- **Refines:** “Vnstock is a source-delayed evaluation adapter” and “Redis-backed jobs and container
+  delivery baseline” below.
+
+## 2026-10-13 — News ingestion is part of application readiness
+
+- **Status:** Accepted and implemented.
+- **Context:** Compose defined a news worker and Beat, but a selective local startup could run the
+  public API/UI without either service, leaving the news database stale even though the application
+  appeared healthy. Scheduler restarts and rolling deployment overlap also require explicit
+  idempotency rather than operational timing assumptions.
+- **Decision:** Keep one independent Beat scheduler and the dedicated concurrent news worker. Make
+  both health-checked dependencies of the API and public Nginx services in the shared local/deployment
+  Compose topology. Beat queues all six sources shortly after startup and every five minutes;
+  staging and production explicitly default `NEWS_INGESTION_ENABLED` to true while retaining the
+  environment kill switch. Canonicalize and de-duplicate discovery URLs before creating hourly
+  unique job keys, then retain the PostgreSQL unique article key on source plus canonical URL.
+- **Consequences:** Starting the public Compose application starts and waits for ingestion without a
+  separate crawl command. Duplicate startup/scheduled deliveries are harmless and later observations
+  update revision history instead of inserting another article. Deployments can still intentionally
+  pause ingestion, and source policy/redistribution approval remains an independent production gate.
+- **Refines:** “Redis-backed jobs and container delivery baseline” and “Durable stock-news ingestion
+  and activation gate” below.
+
+## 2026-10-11 — Automatic single-file Allure presentation
+
+- **Status:** Accepted and implemented.
+- **Context:** `allure-pytest` correctly produced Allure JSON, but raw result files are not a
+  developer-readable report. Requiring a separate manual `allure serve` step meant a feature run did
+  not leave an immediately viewable result artifact.
+- **Decision:** Keep Python `allure-pytest` as the test adapter and source-result format. After every
+  feature suite, whether pytest passes or fails, invoke the exact locked official Allure Commandline
+  package to generate `allure-report/index.html` with `--single-file`. Keep both generated result and
+  report directories ignored. Continue prohibiting legacy `pytest-html`, JUnit, coverage XML, and
+  coverage Markdown artifacts.
+- **Consequences:** Every completed feature-suite invocation leaves one directly openable Allure HTML
+  file plus its machine-readable JSON. Local setup now requires Java and the frontend npm development
+  dependencies; the runner fails visibly if presentation generation is unavailable.
+- **Refines:** “Allure-only local backend test artifacts” below; Allure remains the only report
+  system, but its official HTML presentation is now retained locally.
+
+## 2026-10-11 — Allure-only local backend test artifacts
+
+- **Status:** Refined by “Automatic single-file Allure presentation” above.
+- **Context:** Repository-local HTML/JUnit/coverage files created noisy generated trees and forced
+  developers to inspect several report formats. The requested standard is the Python Allure adapter.
+- **Decision:** Pin `allure-pytest` in both the uv development lock and pip development requirements.
+  Feature runs keep branch coverage in the terminal and write only Allure JSON under
+  `test-results/<feature>/<level>/allure-results/`. Do not retain generated pytest HTML, JUnit,
+  coverage XML, or coverage Markdown in the repository workspace. Use the separately installed
+  Allure CLI only to serve a temporary presentation when needed.
+- **Consequences:** One machine-readable result format covers local test-case inspection, and old
+  HTML artifacts are removed. Developers need the Allure CLI to view the interactive report, while
+  test execution itself needs only the Python dependency.
+- **Supersedes:** The local report formats in “Feature-level test evidence and local reports”; its
+  per-feature registration, unit/integration separation, and branch-coverage requirements remain.
+
+## 2026-10-11 — Automatic observed-price fills and session-aware freshness
+
+- **Status:** Accepted and implemented as the current educational simulation model.
+- **Context:** The product is a beginner practice environment, so a persistent waiting/limit-order
+  workflow obscured portfolio learning and implied exchange behavior that the provider cannot model.
+  Market dates also need to distinguish the current calendar day from the latest valid Vietnamese
+  trading session.
+- **Decision:** Keep durable orders and immutable fills for audit/idempotency, but automatically fill
+  every accepted simulated buy or sell in full at the authoritative latest observed price whenever
+  provider freshness is accepted. Closed-session practice uses the latest valid completed-session
+  snapshot; no weekend or holiday candle is fabricated. Remove status/cancellation controls from the
+  learner UI and disclose that real orders may wait, partially fill, or not fill. Enrich P/E and P/B
+  only for the currently visible market page, capped at 15 symbols with three concurrent detail calls
+  and provider caching. Require market-data work to follow `.agents/rules/market-data-freshness.md`.
+- **Consequences:** Learners get immediate position and cash feedback without mistaking the simulator
+  for an exchange. Existing order tables and cancellation API remain compatible with legacy records,
+  while dashboard reads convert eligible legacy pending/open orders. Price staleness still fails
+  closed, and fundamentals enrichment cannot fan out across the full market universe.
+- **Supersedes:** “Durable day-valid LO paper orders” below. Its persistence, locking, provenance,
+  privacy, and immutable-fill decisions remain valid.
+
+## 2026-10-11 — Durable day-valid LO paper orders
+
+- **Status:** Superseded by automatic observed-price fills; retained as migration history.
+- **Context:** The immediate-fill slice could not represent a successful placement that had not yet
+  matched, reserve cash or shares across concurrent orders, cancel waiting orders, or expose one
+  consistent workflow from the market board, stock detail, and owned positions.
+- **Decision:** Persist LO orders separately from immutable fills. A buy matches at the fresh observed
+  market price only when it is at or below the limit; a sell matches only at or above the limit, and
+  matching is disabled outside an open session. Pending/open orders reserve limit cash plus modeled
+  fee or owned shares under the existing portfolio row lock. Dashboard reads and a 30-second open-page
+  refresh re-evaluate orders; cancellation and day expiry release unfilled reservations. Keep partial
+  fills, exchange holiday calendars, ATO/ATC, settlement, and broker connectivity out of scope.
+- **Consequences:** Placement and execution are now distinct durable events, and concurrent orders
+  cannot reuse reserved capacity. Matching is still an educational observed-price model, not an
+  exchange order book; an order is re-evaluated when the private dashboard is read rather than by a
+  continuously running exchange engine.
+- **Supersedes:** The immediate-fill lifecycle in “Private immediate-fill paper trading for
+  beginners”; its account, fee/tax, privacy, provenance, and immutable-fill decisions remain valid.
+
+## 2026-10-08 — Private immediate-fill paper trading for beginners
+
+- **Status:** Accepted and implemented as an educational simulation.
+- **Context:** Beginners need a safe way to practice buying, holding, reviewing performance, and
+  selling without real money. The current provider contract supplies observed prices and daily
+  candles but not an exchange order book, broker account, settlement engine, or active buy/sell-side
+  classifications.
+- **Decision:** Give each authenticated user one private 100-million-VND account. Simulated market
+  orders fill immediately at the latest observed canonical price and persist immutable source/time/
+  delay metadata. Serialize cash and holding mutations with a PostgreSQL row lock, require a
+  per-account idempotency key, use weighted-average cost including a disclosed 0.15% modeled fee,
+  and record a separate 0.1% modeled sell tax. Protect browser access through the existing
+  CSRF-checked BFF plus verified active bearer session. Derive only observable risk notices and show
+  null/partial valuation when a price is unavailable; do not invent active buy/sell counts, future
+  news, broker matching, or personalized advice.
+- **Consequences:** Users can practice and retain an auditable ledger without exposing portfolio data
+  to public caches or logs. The experience is not exchange-identical: partial fills, limit/ATO/ATC
+  orders, settlement, dividends, splits, margin, short sales, deposits, and broker connectivity need
+  separately specified future work. Public operation still requires approved market-data rights.
+
 ## 2026-10-07 — Vnstock is a source-delayed evaluation adapter
 
 - **Status:** Accepted for local/private evaluation; public redistribution remains gated.
@@ -13,8 +177,9 @@ details.
 - **Decision:** Add Vnstock behind the existing canonical provider port, use KBS for reference/quotes/
   OHLCV plus financial ratios and VCI for industry labels, keep its optional key server-side, cache
   snapshots/candles, and identify all results as source-delayed and partial. Load P/E, P/B, EPS, and
-  ROE lazily only for detail reads with a bounded one-hour per-symbol cache; list, watchlist, and
-  WebSocket snapshots stay on the lightweight quote path. If the entire KBS board is reset before a
+  ROE lazily for detail reads with a bounded one-hour per-symbol cache; the portfolio may enrich only
+  its current 15-row page through bounded detail calls, while watchlist and WebSocket snapshots stay
+  on the lightweight quote path. If the entire KBS board is reset before a
   new session, use one VCI price-board batch for the latest completed close and preceding reference;
   do not fan out historical calls or turn the new reference into a synthetic 0% move. Normalize the
   library's quota `SystemExit` as a provider failure so it cannot cancel an ASGI request. Once any
@@ -193,16 +358,19 @@ details.
   reviewed security master. The first rule baseline also returned neutral or mixed too often and did
   not explain likely stock-market impact.
 - **Decision:** Persist publisher-explicit ticker candidates separately from verified security
-  mentions. Display them as source-mentioned codes without enabling verified-symbol filtering.
+  mentions. Display them as source-mentioned codes. Public symbol-scoped news reads may match an
+  exact qualified or bare publisher candidate in addition to a verified relation, but candidates
+  remain visually distinct and do not become security-master mentions.
   Sentiment rules use weighted financial events, sentence evidence, a stated impact scope and an
   explicit short-term horizon. Confidence remains null until calibration. Analyzer version changes
   replace current analysis without creating an article-content revision.
-- **Consequences:** Cards can show useful tickers while preserving master-data trust. Market-impact
+- **Consequences:** Cards and symbol detail pages can use explicit publisher tickers while preserving
+  master-data trust and avoiding free-text symbol inference. Market-impact
   text is an explainable content assessment, carries a non-advice notice, and is not a price forecast.
 
 ## 2026-09-26 — Feature-level test evidence and local reports
 
-- **Status:** Accepted
+- **Status:** Superseded for local artifact formats by the Allure-only decision above.
 - **Context:** Test pass counts alone do not show which feature lines and branches were exercised,
   and developers need one repeatable location for unit and integration evidence.
 - **Decision:** Every feature carries meaningful unit and integration tests. Backend features are

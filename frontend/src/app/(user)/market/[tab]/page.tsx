@@ -115,9 +115,8 @@ export default async function MarketTabPage({
     vn30: value(queryParams, "vn30") === "true" ? "true" : "",
     sort: selectedValue(queryParams, "sort", ["vn30", "symbol", "price", "change_percent", "volume", "matched_value", "trending", "market_cap", "volume_vs_20d"], tab === "watchlist" ? "trending" : "vn30"),
     direction: selectedValue(queryParams, "direction", ["asc", "desc"], "desc"),
-    mode: value(queryParams, "mode", "basic") === "advanced" ? "advanced" : "basic",
   };
-  for (const [key, selected] of Object.entries(filters).filter(([key]) => key !== "mode")) {
+  for (const [key, selected] of Object.entries(filters)) {
     if (selected) query.set(key, selected);
   }
   const cursor = value(queryParams, "cursor");

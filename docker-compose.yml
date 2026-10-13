@@ -121,6 +121,15 @@ services:
     environment:
       <<: *backend-environment
       SERVICE_NAME: backend
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      celery-beat:
+        condition: service_healthy
+      celery-worker:
+        condition: service_healthy
     expose:
       - "8000"
     healthcheck:
@@ -140,6 +149,12 @@ services:
       <<: *backend-environment
       SERVICE_NAME: celery-worker
     command: ["celery", "-A", "app.workers.celery_app:celery_app", "worker", "--loglevel=INFO", "--concurrency=${CELERY_CONCURRENCY:-2}", "--queues=news-ingestion,celery"]
+    healthcheck:
+      test: ["CMD-SHELL", "celery -A app.workers.celery_app:celery_app inspect ping --destination \"celery@$${HOSTNAME}\" --timeout=10 | grep -q pong"]
+      interval: 30s
+      timeout: 15s
+      retries: 5
+      start_period: 45s
     networks:
       - backend
       - news-egress
@@ -161,7 +176,13 @@ services:
     environment:
       <<: *backend-environment
       SERVICE_NAME: celery-beat
-    command: ["celery", "-A", "app.workers.celery_app:celery_app", "beat", "--loglevel=INFO", "--schedule=/tmp/celerybeat-schedule"]
+    command: ["celery", "-A", "app.workers.celery_app:celery_app", "beat", "--loglevel=INFO", "--schedule=/tmp/celerybeat-schedule", "--pidfile=/tmp/celerybeat.pid"]
+    healthcheck:
+      test: ["CMD", "python", "-c", "import os; pid = int(open('/tmp/celerybeat.pid', encoding='utf-8').read()); os.kill(pid, 0)"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 15s
 
   frontend:
     image: ${FRONTEND_IMAGE:-investiq-frontend:local}
@@ -201,6 +222,52 @@ services:
     logging: *default-logging
     restart: unless-stopped
 
+  frontend-dev:
+    profiles: ["development"]
+    image: investiq-frontend-dev:local
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+      target: dependencies
+    working_dir: /app
+    command: ["npm", "run", "dev", "--", "--hostname", "0.0.0.0"]
+    environment:
+      NODE_ENV: development
+      API_INTERNAL_BASE_URL: http://backend:8000/api
+      NEWS_ADMIN_TOKEN: ${NEWS_ADMIN_TOKEN:-}
+      ADMIN_UI_PASSWORD: ${ADMIN_UI_PASSWORD:-}
+      ADMIN_SESSION_SECRET: ${ADMIN_SESSION_SECRET:-}
+      AUTH_BFF_SECRET: ${AUTH_BFF_SECRET:-}
+      AUTH_SESSION_REDIS_URL: redis://:${REDIS_PASSWORD:?REDIS_PASSWORD is required}@redis:6379/3
+      AUTH_SESSION_ENCRYPTION_KEY: ${AUTH_SESSION_ENCRYPTION_KEY:-}
+      AUTH_SESSION_DAYS: ${AUTH_SESSION_DAYS:-30}
+      AUTH_GOOGLE_CLIENT_ID: ${AUTH_GOOGLE_CLIENT_ID:-}
+      AUTH_GOOGLE_REDIRECT_URI: ${AUTH_GOOGLE_REDIRECT_URI:-http://localhost:3000/auth-api/google/callback}
+    ports:
+      - "127.0.0.1:${FRONTEND_PORT:-3000}:3000"
+    volumes:
+      - ./frontend:/app
+      - frontend-dev-node-modules:/app/node_modules
+      - frontend-dev-next:/app/.next
+    depends_on:
+      backend:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://127.0.0.1:3000/ >/dev/null"]
+      interval: 15s
+      timeout: 5s
+      retries: 8
+      start_period: 45s
+    networks:
+      - backend
+      - edge
+    labels:
+      com.investiq.logs: "true"
+    logging: *default-logging
+    restart: unless-stopped
+
   nginx:
     image: nginx:1.29-alpine@sha256:5616878291a2eed594aee8db4dade5878cf7edcb475e59193904b198d9b830de
     ports:
@@ -209,6 +276,10 @@ services:
       - ./infra/nginx/nginx.conf:/etc/nginx/nginx.conf:ro
     depends_on:
       backend:
+        condition: service_healthy
+      celery-beat:
+        condition: service_healthy
+      celery-worker:
         condition: service_healthy
       frontend:
         condition: service_healthy
@@ -293,6 +364,8 @@ volumes:
   postgres-data:
   redis-data:
   log-viewer-data:
+  frontend-dev-node-modules:
+  frontend-dev-next:
 
 networks:
   backend:

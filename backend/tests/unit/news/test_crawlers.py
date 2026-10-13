@@ -249,6 +249,21 @@ def test_parser_extracts_qualified_and_contextual_symbols_without_uppercase_nois
     assert article.candidate_symbols == ("HOSE:HDC", "HDC")
 
 
+def test_parser_recovers_ticker_from_publisher_tags_without_generic_abbreviations() -> None:
+    html = """
+    <html><head>
+      <meta property="og:title" content="Techcombank được phê duyệt tăng vốn">
+      <meta name="keywords" content="KQKD TCB, tăng trưởng GDP, Techcombank">
+    </head><body><article itemprop="articleBody">
+      <p>Techcombank dự kiến tăng vốn điều lệ để chuẩn bị cho giai đoạn tăng trưởng tiếp theo.</p>
+    </article></body></html>
+    """
+
+    article = VietstockCrawler().parse_article(html, "https://vietstock.vn/tcb.htm")
+
+    assert article.candidate_symbols == ("TCB",)
+
+
 def test_vneconomy_parser_keeps_only_publisher_metadata() -> None:
     html = """
     <html><head>
@@ -348,6 +363,41 @@ def test_worker_crawler_registry_supports_all_active_sources() -> None:
         _crawler(source).source_slug
         for source in ("vietstock", "cafef", "hnx", "stockbiz", "vneconomy", "vnexpress")
     } == {"vietstock", "cafef", "hnx", "stockbiz", "vneconomy", "vnexpress"}
+
+
+def test_beat_start_queues_initial_discovery_for_every_source(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from app.infrastructure.config.settings import settings
+    from app.workers import celery_app as celery_module
+
+    published: list[tuple[str, tuple[str, int, str], str, int]] = []
+    monkeypatch.setattr(settings, "news_ingestion_enabled", True)
+    monkeypatch.setattr(
+        celery_module.celery_app,
+        "send_task",
+        lambda task, *, args, queue, countdown: published.append(
+            (task, args, queue, countdown)
+        ),
+    )
+
+    celery_module.discover_news_on_beat_start(object())
+
+    assert {args[0] for _, args, _, _ in published} == {
+        "vietstock",
+        "cafef",
+        "hnx",
+        "stockbiz",
+        "vneconomy",
+        "vnexpress",
+    }
+    assert all(
+        task == "investiq.news.discover.v1"
+        and args[1:] == (50, "scheduled")
+        and queue == "news-ingestion"
+        and countdown == 5
+        for task, args, queue, countdown in published
+    )
 
 
 def test_stockbiz_parser_uses_publisher_time_and_metadata_only_content() -> None:

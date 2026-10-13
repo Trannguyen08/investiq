@@ -45,6 +45,7 @@ from app.schemas.market import (
     IndicesResponse,
     InstrumentEnvelope,
     InstrumentsResponse,
+    IntradayTradesResponse,
     OverviewResponse,
     PeopleResponse,
     PersonEnvelope,
@@ -106,11 +107,17 @@ def _provider() -> IMarketProvider:
     raise RuntimeError("Market data is disabled until a licensed provider is configured")
 
 
+def get_market_provider() -> IMarketProvider:
+    """Expose the configured canonical provider to adjacent authenticated use cases."""
+    return _provider()
+
+
 async def start_market_provider() -> None:
-    if settings.market_data_mode == "tcbs":
-        provider = _provider()
-        if isinstance(provider, TcbsMarketProvider):
-            await provider.start()
+    if settings.market_data_mode not in {"tcbs", "vnstock"}:
+        return
+    provider = _provider()
+    if isinstance(provider, TcbsMarketProvider):
+        await provider.start()
 
 
 async def close_market_provider() -> None:
@@ -292,7 +299,7 @@ def index(symbol: str, response: Response) -> dict[str, object]:
 def candles(
     response: Response,
     symbol: Annotated[str, Query(min_length=1, max_length=24, pattern=r"^[A-Za-z0-9._-]+$")],
-    interval: Literal["1d", "5m"] = "1d",
+    interval: Literal["1d", "1h", "30m", "5m"] = "1d",
     limit: Annotated[int, Query(ge=1, le=500)] = 120,
 ) -> dict[str, object]:
     _public_headers(response)
@@ -300,6 +307,16 @@ def candles(
     if not value["data"]:
         raise HTTPException(status_code=404, detail="Candle series not found")
     return value
+
+
+@router.get("/intraday-trades", response_model=IntradayTradesResponse)
+def intraday_trades(
+    response: Response,
+    symbol: Annotated[str, Query(min_length=1, max_length=24, pattern=r"^[A-Za-z0-9._-]+$")],
+    limit: Annotated[int, Query(ge=1, le=200)] = 100,
+) -> dict[str, object]:
+    _public_headers(response)
+    return _service().intraday_trades(symbol, limit)
 
 
 @router.get("/events", response_model=EventsResponse)

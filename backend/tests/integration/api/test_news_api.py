@@ -249,6 +249,7 @@ def test_news_collection_applies_recent_window_to_repository() -> None:
 
     assert response.status_code == 200
     assert captured[0].published_after is not None
+    assert captured[0].complete_only is True
     assert datetime.now(UTC) - captured[0].published_after < timedelta(hours=25)
 
 

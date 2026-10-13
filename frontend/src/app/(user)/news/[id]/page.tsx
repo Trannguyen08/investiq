@@ -44,7 +44,7 @@ export default async function NewsDetailPage({ params }: { params: Promise<{ id:
           <span>{article.reading_time_minutes} phút đọc</span>
         </div>
         <div className="article-actions">
-          <div className="news-tags">{tickers.slice(0, 5).map((item) => item.href ? <Link className="symbol-chip" href={item.href} key={item.key}>{item.label}</Link> : <span className="symbol-chip source-symbol" title="Mã được nguồn bài viết nhắc đến" key={item.key}>{item.label}</span>)}{tickers.length > 5 && <span className="symbol-chip">+{tickers.length - 5}</span>}</div>
+          <div className="news-tags">{tickers.slice(0, 5).map((item) => <Link className={`symbol-chip${item.verified ? "" : " source-symbol"}`} href={item.href} title={item.verified ? undefined : "Mã được nguồn bài viết nhắc đến"} key={item.key}>{item.label}</Link>)}{tickers.length > 5 && <span className="symbol-chip">+{tickers.length - 5}</span>}</div>
           <a className="source-button" href={article.url} target="_blank" rel="noopener noreferrer">Đọc tại {article.source.name} ↗</a>
         </div>
       </header>
@@ -52,7 +52,6 @@ export default async function NewsDetailPage({ params }: { params: Promise<{ id:
       <div className="article-layout">
         <article className="article-content">
           {article.content_access !== "full_text" && <div className="content-notice">Nguồn này chỉ cung cấp thông tin tóm tắt tại InvestIQ. Chọn “Đọc tại nguồn” để xem đầy đủ.</div>}
-          {article.extraction_status !== "complete" && <div className="content-notice warning">Bài viết được thu thập một phần; một số nội dung hoặc hình ảnh có thể còn thiếu.</div>}
           {(article.description || keyExcerpts.length > 0) && (
             <section className="article-overview" aria-labelledby="article-overview-title">
               <div className="article-overview-heading">

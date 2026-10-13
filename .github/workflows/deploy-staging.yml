@@ -99,6 +99,7 @@ jobs:
           POSTGRES_PASSWORD: ${{ secrets.POSTGRES_PASSWORD }}
           REDIS_PASSWORD: ${{ secrets.REDIS_PASSWORD }}
           SECRET_KEY: ${{ secrets.SECRET_KEY }}
+          NEWS_INGESTION_ENABLED: ${{ vars.NEWS_INGESTION_ENABLED || 'true' }}
           AUTH_ENABLED: ${{ vars.AUTH_ENABLED || 'false' }}
           AUTH_BFF_SECRET: ${{ secrets.AUTH_BFF_SECRET }}
           AUTH_JWT_SECRET: ${{ secrets.AUTH_JWT_SECRET }}

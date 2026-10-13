@@ -284,6 +284,7 @@ def list_news(
         cursor_id=cursor_id,
         published_after=datetime.now(UTC)
         - timedelta(days=min(window_days, settings.news_retention_days)),
+        complete_only=True,
     )
     cache = get_news_read_cache() if isinstance(repository, SqlNewsRepository) else None
     cache_key = cache.key({**filters, "page": page, "cursor": cursor}) if cache else None

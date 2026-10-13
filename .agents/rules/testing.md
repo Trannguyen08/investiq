@@ -40,9 +40,12 @@
 
 - Run backend feature suites through `backend/tests/run_feature_tests.py` and register each new
   feature's unit paths, integration paths, and owned coverage modules in that file.
-- Generate branch-aware JUnit, Markdown, XML, and HTML output under
-  `test-results/<feature-slug>/<unit|integration>/`. Generated reports stay untracked; only the
-  report workspace documentation and ignore policy are committed.
+- Generate branch-aware terminal coverage plus Allure result data under
+  `test-results/<feature-slug>/<unit|integration>/allure-results/` and an official single-file Allure
+  presentation at the sibling `allure-report/index.html`, including for failed test runs. Do not
+  generate legacy `pytest-html`, JUnit, coverage XML, or coverage Markdown artifacts. Generated
+  Allure JSON and HTML stay untracked; only the result workspace documentation and ignore policy are
+  committed.
 - Review missing lines and branches for the modules owned by the feature. Coverage percentage is
   diagnostic evidence, not permission to omit boundary, failure, authorization, or concurrency
   behavior. Report unit and integration percentages separately.

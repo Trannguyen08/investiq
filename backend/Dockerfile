@@ -11,9 +11,13 @@ RUN pip install --disable-pip-version-check --requirement requirements.txt \
     && addgroup --system --gid 10001 app \
     && adduser --system --uid 10001 --ingroup app app
 
+ENV HOME=/home/app
+RUN install -d -o app -g app "$HOME"
+
 COPY --chown=app:app app ./app
 
 USER app
+RUN test -w "$HOME"
 EXPOSE 8000
 
 CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000", "--proxy-headers", "--forwarded-allow-ips=*"]

@@ -6,6 +6,7 @@ import pytest
 from fastapi.testclient import TestClient
 
 from app.api.v1 import market_data
+from app.infrastructure.config.settings import settings
 from app.infrastructure.external.market_fixture_provider import FixtureMarketProvider
 from app.infrastructure.external.tcbs_market_provider import (
     TcbsConfig,
@@ -101,6 +102,10 @@ def test_market_list_and_intraday_chart_contracts(monkeypatch: pytest.MonkeyPatc
             "/api/v1/market/candles",
             params={"symbol": "FPT", "interval": "5m", "limit": 100},
         )
+        trades = client.get(
+            "/api/v1/market/intraday-trades",
+            params={"symbol": "FPT", "limit": 100},
+        )
 
     assert listing.status_code == 200
     assert listing.json()["pagination"] == {
@@ -116,6 +121,16 @@ def test_market_list_and_intraday_chart_contracts(monkeypatch: pytest.MonkeyPatc
     assert candles.json()["instrument"] == "FPT"
     assert candles.json()["interval"] == "5m"
     assert candles.json()["data"][0]["close"] == "102000"
+    assert trades.status_code == 200
+    assert trades.json()["instrument"] == "FPT"
+    assert trades.json()["data"][-1] == {
+        "timestamp": "2026-10-07T02:04:00Z",
+        "price": "102000",
+        "volume": "200",
+        "match_side": "unknown",
+        "change": "2000",
+        "change_percent": "2.00",
+    }
 
 
 def test_sector_endpoint_aggregates_the_complete_provider_snapshot(
@@ -200,3 +215,22 @@ def test_market_provider_failures_return_safe_503(monkeypatch: pytest.MonkeyPatc
     assert response.json()["error"]["code"] == "MARKET_DATA_UNAVAILABLE"
     assert "upstream" not in response.json()["error"]["message"]
     assert response.headers["retry-after"] == "15"
+
+
+@pytest.mark.anyio
+async def test_vnstock_provider_is_initialized_once_during_application_startup(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    calls: list[object] = []
+    provider = FixtureMarketProvider()
+    monkeypatch.setattr(settings, "market_data_mode", "vnstock")
+
+    def provider_factory() -> FixtureMarketProvider:
+        calls.append(provider)
+        return provider
+
+    monkeypatch.setattr(market_data, "_provider", provider_factory)
+
+    await market_data.start_market_provider()
+
+    assert calls == [provider]

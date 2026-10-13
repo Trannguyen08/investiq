@@ -33,6 +33,20 @@ class CandleResponse(StrictModel):
     volume: str
 
 
+class IntradayTradeResponse(StrictModel):
+    timestamp: datetime
+    price: str
+    volume: str
+    match_side: str
+    change: str | None
+    change_percent: str | None
+
+
+class MarketDepthLevelResponse(StrictModel):
+    price: str
+    volume: str
+
+
 class InstrumentResponse(StrictModel):
     symbol: str
     name: str
@@ -60,6 +74,8 @@ class InstrumentResponse(StrictModel):
     interest_reasons: list[str]
     is_vn30: bool
     candles: list[CandleResponse] = Field(default_factory=list)
+    bid_levels: list[MarketDepthLevelResponse] = Field(default_factory=list)
+    ask_levels: list[MarketDepthLevelResponse] = Field(default_factory=list)
 
 
 class IndexResponse(StrictModel):
@@ -191,6 +207,12 @@ class CandlesResponse(StrictModel):
     instrument: str
     interval: str
     adjusted: bool
+    meta: MarketMeta
+
+
+class IntradayTradesResponse(StrictModel):
+    data: list[IntradayTradeResponse]
+    instrument: str
     meta: MarketMeta
 
 
