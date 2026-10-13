@@ -195,7 +195,12 @@ def test_index_stream_frames_update_a_canonical_snapshot() -> None:
     assert parse_tcbs_stream_message("s|8|not-json") is None
 
 
-def test_security_master_is_split_by_exchange_and_filters_non_common_instruments() -> None:
+def test_security_master_is_split_by_exchange_and_filters_non_common_instruments(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(
+        "app.infrastructure.external.tcbs_market_provider.time.monotonic", lambda: 1.0
+    )
     security_filters: list[str] = []
 
     def transport(request: TcbsRequest) -> object:

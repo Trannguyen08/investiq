@@ -4,6 +4,7 @@ from datetime import UTC, date, datetime
 import pytest
 
 from app.infrastructure.external.crawlers.base import (
+    BoundedHttpClient,
     NewsProviderError,
     UnsafeProviderUrl,
     _decode_response_body,
@@ -411,7 +412,7 @@ def test_stockbiz_parser_uses_publisher_time_and_metadata_only_content() -> None
 
 
 def test_vietstock_archive_discovers_only_in_range_articles() -> None:
-    class Client:
+    class Client(BoundedHttpClient):
         def get_text(self, url: str) -> str:
             assert "page=2" in url
             return """<div class="channelContent">
@@ -420,7 +421,7 @@ def test_vietstock_archive_discovers_only_in_range_articles() -> None:
               <a href="https://outside.example/2026/09/bad.htm">Bad</a>
             </div>"""
 
-    crawler = VietstockCrawler(client=Client())
+    crawler = VietstockCrawler(client=Client(("vietstock.vn",)))
     assert crawler.discover_history_page(2, date(2026, 7, 4), date(2026, 10, 4)) == (
         "https://vietstock.vn/2026/09/market-123.htm",
     )

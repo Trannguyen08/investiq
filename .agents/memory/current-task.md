@@ -688,6 +688,17 @@ unset and Docker Desktop is stopped. Targeted strict mypy passed seven core file
 tests, ESLint, TypeScript, Compose rendering, and `git diff --check` passed. No production build,
 migration execution, browser smoke, or deployment ran; an explicit environment plus approved market
 data rights are still required.
+## Market branch integration with dev — 2026-10-08 (complete)
+
+Merged `origin/dev` into `feature/market` and resolved the sole content conflict by preserving both
+branches' completed task history. Updated Market test assertions to narrow generic service payloads
+for strict mypy and removed one obsolete ignore. The first GitHub run then exposed an uptime-dependent
+TCBS initialization defect: a newly started host could treat an empty security master as fresh and
+skip its initial load. The adapter now requires cached securities before applying the refresh TTL,
+with a deterministic low-monotonic-time regression test. Ruff and strict mypy pass; the full backend
+suite passes 110 tests with 11 database tests skipped locally, all 48 frontend tests plus ESLint and
+TypeScript pass, and the Compose model validates. GitHub Actions owns the PostgreSQL-backed tests and
+container builds because the local Docker Desktop engine is unavailable.
 
 ## Comparison metric legibility - 2026-10-08 (complete)
 
@@ -1048,6 +1059,13 @@ resilience, privacy, observability, delivery backlog, 12-week timeline and accep
 Official documentation for FiinGroup, SSI, DNSE and VSDC is linked; production access remains gated
 by storage/display/redistribution rights. Synced the parent roadmap, plan index, root README,
 project/architecture memory and decision log. No application code, migration or runtime changed.
+## News crawl backend CI repair — 2026-10-08 (complete)
+
+Reproduced pull request #5's Backend CI failure with the workflow's strict mypy command. Updated
+the news repository and crawler HTTP test doubles to satisfy their expanded type contracts. Strict
+mypy, Ruff, 21 focused news tests, the full backend suite (82 passed, 11 database tests skipped
+without `TEST_DATABASE_URL`), and Compose model validation pass. Docker image validation remains
+assigned to GitHub Actions because the local Docker Desktop engine is unavailable.
 
 ## Community and market product roadmap — 2026-10-04 (complete)
 
