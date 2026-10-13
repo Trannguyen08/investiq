@@ -1,6 +1,6 @@
 import Link from "next/link";
 
-import { NewsCard, formatNewsTime } from "@/components/news/news-card";
+import { NewsCard, formatNewsTime, newsTickers } from "@/components/news/news-card";
 import { NewsFilterForm } from "@/components/news/news-filter-form";
 import { getNews, getNewsSources } from "@/lib/api-client";
 
@@ -34,15 +34,16 @@ export default async function NewsPage({ searchParams }: { searchParams: SearchP
     );
   }
 
-  const activeSources = sources.data.filter((source) => source.status === "active");
-  const symbolCounts = new Map<string, number>();
+  const activeSources = sources.data.filter((source) => source.status === "active" && source.content_access === "full_text");
+  const symbolCounts = new Map<string, { count: number; href: string; label: string }>();
   for (const article of result.data) {
-    for (const mention of article.symbols) {
-      const key = `${mention.exchange}:${mention.symbol}`;
-      symbolCounts.set(key, (symbolCounts.get(key) ?? 0) + 1);
+    for (const ticker of newsTickers(article)) {
+      const key = ticker.exchange ? `${ticker.exchange}:${ticker.symbol}` : ticker.symbol;
+      const current = symbolCounts.get(key);
+      symbolCounts.set(key, { count: (current?.count ?? 0) + 1, href: ticker.href, label: ticker.label });
     }
   }
-  const popularSymbols = [...symbolCounts.entries()].sort((a, b) => b[1] - a[1]).slice(0, 8);
+  const popularSymbols = [...symbolCounts.entries()].sort((a, b) => b[1].count - a[1].count).slice(0, 8);
   const pageUrl = (page: number) => {
     const params = new URLSearchParams(query);
     params.set("page", String(page));
@@ -57,7 +58,7 @@ export default async function NewsPage({ searchParams }: { searchParams: SearchP
     <main id="main-content" className="news-page">
       <section className="news-hero">
         <div>
-          <p className="eyebrow">InvestIQ Newsroom</p>
+          <p className="eyebrow">Bản tin InvestIQ</p>
           <h1>Tin tức thị trường</h1>
           <p>Đọc tin và theo dõi nội dung liên quan đến doanh nghiệp niêm yết tại Việt Nam.</p>
         </div>
@@ -90,16 +91,16 @@ export default async function NewsPage({ searchParams }: { searchParams: SearchP
             <section>
               <p className="eyebrow">Trong trang đang xem</p>
               <h2>Mã xuất hiện trong tin</h2>
-              {popularSymbols.length ? popularSymbols.map(([symbol, count]) => (
-                <Link href={`/news?symbol=${encodeURIComponent(symbol)}`} className="symbol-row" key={symbol}>
-                  <strong>{symbol}</strong><span>{count} bài</span>
+              {popularSymbols.length ? popularSymbols.map(([symbol, ticker]) => (
+                <Link href={ticker.href} className="symbol-row" key={symbol}>
+                  <strong>{ticker.label}</strong><span>{ticker.count} bài</span>
                 </Link>
               )) : <p className="muted-copy">Chưa nhận diện được mã trong các bài đã tải.</p>}
             </section>
             <section>
               <p className="eyebrow">Nguồn dữ liệu</p>
               <h2>Tình trạng cập nhật</h2>
-              {sources.data.map((source) => (
+              {activeSources.map((source) => (
                 <div className="source-row" key={source.slug}>
                   <span className={`status-dot ${source.status === "active" ? "fresh" : "unavailable"}`} />
                   <span><strong>{source.name}</strong><small>{source.status === "active" ? "Đã tích hợp" : "Đang đánh giá"}</small></span>

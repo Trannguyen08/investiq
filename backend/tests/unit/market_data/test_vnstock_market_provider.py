@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from datetime import date
 from decimal import Decimal
 from threading import Event, Thread
 
@@ -9,6 +10,8 @@ from app.infrastructure.external.vnstock_market_provider import (
     OfficialVnstockGateway,
     VnstockConfig,
     VnstockMarketProvider,
+    _fundamental_values,
+    _latest_vci_fundamental_rows,
 )
 
 
@@ -21,6 +24,8 @@ class FakeVnstockGateway:
         self.partial_open = False
         self.fundamental_calls = 0
         self.previous_session_calls = 0
+        self.event_calls = 0
+        self.fail_events = False
         self.refresh_started = Event()
         self.release_refresh = Event()
 
@@ -139,7 +144,7 @@ class FakeVnstockGateway:
         count: int,
     ) -> list[dict[str, object]]:
         assert interval in {"1D", "1H", "30m", "5m"}
-        assert count in {90, 200, 500}
+        assert count in {170, 200, 500}
         if symbol in {"VNINDEX", "VN30", "HNXINDEX", "UPCOMINDEX"}:
             return [
                 {
@@ -190,6 +195,33 @@ class FakeVnstockGateway:
         return [
             {"time": "2026-10-08 09:10:01", "price": 102, "volume": 200, "match_type": "buy"},
             {"time": "2026-10-08 09:10:02", "price": 101.9, "volume": 300, "match_type": "sell"},
+        ]
+
+    def event_rows(self, symbol: str) -> list[dict[str, object]]:
+        self.event_calls += 1
+        if self.fail_events:
+            raise RuntimeError("events unavailable")
+        if symbol != "FPT":
+            return []
+        return [
+            {
+                "id": "dividend-1",
+                "ticker": "FPT",
+                "event_code": "DIV",
+                "event_name_vi": "Trả cổ tức bằng tiền mặt",
+                "event_title_vi": "Trả cổ tức bằng tiền mặt - 1.000 đồng/cổ phiếu",
+                "exright_date": "2026-10-07",
+                "record_date": "2026-10-08",
+                "payout_date": "2026-10-16T00:00:00",
+            },
+            {
+                "id": "old-event",
+                "ticker": "FPT",
+                "event_code": "AGME",
+                "event_name_vi": "Đại hội cổ đông",
+                "event_title_vi": "Đại hội đồng cổ đông thường niên",
+                "display_date1": "2026-09-01T00:00:00",
+            },
         ]
 
 
@@ -279,10 +311,123 @@ def test_vnstock_system_exit_is_normalized_as_provider_failure() -> None:
             raise SystemExit("rate limit")
 
     gateway = OfficialVnstockGateway.__new__(OfficialVnstockGateway)
-    gateway._market = QuotaLimitedMarket()  # type: ignore[attr-defined]
+    gateway._market = QuotaLimitedMarket()
 
     with pytest.raises(RuntimeError, match="quote request failed"):
         gateway.quote_rows(["FPT"])
+
+
+def test_stock_candles_fall_back_to_vci_when_kbs_is_temporarily_unavailable() -> None:
+    calls: list[str] = []
+
+    class Frame:
+        @staticmethod
+        def to_dict(*, orient: str) -> list[dict[str, object]]:
+            assert orient == "records"
+            return [{
+                "time": "2026-10-13",
+                "open": 24.35,
+                "high": 24.5,
+                "low": 23.95,
+                "close": 24.4,
+                "volume": 15_227_600,
+            }]
+
+    class Equity:
+        @staticmethod
+        def ohlcv(**kwargs: object) -> object:
+            source = str(kwargs["source"])
+            calls.append(source)
+            if source == "kbs":
+                raise SystemExit("temporary KBS quota exit")
+            return Frame()
+
+    class FallbackMarket:
+        @staticmethod
+        def equity(*, symbol: str) -> object:
+            assert symbol == "VPB"
+            return Equity()
+
+    gateway = OfficialVnstockGateway.__new__(OfficialVnstockGateway)
+    gateway._market = FallbackMarket()
+
+    rows = gateway.candle_rows("VPB", "1D", 500)
+
+    assert calls == ["kbs", "vci"]
+    assert rows[0]["close"] == 24.4
+
+
+def test_vci_event_request_is_bounded_and_normalizes_camel_case() -> None:
+    calls: list[dict[str, object]] = []
+
+    def send(**kwargs: object) -> dict[str, object]:
+        calls.append(kwargs)
+        return {
+            "data": {
+                "content": [
+                    {
+                        "id": "event-1",
+                        "ticker": "FPT",
+                        "eventCode": "DIV",
+                        "eventTitleVi": "Trả cổ tức bằng tiền mặt",
+                        "payoutDate": "2026-10-16T00:00:00",
+                    }
+                ]
+            }
+        }
+
+    gateway = OfficialVnstockGateway.__new__(OfficialVnstockGateway)
+    gateway._event_url = "https://events.example.test"
+    gateway._event_headers = {"Accept": "application/json"}
+    gateway._event_sender = send
+
+    rows = gateway.event_rows("FPT")
+
+    assert rows[0]["event_code"] == "DIV"
+    assert rows[0]["payout_date"] == "2026-10-16T00:00:00"
+    assert calls[0]["timeout"] == 5
+    params = calls[0]["params"]
+    assert isinstance(params, dict)
+    assert params["ticker"] == "FPT"
+    assert params["page"] == 0
+    assert params["size"] == 50
+
+
+def test_vci_fundamentals_use_the_latest_ttm_quarter_not_the_annual_row() -> None:
+    rows = [
+        {
+            "year": 2025,
+            "quarter": 4,
+            "ratio_type": "RATIO_TTM",
+            "pe": 13.6,
+            "pb": 3.5,
+            "roe": 0.28,
+        },
+        {
+            "year": 2025,
+            "quarter": 5,
+            "ratio_type": "RATIO_YEAR",
+            "pe": 10.3,
+            "pb": 2.6,
+            "roe": 0.27,
+        },
+        {
+            "year": 2026,
+            "quarter": 2,
+            "ratio_type": "RATIO_TTM",
+            "pe": 10.72,
+            "pb": 2.69,
+            "roe": 0.26,
+        },
+    ]
+
+    normalized = _latest_vci_fundamental_rows(rows)
+    pe, pb, eps, roe = _fundamental_values(normalized)
+
+    assert pe == Decimal("10.72")
+    assert pb == Decimal("2.69")
+    assert eps is None
+    assert roe == Decimal("26.00")
 
 
 def test_fundamentals_are_loaded_on_detail_only_and_cached() -> None:
@@ -314,6 +459,22 @@ def test_fundamental_failure_keeps_the_quote_available() -> None:
     assert value.pb is None
 
 
+def test_expired_fundamentals_serve_last_observed_values_after_provider_failure() -> None:
+    gateway = FakeVnstockGateway()
+    now = [0.0]
+    provider = VnstockMarketProvider(config(), gateway=gateway, clock=lambda: now[0])
+
+    first = provider.instrument("FPT", include_fundamentals=True)
+    now[0] = 3601
+    gateway.fail_fundamentals = True
+    stale = provider.instrument("FPT", include_fundamentals=True)
+
+    assert first is not None and stale is not None
+    assert stale.pe == first.pe == Decimal("15.53")
+    assert stale.pb == first.pb == Decimal("3.7")
+    assert gateway.fundamental_calls == 2
+
+
 def test_stock_history_is_scaled_from_vnstock_thousands_to_vnd_and_cached() -> None:
     gateway = FakeVnstockGateway()
     provider = VnstockMarketProvider(config(), gateway=gateway)
@@ -337,6 +498,45 @@ def test_intraday_trades_preserve_observed_side_and_vnd_price() -> None:
     assert [item.match_side for item in trades] == ["buy", "sell"]
     assert [item.price for item in trades] == [Decimal("102000"), Decimal("101900.0")]
     assert trades[-1].volume == 300
+
+
+def test_upcoming_vci_events_use_the_next_published_milestone_and_are_cached() -> None:
+    gateway = FakeVnstockGateway()
+    provider = VnstockMarketProvider(
+        config(),
+        gateway=gateway,
+        today=lambda: date(2026, 10, 13),
+    )
+
+    first = provider.events()
+    second = provider.events()
+
+    assert second == first
+    assert gateway.event_calls == 2
+    assert len(first) == 1
+    assert first[0].symbol == "FPT"
+    assert first[0].event_type == "cash_dividend"
+    assert first[0].date_type == "payment_date"
+    assert first[0].event_at.isoformat() == "2026-10-15T17:00:00+00:00"
+    assert first[0].status == "official"
+    assert first[0].source_name == "VCI qua Vnstock"
+
+
+def test_event_refresh_failure_retains_last_observed_calendar() -> None:
+    gateway = FakeVnstockGateway()
+    now = [0.0]
+    provider = VnstockMarketProvider(
+        config(),
+        gateway=gateway,
+        clock=lambda: now[0],
+        today=lambda: date(2026, 10, 13),
+    )
+    observed = provider.events()
+    now[0] = 1801
+    gateway.fail_events = True
+
+    assert provider.events() == observed
+    assert gateway.event_calls == 4
 
 
 def test_refresh_failure_serves_a_labeled_stale_snapshot() -> None:

@@ -25,6 +25,14 @@ same dialog. Owned positions are managed in
 a separate table showing quantity, average cost, observed price/value, daily move, unrealized result,
 portfolio weight, price history, and buy-more/sell controls.
 
+The unrealized and realized summary cards open accessible detail dialogs. The unrealized dialog is
+a read-only sale scenario: only the hypothetical quantity can change, no order can be submitted,
+and each holding shows average cost, observed/current price, hypothetical sale price, modeled sale
+costs, amount, and return percentage. The realized dialog attributes gains and losses to completed
+sales, including allocated average cost, sale price, current comparison price when available,
+modeled costs, amount, and return percentage. Its account total remains authoritative when the
+bounded recent-trade list does not contain the full account history.
+
 ## Financial rules
 
 - Currency is VND. Money uses `NUMERIC`/`Decimal` and API decimal strings; no authoritative
@@ -114,6 +122,9 @@ must not label content sentiment as a price forecast or emit prescriptive buy/se
 - The advanced stock table exposes buy on every row and sell only for owned available quantities,
   blocks an invalid sale at the shared validation boundary, and keeps a distinct owned-position management
   table without bypassing order confirmation.
+- Clicking either profit/loss summary exposes symbol-level attribution. Changing a hypothetical sell
+  quantity recalculates the projected amount and percentage without exposing a sell action, while
+  completed sales remain immutable and visibly separated into gains and losses.
 - Unit tests cover calculations and order decisions. API/repository integration tests cover auth,
   ownership, migration, idempotency, and transaction behavior. Frontend component tests cover the
   primary buy/sell journey and financial summaries.

@@ -11,44 +11,49 @@ const BATCH_SIZE = 15;
 
 export function useVisibleFundamentals(symbols: string[], preloadSymbols: string[] = []) {
   const [values, setValues] = useState<Record<string, VisibleFundamentals>>({});
-  const requested = useRef(new Set<string>());
+  const completed = useRef(new Set<string>());
+  const pending = useRef(new Map<string, Promise<VisibleFundamentalsResponse>>());
   const symbolsKey = symbols.join(",");
   const preloadKey = preloadSymbols.join(",");
 
   useEffect(() => {
     const candidates = [...new Set(`${symbolsKey},${preloadKey}`.split(",").filter(Boolean))];
-    if (!candidates.some((symbol) => !requested.current.has(symbol))) return;
-    const controller = new AbortController();
+    if (!candidates.some((symbol) => !completed.current.has(symbol))) return;
+    let active = true;
 
     async function loadBatches() {
       for (let offset = 0; offset < candidates.length; offset += BATCH_SIZE) {
-        if (controller.signal.aborted) return;
+        if (!active) return;
         const missing = candidates
           .slice(offset, offset + BATCH_SIZE)
-          .filter((symbol) => !requested.current.has(symbol));
+          .filter((symbol) => !completed.current.has(symbol));
         if (!missing.length) continue;
-        missing.forEach((symbol) => requested.current.add(symbol));
-        try {
-          const response = await fetch(`/market-data-api/fundamentals?symbols=${encodeURIComponent(missing.join(","))}`, {
+        const batchKey = missing.join(",");
+        let request = pending.current.get(batchKey);
+        if (!request) {
+          request = fetch(`/market-data-api/fundamentals?symbols=${encodeURIComponent(batchKey)}`, {
             cache: "no-store",
-            signal: controller.signal,
+          }).then(async (response) => {
+            if (!response.ok) throw new Error("Không thể tải chỉ số cơ bản.");
+            return response.json() as Promise<VisibleFundamentalsResponse>;
           });
-          if (!response.ok) throw new Error("Không thể tải chỉ số cơ bản.");
-          const body = await response.json() as {
-            data: { symbol: string; pe: string | null; pb: string | null }[];
-          };
+          pending.current.set(batchKey, request);
+        }
+        try {
+          const body = await request;
+          if (!active) return;
+          const received = new Map(body.data.map((item) => [item.symbol, item]));
+          missing.forEach((symbol) => completed.current.add(symbol));
           setValues((current) => {
             const next = { ...current };
-            body.data.forEach((item) => {
-              next[item.symbol] = { pe: item.pe, pb: item.pb };
+            missing.forEach((symbol) => {
+              const item = received.get(symbol);
+              next[symbol] = { pe: item?.pe ?? null, pb: item?.pb ?? null };
             });
             return next;
           });
         } catch {
-          if (controller.signal.aborted) {
-            missing.forEach((symbol) => requested.current.delete(symbol));
-            return;
-          }
+          if (!active) return;
           setValues((current) => {
             const next = { ...current };
             missing.forEach((symbol) => {
@@ -56,13 +61,19 @@ export function useVisibleFundamentals(symbols: string[], preloadSymbols: string
             });
             return next;
           });
+        } finally {
+          if (pending.current.get(batchKey) === request) pending.current.delete(batchKey);
         }
       }
     }
     void loadBatches();
 
-    return () => controller.abort();
+    return () => { active = false; };
   }, [preloadKey, symbolsKey]);
 
   return values;
 }
+
+type VisibleFundamentalsResponse = {
+  data: { symbol: string; pe: string | null; pb: string | null }[];
+};

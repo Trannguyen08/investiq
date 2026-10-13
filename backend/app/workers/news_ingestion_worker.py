@@ -21,7 +21,11 @@ from app.infrastructure.cache.redis_client import get_news_read_cache
 from app.infrastructure.config.settings import settings
 from app.infrastructure.db.repositories.sql_news_repository import SqlNewsRepository
 from app.infrastructure.db.session import get_pool
-from app.infrastructure.external.crawlers.base import BaseNewsCrawler, NewsProviderError
+from app.infrastructure.external.crawlers.base import (
+    BaseNewsCrawler,
+    NewsProviderError,
+    canonicalize_url,
+)
 from app.infrastructure.external.crawlers.cafef_crawler import CafeFCrawler
 from app.infrastructure.external.crawlers.hnx_crawler import HnxCrawler
 from app.infrastructure.external.crawlers.stockbiz_crawler import StockBizCrawler
@@ -72,6 +76,7 @@ def _persist_discovery(
     run_id = uuid4()
     queued_job_ids: list[str] = []
     window = datetime.now(UTC).strftime("%Y%m%d%H")
+    canonical_urls = tuple(dict.fromkeys(canonicalize_url(url) for url in urls))
     with pool.connection() as connection, connection.transaction():
         source = connection.execute(
             "SELECT id FROM news_sources WHERE slug = %s AND status = 'active' FOR UPDATE",
@@ -84,9 +89,9 @@ def _persist_discovery(
             INSERT INTO crawl_runs (id, source_id, trigger, status, started_at, discovered_count)
             VALUES (%s, %s, %s, 'running', %s, %s)
             """,
-            (run_id, source[0], trigger, datetime.now(UTC), len(urls)),
+            (run_id, source[0], trigger, datetime.now(UTC), len(canonical_urls)),
         )
-        for url in urls:
+        for url in canonical_urls:
             job_key = hashlib.sha256(f"fetch:{source_slug}:{window}:{url}".encode()).hexdigest()
             candidate_job_id = uuid4()
             inserted = connection.execute(

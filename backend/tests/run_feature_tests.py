@@ -63,11 +63,13 @@ FEATURES: dict[str, FeatureTests] = {
         unit_coverage_modules=(
             "app.application.use_cases.news",
             "app.infrastructure.external.crawlers",
+            "app.workers.celery_app",
         ),
         integration_coverage_modules=(
             "app.api.v1.news",
             "app.schemas.news",
             "app.infrastructure.db.repositories.sql_news_repository",
+            "app.workers.news_ingestion_worker",
         ),
     ),
     "logging-viewer": FeatureTests(

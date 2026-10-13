@@ -18,7 +18,7 @@ from datetime import UTC, datetime, timedelta, tzinfo
 from email.utils import parsedate_to_datetime
 from html import unescape
 from http.client import HTTPMessage
-from typing import IO, Final
+from typing import IO, Final, Protocol
 
 from bs4 import BeautifulSoup, Tag
 
@@ -50,6 +50,10 @@ class UnsafeProviderUrl(NewsProviderError):
 
 class ResponseTooLarge(NewsProviderError):
     pass
+
+
+class NewsHttpClient(Protocol):
+    def get_text(self, url: str) -> str: ...
 
 
 def _decode_response_body(raw: bytes, charset: str) -> str:
@@ -254,7 +258,7 @@ class BaseNewsCrawler:
     description_selectors: tuple[str, ...]
     title_selectors: tuple[str, ...] = ("h1",)
 
-    def __init__(self, client: BoundedHttpClient | None = None) -> None:
+    def __init__(self, client: NewsHttpClient | None = None) -> None:
         self._client = client or BoundedHttpClient(self.allowed_domains)
 
     def discover(self, limit: int = 50) -> tuple[str, ...]:
@@ -446,7 +450,9 @@ class BaseNewsCrawler:
         )
         tags = self._tags(json_ld.get("keywords"), soup)
         category = _meta_content(soup, ("property", "article:section"))
-        candidates = self._symbol_candidates(" ".join((title, description or "", content_text)))
+        candidates = self._symbol_candidates(
+            " ".join((title, description or "", content_text)), tags=tags
+        )
         return ParsedArticle(
             source_slug=self.source_slug,
             canonical_url=canonical,
@@ -641,7 +647,7 @@ class BaseNewsCrawler:
         return tuple(dict.fromkeys(item.strip() for item in values if item.strip()))[:20]
 
     @staticmethod
-    def _symbol_candidates(text: str) -> tuple[str, ...]:
+    def _symbol_candidates(text: str, *, tags: tuple[str, ...] = ()) -> tuple[str, ...]:
         qualified_matches = re.findall(
             r"\b(HOSE|HNX|UPCOM)\s*:\s*([A-Z][A-Z0-9]{2,7})\b", text.upper()
         )
@@ -652,4 +658,18 @@ class BaseNewsCrawler:
             text,
         )
         candidates.extend(contextual_matches)
+        ignored_abbreviations = {"CEO", "FDI", "GDP", "IMF", "IPO", "PTE", "UOB", "USD"}
+        for tag in tags:
+            for symbol in re.findall(r"\b[A-Z][A-Z0-9]{2,7}\b", tag):
+                standalone_ticker_tag = tag.strip() == symbol
+                already_qualified = any(
+                    candidate == symbol or candidate.endswith(f":{symbol}")
+                    for candidate in candidates
+                )
+                if (
+                    len(symbol) == 3
+                    and not already_qualified
+                    and (standalone_ticker_tag or symbol not in ignored_abbreviations)
+                ):
+                    candidates.append(symbol)
         return tuple(dict.fromkeys(candidates))

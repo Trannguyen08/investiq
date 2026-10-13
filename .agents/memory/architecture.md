@@ -41,8 +41,10 @@ investiq/
 
 ## Runtime topology
 
-- Nginx is the only publicly bound application service. It routes `/` to Next.js, `/api/` to
-  FastAPI, and `/ws/` to the backend with WebSocket upgrade headers. Public access to
+- Nginx is the only publicly bound application service in shared/deployment environments. It routes
+  `/` to Next.js, `/api/` to FastAPI, and `/ws/` to the backend with WebSocket upgrade headers. The
+  local `development` profile additionally publishes `frontend-dev` on loopback port 3000 for HMR
+  and the fixed Google callback origin. Public access to
   `/api/v1/auth/` is blocked because browsers use the Next.js `/auth-api/` BFF boundary.
 - Dozzle is published separately on a loopback-only host port for local runtime log inspection. It
   can read only labeled service logs through an internal endpoint-restricted Docker socket proxy;
@@ -72,6 +74,12 @@ investiq/
   state, with a bounded process-local fallback when Redis is temporarily unavailable. Freshness is
   enforced before persistence and again on public queries; retention cleanup is explicit and
   dry-run by default.
+- Public news reads expose only current revisions whose extraction status is `complete`. Partial and
+  metadata-only revisions remain auditable but their articles are stored as `withdrawn`; migration
+  `0014_withdraw_incomplete_news` applies that policy to existing rows. Symbol-scoped reads match
+  either verified article-security relations or exact publisher-explicit qualified/bare candidate
+  codes; candidates remain a separate, visibly lower-trust classification rather than being promoted
+  into the reviewed security master.
 - Protected news operations endpoints use a dedicated bearer token, optimistic source row versions,
   and PostgreSQL audit records. They fail closed when no token is configured.
 - Public market routes use canonical domain entities and an application-owned provider port. The
@@ -85,10 +93,11 @@ investiq/
   models, while PostgreSQL migration `0011_market_foundation` owns future licensed history, events,
   public people/holding snapshots, engagement retention, and current private watchlists.
 - Vnstock is a local/private evaluation adapter behind the same port. It uses source-delayed KBS
-  reference/quote/OHLCV data plus VCI industry labels, normalizes equity candles to VND, caches
-  snapshots, candles, and recent KBS executions, and lazily loads per-symbol KBS P/E, P/B, EPS, and
-  ROE for stock detail or a bounded table universe in sequential 15-symbol batches with a one-hour
-  cache, three-call concurrency ceiling, and null fallback. Detail responses preserve up to three
+  reference/quote/OHLCV data plus VCI industry labels and current-TTM valuation statistics,
+  normalizes equity candles to VND, caches snapshots, candles, and recent KBS executions, and lazily
+  loads per-symbol VCI P/E, P/B, and ROE for stock detail or a currently visible 15-symbol table page
+  with a one-hour cache, three-call concurrency ceiling, last-observed stale fallback, and explicit
+  null fallback when the source has never supplied a ratio. Detail responses preserve up to three
   provider-observed resting bid/ask levels; recent executions retain the source's aggressive
   buy/sell/ATO/ATC classification, and the API derives each execution's Decimal change from the
   canonical reference price. A fully reset pre-open KBS board is replaced by one
@@ -100,6 +109,10 @@ investiq/
   rather than being copied from the indicative price. Its optional key stays server-side. Because the client aggregates third-party
   sources, this adapter is not evidence of public redistribution rights and is not a production
   licensing substitute.
+  The same evaluation adapter normalizes published VCI corporate-event milestones for the upcoming
+  30-day Home/Events calendar. It scans the eight highest-interest symbols in the current snapshot
+  with a six-call concurrency ceiling, caches results for 30 minutes, preserves the last observed
+  calendar across refresh failure, and labels the deliberately partial universe in the UI.
 - Stock discovery defaults to VN30-first ordering with 15-row cursor pages and one advanced-only
   nine-column presentation; the removed Basic display mode is not part of route state. The path-addressable
   `/market/stocks/<symbol>` view aggregates documented current-session TCBS trades into five-minute,
@@ -111,15 +124,22 @@ investiq/
   previous-month-start, and same-month-prior-year windows respectively from observed source bars.
   The shared chart keeps hover/focus OHLC detail, ends pointer panning on release/cancel, and clamps
   drag/button panning so users may reveal older fetched history but cannot move beyond the newest
-  observation. The Month and Year views additionally use a chart-local non-passive wheel listener for
-  pointer-anchored zoom, prevent handled gestures from scrolling the enclosing page, and expose
-  accessible zoom buttons between 40 candles and the selected range's full source window. Home and
+  observation. Every shared financial chart uses a chart-local non-passive wheel listener for
+  pointer-anchored zoom, prevents handled gestures from scrolling the enclosing page, and exposes
+  accessible zoom buttons. The shared default spans from 10 candles to the selected range's full
+  source window. The Market VN-Index highlight explicitly spans 50 to 120 daily candles, while Index
+  detail spans 70 to 170 from a provider/API payload bounded to the newest 170 sessions. Daily-
+  versus-intraday axis formatting is derived from observed timestamp spacing rather than from a
+  missing range prop. Home and
   Market share a scoped dark navy visual system; their common movement-weighted sector heatmap packs
   at most eight sectors per desktop row and normalizes each row using absolute percentage movement,
   so widths stay proportional while the bounded 16-sector view occupies exactly two rows. Home derives
   its market-wide breadth summary from canonical exchange snapshots. One shared accessible SVG
-  candlestick renderer serves the Home VN-Index chart and stock detail pages with red/green OHLC,
-  volume, MA5/MA20, axes, and a table alternative. The TCBS adapter accumulates bounded five-minute
+  candlestick renderer serves the Home VN-Index chart, the 100-session Index detail view, and stock
+  detail pages with red/green OHLC, volume, MA5/MA20, axes, per-candle pointer/keyboard inspection,
+  and a table alternative. The Vnstock adapter is instantiated during application startup so
+  concurrent cold requests share one snapshot/candle cache; stock candle reads prefer KBS and fall
+  back once to VCI when KBS fails or returns no rows. The TCBS adapter accumulates bounded five-minute
   VN-Index candles from real index stream ticks in process; absent historical ticks remain absent.
   Stock detail merges its subscribed quote stream into both the headline and its equal-height metric
   panel; the panel explains each metric and distinguishes no trade yet from a numeric zero. Market
@@ -171,7 +191,9 @@ investiq/
   both layers fail closed when their independent runtime secrets are absent.
 - Celery news worker, isolated authentication notification worker, and Beat reuse the backend image.
   The news worker has publisher outbound access; the notification worker has SMTP outbound access.
-  Each environment must run only one Beat scheduler.
+  Each environment must run only one Beat scheduler. Compose health-checks the news worker and Beat,
+  and both the API and Nginx readiness paths depend on them so starting the application also starts
+  ingestion.
 - FastAPI, Celery, and Nginx produce sanitized structured runtime fields. Health access logs and
   image-build output are excluded from the viewer to limit operational noise.
 - Every Compose service uses the `json-file` driver with three 10 MB rotated files, bounding local
@@ -211,7 +233,9 @@ starting at `docs/plan/vietnam-stock-news.md`; implementation evidence is in
 StockBiz, VnEconomy, and VnExpress metadata-only adapters, public news APIs/UI, and backup/restore scripts are
 implemented. Celery Beat queues initial discovery for the six configured sources at scheduler
 startup and continues five-minute discovery; `NEWS_INGESTION_ENABLED` defaults to true and can pause
-all ingestion. Production operation still requires source storage/display policy approval and a
+all ingestion. Discovery canonicalizes URLs before durable hourly job keys, and the database retains
+one article per source/canonical URL while storing later content as revisions. Production operation
+still requires source storage/display policy approval and a
 reviewed security-master import. The user selected periodic backups only, with no database replica;
 backup scheduling is an external script and adds no runtime service here.
 
@@ -229,8 +253,9 @@ REST snapshot refresh, one upstream index stream with an initial index request, 
 heartbeat and bounded reconnect;
 credentials are never sent to Redis or the browser. TCBS requires a Smart OTP for token issuance and
 documents no refresh token, so unattended key-only renewal is impossible. Licensed history backfill,
-provider-level sequence reconciliation, secondary-provider failover and Events/People sources remain
-future work. Every market response carries provider, market time, received time, delay class,
+provider-level sequence reconciliation, secondary-provider failover, a licensed full-market Events
+source, and People sources remain future work. Every market response carries provider, market time,
+received time, delay class,
 freshness and partial state.
 
 Market-data tasks follow `.agents/rules/market-data-freshness.md`: agents compare runtime timestamps

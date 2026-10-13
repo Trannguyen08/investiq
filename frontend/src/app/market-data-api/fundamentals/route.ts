@@ -24,7 +24,7 @@ export async function GET(request: Request) {
 
   const base = process.env.API_INTERNAL_BASE_URL ?? "http://localhost:8000/api";
   const results = new Array<{ symbol: string; pe: string | null; pb: string | null }>(symbols.length);
-  const deadline = AbortSignal.timeout(10_000);
+  const deadline = AbortSignal.timeout(30_000);
   let cursor = 0;
 
   async function worker() {
@@ -34,7 +34,7 @@ export async function GET(request: Request) {
       const symbol = symbols[index];
       try {
         const response = await fetch(`${base}/v1/market/instruments/${encodeURIComponent(symbol)}`, {
-          next: { revalidate: 3600 },
+          cache: "no-store",
           signal: deadline,
         });
         const body = await response.json().catch(() => null) as InstrumentEnvelope | null;
@@ -48,8 +48,15 @@ export async function GET(request: Request) {
   }
 
   await Promise.all(Array.from({ length: Math.min(MAX_CONCURRENCY, symbols.length) }, () => worker()));
+  const complete = results.every((item) => item.pe !== null && item.pb !== null);
   return NextResponse.json(
     { data: results },
-    { headers: { "Cache-Control": "public, max-age=60, s-maxage=3600, stale-while-revalidate=300" } },
+    {
+      headers: {
+        "Cache-Control": complete
+          ? "public, max-age=60, s-maxage=3600, stale-while-revalidate=300"
+          : "no-store",
+      },
+    },
   );
 }

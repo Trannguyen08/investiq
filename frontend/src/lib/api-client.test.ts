@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 
-import { getMarketInstruments, getNews, getNewsArticle } from "@/lib/api-client";
+import { getMarketInstruments, getNews, getNewsArticle, getRelatedStockNews } from "@/lib/api-client";
 
 afterEach(() => {
   vi.unstubAllGlobals();
@@ -38,6 +38,22 @@ describe("news API client", () => {
 
     expect(fetchMock).toHaveBeenCalledWith(
       "http://localhost:8000/api/v1/news?limit=3",
+      expect.objectContaining({
+        next: { revalidate: 30 },
+        signal: expect.any(AbortSignal),
+      }),
+    );
+  });
+
+  it("requests a bounded first page for a qualified stock symbol", async () => {
+    const payload = { data: [], pagination: {}, meta: {} };
+    const fetchMock = vi.fn().mockResolvedValue(new Response(JSON.stringify(payload), { status: 200 }));
+    vi.stubGlobal("fetch", fetchMock);
+
+    await getRelatedStockNews("hose", "fpt");
+
+    expect(fetchMock).toHaveBeenCalledWith(
+      "http://localhost:8000/api/v1/news?symbol=HOSE%3AFPT&limit=6&page=1",
       expect.objectContaining({
         next: { revalidate: 30 },
         signal: expect.any(AbortSignal),

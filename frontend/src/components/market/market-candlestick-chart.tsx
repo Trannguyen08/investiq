@@ -28,6 +28,18 @@ type ZoomWindow = {
   start: number;
 };
 
+const defaultMinimumVisibleCandles = 10;
+
+export const MARKET_OVERVIEW_INDEX_CHART_LIMITS = {
+  minimum: 50,
+  maximum: 120,
+} as const;
+
+export const INDEX_DETAIL_CHART_LIMITS = {
+  minimum: 70,
+  maximum: 170,
+} as const;
+
 const marketDateFormatter = new Intl.DateTimeFormat("en-CA", {
   timeZone: "Asia/Ho_Chi_Minh",
   year: "numeric",
@@ -143,15 +155,15 @@ function shortDate(timestamp: string) {
   }).format(new Date(timestamp));
 }
 
-function axisLabel(timestamp: string, range: ChartRange | undefined, first: boolean) {
-  if (range === "day" || !range) {
+function axisLabel(timestamp: string, range: ChartRange | undefined, first: boolean, intraday: boolean) {
+  if (intraday) {
     return new Intl.DateTimeFormat("vi-VN", {
       timeZone: "Asia/Ho_Chi_Minh",
       hour: "2-digit",
       minute: "2-digit",
     }).format(new Date(timestamp));
   }
-  if (range === "week" || range === "month") return shortDate(timestamp);
+  if (range !== "year") return shortDate(timestamp);
   const value = marketDate(timestamp);
   if (value.month === 1) return String(value.year);
   return first ? `T${value.month}/${value.year}` : `T${value.month}`;
@@ -196,28 +208,46 @@ export function MarketCandlestickChart({
   candles,
   label,
   explain = false,
+  maximumCandles,
+  minimumCandles,
   range,
 }: {
   candles: MarketCandle[];
   label: string;
   explain?: boolean;
+  maximumCandles?: number;
+  minimumCandles?: number;
   range?: ChartRange;
 }) {
   const allValues = numericCandles(candles);
   const defaultStart = allValues.length >= 2 ? initialWindowStart(allValues, range) : 0;
-  const baseVisibleCount = Math.max(2, allValues.length - defaultStart);
-  const minimumZoomCount = Math.min(40, baseVisibleCount);
-  const [requestedStart, setRequestedStart] = useState(defaultStart);
-  const [requestedCount, setRequestedCount] = useState(baseVisibleCount);
+  const rangeVisibleCount = Math.max(0, allValues.length - defaultStart);
+  const maximumZoomCount = Math.min(
+    allValues.length,
+    Math.max(2, Math.floor(maximumCandles ?? allValues.length)),
+  );
+  const requestedMinimum = minimumCandles
+    ?? Math.min(defaultMinimumVisibleCandles, rangeVisibleCount);
+  const minimumZoomCount = Math.min(
+    Math.max(2, Math.floor(requestedMinimum)),
+    maximumZoomCount,
+  );
+  const initialVisibleCount = Math.max(
+    minimumZoomCount,
+    Math.min(rangeVisibleCount, maximumZoomCount),
+  );
+  const initialStart = Math.max(0, allValues.length - initialVisibleCount);
+  const [requestedStart, setRequestedStart] = useState(initialStart);
+  const [requestedCount, setRequestedCount] = useState(initialVisibleCount);
   const [selectedIndex, setSelectedIndex] = useState<number | null>(null);
   const [isDragging, setIsDragging] = useState(false);
   const dragState = useRef<DragState | null>(null);
   const suppressClick = useRef(false);
   const stageRef = useRef<HTMLDivElement | null>(null);
-  const zoomEnabled = range === "month" || range === "year";
+  const zoomEnabled = maximumZoomCount > minimumZoomCount;
   const visibleCount = zoomEnabled
-    ? Math.max(minimumZoomCount, Math.min(requestedCount, baseVisibleCount))
-    : baseVisibleCount;
+    ? Math.max(minimumZoomCount, Math.min(requestedCount, maximumZoomCount))
+    : maximumZoomCount;
   const maximumStart = Math.max(0, allValues.length - visibleCount);
   const windowStart = Math.max(0, Math.min(requestedStart, maximumStart));
   const values = allValues.slice(windowStart, windowStart + visibleCount);
@@ -228,7 +258,7 @@ export function MarketCandlestickChart({
       nextCount,
       anchorRatio,
       minimumCount: minimumZoomCount,
-      maximumCount: baseVisibleCount,
+      maximumCount: maximumZoomCount,
       visibleCount,
       windowStart,
       totalCount: allValues.length,
@@ -257,7 +287,7 @@ export function MarketCandlestickChart({
         nextCount,
         anchorRatio: anchor,
         minimumCount: minimumZoomCount,
-        maximumCount: baseVisibleCount,
+        maximumCount: maximumZoomCount,
         visibleCount,
         windowStart,
         totalCount: allValues.length,
@@ -269,7 +299,7 @@ export function MarketCandlestickChart({
     };
     stage.addEventListener("wheel", handleWheel, { passive: false });
     return () => stage.removeEventListener("wheel", handleWheel);
-  }, [allValues.length, baseVisibleCount, minimumZoomCount, visibleCount, windowStart, zoomEnabled]);
+  }, [allValues.length, maximumZoomCount, minimumZoomCount, visibleCount, windowStart, zoomEnabled]);
 
   if (values.length < 2) {
     return (
@@ -323,7 +353,15 @@ export function MarketCandlestickChart({
     setSelectedIndex(null);
   };
   const panStep = Math.max(1, Math.round(visibleCount * 0.2));
-  const zoomRangeLabel = range === "month" ? "tháng" : "năm";
+  const zoomRangeLabel = range === "day"
+    ? "ngày"
+    : range === "week"
+      ? "tuần"
+      : range === "month"
+        ? "tháng"
+        : range === "year"
+          ? "năm"
+          : "snapshot";
 
   return (
     <div className="financial-candlestick-chart">
@@ -403,7 +441,7 @@ export function MarketCandlestickChart({
           </g>
           {selectedIndex !== null && <line className="financial-chart-crosshair" x1={x(selectedIndex)} x2={x(selectedIndex)} y1={priceTop} y2={volumeBottom} />}
           <g className="financial-chart-axis">{labelIndexes.map((index, tickIndex) => <text key={index} x={x(index)} y={510} textAnchor="middle">
-            {axisLabel(values[index].source.timestamp, range, tickIndex === 0)}
+            {axisLabel(values[index].source.timestamp, range, tickIndex === 0, intraday)}
           </text>)}</g>
         </svg>
         <div className="financial-chart-hit-layer">{values.map((item, index) => <button
@@ -452,7 +490,7 @@ export function MarketCandlestickChart({
           {zoomEnabled && <div className="financial-chart-zoom" role="group" aria-label={`Thu phóng biểu đồ ${zoomRangeLabel}`}>
             <button type="button" aria-label={`Phóng to biểu đồ ${zoomRangeLabel}`} disabled={visibleCount <= minimumZoomCount} onClick={() => zoomTo(Math.round(visibleCount * 0.82))}>＋</button>
             <span>{visibleCount} nến</span>
-            <button type="button" aria-label={`Thu nhỏ biểu đồ ${zoomRangeLabel}`} disabled={visibleCount >= baseVisibleCount} onClick={() => zoomTo(Math.round(visibleCount * 1.22))}>−</button>
+            <button type="button" aria-label={`Thu nhỏ biểu đồ ${zoomRangeLabel}`} disabled={visibleCount >= maximumZoomCount} onClick={() => zoomTo(Math.round(visibleCount * 1.22))}>−</button>
             <small>Lăn con chuột trên biểu đồ để phóng to/thu nhỏ.</small>
           </div>}
         </div>

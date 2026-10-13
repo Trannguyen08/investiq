@@ -5,9 +5,10 @@ import { formatMarketTime } from "@/components/market/formatters";
 import { MarketStatus } from "@/components/market/market-status";
 import { StockLivePrice, StockMetricsPanel, StockPriceChart, type StockChartRange } from "@/components/market/stock-price-chart";
 import { StockIntradayTable } from "@/components/market/stock-intraday-table";
+import { StockRelatedNews } from "@/components/market/stock-related-news";
 import { StockTradeActions } from "@/components/portfolio/stock-trade-actions";
 import { MarketStreamProvider } from "@/hooks/use-realtime-price";
-import { getMarketCandles, getMarketInstrument, getMarketIntradayTrades } from "@/lib/api-client";
+import { getMarketCandles, getMarketInstrument, getMarketIntradayTrades, getRelatedStockNews } from "@/lib/api-client";
 import type { InstrumentEnvelope } from "@/types/market";
 
 const rangeConfig: Record<StockChartRange, { interval: "1d" | "1h" | "30m" | "5m"; limit: number }> = {
@@ -34,17 +35,20 @@ export default async function StockDetailPage({ params, searchParams }: { params
   const range = selectedRange(query.range);
   const returnTo = safeReturnTo(query.from);
   const selected = rangeConfig[range];
-  const [instrumentResult, candles, intraday] = await Promise.all([
-    getMarketInstrument(symbol).then(
-      (value) => ({ status: "fulfilled" as const, value }),
-      () => ({ status: "rejected" as const }),
-    ),
-    getMarketCandles(symbol, selected.interval, selected.limit).catch(() => null),
-    getMarketIntradayTrades(symbol, 100).catch(() => null),
-  ]);
+  const candlesPromise = getMarketCandles(symbol, selected.interval, selected.limit).catch(() => null);
+  const intradayPromise = getMarketIntradayTrades(symbol, 100).catch(() => null);
+  const instrumentResult = await getMarketInstrument(symbol).then(
+    (value) => ({ status: "fulfilled" as const, value }),
+    () => ({ status: "rejected" as const }),
+  );
   if (instrumentResult.status === "rejected") notFound();
   const envelope: InstrumentEnvelope = instrumentResult.value;
   const item = envelope.data;
+  const [candles, intraday, relatedNews] = await Promise.all([
+    candlesPromise,
+    intradayPromise,
+    getRelatedStockNews(item.exchange, item.symbol).catch(() => null),
+  ]);
 
   return <MarketStreamProvider symbols={[symbol]}><main id="main-content" className="market-page stock-detail-page">
     <Link className="stock-detail-back" href={returnTo}>← Quay lại bảng giá</Link>
@@ -58,6 +62,7 @@ export default async function StockDetailPage({ params, searchParams }: { params
       askLevels={item.ask_levels ?? []}
       meta={intraday?.meta ?? envelope.meta}
     />
+    <StockRelatedNews articles={relatedNews?.data ?? null} exchange={item.exchange} symbol={item.symbol} />
     <footer className="stock-detail-source"><span>Nguồn: {envelope.meta.provider_name}</span><span>Thời điểm thị trường: {formatMarketTime(envelope.meta.market_time)}</span><span>Giá chưa điều chỉnh · VND</span></footer>
   </main></MarketStreamProvider>;
 }

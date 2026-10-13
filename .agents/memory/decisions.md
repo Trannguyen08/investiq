@@ -3,6 +3,77 @@
 Record durable decisions in reverse chronological order. Do not record routine implementation
 details.
 
+## 2026-10-13 — Bounded VCI event calendar for the evaluation adapter
+
+- **Status:** Accepted and implemented
+- **Context:** Vnstock exposes VCI corporate events per symbol, but the adapter returned an empty
+  calendar. Scanning all 30 VN30 members plus the quote/index calls exceeded the 20-request guest
+  minute budget and made first-load results depend on call order.
+- **Decision:** Build the local Home/Events calendar from published VCI milestones for the eight
+  highest-interest symbols in the current snapshot. Limit event fetches to six concurrent calls,
+  retain only the nearest milestone per source event within the next 30 Vietnam-market days, cache
+  the normalized calendar for 30 minutes, and serve the last observed calendar after refresh failure.
+  Use the paged VCI event endpoint through the adapter's owned request boundary, with an explicit
+  timeout, instead of consuming the shared Vnstock guest quota needed by quotes and indices. Label
+  the scope as partial; do not synthesize missing dates or claim full-market coverage.
+- **Consequences:** The Home calendar is populated from real provider observations without exhausting
+  the guest request budget. Coverage follows the current high-interest snapshot and is intentionally
+  incomplete; a licensed full-market corporate-actions feed remains the production path.
+- **Refines:** “Vnstock is a source-delayed evaluation adapter” below.
+
+## 2026-10-13 — Complete-only public news feed
+
+- **Status:** Accepted and implemented
+- **Context:** Partial and metadata-only records were presented beside full articles with a warning,
+  which made the public feed inconsistent and looked like broken content.
+- **Decision:** Publish only current revisions with `complete` extraction. Persist incomplete source
+  observations and immutable revisions for operations, but set their article visibility to
+  `withdrawn`; allow a later complete revision to republish the same canonical article. Translate
+  machine event identifiers at the presentation boundary and keep source-explicit ticker candidates
+  visually distinct from reviewed security-master mentions.
+- **Consequences:** Metadata-only sources remain operational inputs but no longer contribute public
+  cards or detail pages. Existing incomplete rows are recoverable rather than hard-deleted, while
+  the public API, pagination, homepage, and portfolio news consumers see complete articles only.
+
+## 2026-10-13 — Fixed local frontend port and VCI valuation reads
+
+- **Status:** Accepted and implemented.
+- **Context:** Ad-hoc frontend containers did not survive normal Compose lifecycle and made the
+  Google callback origin inconsistent. KBS financial-ratio calls also share a 20-request-per-minute
+  guest quota with other KBS operations, so a 15-row table could exhaust that quota before every
+  visible stock received P/E and P/B.
+- **Decision:** Enable a repository-owned `frontend-dev` Compose profile by default for local work,
+  bind it only to loopback port 3000, and keep its dependencies and `.next` cache in named volumes.
+  Use VCI's company ratio summary for the latest quarterly TTM P/E/P/B enrichment, retain the
+  one-hour per-symbol cache and last-observed fallback, and fetch only the currently visible 15-row
+  page. Keep unavailable ratios explicit rather than manufacturing values.
+- **Consequences:** A normal local `docker compose up` consistently provides HMR and the configured
+  Google callback at `http://localhost:3000`. The Market and Portfolio tables can fill one visible
+  page without competing with KBS quote quota; newly visited pages load on demand, and a genuinely
+  absent upstream ratio is shown as unavailable instead of as zero.
+- **Refines:** “Vnstock is a source-delayed evaluation adapter” and “Redis-backed jobs and container
+  delivery baseline” below.
+
+## 2026-10-13 — News ingestion is part of application readiness
+
+- **Status:** Accepted and implemented.
+- **Context:** Compose defined a news worker and Beat, but a selective local startup could run the
+  public API/UI without either service, leaving the news database stale even though the application
+  appeared healthy. Scheduler restarts and rolling deployment overlap also require explicit
+  idempotency rather than operational timing assumptions.
+- **Decision:** Keep one independent Beat scheduler and the dedicated concurrent news worker. Make
+  both health-checked dependencies of the API and public Nginx services in the shared local/deployment
+  Compose topology. Beat queues all six sources shortly after startup and every five minutes;
+  staging and production explicitly default `NEWS_INGESTION_ENABLED` to true while retaining the
+  environment kill switch. Canonicalize and de-duplicate discovery URLs before creating hourly
+  unique job keys, then retain the PostgreSQL unique article key on source plus canonical URL.
+- **Consequences:** Starting the public Compose application starts and waits for ingestion without a
+  separate crawl command. Duplicate startup/scheduled deliveries are harmless and later observations
+  update revision history instead of inserting another article. Deployments can still intentionally
+  pause ingestion, and source policy/redistribution approval remains an independent production gate.
+- **Refines:** “Redis-backed jobs and container delivery baseline” and “Durable stock-news ingestion
+  and activation gate” below.
+
 ## 2026-10-11 — Automatic single-file Allure presentation
 
 - **Status:** Accepted and implemented.
@@ -287,11 +358,14 @@ details.
   reviewed security master. The first rule baseline also returned neutral or mixed too often and did
   not explain likely stock-market impact.
 - **Decision:** Persist publisher-explicit ticker candidates separately from verified security
-  mentions. Display them as source-mentioned codes without enabling verified-symbol filtering.
+  mentions. Display them as source-mentioned codes. Public symbol-scoped news reads may match an
+  exact qualified or bare publisher candidate in addition to a verified relation, but candidates
+  remain visually distinct and do not become security-master mentions.
   Sentiment rules use weighted financial events, sentence evidence, a stated impact scope and an
   explicit short-term horizon. Confidence remains null until calibration. Analyzer version changes
   replace current analysis without creating an article-content revision.
-- **Consequences:** Cards can show useful tickers while preserving master-data trust. Market-impact
+- **Consequences:** Cards and symbol detail pages can use explicit publisher tickers while preserving
+  master-data trust and avoiding free-text symbol inference. Market-impact
   text is an explainable content assessment, carries a non-advice notice, and is not a price forecast.
 
 ## 2026-09-26 — Feature-level test evidence and local reports

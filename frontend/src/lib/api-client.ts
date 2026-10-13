@@ -136,6 +136,19 @@ export function getNews(query: URLSearchParams, timeoutMs?: number): Promise<New
   return requestJson<NewsCollection>(`/v1/news${suffix}`, 30, timeoutMs);
 }
 
+export function getRelatedStockNews(
+  exchange: string,
+  symbol: string,
+  limit = 6,
+): Promise<NewsCollection> {
+  const query = new URLSearchParams({
+    symbol: `${exchange.toUpperCase()}:${symbol.toUpperCase()}`,
+    limit: String(limit),
+    page: "1",
+  });
+  return getNews(query, 800);
+}
+
 export function getNewsArticle(id: string): Promise<Envelope<NewsDetail>> {
   return requestJson<Envelope<NewsDetail>>(`/v1/news/${encodeURIComponent(id)}`);
 }

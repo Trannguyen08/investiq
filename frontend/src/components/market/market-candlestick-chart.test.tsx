@@ -2,7 +2,8 @@ import { cleanup, fireEvent, render, screen, within } from "@testing-library/rea
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { MarketCandlestickChart } from "@/components/market/market-candlestick-chart";
-import type { MarketCandle } from "@/types/market";
+import { IndicesView } from "@/components/market/market-workspace";
+import type { IndexCollection, MarketCandle } from "@/types/market";
 
 const candles: MarketCandle[] = [
   { timestamp: "2026-10-07T02:00:00Z", open: "100", high: "104", low: "99", close: "103", volume: "1000" },
@@ -128,8 +129,8 @@ describe("MarketCandlestickChart", () => {
     fireEvent.wheel(stage, { deltaY: -100, clientX: 500 });
     expect(screen.getByRole("img", { name: /74 nến giá xanh đỏ/ })).toBeInTheDocument();
 
-    for (let index = 0; index < 10; index += 1) fireEvent.wheel(stage, { deltaY: -100, clientX: 500 });
-    expect(screen.getByRole("img", { name: /40 nến giá xanh đỏ/ })).toBeInTheDocument();
+    for (let index = 0; index < 20; index += 1) fireEvent.wheel(stage, { deltaY: -100, clientX: 500 });
+    expect(screen.getByRole("img", { name: /10 nến giá xanh đỏ/ })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Phóng to biểu đồ năm" })).toBeDisabled();
     expect(screen.getByRole("button", { name: "Thu nhỏ biểu đồ năm" })).not.toBeDisabled();
   });
@@ -162,5 +163,93 @@ describe("MarketCandlestickChart", () => {
     expect(pageWheel).not.toHaveBeenCalled();
     expect(screen.getByRole("img", { name: /59 nến giá xanh đỏ/ })).toBeInTheDocument();
     expect(screen.getByRole("group", { name: "Thu phóng biểu đồ tháng" })).toBeInTheDocument();
+  });
+
+  it("shows dates for daily candles and wheel-zooms a 30-candle snapshot", () => {
+    const history: MarketCandle[] = Array.from({ length: 30 }, (_, index) => ({
+      timestamp: new Date(Date.UTC(2026, 8, index + 1)).toISOString(),
+      open: String(100 + index), high: String(103 + index), low: String(99 + index),
+      close: String(102 + index), volume: "1000",
+    }));
+    const { container } = render(
+      <MarketCandlestickChart candles={history} label="Biểu đồ nến VN-Index" />,
+    );
+    const stage = container.querySelector<HTMLElement>(".financial-chart-stage")!;
+    vi.spyOn(stage, "getBoundingClientRect").mockReturnValue({ left: 0, width: 1000 } as DOMRect);
+
+    expect(container.querySelector(".financial-chart-axis")).toHaveTextContent(/01.*09/);
+    expect(screen.queryByText("07:00")).not.toBeInTheDocument();
+    expect(screen.getByRole("group", { name: "Thu phóng biểu đồ snapshot" })).toBeInTheDocument();
+
+    fireEvent.wheel(stage, { deltaY: -100, clientX: 500 });
+
+    expect(screen.getByRole("img", { name: /25 nến giá xanh đỏ/ })).toBeInTheDocument();
+  });
+});
+
+describe("IndicesView chart detail", () => {
+  afterEach(() => cleanup());
+
+  it("keeps the detailed index chart between 70 and 170 visible sessions", () => {
+    const dailyCandles: MarketCandle[] = Array.from({ length: 190 }, (_, index) => ({
+      timestamp: new Date(Date.UTC(2026, 8, index + 1, 3)).toISOString(),
+      open: String(1700 + index),
+      high: String(1710 + index),
+      low: String(1695 + index),
+      close: String(1705 + index),
+      volume: String(500_000_000 + index * 1_000_000),
+    }));
+    const collection: IndexCollection = {
+      data: [{
+        symbol: "VNINDEX",
+        name: "VN-Index",
+        value: "1734",
+        reference_value: "1733",
+        open_value: "1729",
+        high_value: "1739",
+        low_value: "1724",
+        change: "1",
+        change_percent: "0.06",
+        volume: "529000000",
+        matched_value: "12000000000000",
+        advances: 220,
+        declines: 180,
+        unchanged: 80,
+        ceiling_count: 5,
+        floor_count: 2,
+        candles: dailyCandles,
+      }],
+      meta: {
+        schema_version: "1",
+        provider: "vnstock-kbs",
+        provider_name: "Vnstock · nguồn KBS/VCI (có độ trễ)",
+        market_time: "2026-09-30T08:00:00Z",
+        received_at: "2026-09-30T08:01:00Z",
+        delay_class: "source_delayed",
+        freshness: "fresh",
+        session: "closed",
+        partial: false,
+        market_timezone: "Asia/Ho_Chi_Minh",
+      },
+    };
+
+    const { container } = render(<IndicesView collection={collection} selected="VNINDEX" />);
+
+    expect(screen.getByText("170 nến ngày gần nhất")).toBeInTheDocument();
+    expect(screen.getByRole("img", { name: /Biểu đồ nến chi tiết VN-Index, 170 nến giá xanh đỏ/ })).toBeInTheDocument();
+    expect(screen.getByRole("table", { name: "Biểu đồ nến chi tiết VN-Index" })).toBeInTheDocument();
+    expect(screen.getByRole("region", { name: "Giải thích biểu đồ" })).toHaveTextContent("MA20 màu xanh");
+    expect(screen.getAllByRole("button", { name: /Xem nến/ })).toHaveLength(170);
+    const stage = container.querySelector<HTMLElement>(".financial-chart-stage")!;
+    vi.spyOn(stage, "getBoundingClientRect").mockReturnValue({ left: 0, width: 1000 } as DOMRect);
+    fireEvent.wheel(stage, { deltaY: -100, clientX: 500 });
+    expect(screen.getByRole("img", { name: /139 nến giá xanh đỏ/ })).toBeInTheDocument();
+    for (let index = 0; index < 4; index += 1) fireEvent.wheel(stage, { deltaY: -100, clientX: 500 });
+    expect(screen.getByRole("img", { name: /70 nến giá xanh đỏ/ })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Phóng to biểu đồ năm" })).toBeDisabled();
+    for (let index = 0; index < 5; index += 1) fireEvent.wheel(stage, { deltaY: 100, clientX: 500 });
+    expect(screen.getByRole("img", { name: /170 nến giá xanh đỏ/ })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Thu nhỏ biểu đồ năm" })).toBeDisabled();
+    expect(container.querySelector(".index-detail .mini-candles")).not.toBeInTheDocument();
   });
 });

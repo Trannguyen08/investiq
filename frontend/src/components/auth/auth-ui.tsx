@@ -55,7 +55,10 @@ export function LoginForm({ resetSucceeded = false }: { resetSucceeded?: boolean
     catch (value) { setError(value instanceof Error ? value.message : "Đăng nhập thất bại."); }
     finally { setBusy(false); }
   }
-  return <form className="auth-form" onSubmit={submit}><label className="auth-field" htmlFor="email"><span>Email</span><input id="email" type="email" value={email} onChange={(event) => setEmail(event.target.value)} autoComplete="email" required maxLength={320} /></label><PasswordField id="password" label="Mật khẩu" value={password} onChange={setPassword} /><div className="forgot-row"><Link href="/forgot-password">Quên mật khẩu?</Link></div><Notice error={error} success={resetSucceeded ? "Mật khẩu của bạn đã được cập nhật thành công. Vui lòng đăng nhập bằng mật khẩu mới." : ""} /><button className="auth-primary" disabled={busy}>{busy ? "Đang đăng nhập…" : "Đăng nhập"}</button><Link className="google-button" href="/auth-api/google/start"><svg viewBox="0 0 48 48" aria-hidden="true" focusable="false"><path fill="#4285F4" d="M43.6 24.5c0-1.4-.1-2.9-.4-4.3H24v8.2h11a9.5 9.5 0 0 1-4.1 6.2v5.4h6.7c3.9-3.6 6-8.9 6-15.5Z" /><path fill="#34A853" d="M24 44c5.5 0 10.1-1.8 13.5-4.9l-6.7-5.4c-1.9 1.3-4.1 2-6.8 2-5.2 0-9.6-3.5-11.2-8.2H5.9v5.5A20 20 0 0 0 24 44Z" /><path fill="#FBBC05" d="M12.8 27.5a12 12 0 0 1 0-7v-5.6H5.9a20 20 0 0 0 0 18.2l6.9-5.6Z" /><path fill="#EA4335" d="M24 12.3c3 0 5.7 1 7.8 3.1l5.8-5.8A19.3 19.3 0 0 0 24 4 20 20 0 0 0 5.9 14.9l6.9 5.6c1.6-4.7 6-8.2 11.2-8.2Z" /></svg>Đăng nhập với Google</Link><p className="auth-switch">Chưa có tài khoản? <Link href="/register">Đăng ký ngay</Link></p></form>;
+  // A native navigation is required here: Next's client transition can issue a
+  // second OAuth start request and overwrite the one-time PKCE/state cookie.
+  // eslint-disable-next-line @next/next/no-html-link-for-pages
+  return <form className="auth-form" onSubmit={submit}><label className="auth-field" htmlFor="email"><span>Email</span><input id="email" type="email" value={email} onChange={(event) => setEmail(event.target.value)} autoComplete="email" required maxLength={320} /></label><PasswordField id="password" label="Mật khẩu" value={password} onChange={setPassword} /><div className="forgot-row"><Link href="/forgot-password">Quên mật khẩu?</Link></div><Notice error={error} success={resetSucceeded ? "Mật khẩu của bạn đã được cập nhật thành công. Vui lòng đăng nhập bằng mật khẩu mới." : ""} /><button className="auth-primary" disabled={busy}>{busy ? "Đang đăng nhập…" : "Đăng nhập"}</button><a className="google-button" href="/auth-api/google/start"><svg viewBox="0 0 48 48" aria-hidden="true" focusable="false"><path fill="#4285F4" d="M43.6 24.5c0-1.4-.1-2.9-.4-4.3H24v8.2h11a9.5 9.5 0 0 1-4.1 6.2v5.4h6.7c3.9-3.6 6-8.9 6-15.5Z" /><path fill="#34A853" d="M24 44c5.5 0 10.1-1.8 13.5-4.9l-6.7-5.4c-1.9 1.3-4.1 2-6.8 2-5.2 0-9.6-3.5-11.2-8.2H5.9v5.5A20 20 0 0 0 24 44Z" /><path fill="#FBBC05" d="M12.8 27.5a12 12 0 0 1 0-7v-5.6H5.9a20 20 0 0 0 0 18.2l6.9-5.6Z" /><path fill="#EA4335" d="M24 12.3c3 0 5.7 1 7.8 3.1l5.8-5.8A19.3 19.3 0 0 0 24 4 20 20 0 0 0 5.9 14.9l6.9 5.6c1.6-4.7 6-8.2 11.2-8.2Z" /></svg>Đăng nhập với Google</a><p className="auth-switch">Chưa có tài khoản? <Link href="/register">Đăng ký ngay</Link></p></form>;
 }
 
 export function RegisterForm() {
@@ -74,7 +77,7 @@ function useChallenge() {
 }
 
 function Countdown({ expiresAt }: { expiresAt: string }) {
-  const [remaining, setRemaining] = useState(0);
+  const [remaining, setRemaining] = useState(() => Math.max(0, Math.ceil((new Date(expiresAt).getTime() - Date.now()) / 1000)));
   useEffect(() => { const update = () => setRemaining(Math.max(0, Math.ceil((new Date(expiresAt).getTime() - Date.now()) / 1000))); update(); const timer = window.setInterval(update, 1000); return () => clearInterval(timer); }, [expiresAt]);
   return <span className="otp-countdown" aria-live="polite">{String(Math.floor(remaining / 60)).padStart(2, "0")}:{String(remaining % 60).padStart(2, "0")}</span>;
 }

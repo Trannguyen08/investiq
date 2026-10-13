@@ -1,6 +1,10 @@
+from dataclasses import replace
+from datetime import UTC, datetime, timedelta
 from decimal import Decimal
+from typing import Any, cast
 
 from app.application.use_cases.market_data.market_service import MarketService, decode_cursor
+from app.domain.entities.market import Candle, MarketIndex
 from app.infrastructure.external.market_fixture_provider import FixtureMarketProvider
 
 
@@ -19,6 +23,8 @@ def test_vn30_sort_and_fifteen_row_pagination_are_stable() -> None:
 
     rows = first["data"]
     pagination = first["pagination"]
+    assert isinstance(rows, list)
+    assert isinstance(pagination, dict)
     assert len(rows) == 15
     assert all(row["is_vn30"] for row in rows[:13])
     assert all(not row["is_vn30"] for row in rows[13:])
@@ -36,14 +42,17 @@ def test_vn30_sort_and_fifteen_row_pagination_are_stable() -> None:
         limit=15,
         offset=15,
     )
-    assert second["pagination"]["page"] == 2
-    assert decode_cursor(second["pagination"]["previous_cursor"]) == 0
+    second_pagination = second["pagination"]
+    assert isinstance(second_pagination, dict)
+    assert second_pagination["page"] == 2
+    assert decode_cursor(cast(str | None, second_pagination["previous_cursor"])) == 0
 
 
 def test_sector_aggregate_uses_every_instrument_not_one_page() -> None:
     provider = FixtureMarketProvider()
     response = MarketService(provider).sectors()
     rows = response["data"]
+    assert isinstance(rows, list)
 
     assert sum(row["member_count"] for row in rows) == len(provider.instruments())
     banking = next(row for row in rows if row["name"] == "Ngân hàng")
@@ -55,14 +64,18 @@ def test_sector_aggregate_uses_every_instrument_not_one_page() -> None:
 
 def test_intraday_trade_contract_keeps_observed_values_and_provenance() -> None:
     response = MarketService(FixtureMarketProvider()).intraday_trades("FPT", 5)
+    trades = response["data"]
+    meta = response["meta"]
+    assert isinstance(trades, list)
+    assert isinstance(meta, dict)
 
     assert response["instrument"] == "FPT"
-    assert len(response["data"]) == 5
-    assert response["data"][-1]["price"]
-    assert response["data"][-1]["match_side"] == "unknown"
-    assert response["data"][-1]["change"] is not None
-    assert response["data"][-1]["change_percent"] is not None
-    assert response["meta"]["provider"] == "investiq-fixture"
+    assert len(trades) == 5
+    assert trades[-1]["price"]
+    assert trades[-1]["match_side"] == "unknown"
+    assert trades[-1]["change"] is not None
+    assert trades[-1]["change_percent"] is not None
+    assert meta["provider"] == "investiq-fixture"
 
 
 def test_stock_screening_filters_the_complete_universe_before_pagination() -> None:
@@ -92,9 +105,40 @@ def test_stock_screening_filters_the_complete_universe_before_pagination() -> No
         min_volume_ratio=Decimal("0.75"),
         vn30_only=True,
     )
+    pagination = response["pagination"]
+    rows = response["data"]
+    assert isinstance(pagination, dict)
+    assert isinstance(rows, list)
 
-    assert response["pagination"]["total_items"] == len(expected)
-    assert len(response["data"]) <= 5
-    assert all(row["is_vn30"] for row in response["data"])
-    ratios = [Decimal(str(row["volume_vs_20d"])) for row in response["data"]]
+    assert pagination["total_items"] == len(expected)
+    assert len(rows) <= 5
+    assert all(row["is_vn30"] for row in rows)
+    ratios = [Decimal(str(row["volume_vs_20d"])) for row in rows]
     assert ratios == sorted(ratios, reverse=True)
+
+
+def test_index_payload_keeps_the_latest_one_hundred_seventy_candles() -> None:
+    class LongIndexHistoryProvider(FixtureMarketProvider):
+        def indices(self) -> tuple[MarketIndex, ...]:
+            current = super().indices()[0]
+            start = datetime(2026, 1, 1, tzinfo=UTC)
+            candles = tuple(
+                Candle(
+                    timestamp=start + timedelta(days=index),
+                    open=Decimal(1700 + index),
+                    high=Decimal(1710 + index),
+                    low=Decimal(1690 + index),
+                    close=Decimal(1705 + index),
+                    volume=Decimal(500_000_000 + index),
+                )
+                for index in range(200)
+            )
+            return (replace(current, candles=candles),)
+
+    response = MarketService(LongIndexHistoryProvider()).indices()
+    rows = cast(list[dict[str, Any]], response["data"])
+    candles = cast(list[dict[str, str]], rows[0]["candles"])
+
+    assert len(candles) == 170
+    assert candles[0]["timestamp"] == "2026-01-31T00:00:00Z"
+    assert candles[-1]["timestamp"] == "2026-07-19T00:00:00Z"

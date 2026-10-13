@@ -6,6 +6,7 @@ import pytest
 from fastapi.testclient import TestClient
 
 from app.api.v1 import market_data
+from app.infrastructure.config.settings import settings
 from app.infrastructure.external.market_fixture_provider import FixtureMarketProvider
 from app.infrastructure.external.tcbs_market_provider import (
     TcbsConfig,
@@ -214,3 +215,22 @@ def test_market_provider_failures_return_safe_503(monkeypatch: pytest.MonkeyPatc
     assert response.json()["error"]["code"] == "MARKET_DATA_UNAVAILABLE"
     assert "upstream" not in response.json()["error"]["message"]
     assert response.headers["retry-after"] == "15"
+
+
+@pytest.mark.anyio
+async def test_vnstock_provider_is_initialized_once_during_application_startup(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    calls: list[object] = []
+    provider = FixtureMarketProvider()
+    monkeypatch.setattr(settings, "market_data_mode", "vnstock")
+
+    def provider_factory() -> FixtureMarketProvider:
+        calls.append(provider)
+        return provider
+
+    monkeypatch.setattr(market_data, "_provider", provider_factory)
+
+    await market_data.start_market_provider()
+
+    assert calls == [provider]

@@ -173,11 +173,15 @@ class SqlNewsRepository:
             parameters.append(list(query.sources))
         if query.symbols:
             clauses.append(
-                "EXISTS (SELECT 1 FROM article_mentions qm "
+                "(EXISTS (SELECT 1 FROM article_mentions qm "
                 "JOIN security_identifiers qi ON qi.id = qm.identifier_id "
-                "WHERE qm.revision_id = r.id AND (qi.exchange || ':' || qi.symbol) = ANY(%s))"
+                "WHERE qm.revision_id = r.id AND (qi.exchange || ':' || qi.symbol) = ANY(%s)) "
+                "OR r.candidate_symbols ?| %s::text[])"
             )
             parameters.append(list(query.symbols))
+            candidate_symbols = list(query.symbols)
+            candidate_symbols.extend(value.split(":", 1)[-1] for value in query.symbols)
+            parameters.append(candidate_symbols)
         if query.category:
             clauses.append("r.category_key = %s")
             parameters.append(query.category)
@@ -187,12 +191,15 @@ class SqlNewsRepository:
         if query.published_after:
             clauses.append("a.feed_at >= %s")
             parameters.append(query.published_after)
+        if query.complete_only:
+            clauses.append("r.extraction_status = 'complete'")
         return clauses, parameters
 
     def get_article(self, article_id: str) -> NewsArticle | None:
         sql = (
             ARTICLE_SELECT
-            + " WHERE a.id = %s::uuid AND a.visibility = 'published' AND a.feed_at >= %s"
+            + " WHERE a.id = %s::uuid AND a.visibility = 'published' "
+            "AND r.extraction_status = 'complete' AND a.feed_at >= %s"
         )
         cutoff = datetime.now(UTC) - timedelta(days=settings.news_retention_days)
         with (
@@ -277,6 +284,11 @@ class SqlNewsRepository:
             if not source:
                 raise ValueError("news source is not active")
             parsed = self._apply_storage_policy(parsed, str(source["storage_mode"]))
+            visibility = (
+                "published"
+                if parsed.extraction_status is ExtractionStatus.COMPLETE
+                else "withdrawn"
+            )
             content_payload = {
                 "title": parsed.title,
                 "description": parsed.description,
@@ -355,13 +367,15 @@ class SqlNewsRepository:
                             ),
                         )
                     connection.execute(
-                        "UPDATE news_articles SET last_seen_at = %s, updated_at = %s WHERE id = %s",
-                        (parsed.fetched_at, now, article["id"]),
+                        "UPDATE news_articles SET last_seen_at = %s, visibility = %s, "
+                        "updated_at = %s WHERE id = %s",
+                        (parsed.fetched_at, visibility, now, article["id"]),
                     )
                     return str(article["id"]), True
                 connection.execute(
-                    "UPDATE news_articles SET last_seen_at = %s, updated_at = %s WHERE id = %s",
-                    (parsed.fetched_at, now, article["id"]),
+                    "UPDATE news_articles SET last_seen_at = %s, visibility = %s, "
+                    "updated_at = %s WHERE id = %s",
+                    (parsed.fetched_at, visibility, now, article["id"]),
                 )
                 return str(article["id"]), False
 
@@ -372,14 +386,15 @@ class SqlNewsRepository:
                     """
                     INSERT INTO news_articles
                         (id, source_id, canonical_url, canonical_url_hash,
-                         first_seen_at, last_seen_at, feed_at)
-                    VALUES (%s, %s, %s, %s, %s, %s, %s)
+                         visibility, first_seen_at, last_seen_at, feed_at)
+                    VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
                     """,
                     (
                         article_id,
                         source["id"],
                         parsed.canonical_url,
                         url_hash,
+                        visibility,
                         parsed.fetched_at,
                         parsed.fetched_at,
                         feed_at,
@@ -441,10 +456,10 @@ class SqlNewsRepository:
                 """
                 UPDATE news_articles
                 SET current_revision_id = %s, last_seen_at = %s, row_version = row_version + 1,
-                    updated_at = %s
+                    visibility = %s, updated_at = %s
                 WHERE id = %s
                 """,
-                (revision_id, parsed.fetched_at, now, article_id),
+                (revision_id, parsed.fetched_at, visibility, now, article_id),
             )
             connection.execute(
                 "UPDATE news_sources SET last_success_at = %s, updated_at = %s WHERE id = %s",

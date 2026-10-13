@@ -30,6 +30,37 @@ export function changeTone(value: string) {
   return "neutral";
 }
 
+export function priceTone(
+  value: string,
+  referencePrice: string,
+  ceilingPrice: string,
+  floorPrice: string,
+) {
+  const amount = Number(value);
+  const reference = Number(referencePrice);
+  if (!Number.isFinite(amount) || !Number.isFinite(reference)) return "price-neutral";
+  if (amount === Number(ceilingPrice)) return "price-ceiling";
+  if (amount === Number(floorPrice)) return "price-floor";
+  if (amount > reference) return "price-up";
+  if (amount < reference) return "price-down";
+  return "price-reference";
+}
+
+export function formatRatioPair(
+  pe: string | null | undefined,
+  pb: string | null | undefined,
+  loading = false,
+) {
+  if (loading) return "Đang tải…";
+  const ratio = (value: string | null | undefined) => {
+    if (value === null || value === undefined) return "N/A";
+    const amount = Number(value);
+    if (!Number.isFinite(amount)) return "N/A";
+    return amount.toFixed(2).replace(/\.00$/, "").replace(/(\.\d)0$/, "$1");
+  };
+  return `${ratio(pe)} / ${ratio(pb)}`;
+}
+
 export function formatMarketTime(value: string) {
   return new Intl.DateTimeFormat("vi-VN", {
     timeZone: "Asia/Ho_Chi_Minh",

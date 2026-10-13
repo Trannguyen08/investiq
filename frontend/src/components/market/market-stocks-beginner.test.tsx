@@ -1,4 +1,5 @@
-import { cleanup, fireEvent, render, screen } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen, within } from "@testing-library/react";
+import { StrictMode } from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { StocksView } from "@/components/market/market-stocks-beginner";
@@ -113,6 +114,28 @@ describe("StocksView navigation", () => {
     expect(push).toHaveBeenCalledWith(expect.stringContaining("selected=FPT"));
   });
 
+  it("keeps the highlighted VN-Index chart between 50 and 120 visible sessions", () => {
+    const dailyCandles = Array.from({ length: 140 }, (_, candleIndex) => ({
+      timestamp: new Date(Date.UTC(2026, 0, candleIndex + 1, 3)).toISOString(),
+      open: String(1700 + candleIndex),
+      high: String(1710 + candleIndex),
+      low: String(1695 + candleIndex),
+      close: String(1705 + candleIndex),
+      volume: String(500_000_000 + candleIndex * 1_000_000),
+    }));
+    const { container } = render(<StocksView collection={collection} summary={collection} sectors={sectors} filters={{ q: "", exchange: "", sort: "vn30", direction: "desc" }} selected="" selectedCandles={[]} index={{ ...index, candles: dailyCandles }} />);
+    const stage = container.querySelector<HTMLElement>(".market-summary-card .financial-chart-stage")!;
+    vi.spyOn(stage, "getBoundingClientRect").mockReturnValue({ left: 0, width: 1000 } as DOMRect);
+
+    expect(screen.getByRole("img", { name: /Biểu đồ nến VN-Index, 50 nến giá xanh đỏ/ })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Phóng to biểu đồ tháng" })).toBeDisabled();
+    for (let wheelIndex = 0; wheelIndex < 5; wheelIndex += 1) {
+      fireEvent.wheel(stage, { deltaY: 100, clientX: 500 });
+    }
+    expect(screen.getByRole("img", { name: /Biểu đồ nến VN-Index, 120 nến giá xanh đỏ/ })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Thu nhỏ biểu đồ tháng" })).toBeDisabled();
+  });
+
   it("shows sector counts and breadth from the complete aggregate", () => {
     render(<StocksView collection={collection} summary={collection} sectors={sectors} filters={{ q: "", exchange: "", sort: "vn30", direction: "desc", mode: "basic" }} selected="" selectedCandles={[]} index={index} />);
 
@@ -138,11 +161,54 @@ describe("StocksView navigation", () => {
   it("loads P/E and P/B for the visible advanced-table symbols", async () => {
     render(<StocksView collection={collection} summary={collection} sectors={sectors} filters={{ q: "", exchange: "", sort: "vn30", direction: "desc", mode: "advanced" }} selected="" selectedCandles={[]} index={index} />);
 
-    expect(await screen.findByText("15.53 · 3.7")).toBeInTheDocument();
+    expect(await screen.findByText("15.53 / 3.7")).toBeInTheDocument();
     expect(fetch).toHaveBeenCalledWith(
       "/market-data-api/fundamentals?symbols=FPT",
       expect.objectContaining({ cache: "no-store" }),
     );
+  });
+
+  it("keeps loading fundamentals after the Strict Mode effect replay", async () => {
+    const fetchMock = vi.fn((_: RequestInfo | URL, init?: RequestInit) => new Promise<Response>((resolve, reject) => {
+      init?.signal?.addEventListener("abort", () => reject(new DOMException("Aborted", "AbortError")));
+      window.setTimeout(() => resolve(new Response(JSON.stringify({
+        data: [{ symbol: "FPT", pe: "15.53", pb: "3.7" }],
+      }), { status: 200, headers: { "Content-Type": "application/json" } })), 0);
+    }));
+    vi.stubGlobal("fetch", fetchMock);
+
+    render(<StrictMode><StocksView collection={collection} summary={collection} sectors={sectors} filters={{ q: "", exchange: "", sort: "vn30", direction: "desc" }} selected="" selectedCandles={[]} index={index} /></StrictMode>);
+
+    expect(await screen.findByText("15.53 / 3.7")).toBeInTheDocument();
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+  });
+
+  it("uses the full table width without the reading guide and colors exchange prices", () => {
+    const fallingInstrument = {
+      ...instrument,
+      symbol: "HPG",
+      price: "98000",
+      change: "-1000",
+      change_percent: "-1.01",
+      is_vn30: false,
+    };
+    const coloredCollection = { ...collection, data: [instrument, fallingInstrument] };
+    render(<StocksView collection={coloredCollection} summary={coloredCollection} sectors={sectors} filters={{ q: "", exchange: "", sort: "vn30", direction: "desc" }} selected="" selectedCandles={[]} index={index} />);
+
+    expect(screen.queryByRole("heading", { name: "Cách đọc trang này" })).not.toBeInTheDocument();
+    expect(document.querySelector(".stocks-and-guide")).toBeNull();
+    const stockTable = screen.getByRole("table", { name: "Bảng cổ phiếu nâng cao" });
+    const row = within(stockTable).getByRole("link", { name: "FPT" }).closest("tr");
+    expect(row).not.toBeNull();
+    expect(within(row!).getByText("+100.000")).toHaveClass("price-up");
+    expect(within(row!).getByText("TC +99.000")).toHaveClass("price-reference");
+    expect(within(row!).getByText("+98.500")).toHaveClass("price-down");
+    expect(within(row!).getByText("+1,01%").closest("td")).toHaveClass("positive");
+    expect(within(row!).getByText("+1.000").closest("td")).toHaveClass("positive");
+    const fallingRow = within(stockTable).getByRole("link", { name: "HPG" }).closest("tr");
+    expect(fallingRow).not.toBeNull();
+    expect(within(fallingRow!).getByText("-1,01%").closest("td")).toHaveClass("negative");
+    expect(within(fallingRow!).getByText("-1.000").closest("td")).toHaveClass("negative");
   });
 
   it("keeps numbered navigation anchored at the stock table", () => {

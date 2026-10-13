@@ -33,6 +33,9 @@ class RecordingRepository:
     def list_articles(self, query: NewsQuery) -> tuple[tuple[NewsArticle, ...], bool]:
         raise NotImplementedError
 
+    def count_articles(self, query: NewsQuery) -> int:
+        raise NotImplementedError
+
     def get_article(self, article_id: str) -> NewsArticle | None:
         raise NotImplementedError
 

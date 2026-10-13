@@ -125,7 +125,7 @@ def _index(value: MarketIndex, include_candles: bool = True) -> dict[str, object
         "floor_count": value.floor_count,
     }
     if include_candles:
-        payload["candles"] = [_candle(item) for item in value.candles[-30:]]
+        payload["candles"] = [_candle(item) for item in value.candles[-170:]]
     return payload
 
 

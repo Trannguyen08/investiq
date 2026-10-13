@@ -3,7 +3,8 @@
 import type { ReactNode } from "react";
 import Link from "next/link";
 
-import { changeTone, formatChange, formatCompact, formatEventDate, formatMarketTime, formatMoney, formatPercent } from "@/components/market/formatters";
+import { changeTone, formatChange, formatCompact, formatEventDate, formatMarketTime, formatMoney, formatPercent, formatRatioPair, priceTone } from "@/components/market/formatters";
+import { INDEX_DETAIL_CHART_LIMITS, MarketCandlestickChart } from "@/components/market/market-candlestick-chart";
 import { MarketStatus } from "@/components/market/market-status";
 import { MiniCandles } from "@/components/market/mini-candles";
 import { mergeLiveIndex, mergeLiveInstrument } from "@/components/market/live-market";
@@ -46,7 +47,7 @@ export function StocksView({ collection, filters }: { collection: InstrumentColl
   const stream = useMarketStreamState();
   const rows = collection.data.map((item) => mergeLiveInstrument(item, stream.items[item.symbol]));
   const fundamentalsBySymbol = useVisibleFundamentals(
-    rows.filter((item) => item.pe === null && item.pb === null).map((item) => item.symbol),
+    rows.filter((item) => item.pe === null || item.pb === null).map((item) => item.symbol),
   );
   const isTcbs = collection.meta.provider === "tcbs-iflash";
   return <section className="market-tab-panel">
@@ -59,14 +60,14 @@ export function StocksView({ collection, filters }: { collection: InstrumentColl
       <button type="submit">Áp dụng</button>
     </form>
     <div className="market-table-wrap"><table className="market-table stock-table">
-      <thead><tr><th>Mã / Công ty</th><th>Giá</th><th>Thay đổi</th><th>Mở · Cao · Thấp</th><th>Khối lượng</th><th>GTGD</th><th>So TB20</th><th>{isTcbs ? "GT ngoại ròng ước tính" : "Khối ngoại ròng"}</th><th>Vốn hóa</th><th>P/E · P/B</th><th>Biểu đồ</th></tr></thead>
-      <tbody>{rows.map((item) => { const fundamentals = fundamentalsBySymbol[item.symbol]; return <tr className={item.is_vn30 ? "vn30-row" : undefined} key={item.symbol}>
+      <thead><tr><th>Mã / Công ty</th><th>Giá</th><th>Thay đổi</th><th>Mở · Cao · Thấp</th><th>Khối lượng</th><th>GTGD</th><th>So TB20</th><th>{isTcbs ? "GT ngoại ròng ước tính" : "Khối ngoại ròng"}</th><th>Vốn hóa</th><th>P/E / P/B</th><th>Biểu đồ</th></tr></thead>
+      <tbody>{rows.map((item) => { const fundamentals = fundamentalsBySymbol[item.symbol]; const ratiosLoading = (item.pe === null || item.pb === null) && fundamentals === undefined; return <tr className={item.is_vn30 ? "vn30-row" : undefined} key={item.symbol}>
         <td className="stock-identity"><div><Link href={`/market/stocks/${item.symbol}`}>{item.symbol}</Link>{item.is_vn30 && <span className="vn30-badge">VN30</span>}</div><span>{item.name}</span><small>{item.exchange} · {item.sector}</small></td>
-        <td><strong>{formatChange(item.price)}</strong><small>TC {formatChange(item.reference_price)}</small></td>
+        <td><strong className={priceTone(item.price, item.reference_price, item.ceiling_price, item.floor_price)}>{formatChange(item.price)}</strong><small className="price-reference">TC {formatChange(item.reference_price)}</small></td>
         <td className={changeTone(item.change_percent)}><strong>{formatPercent(item.change_percent)}</strong><small>{formatChange(item.change)}</small></td>
-        <td>{formatChange(item.open_price)} · {formatChange(item.high_price)} · {formatChange(item.low_price)}</td>
+        <td><span className={priceTone(item.open_price, item.reference_price, item.ceiling_price, item.floor_price)}>{formatChange(item.open_price)}</span> · <span className={priceTone(item.high_price, item.reference_price, item.ceiling_price, item.floor_price)}>{formatChange(item.high_price)}</span> · <span className={priceTone(item.low_price, item.reference_price, item.ceiling_price, item.floor_price)}>{formatChange(item.low_price)}</span></td>
         <td>{formatCompact(item.volume)}</td><td>{formatMoney(item.matched_value)}</td><td>{isTcbs ? "—" : `${item.volume_vs_20d}×`}</td>
-        <td className={changeTone(item.foreign_net_value)}>{formatMoney(item.foreign_net_value)}</td><td>{formatMoney(item.market_cap)}</td><td>{fundamentals?.pe ?? item.pe ?? "—"} · {fundamentals?.pb ?? item.pb ?? "—"}</td>
+        <td className={changeTone(item.foreign_net_value)}>{formatMoney(item.foreign_net_value)}</td><td>{formatMoney(item.market_cap)}</td><td className="fundamental-ratios">{formatRatioPair(fundamentals?.pe ?? item.pe, fundamentals?.pb ?? item.pb, ratiosLoading)}</td>
         <td className="table-chart"><Link href={`/market/stocks/${item.symbol}`} aria-label={`Xem biểu đồ và chi tiết ${item.symbol}`}><MiniCandles candles={item.candles} label={`Nến ngày ${item.symbol}`} /><span>Xem chi tiết →</span></Link></td>
       </tr>; })}</tbody>
     </table></div>
@@ -84,16 +85,29 @@ export function IndicesView({ collection, selected }: { collection: IndexCollect
   const rows = collection.data.map((item) => mergeLiveIndex(item, stream.items[item.symbol]));
   const current = rows.find((item) => item.symbol === selected) ?? rows[0];
   const hasSessionOhlc = collection.meta.provider !== "tcbs-iflash";
-  return <section className="market-tab-panel"><div className="market-tab-heading"><div><h2>Chỉ số thị trường</h2><p>Giá trị, độ rộng và thanh khoản theo từng chỉ số.</p></div></div><div className="market-index-selector">{rows.map((item) => <Link className={`${item.symbol === current?.symbol ? "active" : ""} index-${changeTone(item.change_percent)}`} href={`/market/indices?symbol=${item.symbol}`} key={item.symbol}><span>{item.name}</span><strong className={changeTone(item.change_percent)}>{formatChange(item.value)}</strong><small className={changeTone(item.change_percent)}>{formatPercent(item.change_percent)}</small></Link>)}</div>{current && <article className="index-detail"><div className="index-detail-heading"><div><p className="eyebrow">{current.symbol}</p><h2>{current.name}</h2><strong className={changeTone(current.change_percent)}>{formatChange(current.value)}</strong><span className={changeTone(current.change_percent)}>{formatChange(current.change)} · {formatPercent(current.change_percent)}</span></div><MiniCandles candles={current.candles} label={`Biểu đồ nến ${current.name}`} /></div><dl className="index-detail-stats"><div><dt>Mở cửa</dt><dd>{hasSessionOhlc ? formatChange(current.open_value) : "—"}</dd></div><div><dt>Cao nhất</dt><dd>{hasSessionOhlc ? formatChange(current.high_value) : "—"}</dd></div><div><dt>Thấp nhất</dt><dd>{hasSessionOhlc ? formatChange(current.low_value) : "—"}</dd></div><div><dt>Khối lượng</dt><dd>{formatCompact(current.volume)}</dd></div><div><dt>Giá trị GD</dt><dd>{formatMoney(current.matched_value)}</dd></div><div><dt>Tăng / Giảm / Đứng</dt><dd><span className="positive">{current.advances}</span> / <span className="negative">{current.declines}</span> / {current.unchanged}</dd></div></dl></article>}</section>;
+  return <section className="market-tab-panel">
+    <div className="market-tab-heading"><div><h2>Chỉ số thị trường</h2><p>Giá trị, độ rộng và thanh khoản theo từng chỉ số.</p></div></div>
+    <div className="market-index-selector">{rows.map((item) => <Link className={`${item.symbol === current?.symbol ? "active" : ""} index-${changeTone(item.change_percent)}`} href={`/market/indices?symbol=${item.symbol}`} key={item.symbol}><span>{item.name}</span><strong className={changeTone(item.change_percent)}>{formatChange(item.value)}</strong><small className={changeTone(item.change_percent)}>{formatPercent(item.change_percent)}</small></Link>)}</div>
+    {current && <article className="index-detail">
+      <div className="index-detail-heading">
+        <div className="index-detail-identity"><p className="eyebrow">{current.symbol}</p><h2>{current.name}</h2><strong className={changeTone(current.change_percent)}>{formatChange(current.value)}</strong><span className={changeTone(current.change_percent)}>{formatChange(current.change)} · {formatPercent(current.change_percent)}</span></div>
+        <div className="index-detail-chart-note"><strong>Diễn biến từng phiên</strong><span>{Math.min(current.candles.length, INDEX_DETAIL_CHART_LIMITS.maximum)} nến ngày gần nhất</span></div>
+      </div>
+      <div className="index-detail-chart">
+        <MarketCandlestickChart candles={current.candles} label={`Biểu đồ nến chi tiết ${current.name}`} range="year" explain minimumCandles={INDEX_DETAIL_CHART_LIMITS.minimum} maximumCandles={INDEX_DETAIL_CHART_LIMITS.maximum} />
+      </div>
+      <dl className="index-detail-stats"><div><dt>Mở cửa</dt><dd>{hasSessionOhlc ? formatChange(current.open_value) : "—"}</dd></div><div><dt>Cao nhất</dt><dd>{hasSessionOhlc ? formatChange(current.high_value) : "—"}</dd></div><div><dt>Thấp nhất</dt><dd>{hasSessionOhlc ? formatChange(current.low_value) : "—"}</dd></div><div><dt>Khối lượng</dt><dd>{formatCompact(current.volume)}</dd></div><div><dt>Giá trị GD</dt><dd>{formatMoney(current.matched_value)}</dd></div><div><dt>Tăng / Giảm / Đứng</dt><dd><span className="positive">{current.advances}</span> / <span className="negative">{current.declines}</span> / {current.unchanged}</dd></div></dl>
+    </article>}
+  </section>;
 }
 
 export function EventsView({ collection, filters }: { collection: EventCollection; filters: { symbol: string; eventType: string } }) {
   const groups = new Map<string, typeof collection.data>();
   for (const event of collection.data) { const key = formatEventDate(event.event_at); groups.set(key, [...(groups.get(key) ?? []), event]); }
-  const labels: Record<string, string> = { shareholder_meeting: "Đại hội cổ đông", cash_dividend: "Cổ tức tiền", stock_dividend: "Cổ tức cổ phiếu", earnings: "Kết quả kinh doanh", additional_listing: "Niêm yết bổ sung" };
+  const labels: Record<string, string> = { shareholder_meeting: "Đại hội cổ đông", cash_dividend: "Cổ tức tiền", stock_dividend: "Cổ tức cổ phiếu", earnings: "Kết quả kinh doanh", additional_listing: "Niêm yết bổ sung", insider_trading: "Giao dịch nội bộ", share_issuance: "Phát hành cổ phiếu", corporate_action: "Sự kiện doanh nghiệp" };
   const emptyTitle = collection.meta.partial ? "Nguồn hiện tại chưa cung cấp lịch sự kiện" : "Không có sự kiện phù hợp";
-  const emptyCopy = collection.meta.partial ? "TCBS iFlash đang cấp dữ liệu giá và chỉ số; lịch sự kiện chưa có trong tích hợp này." : "Thử bỏ mã hoặc chọn loại sự kiện khác.";
-  return <section className="market-tab-panel"><div className="market-tab-heading"><div><h2>Lịch sự kiện</h2><p>Các mốc sắp tới, nhóm theo ngày thị trường Việt Nam.</p></div><span className="table-preset">30 ngày tới</span></div><form className="event-filter" action="/market/events"><label>Mã chứng khoán<input name="symbol" defaultValue={filters.symbol} maxLength={24} placeholder="Ví dụ: FPT" /></label><label>Loại sự kiện<select name="event_type" defaultValue={filters.eventType}><option value="">Tất cả sự kiện</option><option value="shareholder_meeting">Đại hội cổ đông</option><option value="cash_dividend">Cổ tức tiền</option><option value="stock_dividend">Cổ tức cổ phiếu</option><option value="earnings">Kết quả kinh doanh</option><option value="additional_listing">Niêm yết bổ sung</option></select></label><button type="submit">Lọc sự kiện</button></form>{groups.size ? <div className="event-groups">{[...groups].map(([date, events]) => <section key={date}><h3>{date}</h3><div>{events.map((event) => <article key={event.id}><time dateTime={event.event_at}>{new Intl.DateTimeFormat("vi-VN", { timeZone: "Asia/Ho_Chi_Minh", day: "2-digit", month: "2-digit" }).format(new Date(event.event_at))}</time><div className="event-symbol"><strong>{event.symbol}</strong><span>{labels[event.event_type] ?? event.event_type}</span></div><div className="event-copy"><h4>{event.title}</h4><p>{event.summary}</p><small>{event.source_name} · cập nhật {formatMarketTime(collection.meta.market_time)}</small></div><span className={`event-status ${event.status}`}>{event.status === "expected" ? "Dự kiến" : event.status === "official" ? "Chính thức" : "Đã hủy"}</span></article>)}</div></section>)}</div> : <div className="market-empty"><h3>{emptyTitle}</h3><p>{emptyCopy}</p></div>}</section>;
+  const emptyCopy = collection.meta.partial ? `${collection.meta.provider_name} chưa trả sự kiện phù hợp trong cửa sổ 30 ngày này.` : "Thử bỏ mã hoặc chọn loại sự kiện khác.";
+  return <section className="market-tab-panel"><div className="market-tab-heading"><div><h2>Lịch sự kiện</h2><p>Các mốc 30 ngày tới trong nhóm 8 mã nổi bật của snapshot, nhóm theo ngày thị trường Việt Nam.</p></div><span className="table-preset">30 ngày tới</span></div><form className="event-filter" action="/market/events"><label>Mã chứng khoán<input name="symbol" defaultValue={filters.symbol} maxLength={24} placeholder="Ví dụ: FPT" /></label><label>Loại sự kiện<select name="event_type" defaultValue={filters.eventType}><option value="">Tất cả sự kiện</option><option value="shareholder_meeting">Đại hội cổ đông</option><option value="cash_dividend">Cổ tức tiền</option><option value="stock_dividend">Cổ tức cổ phiếu</option><option value="earnings">Kết quả kinh doanh</option><option value="share_issuance">Phát hành cổ phiếu</option><option value="additional_listing">Niêm yết bổ sung</option><option value="insider_trading">Giao dịch nội bộ</option><option value="corporate_action">Sự kiện khác</option></select></label><button type="submit">Lọc sự kiện</button></form>{groups.size ? <div className="event-groups">{[...groups].map(([date, events]) => <section key={date}><h3>{date}</h3><div>{events.map((event) => <article key={event.id}><time dateTime={event.event_at}>{new Intl.DateTimeFormat("vi-VN", { timeZone: "Asia/Ho_Chi_Minh", day: "2-digit", month: "2-digit" }).format(new Date(event.event_at))}</time><div className="event-symbol"><strong>{event.symbol}</strong><span>{labels[event.event_type] ?? event.event_type}</span></div><div className="event-copy"><h4>{event.title}</h4><p>{event.summary}</p><small>{event.source_name} · cập nhật {formatMarketTime(collection.meta.market_time)}</small></div><span className={`event-status ${event.status}`}>{event.status === "expected" ? "Dự kiến" : event.status === "official" ? "Chính thức" : "Đã hủy"}</span></article>)}</div></section>)}</div> : <div className="market-empty"><h3>{emptyTitle}</h3><p>{emptyCopy}</p></div>}</section>;
 }
 
 export function PeopleView({ collection }: { collection: PeopleCollection }) {

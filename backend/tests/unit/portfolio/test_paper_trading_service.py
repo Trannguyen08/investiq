@@ -94,6 +94,17 @@ class RecordingPortfolioRepository:
         self.order = replace(self.order, status="open")
         return self.order
 
+    def cancel_order(self, _: str, __: str) -> PaperOrder:
+        assert self.order is not None
+        self.order = replace(
+            self.order,
+            status="cancelled",
+            reserved_cash=Decimal(),
+            reserved_quantity=0,
+            cancelled_at=datetime(2026, 10, 8, tzinfo=UTC),
+        )
+        return self.order
+
     def fill_order(
         self,
         _: str,
@@ -281,5 +292,8 @@ def test_legacy_waiting_order_auto_fills_at_the_latest_observed_price() -> None:
 
     assert repository.execution is not None
     assert repository.execution.execution_price == Decimal("110")
-    assert dashboard["orders"][0]["status"] == "filled"
+    orders = dashboard["orders"]
+    assert isinstance(orders, list)
+    assert isinstance(orders[0], dict)
+    assert orders[0]["status"] == "filled"
 

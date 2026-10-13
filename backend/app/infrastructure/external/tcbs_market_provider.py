@@ -528,7 +528,7 @@ class TcbsMarketProvider:
                 unchanged=_integer(payload.get("notChange")),
                 ceiling_count=_integer(payload.get("ceilIncrease")),
                 floor_count=_integer(payload.get("floorDecrease")),
-                candles=tuple(previous_candles[-100:]),
+                candles=tuple(previous_candles[-170:]),
             )
             self._market_time = observed_at
         return True

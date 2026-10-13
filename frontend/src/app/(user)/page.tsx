@@ -6,7 +6,7 @@ import type { NewsSummary } from "@/lib/api-client";
 import type { MarketSector } from "@/types/market";
 
 export default async function OverviewPage() {
-  const newsQuery = new URLSearchParams({ limit: "4", window_days: "1" });
+  const newsQuery = new URLSearchParams({ limit: "6", window_days: "1" });
   const [overviewResult, sectorResult, newsResult] = await Promise.allSettled([
     getMarketOverview(),
     getMarketSectors(),

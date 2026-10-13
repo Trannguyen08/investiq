@@ -1,4 +1,4 @@
-import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { PaperTradingDashboard } from "@/components/portfolio/paper-trading-dashboard";
@@ -130,6 +130,68 @@ describe("PaperTradingDashboard", () => {
     expect(screen.getByText(/không dự báo giá tương lai/)).toBeInTheDocument();
   });
 
+  it("opens a read-only unrealized P&L scenario and recalculates only from quantity", async () => {
+    render(<PaperTradingDashboard positiveNews={[]} marketInstruments={marketInstruments} />);
+
+    await screen.findByRole("heading", { name: "Danh mục mô phỏng của bạn" });
+    fireEvent.click(screen.getByRole("button", { name: /Lãi\/lỗ chưa chốt/ }));
+
+    const dialog = screen.getByRole("dialog", { name: "Lãi/lỗ dự kiến nếu bán" });
+    const quantity = screen.getByRole("spinbutton", { name: "Khối lượng bán giả định FPT" });
+    expect(dialog).toHaveTextContent("Chỉ đọc, không bán");
+    expect(dialog).toHaveTextContent("159.500 ₫");
+    expect(dialog).toHaveTextContent("+1,59%");
+    expect(quantity).toHaveValue(100);
+    expect(quantity).toHaveAttribute("max", "100");
+    expect(screen.queryByRole("button", { name: /xác nhận bán/i })).not.toBeInTheDocument();
+
+    fireEvent.change(quantity, { target: { value: "50" } });
+    expect(quantity).toHaveValue(50);
+    expect(dialog).toHaveTextContent("79.750 ₫");
+
+    fireEvent.keyDown(document, { key: "Escape" });
+    expect(screen.queryByRole("dialog", { name: "Lãi/lỗ dự kiến nếu bán" })).not.toBeInTheDocument();
+  });
+
+  it("attributes realized gains and losses to their completed sell trades", async () => {
+    const dashboardWithSales: PaperDashboard = {
+      ...dashboard,
+      account: { ...dashboard.account, realized_pnl: "371750" },
+      trades: [
+        {
+          id: "sale-profit", side: "sell", symbol: "FPT", name: "CTCP FPT", exchange: "HOSE",
+          quantity: 50, execution_price: "110000", gross_amount: "5500000", fee_amount: "8250",
+          tax_amount: "5500", cash_effect: "5486250", realized_pnl: "478750", provider: "fixture",
+          price_at: "2026-10-08T02:00:00Z", received_at: "2026-10-08T02:00:00Z",
+          delay_class: "development_fixture", created_at: "2026-10-08T02:00:00Z",
+        },
+        {
+          id: "sale-loss", side: "sell", symbol: "HPG", name: "Tập đoàn Hòa Phát", exchange: "HOSE",
+          quantity: 100, execution_price: "28000", gross_amount: "2800000", fee_amount: "4200",
+          tax_amount: "2800", cash_effect: "2793000", realized_pnl: "-107000", provider: "fixture",
+          price_at: "2026-10-07T02:00:00Z", received_at: "2026-10-07T02:00:00Z",
+          delay_class: "development_fixture", created_at: "2026-10-07T02:00:00Z",
+        },
+      ],
+    };
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue({ ok: true, json: async () => dashboardWithSales }));
+    render(<PaperTradingDashboard positiveNews={[]} marketInstruments={marketInstruments} />);
+
+    await screen.findByRole("heading", { name: "Danh mục mô phỏng của bạn" });
+    fireEvent.click(screen.getByRole("button", { name: /Lãi\/lỗ đã chốt/ }));
+
+    const dialog = screen.getByRole("dialog", { name: "Lãi/lỗ thực tế đã chốt" });
+    expect(screen.getByRole("table", { name: "Chi tiết lãi lỗ thực tế theo giao dịch bán" })).toBeInTheDocument();
+    expect(dialog).toHaveTextContent("FPT");
+    expect(dialog).toHaveTextContent("Lãi từ giao dịch bán");
+    expect(dialog).toHaveTextContent("478.750 ₫");
+    expect(dialog).toHaveTextContent("HPG");
+    expect(dialog).toHaveTextContent("Lỗ từ giao dịch bán");
+    expect(dialog).toHaveTextContent("-107.000 ₫");
+    expect(dialog).toHaveTextContent("Giá vốn bình quân đã gồm phí mua");
+    expect(dialog).toHaveTextContent("Chỉ để đối chiếu hiện tại");
+  });
+
   it("places a CSRF-protected simulated order and refreshes the dashboard", async () => {
     const fetchMock = vi.fn()
       .mockResolvedValueOnce({ ok: true, json: async () => dashboard })
@@ -192,11 +254,15 @@ describe("PaperTradingDashboard", () => {
 
     render(<PaperTradingDashboard positiveNews={[]} marketInstruments={[instrumentWithoutRatios]} />);
 
-    expect(await screen.findByText("18.5 · 4.2")).toBeInTheDocument();
+    expect(await screen.findByText("18.5 / 4.2")).toBeInTheDocument();
     expect(fetchMock.mock.calls[1][0]).toContain("/market-data-api/fundamentals?symbols=FPT");
+    const marketTable = screen.getByRole("table", { name: "Bảng cổ phiếu nâng cao để giao dịch mô phỏng" });
+    const row = within(marketTable).getByRole("row", { name: /FPT/ });
+    expect(within(row).getByText("+102.000")).toHaveClass("price-up");
+    expect(within(row).getByText("TC +100.000")).toHaveClass("price-reference");
   });
 
-  it("loads fundamental ratios in bounded batches beyond the first 15 stocks", async () => {
+  it("loads fundamental ratios in bounded batches as each page becomes visible", async () => {
     const instruments = Array.from({ length: 16 }, (_, index) => ({
       ...marketInstrument,
       symbol: `S${String(index).padStart(2, "0")}`,
@@ -210,11 +276,13 @@ describe("PaperTradingDashboard", () => {
 
     render(<PaperTradingDashboard positiveNews={[]} marketInstruments={instruments} />);
 
+    await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(2));
+    expect(decodeURIComponent(String(fetchMock.mock.calls[1][0])).split(",")).toHaveLength(15);
+
+    fireEvent.click(screen.getByRole("button", { name: /Trang sau/ }));
+
     await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(3));
-    const fundamentalRequests = fetchMock.mock.calls.slice(1).map((call) => String(call[0]));
-    expect(fundamentalRequests).toHaveLength(2);
-    expect(decodeURIComponent(fundamentalRequests[0]).split(",")).toHaveLength(15);
-    expect(fundamentalRequests[1]).toContain("S15");
+    expect(String(fetchMock.mock.calls[2][0])).toContain("S15");
   });
 
   it("keeps the market table in view when changing pages", async () => {

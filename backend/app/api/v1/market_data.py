@@ -113,10 +113,11 @@ def get_market_provider() -> IMarketProvider:
 
 
 async def start_market_provider() -> None:
-    if settings.market_data_mode == "tcbs":
-        provider = _provider()
-        if isinstance(provider, TcbsMarketProvider):
-            await provider.start()
+    if settings.market_data_mode not in {"tcbs", "vnstock"}:
+        return
+    provider = _provider()
+    if isinstance(provider, TcbsMarketProvider):
+        await provider.start()
 
 
 async def close_market_provider() -> None:
