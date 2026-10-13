@@ -1,5 +1,42 @@
 # Current Task
 
+## Beginner stock-learning vertical slice - 2026-10-13 (complete)
+
+After PR #8 for `feature/investing` passed Backend CI and Frontend CI, create the local branch
+`feature/stock-basic` without merging the PR from the agent workflow. The repository owner subsequently
+merged PR #8 through GitHub, so the local planning branch was fast-forwarded to the resulting `dev`
+merge commit. Research regulator/exchange investor education plus
+evidence-based learning patterns, then replace the empty `Dự báo AI` destination with
+`Chứng khoán căn bản`. The user reviewed and approved `docs/plan/stock-basic.md` before implementation.
+
+Draft complete: the proposal defines the `/learn` information architecture, seven-stage curriculum,
+5–8 minute scenario/example/retrieval/practice lesson loop, direct links into existing Market, News,
+comparison, candlestick, and paper-trading experiences, content provenance/versioning, privacy and
+financial-safety boundaries, a four-PR rollout, and measurable PR 1 acceptance criteria. Sources are
+limited to official exchanges/regulators/investor-education bodies plus a primary retrieval-practice
+study. The user approved implementation on 13/10/2026. Implement PR 1 only: navigation and route
+compatibility, the `/learn` shell, two complete micro-lessons, robust versioned local progress, live
+market-data practice context, and focused frontend coverage. Do not expand into the later curriculum
+or introduce backend persistence in this slice.
+
+Complete: the public `/learn` route now provides the approved 0–6 roadmap and the complete
+“Tiết kiệm hay đầu tư?” and “Đọc một cây nến” lessons. Quiz feedback allows retry and marks a lesson
+complete only after all answers are correct. Local progress stores only a versioned list of completed
+lesson slugs and degrades visibly without breaking when storage is corrupt or blocked. The candle
+lesson uses the canonical VN-Index read model with source, market time, timezone, freshness and delay
+metadata, while unavailable data remains explicitly unavailable. User navigation now says
+`Chứng khoán căn bản`; legacy `/predictions` permanently redirects to `/learn`. PR 2–4 remain
+unimplemented until usage evidence is reviewed.
+
+Validation: all 99 frontend tests, ESLint, TypeScript, and `git diff --check` pass. Focused coverage
+includes lesson/source schema, navigation, permanent redirect, quiz retry/completion, local progress
+restore/corrupt/blocked states, fresh/stale/unavailable market context, the 390px CSS contract, and
+reduced-motion behavior. On the fixed development frontend port 3000, `/learn` returned 200 with the
+new title/navigation/two lessons and `/predictions` returned a 308 to `/learn`. At 21:35 ICT the live
+Vnstock read model exposed 170 VNINDEX candles through the valid 13/10/2026 session, labeled the
+closed partial source as `source_delayed` and `stale`, and the lesson preserved that provenance. No
+production frontend build ran, and no backend API, database migration, or dependency was added.
+
 ## Separate VN-Index chart density bounds - 2026-10-13 (complete)
 
 Set the VN-Index highlight at the top of Market to 50–120 visible daily candles and the detailed

@@ -162,6 +162,14 @@ investiq/
   unvalidated. Home daily-focus cards
   are deterministic links derived from observed breadth, sector movement, provider events, and stored
   news, without claiming a causal explanation.
+- The public learning route `/learn` is a server-rendered Next.js page backed by typed lesson content
+  in `frontend/src/content/stock-basics.ts` and a client journey component under
+  `frontend/src/components/learn/`. It reads the existing canonical Market indices contract on the
+  server to select the newest observed VN-Index candle and carries provider, market-time, timezone,
+  freshness, and delay metadata into the lesson; provider failure yields an honest unavailable state.
+  Its optional browser persistence is isolated in `frontend/src/lib/learning-progress.ts`, versioned,
+  and limited to completed lesson slugs. No learning database/API, personal financial answers, or new
+  dependency exists. `/predictions` is retained only as a permanent compatibility redirect.
 - `/ws/v1/market` sends versioned hello/heartbeat/snapshot/quote events with bounded symbol
   subscriptions and local sequence numbers. Clients deduplicate event IDs and reconnect for a REST-
   backed snapshot after a sequence gap. It is an ephemeral delivery path; REST remains the resync

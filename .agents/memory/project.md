@@ -117,6 +117,15 @@
   Volume-baseline controls are hidden when the active source does not provide that field. Home also
   derives a daily focus block only from observed breadth, sectors, provider events, and database news;
   the shared status bar explains the current trading-session context.
+- `/learn` is the public beginner stock-learning destination and the user navigation label is
+  `Chứng khoán căn bản`; legacy `/predictions` permanently redirects there. Its first vertical slice
+  contains two 5–8 minute, source-backed Vietnamese lessons with scenarios, worked examples,
+  glossary, retryable retrieval questions, and deep links into existing Market/Portfolio tools. The
+  candle lesson uses canonical VN-Index data and displays provider, market time, timezone, freshness,
+  and delay rather than fabricating missing values. Browser progress is optional and versioned, stores
+  only completed lesson slugs, and fails open when localStorage is unavailable. No learning profile,
+  financial answer, backend persistence, recommendation, or prediction is introduced; later
+  curriculum phases remain gated by observed usage.
 - `/portfolio` is an authenticated paper-trading workspace with one private 100-million-VND
   simulation account per user. Migrations `0012_paper_trading` and `0013_paper_orders` store
   row-locked cash/share validation, durable audit orders, weighted-average holdings, and immutable

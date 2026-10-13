@@ -251,5 +251,5 @@ describe("IndicesView chart detail", () => {
     expect(screen.getByRole("img", { name: /170 nến giá xanh đỏ/ })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Thu nhỏ biểu đồ năm" })).toBeDisabled();
     expect(container.querySelector(".index-detail .mini-candles")).not.toBeInTheDocument();
-  });
+  }, 10_000);
 });

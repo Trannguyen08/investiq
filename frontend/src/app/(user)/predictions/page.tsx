@@ -1,5 +1,5 @@
-import { ScaffoldPage } from "@/components/ui/scaffold-page";
+import { permanentRedirect } from "next/navigation";
 
-export default function PredictionsPage() {
-  return <ScaffoldPage title="Predictions" description="Model predictions will be presented here." />;
+export default function LegacyPredictionsPage() {
+  permanentRedirect("/learn");
 }

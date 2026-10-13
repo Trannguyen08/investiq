@@ -281,7 +281,11 @@ must update that overview and all configuration or documentation that references
 See [`DEVELOPMENT_GUIDE.md`](DEVELOPMENT_GUIDE.md) for Docker lifecycle commands, the complete port
 table, backend quality checks, and per-feature coverage reports.
 
-See [`docs/plan/`](docs/plan/README.md) for the feature specifications. The
+See [`docs/plan/`](docs/plan/README.md) for the feature specifications. The first vertical slice of
+the [beginner stock-learning plan](docs/plan/stock-basic.md) is implemented at `/learn`: it replaces
+the empty AI prediction destination with two source-backed Vietnamese micro-lessons, retrieval
+practice, versioned local progress, and an honestly labeled live VN-Index candle example. Later
+curriculum phases remain plan-only pending usage evidence. The
 [authentication plan](docs/plan/auth.md) covers email/Google login, OTP, server-held JWT/refresh
 credentials, and automatic session refresh. The implementation is available behind
 the fail-closed `AUTH_ENABLED` flag; configure the blank auth entries in `.env` before enabling it.
