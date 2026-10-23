@@ -73,10 +73,7 @@ services:
       - key: NODE_ENV
         value: production
       - key: API_INTERNAL_BASE_URL
-        fromService:
-          type: web
-          name: investiq-backend
-          property: host
+        sync: false
       - key: NEXT_PUBLIC_API_URL
         value: /api
       - key: ADMIN_SESSION_SECRET

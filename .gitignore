@@ -229,3 +229,6 @@ docs/plan/*
 !docs/plan/paper-trading.md
 !docs/plan/stock-basic.md
 docs/tutorial/
+
+# Neon CLI local state
+.neon
