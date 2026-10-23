@@ -1,6 +1,14 @@
 # Current Task
 
-## Render deployment and CI/CD guide - 2026-10-23 (complete)
+## Neon DB migration & Render Blueprint deployment - 2026-10-23 (in progress)
+
+- Resolved CI failure on PR #9 (`market-candlestick-chart.test.tsx` and `auth-ui.test.tsx`), passed full test suite, and merged PR #9 into `main` (user granted one-time auto-merge permission).
+- Synced branches `dev` and `main` at `3589da1`.
+- Configured Neon database via `neonctl` in `aws-ap-southeast-1` and executed all 14 SQL migrations (0001 through 0014) to the pooled Neon PostgreSQL database using `backend/.venv313/Scripts/python.exe -m app.infrastructure.db.base`.
+- Added `.neon` to `.gitignore`.
+- Updated `render.yaml` Blueprint to keep `API_INTERNAL_BASE_URL` as `sync: false` to avoid raw host string issues on Render.
+- Next: Launch Blueprint on Render via terminal/web, input environment secrets from `.env`, and configure GitHub Actions secrets for automated CD.
+
 
 Created and refined `docs/deploy.md` providing a comprehensive, step-by-step guide for deploying InvestIQ on Render.com (Frontend Next.js and Backend FastAPI Web Services) paired with a persistent free PostgreSQL database on Neon.tech (or Supabase) to bypass Render's 30-day PostgreSQL trial limit, and integrating GitHub Actions for learning CI/CD. The guide covers Render architecture versus local Docker Compose, Free tier gotchas (cold starts, $PORT injection, pooling), step-by-step Neon PostgreSQL setup in Singapore region and forward-only SQL migration execution, Backend FastAPI deployment (Docker vs Python runtime) with health checks (/healthz, /readyz), Frontend Next.js deployment as a Web Service with BFF API integration, Infrastructure-as-Code via `render.yaml` Blueprint, full GitHub Actions CI/CD pipeline definition with parallel testing and deploy hooks, and production best practices (CORS resolution, zero-secret-leakage, rollback strategies). Synchronized repository structure in `README.md` and `.agents/memory/architecture.md`.
 

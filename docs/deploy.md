@@ -230,7 +230,7 @@ Sau khi log hiển thị `Application startup complete`:
    - **Environment**: Chọn `Node`.
    - **Build Command**:
      ```bash
-     npm ci && npm run build
+     npm ci --include=dev && npm run build
      ```
    - **Start Command**:
      ```bash
@@ -325,7 +325,7 @@ services:
     region: singapore
     plan: free
     rootDir: frontend
-    buildCommand: "npm ci && npm run build"
+    buildCommand: "npm ci --include=dev && npm run build"
     startCommand: "npm run start"
     healthCheckPath: /
     envVars:
