@@ -14,7 +14,7 @@ export const metadata: Metadata = {
 
 async function getLearningMarketExample(): Promise<LearningMarketExample | null> {
   try {
-    const collection = await getMarketIndices(3000);
+    const collection = await getMarketIndices(15000);
     const index = collection.data.find((item) => item.symbol === "VNINDEX") ?? collection.data[0];
     const candle = index?.candles.at(-1);
     if (!index || !candle) return null;

@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { resolveApiBase } from "@/lib/api-base";
 
 const SYMBOL_PATTERN = /^[A-Z0-9._-]{1,24}$/;
 const MAX_SYMBOLS = 15;
@@ -22,7 +23,7 @@ export async function GET(request: Request) {
     );
   }
 
-  const base = process.env.API_INTERNAL_BASE_URL ?? "http://localhost:8000/api";
+  const base = resolveApiBase();
   const results = new Array<{ symbol: string; pe: string | null; pb: string | null }>(symbols.length);
   const deadline = AbortSignal.timeout(30_000);
   let cursor = 0;

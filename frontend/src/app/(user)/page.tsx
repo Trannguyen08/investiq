@@ -10,9 +10,9 @@ export const dynamic = "force-dynamic";
 export default async function OverviewPage() {
   const newsQuery = new URLSearchParams({ limit: "6", window_days: "1" });
   const [overviewResult, sectorResult, newsResult] = await Promise.allSettled([
-    getMarketOverview(2000),
-    getMarketSectors(2000),
-    getNews(newsQuery, 800),
+    getMarketOverview(15000),
+    getMarketSectors(15000),
+    getNews(newsQuery, 15000),
   ]);
   const overview = overviewResult.status === "fulfilled" ? overviewResult.value : null;
   const sectors: MarketSector[] = sectorResult.status === "fulfilled" ? sectorResult.value.data : [];

@@ -6,6 +6,7 @@ import { cookies } from "next/headers";
 import { createClient, type RedisClientType } from "redis";
 
 import type { AuthErrorBody, AuthUser, Challenge } from "@/lib/auth-types";
+import { resolveApiBase } from "@/lib/api-base";
 
 type BackendCredentials = {
   access_token: string;
@@ -74,7 +75,7 @@ function decrypt<T>(value: string): T {
 }
 
 async function backend(path: string, init: RequestInit = {}) {
-  const base = process.env.API_INTERNAL_BASE_URL ?? "http://localhost:8000/api";
+  const base = resolveApiBase();
   return fetch(`${base}/v1/auth${path}`, {
     ...init,
     cache: "no-store",

@@ -9,6 +9,7 @@ import type {
   PeopleCollection,
   SectorCollection,
 } from "@/types/market";
+import { resolveApiBase } from "@/lib/api-base";
 
 export type Source = {
   slug: string;
@@ -111,7 +112,7 @@ export type NewsCollection = {
 
 type Envelope<T> = { data: T; meta: NewsCollection["meta"] };
 
-const serverBase = process.env.API_INTERNAL_BASE_URL ?? "http://localhost:8000/api";
+const serverBase = resolveApiBase();
 
 class InvestIqApiError extends Error {
   constructor(readonly status: number) {
@@ -146,15 +147,15 @@ export function getRelatedStockNews(
     limit: String(limit),
     page: "1",
   });
-  return getNews(query, 800);
+  return getNews(query, 10000);
 }
 
 export function getNewsArticle(id: string): Promise<Envelope<NewsDetail>> {
   return requestJson<Envelope<NewsDetail>>(`/v1/news/${encodeURIComponent(id)}`);
 }
 
-export function getNewsSources(): Promise<Envelope<Source[]>> {
-  return requestJson<Envelope<Source[]>>("/v1/news-sources", 60);
+export function getNewsSources(timeoutMs?: number): Promise<Envelope<Source[]>> {
+  return requestJson<Envelope<Source[]>>("/v1/news-sources", 60, timeoutMs);
 }
 
 export function getMarketOverview(timeoutMs?: number): Promise<MarketOverview> {

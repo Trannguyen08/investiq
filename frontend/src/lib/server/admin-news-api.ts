@@ -1,6 +1,7 @@
+import { resolveApiBase } from "@/lib/api-base";
 import type { AdminNewsSource, AdminOperation, CrawlRun } from "@/lib/admin-news";
 
-const serverBase = process.env.API_INTERNAL_BASE_URL ?? "http://localhost:8000/api";
+const serverBase = resolveApiBase();
 
 async function adminRequest<T>(path: string, init?: RequestInit): Promise<T> {
   const token = process.env.NEWS_ADMIN_TOKEN;

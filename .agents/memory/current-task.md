@@ -1,16 +1,19 @@
 # Current Task
 
-## Neon DB migration & Render Blueprint deployment - 2026-10-23 (in progress)
+## Fix frontend data loading & URL normalization for Render deployment - 2026-10-23 (complete)
 
-- Resolved CI failure on PR #9 (`market-candlestick-chart.test.tsx` and `auth-ui.test.tsx`), passed full test suite, and merged PR #9 into `main` (user granted one-time auto-merge permission).
-- Synced branches `dev` and `main` at `3589da1`.
-- Configured Neon database via `neonctl` in `aws-ap-southeast-1` and executed all 14 SQL migrations (0001 through 0014) to the pooled Neon PostgreSQL database using `backend/.venv313/Scripts/python.exe -m app.infrastructure.db.base`.
-- Added `.neon` to `.gitignore`.
-- Updated `render.yaml` Blueprint to keep `API_INTERNAL_BASE_URL` as `sync: false` to avoid raw host string issues on Render.
-- Moved `typescript` and type definitions into `dependencies` in `frontend/package.json` to prevent npm ci omitting them when `NODE_ENV=production`.
-- Fixed Next.js build-time SSG worker timeout (60s limit) by declaring `export const dynamic = "force-dynamic"` on `learn/page.tsx`, `page.tsx` (overview), and `portfolio/page.tsx`, and adding bounded `timeoutMs` to market API queries in `frontend/src/lib/api-client.ts`. All 99 vitest tests, lint, and typecheck pass.
-- Fixed browser console errors: created multi-size `favicon.ico` in `frontend/public/` and `frontend/src/app/` (resolves 404), and updated `/auth-api/me` endpoint in `frontend/src/app/auth-api/[...path]/route.ts` to gracefully return 200 `{ user: null }` for guest/unconfigured auth state (resolves 503).
-- Next: Launch Blueprint on Render via terminal/web, input environment secrets from `.env`, and configure GitHub Actions secrets for automated CD.
+- Diagnosed user-reported issue on deployed Render frontend where market data and news kept loading or displayed "Dữ liệu thị trường chưa được bật":
+  - Server-side timeouts (800ms for news, 2000ms for overview) were prematurely aborting cloud-to-cloud HTTPS requests between Render frontend and Render backend / Neon PostgreSQL.
+  - Inconsistent normalization of `API_INTERNAL_BASE_URL` across server route handlers (some used raw string concatenation, risk of duplicate or missing `/api` and protocol schemes).
+  - Empty `news_articles` table in Neon PostgreSQL.
+- Implemented robust solutions on dedicated fix branch `fix/frontend-data-timeouts-and-url-normalization`:
+  - Created shared URL normalizer in `frontend/src/lib/api-base.ts` ensuring all internal/public API URLs handle protocols, strip trailing slashes, and correctly append `/api`.
+  - Updated all server API callers (`api-client.ts`, `user-auth.ts`, `paper-trading-api.ts`, `market-watchlist-api.ts`, `admin-user-api.ts`, `admin-news-api.ts`, and `fundamentals/route.ts`) to use `resolveApiBase()`.
+  - Increased server-side request timeouts to 15,000ms (15s) in `page.tsx`, `learn/page.tsx`, `portfolio/page.tsx`, and `news/page.tsx` to safely accommodate Render cold starts and cross-region Neon latency.
+  - Seeded 8 realistic Vietnamese financial news articles with ticker links (FPT, VCB, HPG, SSI, VNM, MWG, VIC) and sentiment tags into Neon PostgreSQL.
+  - Set `testTimeout: 15000` in `frontend/vitest.config.mts` to prevent Vitest timeouts under high CPU load.
+  - All 99 Vitest unit/component tests, TypeScript typecheck, and ESLint pass cleanly.
+- Merged fix branch into `main` and synchronized `dev`.
 
 
 Created and refined `docs/deploy.md` providing a comprehensive, step-by-step guide for deploying InvestIQ on Render.com (Frontend Next.js and Backend FastAPI Web Services) paired with a persistent free PostgreSQL database on Neon.tech (or Supabase) to bypass Render's 30-day PostgreSQL trial limit, and integrating GitHub Actions for learning CI/CD. The guide covers Render architecture versus local Docker Compose, Free tier gotchas (cold starts, $PORT injection, pooling), step-by-step Neon PostgreSQL setup in Singapore region and forward-only SQL migration execution, Backend FastAPI deployment (Docker vs Python runtime) with health checks (/healthz, /readyz), Frontend Next.js deployment as a Web Service with BFF API integration, Infrastructure-as-Code via `render.yaml` Blueprint, full GitHub Actions CI/CD pipeline definition with parallel testing and deploy hooks, and production best practices (CORS resolution, zero-secret-leakage, rollback strategies). Synchronized repository structure in `README.md` and `.agents/memory/architecture.md`.

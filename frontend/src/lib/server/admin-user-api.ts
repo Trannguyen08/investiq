@@ -1,5 +1,6 @@
 import "server-only";
 
+import { resolveApiBase } from "@/lib/api-base";
 import { authenticatedSession } from "@/lib/server/user-auth";
 
 export type AdminUser = {
@@ -24,7 +25,7 @@ export type AdminUserPage = {
 
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
   const session = await authenticatedSession();
-  const base = process.env.API_INTERNAL_BASE_URL ?? "http://localhost:8000/api";
+  const base = resolveApiBase();
   const response = await fetch(`${base}/v1/admin/users${path}`, {
     ...init,
     cache: "no-store",

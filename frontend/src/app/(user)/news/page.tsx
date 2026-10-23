@@ -22,7 +22,7 @@ export default async function NewsPage({ searchParams }: { searchParams: SearchP
   let result;
   let sources;
   try {
-    [result, sources] = await Promise.all([getNews(query), getNewsSources()]);
+    [result, sources] = await Promise.all([getNews(query, 15000), getNewsSources(15000)]);
   } catch {
     return (
       <main id="main-content" className="news-page">

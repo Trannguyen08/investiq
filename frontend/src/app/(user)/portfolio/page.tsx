@@ -8,7 +8,7 @@ export default async function PortfolioPage() {
   const newsQuery = new URLSearchParams({ sentiment: "positive", window_days: "1", limit: "12" });
   const marketQuery = new URLSearchParams({ sort: "vn30", direction: "desc", limit: "100" });
   const [collection, marketResult] = await Promise.all([
-    getNews(newsQuery, 800).catch(() => null),
+    getNews(newsQuery, 15000).catch(() => null),
     getMarketInstruments(marketQuery).then(
       (value) => ({ ok: true as const, value }),
       () => ({ ok: false as const }),
