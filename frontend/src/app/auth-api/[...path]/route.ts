@@ -40,13 +40,20 @@ async function body(request: Request) {
 
 export async function GET(request: Request, context: Context) {
   try {
-    if (!authConfigured()) throw new UserAuthError(503, "AUTH_NOT_CONFIGURED", "Tính năng đăng nhập chưa được cấu hình.");
     const path = (await context.params).path.join("/");
+    if (path === "me") {
+      if (!authConfigured()) return json({ user: null });
+      try {
+        return json({ user: await currentUser() });
+      } catch {
+        return json({ user: null });
+      }
+    }
+    if (!authConfigured()) throw new UserAuthError(503, "AUTH_NOT_CONFIGURED", "Tính năng đăng nhập chưa được cấu hình.");
     if (path === "csrf") {
       const preauth = await getOrCreatePreAuth();
       return json({ csrf_token: preauth.value.csrf });
     }
-    if (path === "me") return json({ user: await currentUser() });
     if (path === "challenge") return json({ challenge: await fetchChallenge(await getOrCreatePreAuth()) });
     if (path === "google/start") {
       const clientId = process.env.AUTH_GOOGLE_CLIENT_ID;

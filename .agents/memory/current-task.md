@@ -9,6 +9,7 @@
 - Updated `render.yaml` Blueprint to keep `API_INTERNAL_BASE_URL` as `sync: false` to avoid raw host string issues on Render.
 - Moved `typescript` and type definitions into `dependencies` in `frontend/package.json` to prevent npm ci omitting them when `NODE_ENV=production`.
 - Fixed Next.js build-time SSG worker timeout (60s limit) by declaring `export const dynamic = "force-dynamic"` on `learn/page.tsx`, `page.tsx` (overview), and `portfolio/page.tsx`, and adding bounded `timeoutMs` to market API queries in `frontend/src/lib/api-client.ts`. All 99 vitest tests, lint, and typecheck pass.
+- Fixed browser console errors: created multi-size `favicon.ico` in `frontend/public/` and `frontend/src/app/` (resolves 404), and updated `/auth-api/me` endpoint in `frontend/src/app/auth-api/[...path]/route.ts` to gracefully return 200 `{ user: null }` for guest/unconfigured auth state (resolves 503).
 - Next: Launch Blueprint on Render via terminal/web, input environment secrets from `.env`, and configure GitHub Actions secrets for automated CD.
 
 
