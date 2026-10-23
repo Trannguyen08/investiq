@@ -1,0 +1,89 @@
+version: "1"
+
+services:
+  # -------------------------------------------------------------
+  # Backend FastAPI Web Service
+  # -------------------------------------------------------------
+  - type: web
+    name: investiq-backend
+    runtime: python
+    region: singapore
+    plan: free
+    rootDir: backend
+    buildCommand: "pip install --upgrade pip && pip install -r requirements.txt"
+    startCommand: "uvicorn app.main:app --host 0.0.0.0 --port $PORT --proxy-headers --forwarded-allow-ips=*"
+    healthCheckPath: /healthz
+    envVars:
+      - key: APP_ENV
+        value: production
+      - key: DATABASE_URL
+        sync: false
+      - key: SECRET_KEY
+        generateValue: true
+      - key: NEWS_INGESTION_ENABLED
+        value: "false"
+      - key: MARKET_DATA_MODE
+        value: fixture
+      - key: LOG_LEVEL
+        value: INFO
+      - key: AUTH_ENABLED
+        value: "true"
+      - key: AUTH_BFF_SECRET
+        sync: false
+      - key: AUTH_JWT_SECRET
+        sync: false
+      - key: AUTH_JWT_PREVIOUS_SECRET
+        sync: false
+      - key: AUTH_OTP_HMAC_KEY
+        sync: false
+      - key: AUTH_PAYLOAD_ENCRYPTION_KEY
+        sync: false
+      - key: AUTH_SESSION_ENCRYPTION_KEY
+        sync: false
+      - key: AUTH_GOOGLE_CLIENT_ID
+        sync: false
+      - key: AUTH_GOOGLE_CLIENT_SECRET
+        sync: false
+      - key: AUTH_MAIL_FROM
+        sync: false
+      - key: AUTH_SMTP_HOST
+        value: smtp.gmail.com
+      - key: AUTH_SMTP_PORT
+        value: "587"
+      - key: AUTH_SMTP_USERNAME
+        sync: false
+      - key: AUTH_SMTP_PASSWORD
+        sync: false
+      - key: AUTH_SMTP_STARTTLS
+        value: "true"
+
+  # -------------------------------------------------------------
+  # Frontend Next.js Web Service
+  # -------------------------------------------------------------
+  - type: web
+    name: investiq-frontend
+    runtime: node
+    region: singapore
+    plan: free
+    rootDir: frontend
+    buildCommand: "npm ci && npm run build"
+    startCommand: "npm run start"
+    healthCheckPath: /
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: API_INTERNAL_BASE_URL
+        fromService:
+          type: web
+          name: investiq-backend
+          property: host
+      - key: NEXT_PUBLIC_API_URL
+        value: /api
+      - key: ADMIN_SESSION_SECRET
+        generateValue: true
+      - key: AUTH_BFF_SECRET
+        sync: false
+      - key: AUTH_SESSION_ENCRYPTION_KEY
+        sync: false
+      - key: AUTH_GOOGLE_CLIENT_ID
+        sync: false
