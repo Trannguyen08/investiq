@@ -19,6 +19,8 @@ import {
 } from "@/lib/api-client";
 import { isMarketTab, type MarketSearchParams } from "@/lib/market-routes";
 
+export const dynamic = "force-dynamic";
+
 function value(params: MarketSearchParams, key: string, fallback = "") {
   const selected = params[key];
   return typeof selected === "string" ? selected : fallback;

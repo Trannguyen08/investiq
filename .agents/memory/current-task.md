@@ -12,8 +12,9 @@
   - Increased server-side request timeouts to 15,000ms (15s) in `page.tsx`, `learn/page.tsx`, `portfolio/page.tsx`, and `news/page.tsx` to safely accommodate Render cold starts and cross-region Neon latency.
   - Seeded 8 realistic Vietnamese financial news articles with ticker links (FPT, VCB, HPG, SSI, VNM, MWG, VIC) and sentiment tags into Neon PostgreSQL.
   - Set `testTimeout: 15000` in `frontend/vitest.config.mts` to prevent Vitest timeouts under high CPU load.
-  - All 99 Vitest unit/component tests, TypeScript typecheck, and ESLint pass cleanly.
-- Merged fix branch into `main` and synchronized `dev`.
+  - Extended force-dynamic declarations across all dynamic data routes (`market/[tab]`, `market/stocks/[symbol]`, `news`, `news/[id]`) so Next.js build never attempts static prerender against cold/unreachable backend during production image creation.
+- Updated `requestJson` in `frontend/src/lib/api-client.ts` to evaluate `resolveApiBase()` per-request rather than at static module evaluation time, ensuring live runtime environment variables are always respected.
+- All 99 Vitest tests, TypeScript typecheck, and ESLint pass. Merged into `main` and synchronized `dev`.
 
 
 Created and refined `docs/deploy.md` providing a comprehensive, step-by-step guide for deploying InvestIQ on Render.com (Frontend Next.js and Backend FastAPI Web Services) paired with a persistent free PostgreSQL database on Neon.tech (or Supabase) to bypass Render's 30-day PostgreSQL trial limit, and integrating GitHub Actions for learning CI/CD. The guide covers Render architecture versus local Docker Compose, Free tier gotchas (cold starts, $PORT injection, pooling), step-by-step Neon PostgreSQL setup in Singapore region and forward-only SQL migration execution, Backend FastAPI deployment (Docker vs Python runtime) with health checks (/healthz, /readyz), Frontend Next.js deployment as a Web Service with BFF API integration, Infrastructure-as-Code via `render.yaml` Blueprint, full GitHub Actions CI/CD pipeline definition with parallel testing and deploy hooks, and production best practices (CORS resolution, zero-secret-leakage, rollback strategies). Synchronized repository structure in `README.md` and `.agents/memory/architecture.md`.

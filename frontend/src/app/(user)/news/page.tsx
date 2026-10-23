@@ -4,6 +4,8 @@ import { NewsCard, formatNewsTime, newsTickers } from "@/components/news/news-ca
 import { NewsFilterForm } from "@/components/news/news-filter-form";
 import { getNews, getNewsSources } from "@/lib/api-client";
 
+export const dynamic = "force-dynamic";
+
 type SearchParams = Promise<Record<string, string | string[] | undefined>>;
 
 function first(value: string | string[] | undefined) {

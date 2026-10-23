@@ -11,6 +11,8 @@ import { MarketStreamProvider } from "@/hooks/use-realtime-price";
 import { getMarketCandles, getMarketInstrument, getMarketIntradayTrades, getRelatedStockNews } from "@/lib/api-client";
 import type { InstrumentEnvelope } from "@/types/market";
 
+export const dynamic = "force-dynamic";
+
 const rangeConfig: Record<StockChartRange, { interval: "1d" | "1h" | "30m" | "5m"; limit: number }> = {
   day: { interval: "5m", limit: 200 },
   week: { interval: "30m", limit: 500 },

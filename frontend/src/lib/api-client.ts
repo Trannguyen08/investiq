@@ -112,8 +112,6 @@ export type NewsCollection = {
 
 type Envelope<T> = { data: T; meta: NewsCollection["meta"] };
 
-const serverBase = resolveApiBase();
-
 class InvestIqApiError extends Error {
   constructor(readonly status: number) {
     super(`InvestIQ API returned ${status}`);
@@ -122,7 +120,9 @@ class InvestIqApiError extends Error {
 
 async function requestJson<T>(path: string, revalidate?: number, timeoutMs?: number): Promise<T> {
   const cacheOptions = revalidate ? { next: { revalidate } } : { cache: "no-store" as const };
-  const response = await fetch(`${serverBase}${path}`, {
+  const base = resolveApiBase();
+  const normalizedPath = path.startsWith("/") ? path : `/${path}`;
+  const response = await fetch(`${base}${normalizedPath}`, {
     ...cacheOptions,
     ...(timeoutMs ? { signal: AbortSignal.timeout(timeoutMs) } : {}),
   });
