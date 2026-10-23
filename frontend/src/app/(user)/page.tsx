@@ -5,11 +5,13 @@ import { getMarketOverview, getMarketSectors, getNews } from "@/lib/api-client";
 import type { NewsSummary } from "@/lib/api-client";
 import type { MarketSector } from "@/types/market";
 
+export const dynamic = "force-dynamic";
+
 export default async function OverviewPage() {
   const newsQuery = new URLSearchParams({ limit: "6", window_days: "1" });
   const [overviewResult, sectorResult, newsResult] = await Promise.allSettled([
-    getMarketOverview(),
-    getMarketSectors(),
+    getMarketOverview(2000),
+    getMarketSectors(2000),
     getNews(newsQuery, 800),
   ]);
   const overview = overviewResult.status === "fulfilled" ? overviewResult.value : null;

@@ -2,6 +2,8 @@ import { PaperTradingDashboard } from "@/components/portfolio/paper-trading-dash
 import { getMarketInstruments, getNews } from "@/lib/api-client";
 import type { PositivePaperNews } from "@/types/portfolio";
 
+export const dynamic = "force-dynamic";
+
 export default async function PortfolioPage() {
   const newsQuery = new URLSearchParams({ sentiment: "positive", window_days: "1", limit: "12" });
   const marketQuery = new URLSearchParams({ sort: "vn30", direction: "desc", limit: "100" });

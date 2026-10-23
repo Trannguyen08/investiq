@@ -157,8 +157,8 @@ export function getNewsSources(): Promise<Envelope<Source[]>> {
   return requestJson<Envelope<Source[]>>("/v1/news-sources", 60);
 }
 
-export function getMarketOverview(): Promise<MarketOverview> {
-  return requestJson<MarketOverview>("/v1/market/overview", 5);
+export function getMarketOverview(timeoutMs?: number): Promise<MarketOverview> {
+  return requestJson<MarketOverview>("/v1/market/overview", 5, timeoutMs);
 }
 
 function normalizeInstrumentCollection(
@@ -217,12 +217,12 @@ export function getMarketIntradayTrades(
   return requestJson<MarketIntradayTrades>(`/v1/market/intraday-trades?${query.toString()}`, 5);
 }
 
-export function getMarketIndices(): Promise<IndexCollection> {
-  return requestJson<IndexCollection>("/v1/market/indices", 5);
+export function getMarketIndices(timeoutMs?: number): Promise<IndexCollection> {
+  return requestJson<IndexCollection>("/v1/market/indices", 5, timeoutMs);
 }
 
-export function getMarketSectors(): Promise<SectorCollection> {
-  return requestJson<SectorCollection>("/v1/market/sectors", 5);
+export function getMarketSectors(timeoutMs?: number): Promise<SectorCollection> {
+  return requestJson<SectorCollection>("/v1/market/sectors", 5, timeoutMs);
 }
 
 export function getMarketEvents(query = new URLSearchParams()): Promise<EventCollection> {

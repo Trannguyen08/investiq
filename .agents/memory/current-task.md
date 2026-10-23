@@ -7,6 +7,8 @@
 - Configured Neon database via `neonctl` in `aws-ap-southeast-1` and executed all 14 SQL migrations (0001 through 0014) to the pooled Neon PostgreSQL database using `backend/.venv313/Scripts/python.exe -m app.infrastructure.db.base`.
 - Added `.neon` to `.gitignore`.
 - Updated `render.yaml` Blueprint to keep `API_INTERNAL_BASE_URL` as `sync: false` to avoid raw host string issues on Render.
+- Moved `typescript` and type definitions into `dependencies` in `frontend/package.json` to prevent npm ci omitting them when `NODE_ENV=production`.
+- Fixed Next.js build-time SSG worker timeout (60s limit) by declaring `export const dynamic = "force-dynamic"` on `learn/page.tsx`, `page.tsx` (overview), and `portfolio/page.tsx`, and adding bounded `timeoutMs` to market API queries in `frontend/src/lib/api-client.ts`. All 99 vitest tests, lint, and typecheck pass.
 - Next: Launch Blueprint on Render via terminal/web, input environment secrets from `.env`, and configure GitHub Actions secrets for automated CD.
 
 

@@ -5,6 +5,8 @@ import { stockBasicsLessons } from "@/content/stock-basics";
 import { getMarketIndices } from "@/lib/api-client";
 import type { LearningMarketExample } from "@/types/learning";
 
+export const dynamic = "force-dynamic";
+
 export const metadata: Metadata = {
   title: "Chứng khoán căn bản | InvestIQ",
   description: "Lộ trình ngắn giúp người mới hiểu rủi ro, đọc dữ liệu và thực hành đầu tư mô phỏng.",
@@ -12,7 +14,7 @@ export const metadata: Metadata = {
 
 async function getLearningMarketExample(): Promise<LearningMarketExample | null> {
   try {
-    const collection = await getMarketIndices();
+    const collection = await getMarketIndices(3000);
     const index = collection.data.find((item) => item.symbol === "VNINDEX") ?? collection.data[0];
     const candle = index?.candles.at(-1);
     if (!index || !candle) return null;
