@@ -28,7 +28,9 @@ investiq/
 |   |-- Dockerfile
 |   `-- src/                  # Next.js App Router, UI, hooks, state, and contracts
 |-- docs/
-|   `-- plan/                 # Feature specifications and implementation evidence
+|   |-- plan/                 # Feature specifications and implementation evidence
+|   |-- tutorial/             # Local credential and API acquisition guides
+|   `-- deploy.md             # Render deployment and GitHub Actions CI/CD guide
 |-- infra/
 |   |-- log-viewer/           # Default local runtime-log viewer profile
 |   |-- nginx/nginx.conf      # Public reverse proxy and structured access logs

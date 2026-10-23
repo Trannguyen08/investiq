@@ -106,9 +106,11 @@ describe("authentication forms", () => {
     fireEvent.change(screen.getByLabelText("Email"), { target: { value: "user@example.com" } });
     fireEvent.click(screen.getByRole("button", { name: "Xác nhận email" }));
 
-    await waitFor(() => expect(screen.getByText(/Mã OTP có hiệu lực trong 90 giây/)).toBeTruthy());
-    expect(screen.getByText(/kiểm tra mục Thư rác\/Spam/)).toBeTruthy();
-    expect(screen.getByText("01:30")).toBeTruthy();
+    await waitFor(() => {
+      expect(screen.getByText(/Mã OTP có hiệu lực trong 90 giây/)).toBeTruthy();
+      expect(screen.getByText(/kiểm tra mục Thư rác\/Spam/)).toBeTruthy();
+      expect(screen.getByText("01:30")).toBeTruthy();
+    });
     expect(screen.getByRole("button", { name: "Xác nhận OTP" })).toHaveClass("auth-primary");
     vi.unstubAllGlobals();
   });

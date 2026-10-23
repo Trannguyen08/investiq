@@ -264,7 +264,7 @@ audit behavior, and access checks.
 investiq/
 |-- backend/              # FastAPI runtime, Clean Architecture modules, workers, Dockerfile
 |-- frontend/             # Next.js app and Dockerfile
-|-- docs/plan/            # Feature plans, data designs, and API/UI specifications
+|-- docs/                 # Specifications, tutorials, and deployment/CI-CD guides
 |-- infra/
 |   |-- log-viewer/       # Default local runtime-log viewer profile
 |   |-- nginx/            # Reverse-proxy configuration
@@ -280,6 +280,8 @@ must update that overview and all configuration or documentation that references
 
 See [`DEVELOPMENT_GUIDE.md`](DEVELOPMENT_GUIDE.md) for Docker lifecycle commands, the complete port
 table, backend quality checks, and per-feature coverage reports.
+
+See [`docs/deploy.md`](docs/deploy.md) for the step-by-step guide on deploying to Render (Frontend, Backend, PostgreSQL) and configuring GitHub Actions for CI/CD.
 
 See [`docs/plan/`](docs/plan/README.md) for the feature specifications. The first vertical slice of
 the [beginner stock-learning plan](docs/plan/stock-basic.md) is implemented at `/learn`: it replaces
