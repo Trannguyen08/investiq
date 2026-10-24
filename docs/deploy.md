@@ -243,6 +243,7 @@ Thêm các biến sau vào tab **Environment**:
 | Key | Value | Ý nghĩa |
 | :--- | :--- | :--- |
 | `NODE_ENV` | `production` | Chạy Next.js ở chế độ tối ưu |
+| `HOSTNAME` | `0.0.0.0` | Bắt buộc trên Render để Next.js lắng nghe cổng HTTP công khai |
 | `API_INTERNAL_BASE_URL` | `https://investiq-backend.onrender.com/api` | Địa chỉ Backend mà Next.js Server gọi tới |
 | `NEXT_PUBLIC_API_URL` | `/api` | Đường dẫn client gọi |
 | `NEXT_PUBLIC_MARKET_WS_URL`| `wss://investiq-backend.onrender.com/ws/v1/market` | URL WebSocket cho bảng giá thời gian thực |

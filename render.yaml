@@ -72,6 +72,8 @@ services:
     envVars:
       - key: NODE_ENV
         value: production
+      - key: HOSTNAME
+        value: 0.0.0.0
       - key: API_INTERNAL_BASE_URL
         sync: false
       - key: NEXT_PUBLIC_API_URL
