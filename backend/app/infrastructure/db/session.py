@@ -22,6 +22,9 @@ def get_pool() -> ConnectionPool:
                     min_size=settings.database_pool_min_size,
                     max_size=settings.database_pool_max_size,
                     timeout=5,
+                    max_idle=120.0,
+                    max_lifetime=1800.0,
+                    check=ConnectionPool.check_connection,
                     open=False,
                 )
                 pool.open(wait=True)
