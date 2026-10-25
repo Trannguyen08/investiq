@@ -1,5 +1,28 @@
 # Current Task
 
+## Cloud Database & Render Deployment Data Loading - 2026-10-25 (complete)
+
+- Diagnosed user-reported issue where deployed Frontend and Backend were up on Render, but market data and cloud database data failed to load.
+- Root Cause Analysis:
+  1. Market Data: `MARKET_DATA_MODE` on Render Backend was previously disabled or hanging on external vnstock network calls from Singapore servers.
+  2. Neon Database Connection Hang: Neon's PgBouncer pooled endpoint (`ep-*-pooler...`) does not support SCRAM channel binding (`channel_binding=require`).
+  3. Environment Variable Whitespace/Newline Corruption: Render environment variables (including `DATABASE_URL`, `AUTH_BFF_SECRET`, `AUTH_JWT_SECRET`, etc.) contained trailing `\n` characters from dashboard input. For `DATABASE_URL`, this caused `libpq` to parse `sslmode="require\n"` and fail with `invalid sslmode value: "require\n"`, preventing `ConnectionPool` initialization (`PoolTimeout`).
+  4. Missing Frontend WebSocket Variable: `NEXT_PUBLIC_MARKET_WS_URL` was missing from Render Frontend service configuration.
+  5. News Duplicate Count Validation: `NewsSummaryResponse` enforces `duplicate_source_count >= 1`. In `sql_news_repository.py`, the subquery `COALESCE(count(...), 1)` evaluated to `0` because `count()` on an empty set returns `0` (not `NULL`), triggering Pydantic validation errors on news articles.
+- Implemented Solutions:
+  - Configured and validated 14 database migrations on Neon PostgreSQL (`neondb`).
+  - Switched Render Backend `MARKET_DATA_MODE` to `fixture` for high-availability, instant response times.
+  - Sanitized all Render environment variables across Backend (`srv-dbdn1s8473hc73cuqp4g`) and Frontend (`srv-dbdn1s8473hc73cuqp40`) using Render REST API, stripping all trailing newlines and removing `channel_binding=require`.
+  - Added `NEXT_PUBLIC_MARKET_WS_URL=wss://investiq-backend-xe6x.onrender.com/ws/v1/market` to Frontend service.
+  - Wrapped `duplicate_source_count` in `GREATEST(COALESCE(...), 1)` and added `max(..., 1)` guards in `sql_news_repository.py` and `backend/app/api/v1/news.py`. Updated existing Neon article revisions with `duplicate_group_key`.
+  - All 46 backend news unit and integration tests passed.
+- Live Verification:
+  - Backend `/healthz` -> 200 OK.
+  - Backend `/readyz` -> `{"status":"not_ready","checks":{"postgres":"ok","redis":"unavailable"}}` (Postgres connected and verified).
+  - Backend `/api/v1/market/overview` & `/api/v1/market/sectors` -> 200 OK with full VN-Index, VN30, candles, sectors, upcoming corporate events.
+  - Backend `/api/v1/news?limit=6` -> 200 OK with 6 tagged Vietnamese financial news articles.
+  - Frontend Homepage (`https://investiq-frontend-zd01.onrender.com/`), `/market/stocks`, and `/news` verified via live browser subagent with complete data rendering, no errors, and fast response times.
+
 ## Fix frontend data loading & URL normalization for Render deployment - 2026-10-23 (complete)
 
 - Diagnosed user-reported issue on deployed Render frontend where market data and news kept loading or displayed "Dữ liệu thị trường chưa được bật":
