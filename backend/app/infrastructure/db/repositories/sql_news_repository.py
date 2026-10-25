@@ -47,14 +47,14 @@ SELECT
     r.fetched_at,
     r.extraction_status,
     r.quality_flags,
-    COALESCE((
+    GREATEST(COALESCE((
         SELECT count(DISTINCT duplicate_article.source_id)
         FROM article_revisions duplicate_revision
         JOIN news_articles duplicate_article ON duplicate_article.id = duplicate_revision.article_id
         WHERE r.duplicate_group_key IS NOT NULL
           AND duplicate_revision.duplicate_group_key = r.duplicate_group_key
           AND duplicate_article.visibility = 'published'
-    ), 1)::integer AS duplicate_source_count,
+    ), 1), 1)::integer AS duplicate_source_count,
     s.id::text AS source_id,
     s.slug AS source_slug,
     s.name AS source_name,
@@ -645,7 +645,7 @@ class SqlNewsRepository:
             candidate_symbols=tuple(
                 str(item) for item in cls._plain_list(row["candidate_symbols"])
             ),
-            duplicate_source_count=cls._integer(row["duplicate_source_count"]),
+            duplicate_source_count=max(cls._integer(row["duplicate_source_count"]), 1),
         )
 
     @classmethod

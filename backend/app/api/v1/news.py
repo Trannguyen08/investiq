@@ -186,7 +186,7 @@ def _summary(article: NewsArticle) -> NewsSummaryResponse:
         sentiment=_sentiment(article.sentiment),
         extraction_status=article.extraction_status.value,
         content_access=article.content_access.value,
-        duplicate_source_count=article.duplicate_source_count,
+        duplicate_source_count=max(article.duplicate_source_count, 1),
     )
 
 
