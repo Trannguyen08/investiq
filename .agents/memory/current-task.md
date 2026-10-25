@@ -1,5 +1,22 @@
 # Current Task
 
+## Production Live Vnstock Market Data & Bulk News Ingestion - 2026-10-25 (complete)
+
+- Diagnosed user-reported issue where production was missing market data (only 5 fixture stocks, outdated date) and news had only 8 initial seeded items compared to local environment.
+- Root Cause Analysis:
+  1. Market Data: Render Backend was configured with `MARKET_DATA_MODE=fixture` rather than `vnstock`.
+  2. News Data: Crawled articles previously resided in local Docker PostgreSQL volume (`db_data`), whereas cloud Neon PostgreSQL only had the initial 8 seed articles.
+- Implemented Solutions:
+  1. Updated Render Backend environment variables: `MARKET_DATA_MODE=vnstock` and `NEWS_INGESTION_ENABLED=true`.
+  2. Enhanced FastAPI startup lifespan in `market_data.py` to pre-warm `VnstockMarketProvider` in the background (`asyncio.create_task(asyncio.to_thread(provider.indices))`) to eliminate cold start latency.
+  3. Committed and pushed fix to `main` branch (tracked by Render Backend).
+  4. Executed automated bulk crawl from Vietstock & CafeF into Neon PostgreSQL, successfully ingesting 70 new articles with sentiment analysis, market impact, tags, and thumbnails (total 78 articles in DB).
+- Live Production Verification:
+  - Backend `/api/v1/market/instruments`: returned all 1,397 Vietnamese stocks across HOSE/HNX/UPCOM with live quotes and `vnstock-kbs` provider.
+  - Backend `/api/v1/market/overview`: returned all 4 indices (VN-Index, VN30, HNX, UPCOM) with fresh trading data and corporate events.
+  - Backend `/api/v1/news`: returned 78 articles with pagination, sentiment tags, and thumbnails.
+  - Frontend `https://investiq-frontend-zd01.onrender.com/news` and `/market/stocks` verified via browser subagent with screenshots showing full data.
+
 ## Cloud Database & Render Deployment Data Loading - 2026-10-25 (complete)
 
 - Diagnosed user-reported issue where deployed Frontend and Backend were up on Render, but market data and cloud database data failed to load.
