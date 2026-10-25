@@ -1,5 +1,19 @@
 # Current Task
 
+## Production News Module Strict Market Ingestion & Continuous Deployment Crawl - 2026-10-25 (complete)
+
+- Addressed user feedback requesting to use the repository's dedicated crawler modules (`VietstockCrawler`, `CafeFCrawler`, `VnEconomyCrawler`, `StockBizCrawler`, `VnExpressCrawler`, `HnxCrawler`), enforce strict stock market / enterprise relevance, purge previous non-market articles, and automate continuous crawling on every deployment along with 90-day retention cleanup.
+- Implemented Changes:
+  1. Purged all previous news articles, revisions, mentions, sentiment analyses, and crawl runs from Neon PostgreSQL (`TRUNCATE TABLE sentiment_analyses, article_mentions, article_assets, article_revisions, ingestion_jobs, crawl_runs, news_articles CASCADE`).
+  2. Refined `VietstockCrawler.discovery_urls` to focus strictly on securities (`144/chung-khoan.rss`), listed enterprises (`733/doanh-nghiep.rss`), market analysis (`145/phan-tich-nhan-dinh.rss`), and corporate finance (`737/tai-chinh.rss`), removing the generic `0/tin-moi.rss` feed.
+  3. Enhanced `CafeFCrawler` to support both Google News sitemap and high-signal financial RSS feeds (`thi-truong-chung-khoan.rss`, `doanh-nghiep.rss`, `tai-chinh-ngan-hang.rss`) with strict `MARKET_TERMS` and `EXCLUDED_TERMS` filtering.
+  4. Extracted `process_ingestion_job` in `news_ingestion_worker.py` and implemented `run_direct_ingestion_cycle` supporting standalone in-process execution without Celery/Redis.
+  5. Integrated `_news_background_loop()` into FastAPI `lifespan` in `main.py`, ensuring:
+     - On every web deployment/restart: runs 90-day retention cleanup (`cleanup_old_news(retention_days=90, dry_run=False, confirm=True)`) and crawls all configured stock market sources.
+     - Continuously while running: repeats the crawl and retention cycle every 15 minutes.
+  6. All 101 backend unit tests and 99 frontend tests pass.
+  7. Committed (`4e9d891`), pushed to `origin/main` and `origin/feature/stock-basic`, and triggered Render deploy `dep-dbf33bq9lscs738kna80`.
+
 ## Production Live Vnstock Market Data & Bulk News Ingestion - 2026-10-25 (complete)
 
 - Diagnosed user-reported issue where production was missing market data (only 5 fixture stocks, outdated date) and news had only 8 initial seeded items compared to local environment.
