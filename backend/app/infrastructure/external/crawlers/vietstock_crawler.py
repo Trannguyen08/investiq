@@ -17,9 +17,10 @@ class VietstockCrawler(BaseNewsCrawler):
     source_slug = "vietstock"
     allowed_domains = ("vietstock.vn", "fili.vn")
     discovery_urls = (
-        "https://vietstock.vn/0/tin-moi.rss",
         "https://vietstock.vn/144/chung-khoan.rss",
         "https://vietstock.vn/733/doanh-nghiep.rss",
+        "https://vietstock.vn/145/phan-tich-nhan-dinh.rss",
+        "https://vietstock.vn/737/tai-chinh.rss",
     )
     content_selectors = (
         "[itemprop='articleBody']",

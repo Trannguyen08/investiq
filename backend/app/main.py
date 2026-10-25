@@ -35,15 +35,41 @@ from app.infrastructure.db.session import close_pool
 from app.infrastructure.security.jwt_handler import JwtError
 from app.middleware.request_logging import RequestLoggingMiddleware
 
-configure_logging()
+import logging
+
+from app.workers.news_ingestion_worker import run_direct_ingestion_cycle
+
+logger = logging.getLogger("investiq.news.lifecycle")
+
+
+async def _news_background_loop() -> None:
+    await asyncio.sleep(2)
+    while True:
+        try:
+            logger.info("Executing news retention and ingestion cycle")
+            await asyncio.to_thread(run_direct_ingestion_cycle)
+        except asyncio.CancelledError:
+            break
+        except Exception as exc:
+            logger.error("Error during background news cycle: %s", exc)
+        await asyncio.sleep(900)
 
 
 @asynccontextmanager
 async def lifespan(_: FastAPI) -> AsyncIterator[None]:
     await start_market_provider()
+    news_task = None
+    if settings.news_ingestion_enabled:
+        news_task = asyncio.create_task(_news_background_loop())
     try:
         yield
     finally:
+        if news_task:
+            news_task.cancel()
+            try:
+                await news_task
+            except asyncio.CancelledError:
+                pass
         await close_market_provider()
         close_pool()
 

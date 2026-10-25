@@ -78,7 +78,12 @@ def _normalized(value: str) -> str:
 class CafeFCrawler(BaseNewsCrawler):
     source_slug = "cafef"
     allowed_domains = ("cafef.vn",)
-    discovery_urls = ("https://cafef.vn/google-news-sitemap.xml",)
+    discovery_urls = (
+        "https://cafef.vn/thi-truong-chung-khoan.rss",
+        "https://cafef.vn/doanh-nghiep.rss",
+        "https://cafef.vn/tai-chinh-ngan-hang.rss",
+        "https://cafef.vn/google-news-sitemap.xml",
+    )
     naive_datetime_timezone = ZoneInfo("Asia/Ho_Chi_Minh")
     content_selectors = (
         "[data-role='content']",
@@ -89,29 +94,30 @@ class CafeFCrawler(BaseNewsCrawler):
     description_selectors = (".sapo", ".detail-sapo", ".knc-sapo")
 
     def parse_discovery_document(self, document: str) -> tuple[str, ...]:
-        """Return only finance/market article URLs from CafeF's mixed-topic sitemap."""
+        """Return only finance/market article URLs from CafeF's RSS feeds or sitemap."""
         try:
             root = ET.fromstring(document)
         except ET.ParseError as exc:
             raise NewsProviderError("provider discovery document is invalid XML") from exc
 
         urls: list[str] = []
-        for entry in root:
-            if entry.tag.rsplit("}", 1)[-1].lower() != "url":
+        for entry in root.iter():
+            tag = entry.tag.rsplit("}", 1)[-1].lower()
+            if tag not in {"url", "item"}:
                 continue
             article_url = next(
                 (
                     child.text.strip()
                     for child in entry
-                    if child.tag.rsplit("}", 1)[-1].lower() == "loc" and child.text
+                    if child.tag.rsplit("}", 1)[-1].lower() in {"loc", "link"} and child.text
                 ),
                 None,
             )
             news_title = next(
                 (
                     node.text.strip()
-                    for node in entry.iter(f"{{{NEWS_NAMESPACE}}}title")
-                    if node.text
+                    for node in entry.iter()
+                    if node.tag.rsplit("}", 1)[-1].lower() == "title" and node.text
                 ),
                 None,
             )

@@ -250,17 +250,10 @@ def dispatch_news_jobs(limit: int = 20) -> dict[str, int]:
     return {"dispatched": len(job_ids)}
 
 
-@celery_app.task(  # type: ignore[untyped-decorator]
-    bind=True,
-    name="investiq.news.fetch.v1",
-    soft_time_limit=60,
-    time_limit=90,
-    max_retries=2,
-)
-def fetch_news_article(self: Task, job_id: str) -> dict[str, str | bool]:
-    pool = get_pool()
+def process_ingestion_job(job_id: str, *, pool: object | None = None) -> dict[str, str | bool]:
+    db_pool = pool or get_pool()
     now = datetime.now(UTC)
-    with pool.connection() as connection, connection.transaction():
+    with db_pool.connection() as connection, connection.transaction():
         with connection.cursor(row_factory=dict_row) as cursor:
             job = cursor.execute(
                 """
@@ -306,7 +299,7 @@ def fetch_news_article(self: Task, job_id: str) -> dict[str, str | bool]:
         )
     payload = job["payload"]
     if not isinstance(payload, dict) or not isinstance(payload.get("url"), str):
-        _finish_job(job_id, "failed", "INVALID_PAYLOAD")
+        _finish_job(job_id, "failed", "INVALID_PAYLOAD", pool=db_pool)
         raise ValueError("news ingestion job payload is invalid")
     try:
         parsed = _crawler(str(job["slug"])).fetch_article(str(payload["url"]))
@@ -314,13 +307,13 @@ def fetch_news_article(self: Task, job_id: str) -> dict[str, str | bool]:
             parsed,
             max_age=timedelta(hours=settings.news_ingestion_max_age_hours),
         )
-        use_case = IngestNews(SqlNewsRepository(pool), VietnameseRuleSentimentAnalyzer())
+        use_case = IngestNews(SqlNewsRepository(db_pool), VietnameseRuleSentimentAnalyzer())
         article_id, changed = use_case.execute(parsed)
         if changed:
             get_news_read_cache().invalidate()
     except (StaleArticle, UnverifiableArticleDate) as exc:
         error_code = "STALE_ARTICLE" if isinstance(exc, StaleArticle) else "UNVERIFIABLE_DATE"
-        _finish_job(job_id, "cancelled", error_code)
+        _finish_job(job_id, "cancelled", error_code, pool=db_pool)
         logger.info(
             "News article skipped by freshness policy",
             extra={"problem": str(exc), "request_id": job_id},
@@ -335,16 +328,32 @@ def fetch_news_article(self: Task, job_id: str) -> dict[str, str | bool]:
             "failed" if terminal else "pending",
             "PROVIDER_FAILURE",
             next_attempt_at=retry_at,
+            pool=db_pool,
         )
         logger.warning(
             "News provider request failed",
             extra={"problem": str(exc), "request_id": job_id},
         )
-        if terminal:
-            raise
-        raise self.retry(exc=exc, countdown=countdown) from exc
-    _finish_job(job_id, "succeeded", None, article_id=article_id)
+        raise
+    _finish_job(job_id, "succeeded", None, article_id=article_id, pool=db_pool)
     return {"job_id": job_id, "status": "succeeded", "article_id": article_id, "changed": changed}
+
+
+@celery_app.task(  # type: ignore[untyped-decorator]
+    bind=True,
+    name="investiq.news.fetch.v1",
+    soft_time_limit=60,
+    time_limit=90,
+    max_retries=2,
+)
+def fetch_news_article(self: Task, job_id: str) -> dict[str, str | bool]:
+    db_pool = get_pool()
+    try:
+        return process_ingestion_job(job_id, pool=db_pool)
+    except NewsProviderError as exc:
+        attempt = getattr(self.request, "retries", 0) + 1
+        countdown = min(60, 5 * (2 ** (attempt - 1)))
+        raise self.retry(exc=exc, countdown=countdown) from exc
 
 
 def _finish_job(
@@ -354,8 +363,10 @@ def _finish_job(
     *,
     article_id: str | None = None,
     next_attempt_at: datetime | None = None,
+    pool: object | None = None,
 ) -> None:
-    with get_pool().connection() as connection:
+    db_pool = pool or get_pool()
+    with db_pool.connection() as connection:
         connection.execute(
             """
             UPDATE ingestion_jobs
@@ -442,3 +453,70 @@ def cleanup_old_news(
         "matched": matched,
         "deleted": deleted,
     }
+
+
+def run_direct_ingestion_cycle(
+    source_slugs: tuple[str, ...] = (
+        "vietstock",
+        "cafef",
+        "vneconomy",
+        "stockbiz",
+        "vnexpress",
+        "hnx",
+    ),
+    limit_per_source: int = 25,
+) -> dict[str, int]:
+    """Execute complete discovery, ingestion, and retention cleanup without requiring Celery."""
+    if not settings.news_ingestion_enabled:
+        return {"ingested": 0, "deleted": 0}
+
+    pool = get_pool()
+    stats = {"discovered": 0, "ingested": 0, "deleted": 0, "skipped": 0, "failed": 0}
+
+    # Step 1: Cleanup old articles beyond retention days (90 days)
+    try:
+        cleanup_res = cleanup_old_news.run(
+            retention_days=settings.news_retention_days, dry_run=False, confirm=True
+        )
+        stats["deleted"] = int(cleanup_res.get("deleted", 0))
+    except Exception as exc:
+        logger.error("Retention cleanup failed: %s", exc)
+
+    # Step 2: Ingest from each configured news source
+    for slug in source_slugs:
+        try:
+            discovery_res = discover_news.run(slug, limit=limit_per_source, trigger="scheduled")
+            queued = int(discovery_res.get("queued", 0))
+            stats["discovered"] += queued
+        except Exception as exc:
+            logger.warning("Discovery failed for source %s: %s", slug, exc)
+            continue
+
+        with pool.connection() as connection:
+            rows = connection.execute(
+                """
+                SELECT j.id::text
+                FROM ingestion_jobs j
+                JOIN news_sources s ON s.id = j.source_id
+                WHERE s.slug = %s AND j.status = 'pending'
+                ORDER BY j.created_at DESC
+                LIMIT %s
+                """,
+                (slug, limit_per_source),
+            ).fetchall()
+
+        for (job_id,) in rows:
+            try:
+                res = process_ingestion_job(job_id, pool=pool)
+                if res.get("status") == "succeeded":
+                    stats["ingested"] += 1
+                elif res.get("status") == "cancelled":
+                    stats["skipped"] += 1
+                else:
+                    stats["failed"] += 1
+            except Exception as exc:
+                stats["failed"] += 1
+                logger.warning("Failed processing news job %s: %s", job_id, exc)
+
+    return stats
+
