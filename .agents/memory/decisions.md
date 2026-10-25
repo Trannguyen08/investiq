@@ -3,6 +3,29 @@
 Record durable decisions in reverse chronological order. Do not record routine implementation
 details.
 
+## 2026-10-25 — Direct FastAPI news ingestion cycle and 90-day retention on web deploy
+
+- **Status:** Accepted and implemented
+- **Context:** On single-instance container hosts and Render free-tier deployments, standalone Celery
+  workers and Celery Beat schedulers are not running. Relying exclusively on Celery Beat left news
+  un-ingested on deploy, while generic discovery feeds could bring in off-topic articles (e.g. lifestyle,
+  sports) or stale records older than 90 days.
+- **Decision:**
+  1. Purged test/off-topic articles from cloud PostgreSQL.
+  2. Refined crawler configurations (`VietstockCrawler`, `CafeFCrawler`, etc.) to focus exclusively on
+     Vietnamese securities, stock market indices, and listed corporate finance feeds, applying strict
+     market and ticker terminology guards.
+  3. Extracted `process_ingestion_job` in `news_ingestion_worker.py` and implemented `run_direct_ingestion_cycle`
+     which executes `cleanup_old_news(retention_days=90, dry_run=False, confirm=True)` and ingests discovered
+     market articles directly into PostgreSQL without requiring Celery or Redis.
+  4. Registered an async background loop in FastAPI `lifespan` (`main.py`) that executes immediately upon
+     deployment startup (2s post-boot) and repeats every 15 minutes.
+  5. Configured `psycopg_pool.ConnectionPool` with `check=ConnectionPool.check_connection`, `max_idle=120.0`,
+     and `max_lifetime=1800.0` to cleanly recycle serverless PostgreSQL SSL connections.
+- **Consequences:** News ingestion and 90-day retention work autonomously upon every web service deployment
+  and during continuous operation regardless of whether Celery Beat is deployed. Public news feeds only
+  contain relevant Vietnamese stock and corporate market news with sentiment analysis.
+
 ## 2026-10-13 — Bounded VCI event calendar for the evaluation adapter
 
 - **Status:** Accepted and implemented
