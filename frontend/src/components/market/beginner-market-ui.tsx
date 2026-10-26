@@ -43,7 +43,7 @@ export function SectorHeatmap({ sectors: values, headingId }: { sectors: MarketS
   );
 }
 
-export function InfoTip({ term, children }: { term: string; children: string }) {
+export function InfoTip({ term, children }: { term: string; children: React.ReactNode }) {
   return (
     <details className="market-info-tip">
       <summary aria-label={`Giải thích ${term}`}>?</summary>

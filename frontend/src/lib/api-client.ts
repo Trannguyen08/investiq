@@ -233,7 +233,7 @@ export function getMarketEvents(query = new URLSearchParams()): Promise<EventCol
 }
 
 export function getMarketPeople(): Promise<PeopleCollection> {
-  return requestJson<PeopleCollection>("/v1/market/people", 3600);
+  return requestJson<PeopleCollection>("/v1/market/people", 30);
 }
 
 export function getMarketGrowth(symbol: string): Promise<StockGrowthEnvelope> {

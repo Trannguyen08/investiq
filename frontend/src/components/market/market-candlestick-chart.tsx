@@ -147,26 +147,48 @@ function nextZoomWindow({
   return { count, start: Math.max(0, Math.min(start, maximumStart)) };
 }
 
+function marketDateTime(timestamp: string) {
+  const date = new Date(timestamp);
+  const utc = date.getTime() + date.getTimezoneOffset() * 60000;
+  const vn = new Date(utc + 7 * 3600000);
+  return {
+    year: vn.getFullYear(),
+    month: vn.getMonth() + 1,
+    day: vn.getDate(),
+    hour: vn.getHours(),
+    minute: vn.getMinutes(),
+  };
+}
+
 function shortDate(timestamp: string) {
-  return new Intl.DateTimeFormat("vi-VN", {
-    timeZone: "Asia/Ho_Chi_Minh",
-    day: "2-digit",
-    month: "2-digit",
-  }).format(new Date(timestamp));
+  const dt = marketDateTime(timestamp);
+  return `${String(dt.day).padStart(2, "0")}/${String(dt.month).padStart(2, "0")}`;
 }
 
 function axisLabel(timestamp: string, range: ChartRange | undefined, first: boolean, intraday: boolean) {
-  if (intraday) {
-    return new Intl.DateTimeFormat("vi-VN", {
-      timeZone: "Asia/Ho_Chi_Minh",
-      hour: "2-digit",
-      minute: "2-digit",
-    }).format(new Date(timestamp));
+  const dt = marketDateTime(timestamp);
+  const dayStr = String(dt.day).padStart(2, "0");
+  const monthStr = String(dt.month).padStart(2, "0");
+  const hourStr = String(dt.hour).padStart(2, "0");
+  const minuteStr = String(dt.minute).padStart(2, "0");
+
+  if (range === "day") {
+    return `${dayStr}/${monthStr} ${hourStr}:${minuteStr}`;
   }
-  if (range !== "year") return shortDate(timestamp);
-  const value = marketDate(timestamp);
-  if (value.month === 1) return String(value.year);
-  return first ? `T${value.month}/${value.year}` : `T${value.month}`;
+  if (range === "week") {
+    return `${dayStr}/${monthStr}`;
+  }
+  if (range === "month") {
+    return `${dayStr}/${monthStr}`;
+  }
+  if (range === "year") {
+    if (dt.month === 1) return String(dt.year);
+    return first ? `T${dt.month}/${dt.year}` : `T${dt.month}`;
+  }
+  if (intraday) {
+    return `${dayStr}/${monthStr} ${hourStr}:${minuteStr}`;
+  }
+  return `${dayStr}/${monthStr}`;
 }
 
 function axisIndexes(values: NumericCandle[], range?: ChartRange) {
@@ -184,7 +206,22 @@ function axisIndexes(values: NumericCandle[], range?: ChartRange) {
     if (!result.includes(last)) result.push(last);
     return result;
   }
-  const divisions = range === "week" || range === "month" ? 5 : 4;
+  if (range === "week") {
+    const seenDays = new Set<string>();
+    const result: number[] = [];
+    values.forEach((item, index) => {
+      const dt = marketDateTime(item.source.timestamp);
+      const key = `${dt.year}-${dt.month}-${dt.day}`;
+      if (!seenDays.has(key)) {
+        seenDays.add(key);
+        result.push(index);
+      }
+    });
+    if (result.length >= 3 && result.length <= 7) {
+      return result;
+    }
+  }
+  const divisions = range === "month" ? 5 : 4;
   return [...new Set(Array.from(
     { length: divisions + 1 },
     (_, index) => Math.round((values.length - 1) * index / divisions),

@@ -49,22 +49,19 @@ export function StockDetailTabs({
     }
   };
 
-  const tabs: { id: StockTabId; label: string; icon: string; count?: number; badge?: string }[] = [
+  const tabs: { id: StockTabId; label: string; count?: number; badge?: string }[] = [
     {
       id: "chart",
       label: "Biểu đồ & Sổ lệnh",
-      icon: "📊",
     },
     {
       id: "growth",
       label: "Tăng trưởng & Tài chính",
-      icon: "📈",
       badge: "Mới",
     },
     {
       id: "news",
       label: "Tin tức doanh nghiệp",
-      icon: "📰",
       count: newsCount,
     },
   ];
@@ -90,9 +87,6 @@ export function StockDetailTabs({
               onClick={() => handleSelectTab(tab.id)}
               type="button"
             >
-              <span className="tab-icon" aria-hidden="true">
-                {tab.icon}
-              </span>
               <span className="tab-label">{tab.label}</span>
               {tab.count !== undefined && tab.count > 0 && (
                 <span className="tab-count-badge" aria-label={`${tab.count} bài tin`}>

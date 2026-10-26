@@ -199,25 +199,29 @@ describe("beginner market UI", () => {
 
     const { container } = render(<HomeStockPulse instruments={[stockA, stockB]} meta={marketMeta} />);
 
-    // Check all 6 filter tabs exist
-    const ranges = ["Ngày", "Tuần", "Tháng", "3 tháng", "6 tháng", "Năm"];
-    for (const label of ranges) {
-      expect(within(container).getByRole("tab", { name: label })).toBeInTheDocument();
+    // Check dropdown select exists with all 6 options
+    const select = within(container).getByRole("combobox", { name: /mốc thời gian biến động/i });
+    expect(select).toBeInTheDocument();
+    expect(select).toHaveValue("1D");
+
+    const optionLabels = [
+      "Theo ngày (1 phiên)",
+      "Theo tuần (5 phiên)",
+      "Theo tháng (21 phiên)",
+      "Theo 3 tháng (1 quý)",
+      "Theo 6 tháng (Nửa năm)",
+      "Theo năm (1 năm)",
+    ];
+    for (const label of optionLabels) {
+      expect(within(select).getByRole("option", { name: label })).toBeInTheDocument();
     }
 
-    // Default is "Ngày"
-    const dayTab = within(container).getByRole("tab", { name: "Ngày" });
-    expect(dayTab).toHaveAttribute("aria-selected", "true");
+    // Change to "1W" (Tuần)
+    fireEvent.change(select, { target: { value: "1W" } });
+    expect(select).toHaveValue("1W");
 
-    // Click "Tuần"
-    const weekTab = within(container).getByRole("tab", { name: "Tuần" });
-    fireEvent.click(weekTab);
-    expect(weekTab).toHaveAttribute("aria-selected", "true");
-    expect(dayTab).toHaveAttribute("aria-selected", "false");
-
-    // Click "Tháng"
-    const monthTab = within(container).getByRole("tab", { name: "Tháng" });
-    fireEvent.click(monthTab);
-    expect(monthTab).toHaveAttribute("aria-selected", "true");
+    // Change to "1M" (Tháng)
+    fireEvent.change(select, { target: { value: "1M" } });
+    expect(select).toHaveValue("1M");
   });
 });

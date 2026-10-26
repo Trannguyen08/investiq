@@ -34,7 +34,6 @@ from app.infrastructure.db.repositories.sql_watchlist_repository import (
 )
 from app.infrastructure.db.session import get_pool
 from app.infrastructure.external.market_fixture_provider import FixtureMarketProvider
-from app.infrastructure.external.tcbs_market_provider import TcbsConfig, TcbsMarketProvider
 from app.infrastructure.external.vnstock_market_provider import VnstockConfig, VnstockMarketProvider
 from app.schemas.market import (
     AddWatchlistItemRequest,
@@ -68,29 +67,6 @@ watchlist_router = APIRouter(
 def _provider() -> IMarketProvider:
     if settings.market_data_mode == "fixture":
         return FixtureMarketProvider()
-    if settings.market_data_mode == "tcbs":
-        settings.require_tcbs_configuration()
-        return TcbsMarketProvider(
-            TcbsConfig(
-                api_base_url=settings.tcbs_api_base_url,
-                ws_url=settings.tcbs_ws_url,
-                api_key=(
-                    settings.tcbs_api_key.get_secret_value() if settings.tcbs_api_key else None
-                ),
-                otp=settings.tcbs_otp.get_secret_value() if settings.tcbs_otp else None,
-                access_token=(
-                    settings.tcbs_access_token.get_secret_value()
-                    if settings.tcbs_access_token
-                    else None
-                ),
-                request_timeout_seconds=settings.tcbs_request_timeout_seconds,
-                quote_refresh_seconds=settings.tcbs_quote_refresh_seconds,
-                security_refresh_seconds=settings.tcbs_security_refresh_seconds,
-                retry_attempts=settings.tcbs_http_retry_attempts,
-                circuit_failure_threshold=settings.tcbs_circuit_failure_threshold,
-                circuit_open_seconds=settings.tcbs_circuit_open_seconds,
-            )
-        )
     if settings.market_data_mode == "vnstock":
         return VnstockMarketProvider(
             VnstockConfig(
@@ -114,20 +90,15 @@ def get_market_provider() -> IMarketProvider:
 
 
 async def start_market_provider() -> None:
-    if settings.market_data_mode not in {"tcbs", "vnstock"}:
+    if settings.market_data_mode != "vnstock":
         return
     provider = _provider()
-    if isinstance(provider, TcbsMarketProvider):
-        await provider.start()
     if isinstance(provider, VnstockMarketProvider):
         asyncio.create_task(asyncio.to_thread(provider.indices))
 
 
 async def close_market_provider() -> None:
-    if settings.market_data_mode == "tcbs":
-        provider = _provider()
-        if isinstance(provider, TcbsMarketProvider):
-            await provider.close()
+    pass
 
 
 def _service() -> MarketService:

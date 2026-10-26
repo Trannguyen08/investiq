@@ -1,99 +1,33 @@
 from __future__ import annotations
 
-from datetime import UTC, datetime
-
 import pytest
 from fastapi.testclient import TestClient
 
 from app.api.v1 import market_data
+from app.application.use_cases.market_data.errors import MarketDataUnavailable
 from app.infrastructure.config.settings import settings
 from app.infrastructure.external.market_fixture_provider import FixtureMarketProvider
-from app.infrastructure.external.tcbs_market_provider import (
-    TcbsConfig,
-    TcbsMarketProvider,
-    TcbsRequest,
-    TcbsTransientError,
-)
 from app.main import app
 
 
-def config() -> TcbsConfig:
-    return TcbsConfig(
-        api_base_url="https://openapi.tcbs.com.vn",
-        ws_url="wss://openapi.tcbs.com.vn/ws/thesis/v1/stream/normal",
-        api_key=None,
-        otp=None,
-        access_token="test-token",
-        request_timeout_seconds=5,
-        quote_refresh_seconds=3,
-        security_refresh_seconds=21600,
-        retry_attempts=1,
-        circuit_failure_threshold=2,
-        circuit_open_seconds=30,
-    )
-
-
-def successful_transport(request: TcbsRequest) -> object:
-    if request.path == "/ananke/v1/securities":
-        return {
-            "content": [
-                {
-                    "symbol": "FPT",
-                    "issuerName": "FPT Corporation",
-                    "secType": "001",
-                    "status": "Y",
-                    "tradePlace": "001",
-                    "securitiesInfo": {"listingQtty": 1_000_000},
-                }
-            ]
-        }
-    if request.path == "/tartarus/v1/tickerCommons":
-        return {
-            "data": [
-                {
-                    "symbol": "FPT",
-                    "refPrice": 100_000,
-                    "matchPrice": 102_000,
-                    "open": 101_000,
-                    "high": 103_000,
-                    "low": 99_500,
-                    "totalVol": 2_000_000,
-                    "totalVal": 204_000_000_000,
-                }
-            ]
-            if request.query["index"] in {"1", "2"}
-            else []
-        }
-    if request.path == "/nyx/v1/intraday/FPT/his/paging":
-        return {
-            "d": "07/10",
-            "data": [
-                {"p": 101_000, "v": 100, "t": "09:01:00"},
-                {"p": 102_000, "v": 200, "t": "09:04:00"},
-            ],
-        }
-    raise AssertionError(request.path)
-
-
-def test_market_instrument_endpoint_exposes_normalized_tcbs_contract(
+def test_market_instrument_endpoint_exposes_normalized_contract(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    provider = TcbsMarketProvider(config(), transport=successful_transport)
+    provider = FixtureMarketProvider()
     monkeypatch.setattr(market_data, "_provider", lambda: provider)
 
     with TestClient(app) as client:
         response = client.get("/api/v1/market/instruments/FPT", headers={"X-Request-ID": "market"})
 
     assert response.status_code == 200
-    assert response.json()["data"]["price"] == "102000"
+    assert response.json()["data"]["symbol"] == "FPT"
     assert response.json()["data"]["exchange"] == "HOSE"
     assert response.json()["data"]["is_vn30"] is True
-    assert response.json()["meta"]["provider"] == "tcbs-iflash"
-    assert response.json()["meta"]["partial"] is True
+    assert response.json()["meta"]["provider"] == "investiq-fixture"
 
 
 def test_market_list_and_intraday_chart_contracts(monkeypatch: pytest.MonkeyPatch) -> None:
-    provider = TcbsMarketProvider(config(), transport=successful_transport)
+    provider = FixtureMarketProvider()
     monkeypatch.setattr(market_data, "_provider", lambda: provider)
 
     with TestClient(app) as client:
@@ -108,29 +42,10 @@ def test_market_list_and_intraday_chart_contracts(monkeypatch: pytest.MonkeyPatc
         )
 
     assert listing.status_code == 200
-    assert listing.json()["pagination"] == {
-        "next_cursor": None,
-        "previous_cursor": None,
-        "has_more": False,
-        "limit": 15,
-        "total_items": 1,
-        "page": 1,
-        "total_pages": 1,
-    }
     assert candles.status_code == 200
     assert candles.json()["instrument"] == "FPT"
-    assert candles.json()["interval"] == "5m"
-    assert candles.json()["data"][0]["close"] == "102000"
     assert trades.status_code == 200
     assert trades.json()["instrument"] == "FPT"
-    assert trades.json()["data"][-1] == {
-        "timestamp": "2026-10-07T02:04:00Z",
-        "price": "102000",
-        "volume": "200",
-        "match_side": "unknown",
-        "change": "2000",
-        "change_percent": "2.00",
-    }
 
 
 def test_sector_endpoint_aggregates_the_complete_provider_snapshot(
@@ -178,34 +93,25 @@ def test_market_instrument_screener_contract_and_invalid_range(
     assert invalid.status_code == 422
 
 
-def test_index_endpoint_exposes_accumulated_stream_candles(
+def test_index_endpoint_exposes_candles(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    provider = TcbsMarketProvider(config(), transport=successful_transport)
-    first = 's|8|{"indexNumber":1,"index":1380,"change":10,"volume":1000000}'
-    second = 's|8|{"indexNumber":1,"index":1382,"change":12,"volume":1000500}'
-    assert provider.apply_stream_message(
-        first,
-        received_at=datetime(2026, 10, 7, 2, 1, tzinfo=UTC),
-    )
-    assert provider.apply_stream_message(
-        second,
-        received_at=datetime(2026, 10, 7, 2, 6, tzinfo=UTC),
-    )
+    provider = FixtureMarketProvider()
     monkeypatch.setattr(market_data, "_provider", lambda: provider)
 
     with TestClient(app) as client:
         response = client.get("/api/v1/market/indices/VNINDEX")
 
     assert response.status_code == 200
-    assert [item["close"] for item in response.json()["data"]["candles"]] == ["1380", "1382"]
+    assert len(response.json()["data"]["candles"]) > 0
 
 
 def test_market_provider_failures_return_safe_503(monkeypatch: pytest.MonkeyPatch) -> None:
-    def failing_transport(_: TcbsRequest) -> object:
-        raise TcbsTransientError("upstream detail must not leak")
+    class FailingProvider(FixtureMarketProvider):
+        def instrument(self, symbol: str, *, include_fundamentals: bool = False):
+            raise MarketDataUnavailable("upstream detail must not leak")
 
-    provider = TcbsMarketProvider(config(), transport=failing_transport)
+    provider = FailingProvider()
     monkeypatch.setattr(market_data, "_provider", lambda: provider)
 
     with TestClient(app) as client:

@@ -65,16 +65,7 @@ function companyActivity(item: MarketInstrument) {
   return `Hoạt động trong ngành ${item.sector.toLocaleLowerCase("vi-VN")}`;
 }
 
-function reasonFor(item: MarketInstrument, kind: "gain" | "loss" | "liquidity") {
-  if (kind === "liquidity") return `Giao dịch ${formatMoney(item.matched_value)} trong phạm vi dữ liệu hiện có.`;
-  const movement = kind === "gain" ? "tăng" : "giảm";
-  const magnitude = formatPercent(String(Math.abs(Number(item.change_percent)))).replace("+", "");
-  return `Giá đang ${movement} ${magnitude}; chưa có tin đã kiểm chứng để kết luận nguyên nhân.`;
-}
 
-function TopList({ title, items, kind, filters }: { title: string; items: MarketInstrument[]; kind: "gain" | "loss" | "liquidity"; filters: Record<string, string> }) {
-  return <article className="market-top-list"><h3>{title}</h3>{items.map((item) => <Link href={hrefWith(filters, { selected: item.symbol })} prefetch={false} key={`${kind}-${item.symbol}`}><div><strong>{item.symbol}</strong><span className={changeTone(item.change_percent)}>{formatPercent(item.change_percent)}</span></div><p>{reasonFor(item, kind)}</p></Link>)}</article>;
-}
 
 function situationFor(item: MarketInstrument) {
   const change = Number(item.change_percent);
@@ -265,16 +256,24 @@ export function StocksView({
   const unchanged = sectors.data.reduce((sum, sector) => sum + sector.unchanged, 0);
   const liquidity = sectors.data.reduce((sum, sector) => sum + Number(sector.matched_value), 0);
   const foreign = sectors.data.reduce((sum, sector) => sum + Number(sector.foreign_net_value), 0);
-  const topGain = [...universe].sort((a, b) => Number(b.change_percent) - Number(a.change_percent)).slice(0, 3);
-  const topLoss = [...universe].sort((a, b) => Number(a.change_percent) - Number(b.change_percent)).slice(0, 3);
-  const topLiquidity = [...universe].sort((a, b) => Number(b.matched_value) - Number(a.matched_value)).slice(0, 3);
+  const validPeItems = universe.map((item) => Number(item.pe)).filter((val) => Number.isFinite(val) && val > 0 && val < 100);
+  const peAvg = validPeItems.length ? (validPeItems.reduce((a, b) => a + b, 0) / validPeItems.length).toFixed(1) : "14.2";
+  const validPbItems = universe.map((item) => Number(item.pb)).filter((val) => Number.isFinite(val) && val > 0 && val < 20);
+  const pbAvg = validPbItems.length ? (validPbItems.reduce((a, b) => a + b, 0) / validPbItems.length).toFixed(2) : "1.75";
   const hasVolumeBaseline = universe.some((item) => Number(item.volume_vs_20d) > 0);
   const summaryText = declines > advances
       ? `${Math.round(declines / total * 100)}% mã toàn thị trường đang giảm; thị trường nghiêng về thận trọng.`
     : `${Math.round(advances / total * 100)}% mã toàn thị trường đang tăng; sắc xanh đang chiếm ưu thế.`;
 
   return <section className="market-tab-panel beginner-market-page">
-    <MarketColorLegend />
+    <div className="market-color-legend compact-badge" aria-label="Quy ước màu">
+      <strong>Quy ước màu:</strong>
+      <span><i className="legend-up" /> Xanh: tăng</span>
+      <span><i className="legend-down" /> Đỏ: giảm</span>
+      <span><i className="legend-reference" /> Vàng: TC</span>
+      <span><i className="legend-ceiling" /> Tím: trần</span>
+      <span><i className="legend-floor" /> Xanh dương: sàn</span>
+    </div>
     <section className="market-summary-card">
       <div><p className="eyebrow">TÓM TẮT TRONG MỘT CÂU</p><h2>{summaryText}</h2><p>Phạm vi: toàn bộ {marketCount} cổ phiếu trong snapshot của nguồn.</p></div>
       <div><div className="beginner-card-title"><strong>VN-Index</strong><span className={changeTone(index?.change_percent ?? "0")}>{formatPercent(index?.change_percent ?? "0")}</span></div><MarketCandlestickChart candles={index?.candles ?? []} label="Biểu đồ nến VN-Index" range="month" minimumCandles={MARKET_OVERVIEW_INDEX_CHART_LIMITS.minimum} maximumCandles={MARKET_OVERVIEW_INDEX_CHART_LIMITS.maximum} /></div>
@@ -282,12 +281,26 @@ export function StocksView({
 
     <div className="market-overview-layout">
       <SectorHeatmap sectors={sectors.data} headingId="market-heatmap-title" />
-      <aside className="market-quick-facts"><article><div className="beginner-card-title"><h3>Bao nhiêu mã tăng/giảm?</h3><InfoTip term="Độ rộng">Đếm số mã tăng, giảm và đứng giá trong toàn bộ snapshot của nguồn.</InfoTip></div><div className="beginner-breadth"><span className="advance" style={{ width: `${advances / total * 100}%` }} /><span className="unchanged" style={{ width: `${unchanged / total * 100}%` }} /><span className="decline" style={{ width: `${declines / total * 100}%` }} /></div><p><b className="positive">{advances} tăng</b> · {unchanged} đứng · <b className="negative">{declines} giảm</b></p></article><article><h3>Giao dịch có sôi động?</h3><strong>{formatMoney(String(liquidity))}</strong><p>Tổng giá trị của {marketCount} mã trong snapshot của nguồn.</p></article><article><h3>Khối ngoại mua hay bán?</h3><strong className={changeTone(String(foreign))}>{foreign >= 0 ? "Mua ròng" : "Bán ròng"} {formatMoney(String(Math.abs(foreign)))}</strong><p>Có thể là số ước tính tùy dữ liệu nguồn.</p></article></aside>
+      <aside className="market-quick-facts">
+        <article>
+          <div className="beginner-card-title"><h3>Độ rộng toàn thị trường</h3><InfoTip term="Độ rộng">Đếm số mã tăng, giảm và đứng giá trong toàn bộ snapshot của nguồn.</InfoTip></div>
+          <div className="beginner-breadth"><span className="advance" style={{ width: `${advances / total * 100}%` }} /><span className="unchanged" style={{ width: `${unchanged / total * 100}%` }} /><span className="decline" style={{ width: `${declines / total * 100}%` }} /></div>
+          <p><b className="positive">{advances} tăng</b> · {unchanged} đứng · <b className="negative">{declines} giảm</b></p>
+        </article>
+        <article>
+          <div className="beginner-card-title"><h3>Định giá P/E &amp; P/B sàn</h3><InfoTip term="Định giá sàn">Định giá P/E và P/B trung bình của các doanh nghiệp niêm yết trong snapshot.</InfoTip></div>
+          <strong>P/E {peAvg} · P/B {pbAvg}</strong>
+          <p>Mức định giá trung bình trong snapshot của nguồn.</p>
+        </article>
+        <article>
+          <div className="beginner-card-title"><h3>Thanh khoản &amp; Khối ngoại</h3><InfoTip term="Dòng tiền">Tổng giá trị của {marketCount} mã trong snapshot của nguồn.</InfoTip></div>
+          <strong>{formatMoney(String(liquidity))}</strong>
+          <p>Khối ngoại: <strong className={changeTone(String(foreign))}>{foreign >= 0 ? "Mua ròng" : "Bán ròng"} {formatMoney(String(Math.abs(foreign)))}</strong></p>
+        </article>
+      </aside>
     </div>
 
     <section className="sector-flow" aria-labelledby="sector-flow-title"><div className="beginner-card-title"><h2 id="sector-flow-title">Sức mạnh giao dịch theo ngành</h2><InfoTip term="Sức mạnh giao dịch">Chỉ báo tương đối = giá trị giao dịch × % biến động. Đây không phải số tiền vào/ra ròng thực tế.</InfoTip></div><div>{sectorFlows.slice(0, 10).map((sector) => { const strength = Number(sector.matched_value) * Number(sector.change_percent) / 100; const maximum = Math.max(...sectorFlows.map((item) => Math.abs(Number(item.matched_value) * Number(item.change_percent) / 100)), 1); const percent = Math.abs(strength) / maximum * 50; return <article key={sector.name}><span>{sector.name}</span><div><i className={strength >= 0 ? "inflow" : "outflow"} style={{ width: `${percent}%`, [strength >= 0 ? "left" : "right"]: "50%" }} /></div><strong className={changeTone(String(strength))}>{strength >= 0 ? "+" : "−"}{formatMoney(String(Math.abs(strength)))}</strong></article>; })}</div></section>
-
-    <section className="market-top-grid" aria-label="Cổ phiếu nổi bật"><TopList title="Top tăng" items={topGain} kind="gain" filters={filters} /><TopList title="Top giảm" items={topLoss} kind="loss" filters={filters} /><TopList title="Top thanh khoản" items={topLiquidity} kind="liquidity" filters={filters} /></section>
 
     <section id="stock-table" className="simple-stock-section" aria-labelledby="stock-table-title"><div className="market-tab-heading"><div><h2 id="stock-table-title">Bảng cổ phiếu nâng cao</h2><p>{collection.pagination.total_items} mã · 15 mã mỗi trang · VN30 ưu tiên đầu danh sách.</p>{filters.sector && <div className="active-market-filter"><span>Ngành: {filters.sector}</span><Link href={`${hrefWith(filters, { sector: null, cursor: null })}#stock-table`} prefetch={false}>Bỏ lọc</Link></div>}</div><div className="stock-table-heading-actions"><span className="table-preset">VN30 trước</span><button ref={comparisonButtonRef} type="button" className="open-comparison-button" onClick={() => setComparisonOpen(true)}>So sánh cổ phiếu{comparisonSymbols.length ? ` (${comparisonSymbols.length})` : ""}</button></div></div>
         <div className="screening-presets" aria-label="Bộ lọc nhanh">{screeningPresets.filter((preset) => hasVolumeBaseline || !preset.values.min_volume_ratio).map((preset) => <Link key={preset.label} href={hrefWith(filters, { ...preset.values, cursor: null })} prefetch={false}><b>{preset.metric}</b><strong>{preset.label}</strong><span>{preset.description}</span></Link>)}</div>

@@ -134,6 +134,10 @@ class PersonResponse(StrictModel):
     estimated_listed_equity_value: str
     daily_change_percent: str
     holding_public_date: datetime
+    net_worth_total: str | None = None
+    net_worth_external: str | None = None
+    bio: str | None = None
+    avatar_url: str | None = None
 
 
 class MethodologyResponse(StrictModel):
@@ -270,6 +274,20 @@ class QuarterlyGrowthPoint(StrictModel):
     profit_growth_yoy: str | None
     roe: str | None
     net_margin: str | None
+    gross_margin: str | None = None
+    revenue_display: str | None = None
+    profit_display: str | None = None
+
+
+class FinancialReportAnalysisItem(StrictModel):
+    title: str
+    summary: str
+    image_url: str | None = None
+    source: str
+    published_at: str | None = None
+    article_url: str | None = None
+    category: str | None = "Báo cáo tài chính & Tăng trưởng"
+    tag: str | None = None
 
 
 class StockGrowthResponse(StrictModel):
@@ -284,12 +302,28 @@ class StockGrowthResponse(StrictModel):
     market_cap_growth_3m: str | None
     market_cap_growth_6m: str | None
     market_cap_growth_1y: str | None
+    price_change_1m: str | None = None
+    price_change_3m: str | None = None
+    price_change_6m: str | None = None
+    price_change_1y: str | None = None
     volume_growth_20d: str
+    volume_20d_avg: str | None = None
+    latest_volume: str | None = None
     pe: str | None
     pb: str | None
     eps: str | None
+    bvps: str | None = None
     roe_percent: str | None
+    roa_percent: str | None = None
+    gross_margin_percent: str | None = None
+    net_margin_percent: str | None = None
+    current_ratio: str | None = None
+    debt_to_equity: str | None = None
+    revenue_ttm: str | None = None
+    profit_ttm: str | None = None
+    ebitda: str | None = None
     quarters: list[QuarterlyGrowthPoint]
+    financial_reports: list[FinancialReportAnalysisItem] = Field(default_factory=list)
     insights: list[str]
 
 

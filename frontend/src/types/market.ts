@@ -112,6 +112,10 @@ export type MarketPerson = {
   estimated_listed_equity_value: string;
   daily_change_percent: string;
   holding_public_date: string;
+  net_worth_total?: string | null;
+  net_worth_external?: string | null;
+  bio?: string | null;
+  avatar_url?: string | null;
 };
 
 export type MarketOverview = {
@@ -208,6 +212,20 @@ export type QuarterlyGrowthPoint = {
   profit_growth_yoy: string | null;
   roe: string | null;
   net_margin: string | null;
+  gross_margin?: string | null;
+  revenue_display?: string | null;
+  profit_display?: string | null;
+};
+
+export type FinancialReportAnalysisItem = {
+  title: string;
+  summary: string;
+  image_url?: string | null;
+  source: string;
+  published_at?: string | null;
+  article_url?: string | null;
+  category?: string | null;
+  tag?: string | null;
 };
 
 export type StockGrowthData = {
@@ -222,14 +240,31 @@ export type StockGrowthData = {
   market_cap_growth_3m: string | null;
   market_cap_growth_6m: string | null;
   market_cap_growth_1y: string | null;
+  price_change_1m?: string | null;
+  price_change_3m?: string | null;
+  price_change_6m?: string | null;
+  price_change_1y?: string | null;
   volume_growth_20d: string;
+  volume_20d_avg?: string | null;
+  latest_volume?: string | null;
   pe: string | null;
   pb: string | null;
   eps: string | null;
+  bvps?: string | null;
   roe_percent: string | null;
+  roa_percent?: string | null;
+  gross_margin_percent?: string | null;
+  net_margin_percent?: string | null;
+  current_ratio?: string | null;
+  debt_to_equity?: string | null;
+  revenue_ttm?: string | null;
+  profit_ttm?: string | null;
+  ebitda?: string | null;
   quarters: QuarterlyGrowthPoint[];
+  financial_reports?: FinancialReportAnalysisItem[];
   insights: string[];
 };
+
 
 export type StockGrowthEnvelope = {
   data: StockGrowthData;

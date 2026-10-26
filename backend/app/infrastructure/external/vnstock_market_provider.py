@@ -651,7 +651,15 @@ class VnstockMarketProvider:
         )
 
     def people(self) -> tuple[MarketPerson, ...]:
-        return ()
+        from app.infrastructure.external.crawlers.leader_crawler import get_leader_crawler
+
+        try:
+            crawler = get_leader_crawler()
+            instruments = self.instruments()
+            return crawler.get_prominent_leaders(instruments)
+        except Exception as exc:
+            logger.warning("Failed to compute prominent leaders: %s", exc)
+            return ()
 
     def instrument(
         self, symbol: str, *, include_fundamentals: bool = False

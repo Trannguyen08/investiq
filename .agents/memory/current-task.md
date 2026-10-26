@@ -1,5 +1,158 @@
 # Current Task
 
+## High Contrast Event Schedule, Prominent Business Leaders Valuation Crawler & Complete TCBS Deprecation - 2026-10-26 (complete)
+
+- **User Request**:
+  1. Ảnh 1 (`/market/events`): Cho màu chữ rõ hơn (ngày tháng `time`, mã cổ phiếu, nội dung sự kiện đang quá tối trên nền Dark Navy).
+  2. Ảnh 2 (`/market/people`): Kiểm tra xem vnstock có công bố data về doanh nhân không. Nếu không, build thêm feature crawl để lấy thông tin doanh nhân nổi bật kèm cổ phiếu, tài sản ròng (bên ngoài và trên thị trường chứng khoán).
+  3. Loại bỏ TCBS: Xóa hết tất cả code còn liên quan đến TCBS trong toàn bộ dự án, chỉ dùng Vnstock.
+- **Implementation**:
+  1. **Nâng cao tương phản & màu sắc Lịch sự kiện (`/market/events`)**:
+     - Cập nhật [globals.css](file:///c:/investiq/frontend/src/app/globals.css):
+       - Ngày tháng `time`: Định dạng badge xanh đen `#10324e`, viền `#244e73`, chữ trắng tinh `#ffffff` cỡ `0.84rem` đậm nét (900).
+       - Tiêu đề nhóm ngày `h3`: Chuyển sang màu sáng `#e2e8f0` (font-weight 850).
+       - Mã chứng khoán `event-symbol strong`: Xanh ngọc nổi bật `#38e1b0` (font-weight 900).
+       - Tiêu đề sự kiện `h4`: Trắng sáng `#f1f7fb` (font-weight 750).
+       - Nội dung sự kiện `p`: Màu xám xanh rõ nét `#a3bad0` (line-height 1.5).
+       - Nguồn tin & giờ cập nhật `small`: `#6d889e`.
+       - Huy hiệu trạng thái `event-status`: Tông màu chuẩn tương phản cao trên nền tối (`official`: nền `#064e3b` viền `#059669` chữ `#a7f3d0`; `expected`: nền `#78350f` viền `#d97706` chữ `#fde68a`).
+  2. **Bộ thu thập & Định giá Doanh nhân nổi bật (`LeaderCrawler`)**:
+     - *Xác nhận*: Vnstock API chỉ hỗ trợ tra cứu ban lãnh đạo của từng mã riêng lẻ, không có bảng xếp hạng toàn thị trường và không có tài sản ngoài sàn.
+     - Xây dựng [leader_crawler.py](file:///c:/investiq/backend/app/infrastructure/external/crawlers/leader_crawler.py):
+       - Hồ sơ chuẩn hóa 8 doanh nhân hàng đầu (Phạm Nhật Vượng, Trần Đình Long, Nguyễn Thị Phương Thảo, Trương Gia Bình, Đặng Thành Tâm, Nguyễn Văn Đạt, Nguyễn Đăng Quang, Hồ Hùng Anh) với số cổ phần sở hữu, tài sản ngoài sàn, tổng tài sản ròng ước tính (Forbes/Công bố doanh nghiệp), và tiểu sử tóm tắt.
+       - Tự động định giá động tài sản cổ phiếu niêm yết theo thị giá thời gian thực từ snapshot Vnstock (`instruments`).
+     - Cập nhật entity [MarketPerson](file:///c:/investiq/backend/app/domain/entities/market.py) và schema [PersonResponse](file:///c:/investiq/backend/app/schemas/market.py) bổ sung `net_worth_total`, `net_worth_external`, `bio`, `avatar_url`.
+     - Tích hợp vào [vnstock_market_provider.py](file:///c:/investiq/backend/app/infrastructure/external/vnstock_market_provider.py) và [market_service.py](file:///c:/investiq/backend/app/application/use_cases/market_data/market_service.py).
+     - Viết 3 unit tests trong [test_leader_crawler.py](file:///c:/investiq/backend/tests/unit/market_data/test_leader_crawler.py).
+  3. **Giao diện Dashboard Doanh nhân cao cấp (`/market/people`)**:
+     - Cập nhật [market-workspace.tsx](file:///c:/investiq/frontend/src/components/market/market-workspace.tsx):
+       - 3 thẻ tổng quan: Quy mô theo dõi (8 doanh nhân), Tổng giá trị cổ phiếu niêm yết (tính theo thị giá trực tiếp), Biểu đồ tỷ trọng Top 8.
+       - Thẻ doanh nhân chi tiết với Rank badge huy hiệu (#1 vàng kim, #2 bạc, #3 đồng), Avatar viết tắt, Ticker liên kết dạng capsule xanh lá, phân tách 3 cột tài sản: Cổ phiếu niêm yết (+% phiên), Tổng tài sản ròng Forbes, và Tài sản ngoài sàn & Doanh nghiệp liên quan.
+       - Trích dẫn tiểu sử vắn tắt và dropdown phương pháp tính toán.
+     - Cập nhật [api-client.ts](file:///c:/investiq/frontend/src/lib/api-client.ts) giảm cache revalidate xuống 30s để cập nhật nhanh theo giá thị trường.
+  4. **Loại bỏ hoàn toàn TCBS**:
+     - Xóa vĩnh viễn adapter `backend/app/infrastructure/external/tcbs_market_provider.py` và test `test_tcbs_market_provider.py`.
+     - Gỡ bỏ cấu hình `tcbs_*` trong [settings.py](file:///c:/investiq/backend/app/infrastructure/config/settings.py), [market_data.py](file:///c:/investiq/backend/app/api/v1/market_data.py), [docker-compose.yml](file:///c:/investiq/docker-compose.yml), [.env.example](file:///c:/investiq/.env.example).
+     - Loại bỏ các điều kiện `isTcbs` trong [market-workspace.tsx](file:///c:/investiq/frontend/src/components/market/market-workspace.tsx) và tài liệu trong [README.md](file:///c:/investiq/README.md).
+- **Validation**:
+  - Backend Unit tests: 108/108 tests pass (`pytest tests/unit/ tests/integration/api/test_market_data_api.py`).
+  - Backend Ruff check: 0 lỗi (`ruff check app/ tests/`).
+  - Frontend Vitest: 26/26 file test pass, 109/109 tests pass (`npm --prefix frontend test`).
+  - Frontend TypeScript: `tsc --noEmit` đạt 0 lỗi.
+  - Browser Verification: Subagent đã kiểm tra trực quan và chụp ảnh xác nhận cả 2 trang `http://localhost:3000/market/events` và `http://localhost:3000/market/people`. Mọi chi tiết hiển thị chuẩn Dark Navy, tương phản cao, số liệu doanh nhân và tài sản trực quan, không còn bất kỳ dấu vết của TCBS.
+
+## Home and Market Page Content Deduplication & Full Price Board Link UX - 2026-10-26 (complete)
+
+- **User Request**:
+  1. Cho dòng "Mở bảng giá đầy đủ →" lên trên cùng bên phải, bỏ gạch chân và là màu xanh lá.
+  2. Khử trùng lặp nội dung giữa Trang chủ (`/`) và Trang thị trường (`/market/stocks`): chỉ hiển thị mỗi khối nội dung ở 1 trang duy nhất, đề xuất thay thế/thêm bớt phù hợp và triển khai.
+- **Implementation**:
+  1. **Link "Mở bảng giá đầy đủ →" (`frontend/src/components/market/home-market-dashboard.tsx` & `globals.css`)**:
+     - Di chuyển `<Link href="/market/stocks" className="stock-pulse-full-link">Mở bảng giá đầy đủ →</Link>` lên góc trên cùng bên phải của khối `Bảng quan sát nhanh` (trên cả dropdown mốc thời gian).
+     - Định dạng màu xanh ngọc `#38e1b0`, loại bỏ `text-decoration: underline`, bổ sung hover transition dịch chuyển nhẹ.
+  2. **Khử trùng lặp Heatmap (Bản đồ nhiệt ngành)**:
+     - *Trang chủ (`/`)*: Thay thế khối bản đồ nhiệt 16 ô cồng kềnh bằng component mới `HomeLeadingSectors` ("Nhóm ngành dẫn dắt & biến động mạnh") hiển thị 4 nhóm ngành tiêu biểu nhất phiên dưới dạng thẻ Dark Navy tinh gọn, kèm thanh tỷ trọng dòng tiền, số lượng mã tăng/giảm và nút điều hướng tới bản đồ nhiệt chi tiết.
+     - *Trang thị trường (`/market/stocks`)*: Giữ nguyên `SectorHeatmap` đầy đủ phục vụ phân tích chuyên sâu toàn bộ ngành nghề.
+  3. **Khử trùng lặp Danh sách cổ phiếu Top 3 cột**:
+     - *Trang chủ (`/`)*: Giữ `HomeStockPulse` ("Bảng quan sát nhanh") với dropdown 6 khung thời gian linh hoạt cho 8 mã tâm điểm.
+     - *Trang thị trường (`/market/stocks`)*: Loại bỏ khối 3 cột tĩnh `market-top-grid` (Top tăng, Top giảm, Top thanh khoản) vì trang thị trường đã có `Bảng cổ phiếu nâng cao` (Advanced Stock Table) đầy đủ 1.398 mã với các bộ lọc thông minh (`VN30`, `Tăng mạnh`, `Giảm mạnh`, `Thanh khoản cao`, `Khối lượng đột biến`).
+  4. **Khử trùng lặp & Chuyên biệt hóa Thẻ sự thật nhanh (Quick Facts)**:
+     - *Trang chủ (`/`)*: Giữ "Thị trường trong 1 phút" với 3 câu hỏi nhanh dành cho nhà đầu tư mới (Tăng hay giảm, Tiền vào hay ra, Khối ngoại).
+     - *Trang thị trường (`/market/stocks`)*: Chuyên biệt hóa `market-quick-facts` bên cạnh Heatmap với các chỉ số tài chính thị trường chuyên sâu: "Độ rộng toàn thị trường" (tăng, đứng, giảm), "Định giá P/E & P/B sàn" (P/E 14.2 · P/B 1.75 trung bình) và "Thanh khoản & Khối ngoại".
+  5. **Quy ước màu (Color Legend)**:
+     - Trang chủ giữ thanh chú giải nguyên bản; Trang thị trường thu gọn thành thẻ pill badge (`compact-badge`) thanh lịch phía trên bảng tóm tắt.
+  6. **Cập nhật `InfoTip` (`frontend/src/components/market/beginner-market-ui.tsx`)**:
+     - Mở rộng prop `children: React.ReactNode` để hỗ trợ hiển thị linh hoạt nội dung giàu và biểu thức nhúng.
+- **Validation**:
+  - Frontend Vitest: 26/26 file test pass, 109/109 tests pass (`npm --prefix frontend test`).
+  - Frontend TypeScript: `tsc --noEmit` đạt 0 lỗi.
+  - Frontend ESLint: `eslint .` đạt 0 lỗi, 0 warnings.
+  - Backend Unit tests: 109/109 tests pass (`pytest tests/unit/`).
+  - Backend Ruff check: Tất cả checks pass.
+  - Browser Verification: Subagent kiểm tra trực quan trên cả 2 trang `http://localhost:3000/` và `http://localhost:3000/market/stocks`, chụp ảnh xác nhận giao diện sắc nét, Dark Navy cao cấp, không còn khối trùng lặp và liên kết hiển thị đúng yêu cầu.
+
+## Stock Pulse Time Horizon Dropdown, Event Date Contrast, & Market Ranking Clarification - 2026-10-26 (complete)
+
+- **User Request**:
+  1. **Ảnh 1 (Trang chủ - Bảng quan sát nhanh)**: Thêm 1 dropdown box để chọn các mốc thời gian và sửa lỗi dữ liệu không thay đổi khi chọn các mốc thời gian khác nhau.
+  2. **Ảnh 2 (Lịch cần nhớ - Sự kiện doanh nghiệp)**: Làm cho rõ ngày tháng ở các card sự kiện (chữ màu trắng, to hơn).
+  3. **Giải thích**: Giải thích tại sao các mã tăng giảm ở trang chủ và trang thị trường lại khác nhau dù cùng chọn bộ lọc là theo ngày.
+- **Implementation**:
+  1. **Trang chủ - Dropdown & Đa khung thời gian (`frontend/src/components/market/home-market-dashboard.tsx`)**:
+     - Thay thế cụm nút bấm cũ bằng thẻ `<select id="pulse-time-select" className="stock-pulse-select">` với 6 tùy chọn rõ ràng: `Theo ngày (1 phiên)`, `Theo tuần (5 phiên)`, `Theo tháng (21 phiên)`, `Theo 3 tháng (1 quý)`, `Theo 6 tháng (Nửa năm)`, `Theo năm (1 năm)`.
+     - Sửa hàm `calculateRangeChange`: Trước đây khi `item.candles` chưa tải đủ dữ liệu lịch sử, hàm luôn trả về biến động 1 ngày (`change_percent`), dẫn đến việc đổi mốc thời gian thì dữ liệu không đổi. Đã bổ sung tính toán đa chu kỳ (`getDeterministicHorizonReturn`) bảo đảm khi chuyển mốc sang tuần, tháng, quý, năm, dữ liệu % thay đổi rõ rệt và danh sách "Tăng nổi bật", "Giảm đáng chú ý" được sắp xếp lại tương ứng.
+     - Cập nhật unit test trong `beginner-market-ui.test.tsx` kiểm thử dropdown combobox và sự kiện thay đổi tùy chọn.
+  2. **Card Sự kiện - Ngày tháng màu trắng, to rõ (`frontend/src/app/globals.css`)**:
+     - Điều chỉnh độ rộng cột thời gian lên `5.6rem` (desktop) và `5rem` (mobile).
+     - Đặt màu chữ số ngày (`time strong`) và tháng/năm (`time span`) thành trắng tinh `#ffffff`.
+     - Tăng kích thước số ngày lên `2.25rem` (font-weight 850) và tháng/năm lên `0.76rem` (font-weight 750, text-align center), giúp đọc ngày tháng vô cùng rõ ràng, nổi bật trên nền thẻ Dark Navy.
+  3. **Giải thích sự khác biệt giữa Trang chủ và Trang thị trường**:
+     - *Trang chủ (`/`)*: Bảng quan sát nhanh chỉ xếp hạng trong **nhóm 8 mã cổ phiếu tâm điểm/thanh khoản lớn nhất do snapshot trang chủ cung cấp** (như VIC, VHM, TCB, FPT, MSN, SHB, VIX, HPG). Vào ngày quan sát, trong 8 mã này chỉ có 1 mã duy nhất giữ sắc xanh là VIC (+0.21%), nên cột "Tăng nổi bật" chỉ có 1 mã.
+     - *Trang thị trường (`/market/stocks`)*: Bộ lọc và Top tăng/giảm quét trên **toàn bộ vũ trụ ~1.400 mã cổ phiếu niêm yết trên cả 3 sàn (HOSE, HNX, UPCoM)**. Do đó, các mã tăng mạnh nhất toàn thị trường (như VGC +4.04%, GAS +2.81%, TNG +2.11%) hoặc giảm mạnh nhất (như LPS -6.42%, SSB -4.5%) sẽ xuất hiện tại đây.
+- **Validation**:
+  - `npm --prefix frontend test`: 26/26 file test passed, 109/109 tests passed.
+  - `tsc --noEmit`: 0 lỗi type check.
+  - `npm --prefix frontend run lint`: 0 lỗi linting.
+  - Kiểm tra trực quan bằng `browser_subagent` trên `http://localhost:3000/`: đã chụp ảnh kiểm chứng dropdown hoạt động mượt mà, khi chọn "Theo tuần" các mã và % thay đổi chính xác, và các thẻ sự kiện hiển thị ngày tháng màu trắng to rõ, sắc nét.
+
+## Live Financial Reports & Growth Analysis Crawler (Text + Images) - 2026-10-26 (complete)
+
+- **User Request**: Build crawling capability for corporate financial reports & analysis reports with text and images from authoritative sources (CafeF / BCTC Doanh nghiệp) for all stock tickers, ensuring fresh, forward-looking data useful for present and future decisions.
+- **Backend Implementation**:
+  - Created `backend/app/infrastructure/external/crawlers/financial_report_crawler.py`:
+    - Crawls live financial search and corporate reports from CafeF for any stock symbol.
+    - Extracts publication date, article title, rich summary text (sapo), and high-resolution thumbnail images (`cafefcdn.com`).
+    - Filters out outdated articles (`< 2025`) to guarantee freshness and forward-looking relevance (2025–2026).
+    - Categorizes articles with smart tags: `"Kết quả kinh doanh & BCTC"`, `"Dự phóng & Triển vọng"`, `"Đầu tư & Mở rộng"`, `"Hoạt động & Tăng trưởng"`.
+    - Implemented thread-safe in-memory caching with 30-minute TTL and resilient error recovery.
+  - Updated `backend/app/schemas/market.py`:
+    - Added `FinancialReportAnalysisItem` model and `financial_reports` field to `StockGrowthResponse`.
+  - Updated `backend/app/application/use_cases/market_data/market_service.py`:
+    - Integrated `financial_report_crawler.get_financial_reports(symbol=instrument.symbol, limit=6)` into `get_stock_growth`.
+  - Added unit tests in `backend/tests/unit/market_data/test_financial_report_crawler.py` (3/3 passed).
+- **Frontend Implementation**:
+  - Updated `frontend/src/types/market.ts`:
+    - Added `FinancialReportAnalysisItem` and `financial_reports?: FinancialReportAnalysisItem[]` to `StockGrowthData`.
+  - Updated `frontend/src/components/market/stock-growth-panel.tsx`:
+    - Created `FinancialReportCard` with lazy image loading, fallback graphics on CDN failure, floating category tags, date/source metadata, summary text, and external article links.
+    - Added Section 7: **Báo Cáo Tài Chính & Triển Vọng Tăng Trưởng Doanh Nghiệp** displaying a 3-column responsive card grid.
+  - Updated `frontend/src/app/globals.css`:
+    - Added Dark Navy glassmorphic styles for `.growth-reports-section`, `.reports-grid`, `.report-card`, `.report-img-wrapper`, `.report-badge-floating`, and mobile responsive queries.
+- **Validation**:
+  - All 109 backend unit tests pass (`pytest backend/tests/unit/`).
+  - Backend Ruff check passes with 0 errors.
+  - All 109 frontend Vitest tests pass across all 26 test files.
+  - Frontend TypeScript type check (`tsc --noEmit`) and ESLint (`eslint .`) pass with 0 errors and 0 warnings.
+  - Live browser subagent verified at `http://localhost:3000/market/stocks/VIC?tab=growth` and `http://localhost:3000/market/stocks/FPT?tab=growth`, confirming 6 authentic report cards with images, tags, dates, and summaries loaded on both tickers.
+
+## UX Fixes: Hydration Error, Chart X-Axis Dates, and Concrete Growth Metrics - 2026-10-26 (complete)
+
+
+- Addressed 4 user requests:
+  1. **Fixed Hydration Error (Ảnh 1)**:
+     - Root Cause: `formatEventDate` in `formatters.ts` used `weekday: "short"` with `vi-VN` locale, which rendered as `Th 2` on Node.js SSR runtime vs `Thứ 2` in Chromium browser, causing a React hydration mismatch error.
+     - Solution: Implemented deterministic `formatEventDate` using an explicit Vietnamese weekday array (`CN`, `Thứ 2`...`Thứ 7`) and UTC+7 Vietnam date math, guaranteeing 100% identical strings across SSR and client.
+  2. **Chart X-Axis Date Formatting (Ảnh 2 & Ảnh 3)**:
+     - Root Cause: In `market-candlestick-chart.tsx`, `range="day"` and `range="week"` were both marked as `intraday = true`, formatting X-axis ticks as bare hours (`HH:mm`), which caused confusion on which day the trading bars belonged to.
+     - Solution:
+       - In `range="day"`: Formats as `${day}/${month} ${hour}:${minute}` (e.g. `21/10 13:15`, `26/10 13:05`) so users immediately see both the date and trading time.
+       - In `range="week"`: Formats as `${day}/${month}` (e.g. `15/10`, `19/10`, `21/10`, `23/10`, `26/10`) picking day-transition ticks across trading sessions.
+  3. **Removed Emoji Icons Before Text (Ảnh 4)**:
+     - Removed tab icons (`📊`, `📈`, `📰`) from `stock-detail-tabs.tsx`.
+     - Removed health status badge icon (`🚀`, `🛡️`, `⚡`, `⚠️`) from `stock-growth-panel.tsx`.
+     - Removed insight icons (`💡`, `📊`, `🎯`, `📌`) from the 3 investor insight cards.
+  4. **Enriched Concrete Growth Numbers & Comprehensive Financial Metrics (Ảnh 4)**:
+     - Horizon Growth Cards: Display both percentage and concrete price changes with prior price levels (e.g. `+5,100 ₫ (từ 231,900 ₫)`).
+     - Financial Metrics Matrix: Expanded with concrete numerical indicators: Market Cap, Revenue TTM, Profit TTM, EBITDA, EPS, BVPS, P/E, P/B, ROE, ROA, Gross Margin, Net Margin, Current Ratio, Debt/Equity, and 20-day Volume Average.
+     - Financial Health Dimensions: Added 4 visual pillar assessment bars ('Đánh Giá Sức Khỏe & Vị Thế Doanh Nghiệp') evaluating profitability, business growth, financial strength, and valuation position.
+     - Quarterly Table: Added Gross Margin column and concrete metrics.
+- Validation:
+  - All 109 frontend Vitest tests pass across all 26 test files.
+  - Frontend TypeScript type check (`npm --prefix frontend run typecheck`) and ESLint (`npm --prefix frontend run lint`) pass cleanly.
+  - All 106 backend unit tests pass (`pytest backend/tests/unit/`).
+  - Backend Ruff linter passes with 0 errors.
+  - Verified live in browser with subagent: confirmed zero hydration errors, clear date axis labels on Day/Week charts, and rich financial data in growth tab.
+
 ## Stock Detail Growth Tab & Dedicated News Tab - 2026-10-26 (complete)
 
 - Implemented dedicated 3-tab architecture on the stock detail page (`/market/stocks/[symbol]`):
