@@ -262,3 +262,37 @@ class CreateWatchlistRequest(StrictModel):
 
 class AddWatchlistItemRequest(StrictModel):
     symbol: str = Field(min_length=1, max_length=24, pattern=r"^[A-Za-z0-9._-]+$")
+
+
+class QuarterlyGrowthPoint(StrictModel):
+    period: str
+    revenue_growth_yoy: str | None
+    profit_growth_yoy: str | None
+    roe: str | None
+    net_margin: str | None
+
+
+class StockGrowthResponse(StrictModel):
+    symbol: str
+    company_name: str
+    sector: str
+    health_status: str
+    health_title: str
+    health_summary: str
+    market_cap: str
+    market_cap_growth_1m: str | None
+    market_cap_growth_3m: str | None
+    market_cap_growth_6m: str | None
+    market_cap_growth_1y: str | None
+    volume_growth_20d: str
+    pe: str | None
+    pb: str | None
+    eps: str | None
+    roe_percent: str | None
+    quarters: list[QuarterlyGrowthPoint]
+    insights: list[str]
+
+
+class StockGrowthEnvelope(StrictModel):
+    data: StockGrowthResponse
+    meta: MarketMeta

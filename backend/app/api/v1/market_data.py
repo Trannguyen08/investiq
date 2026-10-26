@@ -50,6 +50,7 @@ from app.schemas.market import (
     PeopleResponse,
     PersonEnvelope,
     SectorsResponse,
+    StockGrowthEnvelope,
     WatchlistResponse,
     WatchlistsResponse,
 )
@@ -279,6 +280,21 @@ def instrument(symbol: str, response: Response) -> dict[str, object]:
     value = _service().instrument(symbol)
     if value is None:
         raise HTTPException(status_code=404, detail="Instrument not found")
+    return value
+
+
+@router.get("/instruments/{symbol}/growth", response_model=StockGrowthEnvelope)
+def stock_growth(symbol: str, response: Response) -> dict[str, object]:
+    _public_headers(response)
+    normalized = symbol.upper()
+    value = _cached(
+        "growth",
+        {"symbol": normalized},
+        lambda: _service().growth(normalized),
+        get_market_read_cache(),
+    )
+    if value is None:
+        raise HTTPException(status_code=404, detail="Stock growth data not found")
     return value
 
 

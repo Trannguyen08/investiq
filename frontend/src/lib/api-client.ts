@@ -8,6 +8,7 @@ import type {
   MarketOverview,
   PeopleCollection,
   SectorCollection,
+  StockGrowthEnvelope,
 } from "@/types/market";
 import { resolveApiBase } from "@/lib/api-base";
 
@@ -233,4 +234,11 @@ export function getMarketEvents(query = new URLSearchParams()): Promise<EventCol
 
 export function getMarketPeople(): Promise<PeopleCollection> {
   return requestJson<PeopleCollection>("/v1/market/people", 3600);
+}
+
+export function getMarketGrowth(symbol: string): Promise<StockGrowthEnvelope> {
+  return requestJson<StockGrowthEnvelope>(
+    `/v1/market/instruments/${encodeURIComponent(symbol)}/growth`,
+    60,
+  );
 }

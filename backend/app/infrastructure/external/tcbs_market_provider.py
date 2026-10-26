@@ -814,3 +814,7 @@ class TcbsMarketProvider:
     def index(self, symbol: str) -> MarketIndex | None:
         with self._state_lock:
             return self._indices.get(symbol.upper())
+
+    def fundamental_growth_rows(self, symbol: str) -> list[dict[str, object]]:
+        del symbol
+        return []

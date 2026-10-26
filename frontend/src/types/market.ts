@@ -201,3 +201,37 @@ export type Watchlist = {
   updated_at: string;
   items: WatchlistItem[];
 };
+
+export type QuarterlyGrowthPoint = {
+  period: string;
+  revenue_growth_yoy: string | null;
+  profit_growth_yoy: string | null;
+  roe: string | null;
+  net_margin: string | null;
+};
+
+export type StockGrowthData = {
+  symbol: string;
+  company_name: string;
+  sector: string;
+  health_status: "expanding" | "stable" | "accumulating" | "cautious";
+  health_title: string;
+  health_summary: string;
+  market_cap: string;
+  market_cap_growth_1m: string | null;
+  market_cap_growth_3m: string | null;
+  market_cap_growth_6m: string | null;
+  market_cap_growth_1y: string | null;
+  volume_growth_20d: string;
+  pe: string | null;
+  pb: string | null;
+  eps: string | null;
+  roe_percent: string | null;
+  quarters: QuarterlyGrowthPoint[];
+  insights: string[];
+};
+
+export type StockGrowthEnvelope = {
+  data: StockGrowthData;
+  meta: MarketMeta;
+};

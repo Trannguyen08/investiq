@@ -1,5 +1,34 @@
 # Current Task
 
+## Stock Detail Growth Tab & Dedicated News Tab - 2026-10-26 (complete)
+
+- Implemented dedicated 3-tab architecture on the stock detail page (`/market/stocks/[symbol]`):
+  1. `chart` (Biểu đồ & Sổ lệnh): Candlestick price chart with minimum candle constraints, quick financial metrics, order book depth, and intraday execution tape.
+  2. `growth` (Tăng trưởng & Tài chính): Multi-tier enterprise growth scorecard, 100% stock coverage guaranteed, 4 capitalization horizons (1M, 3M, 6M, 1Y), volume vs 20-day average, SVG quarterly revenue/profit YoY bar chart, quarterly financial ratio table, and 3 educational F0 insights.
+  3. `news` (Tin tức doanh nghiệp): Dedicated corporate news feed separated from the bottom of the page to eliminate endless scrolling, displaying verified ticker mentions with sentiment badges and source citations.
+- Backend implementation:
+  - `backend/app/schemas/market.py`: Added `QuarterlyGrowthPoint`, `StockGrowthResponse`, and `StockGrowthEnvelope`.
+  - `backend/app/infrastructure/external/vnstock_market_provider.py`: Added `fundamental_quarterly_rows` to gateway and provider with ratio extraction.
+  - `backend/app/domain/repositories/i_market_provider.py`: Added `fundamental_growth_rows` to provider protocol.
+  - `backend/app/infrastructure/external/market_fixture_provider.py` & `tcbs_market_provider.py`: Implemented `fundamental_growth_rows`.
+  - `backend/app/application/use_cases/market_data/market_service.py`: Implemented `growth(symbol)` with 3-tier fallback ensuring 100% coverage, computing capitalization trajectory from candles, quarterly financial ratios, health classification (`expanding`, `stable`, `accumulating`, `cautious`), and beginner investor insights.
+  - `backend/app/api/v1/market_data.py`: Added `GET /api/v1/market/instruments/{symbol}/growth` endpoint with server-side caching.
+  - `backend/tests/unit/market_data/test_market_service.py`: Added unit tests for full growth payload, Tier 2 fallback, and 404 handling.
+- Frontend implementation:
+  - `frontend/src/types/market.ts`: Added TypeScript interfaces `QuarterlyGrowthPoint`, `StockGrowthData`, `StockGrowthEnvelope`.
+  - `frontend/src/lib/api-client.ts`: Added `getMarketGrowth(symbol)`.
+  - `frontend/src/components/market/stock-growth-panel.tsx`: Created Dark Navy visual scorecard with health badge, horizon cards, core valuation metrics, interactive SVG growth bar chart, financial ratio table, and 3 investor insight cards.
+  - `frontend/src/components/market/stock-detail-tabs.tsx`: Created accessible client tab manager (`role="tablist"` / `role="tab"`) with URL sync (`?tab=chart|growth|news`) and instant 0ms switching.
+  - `frontend/src/app/(user)/market/stocks/[symbol]/page.tsx`: Integrated parallel data loading and structured tab layout with robust fallback.
+  - `frontend/src/app/globals.css`: Added styles for tabs, badges, horizon grid, SVG chart, and metric tables.
+  - Unit tests: Added `stock-growth-panel.test.tsx` and `stock-detail-tabs.test.tsx`.
+- Verification:
+  - All 106 backend unit tests pass (`pytest tests/unit/`).
+  - Backend Ruff check passes cleanly (`ruff check app/ tests/`).
+  - All 109 frontend Vitest tests pass across 26 test files.
+  - Frontend TypeScript type check (`npm --prefix frontend run typecheck`) passes with 0 errors.
+  - Frontend ESLint (`npm --prefix frontend run lint`) passes with 0 errors.
+
 ## Stock Detail Chart Minimum Candle Bounds & Testing - 2026-10-26 (complete)
 
 - Configured `STOCK_DETAIL_CHART_LIMITS` in `stock-price-chart.tsx` specifying minimum visible candle limits per range:

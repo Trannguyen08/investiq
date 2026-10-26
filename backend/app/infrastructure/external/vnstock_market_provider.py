@@ -92,6 +92,8 @@ class VnstockGateway(Protocol):
 
     def fundamental_rows(self, symbol: str) -> list[dict[str, object]]: ...
 
+    def fundamental_quarterly_rows(self, symbol: str) -> list[dict[str, object]]: ...
+
     def trade_rows(self, symbol: str, limit: int) -> list[dict[str, object]]: ...
 
     def event_rows(self, symbol: str) -> list[dict[str, object]]: ...
@@ -283,6 +285,20 @@ class OfficialVnstockGateway:
         # newest trailing-twelve-month quarter so valuation ratios do not get
         # mixed with the annual row (quarter=5) for the same year.
         return _latest_vci_fundamental_rows(rows)
+
+    def fundamental_quarterly_rows(self, symbol: str) -> list[dict[str, object]]:
+        try:
+            frame = self._company_type(
+                source="vci",
+                symbol=symbol,
+            ).ratio_summary()
+            return _frame_records(frame)
+        except (Exception, SystemExit) as exc:
+            logger.warning(
+                "vnstock_quarterly_ratios_unavailable",
+                extra={"symbol": symbol, "error": str(exc)},
+            )
+            return []
 
     def trade_rows(self, symbol: str, limit: int) -> list[dict[str, object]]:
         try:
@@ -549,6 +565,7 @@ class VnstockMarketProvider:
         self._intraday_cache: dict[str, tuple[float, tuple[IntradayTrade, ...]]] = {}
         self._event_lock = RLock()
         self._event_cache: tuple[float, tuple[MarketEvent, ...]] | None = None
+        self._growth_cache: dict[str, tuple[float, list[dict[str, object]]]] = {}
 
     @property
     def market_time(self) -> str:
@@ -648,6 +665,23 @@ class VnstockMarketProvider:
     def index(self, symbol: str) -> MarketIndex | None:
         normalized = symbol.upper()
         return next((item for item in self.indices() if item.symbol == normalized), None)
+
+    def fundamental_growth_rows(self, symbol: str) -> list[dict[str, object]]:
+        normalized = symbol.upper()
+        now = self._clock()
+        cached = self._growth_cache.get(normalized)
+        if cached and cached[0] > now:
+            return cached[1]
+        try:
+            rows = self._gateway.fundamental_quarterly_rows(normalized)
+        except (RuntimeError, TypeError, ValueError):
+            logger.warning("vnstock_growth_rows_unavailable", extra={"symbol": normalized})
+            rows = []
+        ttl = self._config.fundamental_cache_seconds
+        if len(self._growth_cache) >= self._config.max_symbols:
+            self._growth_cache.clear()
+        self._growth_cache[normalized] = (now + ttl, rows)
+        return rows
 
     def candles(self, symbol: str, interval: str) -> tuple[Candle, ...]:
         normalized = symbol.upper()
