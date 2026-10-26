@@ -3,7 +3,7 @@
 Record durable decisions in reverse chronological order. Do not record routine implementation
 details.
 
-## 2026-10-26 — Resilient auth session and rate-limit fallbacks on serverless/free cloud deployments
+## 2026-10-26 â€” Resilient auth session and rate-limit fallbacks on serverless/free cloud deployments
 
 - **Status:** Accepted and implemented
 - **Context:** On free-tier cloud environments like Render without a paid Redis add-on, Redis is unavailable (`redis: unavailable`). This previously caused:
@@ -18,7 +18,7 @@ details.
   5. Synchronize all environment variables in `render.yaml` and provide explicit Google Cloud Console setup documentation in `docs/deploy.md`.
 - **Consequences:** Google and email authentication work reliably on standalone cloud web services without failing closed on missing Redis, while maintaining security invariants (AES-256-GCM encrypted cookies, strict CSRF validation, rate limiting, and exact Google OIDC claim verification).
 
-## 2026-10-25 — Direct FastAPI news ingestion cycle and 90-day retention on web deploy
+## 2026-10-25 â€” Direct FastAPI news ingestion cycle and 90-day retention on web deploy
 
 - **Status:** Accepted and implemented
 - **Context:** On single-instance container hosts and Render free-tier deployments, standalone Celery
@@ -41,7 +41,7 @@ details.
   and during continuous operation regardless of whether Celery Beat is deployed. Public news feeds only
   contain relevant Vietnamese stock and corporate market news with sentiment analysis.
 
-## 2026-10-13 — Bounded VCI event calendar for the evaluation adapter
+## 2026-10-13 â€” Bounded VCI event calendar for the evaluation adapter
 
 - **Status:** Accepted and implemented
 - **Context:** Vnstock exposes VCI corporate events per symbol, but the adapter returned an empty
@@ -57,9 +57,9 @@ details.
 - **Consequences:** The Home calendar is populated from real provider observations without exhausting
   the guest request budget. Coverage follows the current high-interest snapshot and is intentionally
   incomplete; a licensed full-market corporate-actions feed remains the production path.
-- **Refines:** “Vnstock is a source-delayed evaluation adapter” below.
+- **Refines:** â€œVnstock is a source-delayed evaluation adapterâ€ below.
 
-## 2026-10-13 — Complete-only public news feed
+## 2026-10-13 â€” Complete-only public news feed
 
 - **Status:** Accepted and implemented
 - **Context:** Partial and metadata-only records were presented beside full articles with a warning,
@@ -73,7 +73,7 @@ details.
   cards or detail pages. Existing incomplete rows are recoverable rather than hard-deleted, while
   the public API, pagination, homepage, and portfolio news consumers see complete articles only.
 
-## 2026-10-13 — Fixed local frontend port and VCI valuation reads
+## 2026-10-13 â€” Fixed local frontend port and VCI valuation reads
 
 - **Status:** Accepted and implemented.
 - **Context:** Ad-hoc frontend containers did not survive normal Compose lifecycle and made the
@@ -89,10 +89,10 @@ details.
   Google callback at `http://localhost:3000`. The Market and Portfolio tables can fill one visible
   page without competing with KBS quote quota; newly visited pages load on demand, and a genuinely
   absent upstream ratio is shown as unavailable instead of as zero.
-- **Refines:** “Vnstock is a source-delayed evaluation adapter” and “Redis-backed jobs and container
-  delivery baseline” below.
+- **Refines:** â€œVnstock is a source-delayed evaluation adapterâ€ and â€œRedis-backed jobs and container
+  delivery baselineâ€ below.
 
-## 2026-10-13 — News ingestion is part of application readiness
+## 2026-10-13 â€” News ingestion is part of application readiness
 
 - **Status:** Accepted and implemented.
 - **Context:** Compose defined a news worker and Beat, but a selective local startup could run the
@@ -109,10 +109,10 @@ details.
   separate crawl command. Duplicate startup/scheduled deliveries are harmless and later observations
   update revision history instead of inserting another article. Deployments can still intentionally
   pause ingestion, and source policy/redistribution approval remains an independent production gate.
-- **Refines:** “Redis-backed jobs and container delivery baseline” and “Durable stock-news ingestion
-  and activation gate” below.
+- **Refines:** â€œRedis-backed jobs and container delivery baselineâ€ and â€œDurable stock-news ingestion
+  and activation gateâ€ below.
 
-## 2026-10-11 — Automatic single-file Allure presentation
+## 2026-10-11 â€” Automatic single-file Allure presentation
 
 - **Status:** Accepted and implemented.
 - **Context:** `allure-pytest` correctly produced Allure JSON, but raw result files are not a
@@ -126,12 +126,12 @@ details.
 - **Consequences:** Every completed feature-suite invocation leaves one directly openable Allure HTML
   file plus its machine-readable JSON. Local setup now requires Java and the frontend npm development
   dependencies; the runner fails visibly if presentation generation is unavailable.
-- **Refines:** “Allure-only local backend test artifacts” below; Allure remains the only report
+- **Refines:** â€œAllure-only local backend test artifactsâ€ below; Allure remains the only report
   system, but its official HTML presentation is now retained locally.
 
-## 2026-10-11 — Allure-only local backend test artifacts
+## 2026-10-11 â€” Allure-only local backend test artifacts
 
-- **Status:** Refined by “Automatic single-file Allure presentation” above.
+- **Status:** Refined by â€œAutomatic single-file Allure presentationâ€ above.
 - **Context:** Repository-local HTML/JUnit/coverage files created noisy generated trees and forced
   developers to inspect several report formats. The requested standard is the Python Allure adapter.
 - **Decision:** Pin `allure-pytest` in both the uv development lock and pip development requirements.
@@ -142,10 +142,10 @@ details.
 - **Consequences:** One machine-readable result format covers local test-case inspection, and old
   HTML artifacts are removed. Developers need the Allure CLI to view the interactive report, while
   test execution itself needs only the Python dependency.
-- **Supersedes:** The local report formats in “Feature-level test evidence and local reports”; its
+- **Supersedes:** The local report formats in â€œFeature-level test evidence and local reportsâ€; its
   per-feature registration, unit/integration separation, and branch-coverage requirements remain.
 
-## 2026-10-11 — Automatic observed-price fills and session-aware freshness
+## 2026-10-11 â€” Automatic observed-price fills and session-aware freshness
 
 - **Status:** Accepted and implemented as the current educational simulation model.
 - **Context:** The product is a beginner practice environment, so a persistent waiting/limit-order
@@ -163,10 +163,10 @@ details.
   for an exchange. Existing order tables and cancellation API remain compatible with legacy records,
   while dashboard reads convert eligible legacy pending/open orders. Price staleness still fails
   closed, and fundamentals enrichment cannot fan out across the full market universe.
-- **Supersedes:** “Durable day-valid LO paper orders” below. Its persistence, locking, provenance,
+- **Supersedes:** â€œDurable day-valid LO paper ordersâ€ below. Its persistence, locking, provenance,
   privacy, and immutable-fill decisions remain valid.
 
-## 2026-10-11 — Durable day-valid LO paper orders
+## 2026-10-11 â€” Durable day-valid LO paper orders
 
 - **Status:** Superseded by automatic observed-price fills; retained as migration history.
 - **Context:** The immediate-fill slice could not represent a successful placement that had not yet
@@ -182,10 +182,10 @@ details.
   cannot reuse reserved capacity. Matching is still an educational observed-price model, not an
   exchange order book; an order is re-evaluated when the private dashboard is read rather than by a
   continuously running exchange engine.
-- **Supersedes:** The immediate-fill lifecycle in “Private immediate-fill paper trading for
-  beginners”; its account, fee/tax, privacy, provenance, and immutable-fill decisions remain valid.
+- **Supersedes:** The immediate-fill lifecycle in â€œPrivate immediate-fill paper trading for
+  beginnersâ€; its account, fee/tax, privacy, provenance, and immutable-fill decisions remain valid.
 
-## 2026-10-08 — Private immediate-fill paper trading for beginners
+## 2026-10-08 â€” Private immediate-fill paper trading for beginners
 
 - **Status:** Accepted and implemented as an educational simulation.
 - **Context:** Beginners need a safe way to practice buying, holding, reviewing performance, and
@@ -205,7 +205,7 @@ details.
   orders, settlement, dividends, splits, margin, short sales, deposits, and broker connectivity need
   separately specified future work. Public operation still requires approved market-data rights.
 
-## 2026-10-07 — Vnstock is a source-delayed evaluation adapter
+## 2026-10-07 â€” Vnstock is a source-delayed evaluation adapter
 
 - **Status:** Accepted for local/private evaluation; public redistribution remains gated.
 - **Context:** The beginner experience needs real quote breadth, industry classification, and
@@ -235,7 +235,7 @@ details.
   null fundamentals. Public/commercial deployment remains blocked until Vnstock and each relevant
   upstream owner confirm display, cache, retention, and redistribution rights in writing.
 
-## 2026-10-06 — Bounded Docker container logs
+## 2026-10-06 â€” Bounded Docker container logs
 
 - **Status:** Accepted and implemented.
 - **Context:** Docker's `json-file` driver is unbounded unless the daemon or container declares
@@ -247,7 +247,7 @@ details.
   Existing containers must be recreated before the new policy applies; unrelated host containers
   remain governed by their own configuration or the daemon default.
 
-## 2026-10-06 — Credential-gated TCBS adapter and path-addressable market tabs
+## 2026-10-06 â€” Credential-gated TCBS adapter and path-addressable market tabs
 
 - **Status:** Accepted and implemented behind an activation gate.
 - **Context:** Market UI and contracts existed only against a fixture, and query-only tabs made the
@@ -265,7 +265,7 @@ details.
   not fabricate daily candles, events, people or fundamentals. Public activation remains gated by
   field-level display/cache/redistribution rights and live-session validation.
 
-## 2026-10-04 — Canonical licensed market data and explainable popularity
+## 2026-10-04 â€” Canonical licensed market data and explainable popularity
 
 - **Status:** Foundation implemented; licensed production adapters pending.
 - **Context:** The home and market pages need replaceable realtime/delayed providers, reliable
@@ -276,18 +276,18 @@ details.
   freshness; reconcile stream gaps with REST snapshots. Rank popular stocks from privacy-safe
   InvestIQ engagement plus normalized market activity and show human-readable reason codes. Treat
   matched volume as two-sided; show active buy/sell only when the provider defines it. For people,
-  minimize public professional/holding fields and label the computed metric “estimated listed-equity
-  value,” never total net worth.
+  minimize public professional/holding fields and label the computed metric â€œestimated listed-equity
+  value,â€ never total net worth.
 - **Consequences:** Production launch is gated by field-level storage/display/redistribution rights.
   A provider can be replaced per data class without changing domain/UI contracts, but failover may
   occur only between semantically compatible feeds. Engagement needs retention and anti-abuse
   controls; people imagery and holdings need source dates and usage rights. The full specification is
   `docs/plan/home-market-pages.md`.
-- **Refines:** “Evidence-based market community as the next product phase” below. The MVP baseline
+- **Refines:** â€œEvidence-based market community as the next product phaseâ€ below. The MVP baseline
   remains licensed EOD/delayed data, while the canonical transport may accept realtime data earlier
   when rights and budget are approved; a professional tick-by-tick board remains deferred.
 
-## 2026-10-04 — Evidence-based market community as the next product phase
+## 2026-10-04 â€” Evidence-based market community as the next product phase
 
 - **Status:** Accepted as roadmap; not implemented.
 - **Context:** Authentication and stock-news aggregation provide a base for market and community
@@ -303,7 +303,7 @@ details.
   privacy, moderation, abuse controls, auditability and retention from its first release. The
   detailed roadmap is `docs/plan/community-market-roadmap.md`.
 
-## 2026-10-04 — Numbered news browsing and archive recovery
+## 2026-10-04 â€” Numbered news browsing and archive recovery
 
 - **Status:** Accepted and implemented.
 - **Context:** Users need direct access to ten-item pages and three months of publisher-dated news.
@@ -317,7 +317,7 @@ details.
   30 seconds old. Archive coverage depends on what the publisher exposes; verified publication dates
   and the 90-day retention cutoff still govern stored articles.
 
-## 2026-10-02 — Authentication email feedback
+## 2026-10-02 â€” Authentication email feedback
 
 - **Status:** Accepted and implemented
 - **Context:** Duplicate registrations left users waiting for an OTP that was never sent; password
@@ -329,7 +329,7 @@ details.
   sign-in provider to someone who knows an email address. The user explicitly chose that behavior;
   the additional IP limit reduces, but does not eliminate, enumeration risk.
 
-## 2026-10-02 — Automatic user sessions and OTP email presentation
+## 2026-10-02 â€” Automatic user sessions and OTP email presentation
 
 - **Status:** Accepted and implemented
 - **Context:** Users should not need to opt into persistent login, and authentication emails need
@@ -342,7 +342,7 @@ details.
   expire at the backend absolute limit and can be revoked at logout; new sessions use the existing
   refresh replay protections. Mail clients that do not support HTML receive the same OTP in text.
 
-## 2026-10-02 — SMTP egress for authentication notifications
+## 2026-10-02 â€” SMTP egress for authentication notifications
 
 - **Status:** Accepted and implemented
 - **Context:** The Compose backend network is internal-only, so the authentication email worker
@@ -353,7 +353,7 @@ details.
 - **Consequences:** Authentication email delivery can reach its configured provider while the API,
   general Celery worker, Beat, database, and Redis retain their existing network isolation.
 
-## 2026-09-30 — Metadata-only expansion through publisher RSS feeds
+## 2026-09-30 â€” Metadata-only expansion through publisher RSS feeds
 
 - **Status:** Accepted and implemented
 - **Context:** The news product needed more reputable sources, while publisher RSS terms and official
@@ -366,7 +366,7 @@ details.
   full-text rights. Detail pages for the three new sources direct readers to the publisher; six
   researched sources remain pending or blocked.
 
-## 2026-09-29 — News persistence protection scope
+## 2026-09-29 â€” News persistence protection scope
 
 - **Status:** Accepted and implemented
 - **Context:** The news feature request mentioned `db reply`; clarification explicitly selected
@@ -377,7 +377,7 @@ details.
   A six-hour scheduler is available, while production storage, tiered retention and alerting remain
   deployment configuration. A PostgreSQL 17 restore drill was completed on 29/09/2026.
 
-## 2026-09-29 — Durable stock-news ingestion and activation gate
+## 2026-09-29 â€” Durable stock-news ingestion and activation gate
 
 - **Status:** Accepted
 - **Context:** Redis/Celery delivery can lose queued messages, source rights differ, and article
@@ -389,7 +389,7 @@ details.
 - **Consequences:** Redis is transport rather than the only job record. Operators must explicitly
   activate ingestion and maintain source policy; seven researched sources remain pending/blocked.
 
-## 2026-09-29 — Source-explicit tickers and bounded market-impact analysis
+## 2026-09-29 â€” Source-explicit tickers and bounded market-impact analysis
 
 - **Status:** Accepted and implemented
 - **Context:** Live articles contain qualified and contextual tickers that are absent from the small
@@ -406,7 +406,7 @@ details.
   master-data trust and avoiding free-text symbol inference. Market-impact
   text is an explainable content assessment, carries a non-advice notice, and is not a price forecast.
 
-## 2026-09-26 — Feature-level test evidence and local reports
+## 2026-09-26 â€” Feature-level test evidence and local reports
 
 - **Status:** Superseded for local artifact formats by the Allure-only decision above.
 - **Context:** Test pass counts alone do not show which feature lines and branches were exercised,
@@ -419,7 +419,7 @@ details.
   artifacts to Git. Coverage remains diagnostic evidence and does not replace behavior-focused
   assertions or required boundary/failure cases.
 
-## 2026-09-26 — Local runtime log viewer with restricted Docker access
+## 2026-09-26 â€” Local runtime log viewer with restricted Docker access
 
 - **Status:** Accepted
 - **Context:** Developers need one chronological UI for useful API, application, warning, and error
@@ -432,7 +432,7 @@ details.
   structured request context. Remote access requires an explicit authenticated proxy or SSH tunnel;
   the Docker socket proxy remains a privileged infrastructure boundary and must never be published.
 
-## 2026-09-26 — Redis-backed jobs and container delivery baseline
+## 2026-09-26 â€” Redis-backed jobs and container delivery baseline
 
 - **Status:** Accepted
 - **Context:** InvestIQ needs asynchronous and scheduled Celery work but does not need Kafka,
@@ -445,7 +445,7 @@ details.
   runs per environment. Nginx is the sole public container. Adding a distinct broker/event platform
   requires a new decision. Production approval and secrets live in GitHub environments.
 
-## 2026-09-26 — On-demand, project-specific rule modules
+## 2026-09-26 â€” On-demand, project-specific rule modules
 
 - **Status:** Accepted
 - **Context:** The initial rules were generic and did not cover InvestIQ's financial, ML, messaging,
@@ -457,7 +457,7 @@ details.
 - **Consequences:** Agents load only matching rules. Adding or renaming a module must update the root
   routing table, and rule content must follow the actual FastAPI, Next.js, ML, and finance boundaries.
 
-## 2026-09-26 — Monorepo boundaries and synchronized structure documentation
+## 2026-09-26 â€” Monorepo boundaries and synchronized structure documentation
 
 - **Status:** Accepted
 - **Context:** InvestIQ requires separate backend, frontend, ML, CI/CD, and infrastructure areas,
@@ -470,7 +470,7 @@ details.
 
 ## Template
 
-### YYYY-MM-DD — Decision title
+### YYYY-MM-DD â€” Decision title
 
 - **Status:** Proposed | Accepted | Superseded
 - **Context:** What constraint or problem required a decision?
@@ -478,7 +478,7 @@ details.
 - **Consequences:** What trade-offs and follow-up work result?
 - **Supersedes:** Link or heading, if applicable.
 
-## 2026-09-26 — Repository-local agent guidance
+## 2026-09-26 â€” Repository-local agent guidance
 
 - **Status:** Accepted
 - **Context:** Agents need stable project context and task-specific operating rules.
@@ -486,7 +486,7 @@ details.
   `AGENTS.md` as the repository entry point.
 - **Consequences:** Agents must keep durable memory current and avoid duplicating guidance.
 
-## 2026-09-30 — Freshness-first news ingestion and protected operations
+## 2026-09-30 â€” Freshness-first news ingestion and protected operations
 
 - **Status:** Accepted
 - **Context:** Multi-source crawling must not retain stale or unverifiable articles, and provider
@@ -502,7 +502,7 @@ details.
   The static operations token is transitional and must be replaced by role-based admin identity in a
   separately scoped RBAC migration.
 
-## 2026-09-30 — Server-mediated Admin News workspace
+## 2026-09-30 â€” Server-mediated Admin News workspace
 
 - **Status:** Accepted
 - **Context:** Operators need browser controls now, but exposing the FastAPI operations token to
@@ -518,7 +518,7 @@ details.
   by named admin identities, RBAC, and centralized login throttling in a separately scoped RBAC
   migration.
 
-## 2026-10-01 — Server-held end-user authentication credentials
+## 2026-10-01 â€” Server-held end-user authentication credentials
 
 - **Status:** Accepted
 - **Context:** Email/password and Google authentication need durable sessions without exposing JWT
@@ -534,9 +534,23 @@ details.
   fails closed when dependencies or secrets are unavailable. Admin access still needs a future RBAC
   migration.
 
-### 2026-10-01 — Role-checked account administration
+### 2026-10-01 â€” Role-checked account administration
 
 - **Status:** Accepted and implemented
 - **Context:** Admins need account search and controlled role/status management without treating the shared Admin News credential as user identity.
 - **Decision:** Protect account APIs with the BFF server secret and a verified active user session; authorize from the current database role. Audit user changes with actor, target, request ID, requested fields, and outcome. Prevent self changes and last-active-admin removal, and revoke sessions atomically when disabling an account.
 - **Consequences:** The account page requires both the Admin workspace session and a separate authenticated InvestIQ admin account session. Account APIs fail closed when auth or Redis rate-limit protection is unavailable.
+
+## 2026-10-26 â€” Git Branching Invariants, PR Promotion Hierarchy, and Remote Synchronization
+
+- **Status:** Accepted
+- **Context:** Commits directly to `main` or uncontrolled branch diverging caused `dev` to fall behind `main`, risking regression and uncoordinated deployments. Commits remaining local-only risked work loss and delayed CI validation.
+- **Decision:** Codify `.agents/rules/git.md` requiring: (1) `dev` must always be ahead of or equal to `main` (`dev >= main`); (2) All PRs must target `dev` before promotion to `main`; (3) 100% green CI/CD gate before merging; (4) Standard branch naming (`feature/*`, `fix/*`, `chore/*`, `docs/*`, `refactor/*`) and task isolation; (5) Immediate remote synchronization (`git push`) after every commit.
+- **Consequences:** Merged/fast-forwarded `dev` to match `main`. All agents and contributors strictly adhere to the `dev`-first integration hierarchy and immediate remote pushes.
+
+## 2026-10-26 â€” Secure Web Deployment & Attack Mitigation Skill
+
+- **Status:** Accepted
+- **Context:** Production web deployments risk inadvertent leakage of sensitive data (API keys, stack traces, source maps) and vulnerability to web attacks (OWASP Top 10, SSRF, DoS, broken access control).
+- **Decision:** Introduce `.agents/skills/secure-deployment/SKILL.md` grounded in proven industry gold standards from high-starred open-source repositories: `OWASP/CheatSheetSeries` (33k+â˜…), `gitleaks/gitleaks` (30k+â˜…), `trufflesecurity/trufflehog` (28k+â˜…), and `shieldfy/API-Security-Checklist` (23k+â˜…).
+- **Consequences:** Deployment plans and PRs must satisfy the pre-deploy audit, secret scanning, source map disabling, HTTP security headers (CSP, HSTS, X-Content-Type-Options), rate limiting, non-root container isolation, and post-deploy live probe checklist.

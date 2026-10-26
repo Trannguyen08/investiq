@@ -1,6 +1,32 @@
 # Current Task
 
-## UX, Ticker Recognition, 6-Source Crawlers, Stock Pulse Time Filters & Instant Market Load - 2026-10-26 (complete)
+## Git Rules, Dev Branch Fast-Forward Sync & Web Deployment Security Skill - 2026-10-26 (complete)
+
+- Addressed user requests:
+  1. **Git Rules Specification (`.agents/rules/git.md`)**:
+     - Defined 5 mandatory Git rules:
+       - `dev` branch must always be ahead of or equal to `main` (`dev >= main`).
+       - All PRs must target `dev` before promotion to `main`.
+       - Merge only after 100% CI/CD checks pass.
+       - Isolated task branches with conventional prefixes (`feature/`, `fix/`, `chore/`, `docs/`, `refactor/`).
+       - Immediate remote synchronization (`git push`) after every commit; never leave commits purely local.
+     - Registered `git.md` in `AGENTS.md` Rule routing table and cross-referenced in `.agents/rules/devops.md`.
+  2. **Fixed `dev` Branch Lagging Behind `main`**:
+     - Investigated `origin/dev` vs `origin/main`: `origin/dev` was at commit `c6d333c`, behind `main` (`c47edd7`) by 9 commits due to direct hotfixes on `main`.
+     - Fast-forwarded local `dev` to `main` and pushed to `origin/dev`.
+     - Both `main` and `dev` are now completely synchronized at `c47edd7` on both local and `origin`.
+  3. **Researched High-Starred Security Repositories & Created Security Skill**:
+     - Researched GitHub repositories with tens of thousands of stars:
+       - `OWASP/CheatSheetSeries` (~33.7k★) - Web security controls & secure HTTP headers
+       - `gitleaks/gitleaks` (~30.3k★) & `trufflesecurity/trufflehog` (~28.7k★) - Secret detection
+       - `shieldfy/API-Security-Checklist` (~23.3k★) - API security countermeasures
+       - `OWASP/Top10` & `OWASP/API-Security` - Injection, SSRF, BOLA, rate-limiting defenses
+     - Created `.agents/skills/secure-deployment/SKILL.md` detailing:
+       - Secret leakage prevention (env files, frontend prefix audits, source map disabling, error stack trace masking, correlation IDs).
+       - Web attack defenses (CSP, HSTS, X-Content-Type-Options, Permissions-Policy, strict CORS, rate limiting, crawler SSRF guards, session cookie security).
+       - Pre-deploy and post-deploy audit checklists.
+     - Recorded durable decision in `.agents/memory/decisions.md`.
+
 
 - Switched to dedicated branch `fix/UX`.
 - Addressed 4 user requests:

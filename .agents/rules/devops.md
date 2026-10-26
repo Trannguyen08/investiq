@@ -33,5 +33,5 @@ Apply to `.github/workflows/`, Docker/Compose, `infra/`, release scripts, and ru
 - Every deployment has a tested rollback or roll-forward plan and explicit health/error/latency gates.
 - Rolling releases keep old/new application versions compatible with the same schemas and messages.
 - Run database migrations as a dedicated release phase using expand/contract ordering.
-- Staging may deploy from `develop`; production requires a versioned release and protected approval.
+- Staging deploys from `dev`; production requires a versioned release and protected approval. Follow `git.md` for branch hierarchy (`dev >= main`), PR gating, and remote sync.
 - Do not run the Next.js production build during interactive agent sessions; use development HMR.
