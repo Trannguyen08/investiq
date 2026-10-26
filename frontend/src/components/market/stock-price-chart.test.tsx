@@ -1,7 +1,7 @@
-import { render, screen } from "@testing-library/react";
+import { fireEvent, render, screen } from "@testing-library/react";
 import { describe, expect, it } from "vitest";
 
-import { StockLivePrice, StockMetricsPanel, StockPriceChart } from "@/components/market/stock-price-chart";
+import { STOCK_DETAIL_CHART_LIMITS, StockLivePrice, StockMetricsPanel, StockPriceChart } from "@/components/market/stock-price-chart";
 import type { MarketCandle, MarketInstrument } from "@/types/market";
 
 const candles: MarketCandle[] = [
@@ -65,5 +65,38 @@ describe("StockPriceChart", () => {
     expect(screen.getByText("Chưa khớp lệnh")).toBeInTheDocument();
     expect(screen.getAllByText("Chưa phát sinh")).toHaveLength(6);
     expect(screen.getByText(/InvestIQ không thay số chưa có bằng dữ liệu giả/)).toBeInTheDocument();
+  });
+
+  it("enforces minimum candle boundaries: 70 for day/week, 100 for month, 150 for year", () => {
+    expect(STOCK_DETAIL_CHART_LIMITS.day.minimum).toBe(70);
+    expect(STOCK_DETAIL_CHART_LIMITS.week.minimum).toBe(70);
+    expect(STOCK_DETAIL_CHART_LIMITS.month.minimum).toBe(100);
+    expect(STOCK_DETAIL_CHART_LIMITS.year.minimum).toBe(150);
+
+    const manyCandles: MarketCandle[] = Array.from({ length: 200 }, (_, index) => ({
+      timestamp: new Date(Date.UTC(2026, 0, index + 1, 3)).toISOString(),
+      open: "100", high: "105", low: "98", close: "102", volume: "1000",
+    }));
+
+    // In day view, with 200 candles, initial/minimum visible candles should be 70
+    const { rerender } = render(<StockPriceChart symbol="FPT" range="day" candles={manyCandles} />);
+    expect(screen.getByRole("img", { name: /70 nến giá xanh đỏ/ })).toBeInTheDocument();
+
+    // In week view, with 200 candles, initial/minimum visible candles should be 70
+    rerender(<StockPriceChart symbol="FPT" range="week" candles={manyCandles} />);
+    expect(screen.getByRole("img", { name: /70 nến giá xanh đỏ/ })).toBeInTheDocument();
+
+    // In month view, with 200 candles, initial/minimum visible candles should be 100
+    rerender(<StockPriceChart symbol="FPT" range="month" candles={manyCandles} />);
+    expect(screen.getByRole("img", { name: /100 nến giá xanh đỏ/ })).toBeInTheDocument();
+
+    // In year view, with 200 candles, zooming in clamps at exactly minimum 150 candles
+    rerender(<StockPriceChart symbol="FPT" range="year" candles={manyCandles} />);
+    const zoomIn = screen.getByRole("button", { name: "Phóng to biểu đồ năm" });
+    while (!zoomIn.hasAttribute("disabled")) {
+      fireEvent.click(zoomIn);
+    }
+    expect(screen.getByRole("img", { name: /150 nến giá xanh đỏ/ })).toBeInTheDocument();
+    expect(zoomIn).toBeDisabled();
   });
 });

@@ -1,6 +1,20 @@
 # Current Task
 
-## Git Rules, Dev Branch Fast-Forward Sync & Web Deployment Security Skill - 2026-10-26 (complete)
+## Stock Detail Chart Minimum Candle Bounds & Testing - 2026-10-26 (complete)
+
+- Configured `STOCK_DETAIL_CHART_LIMITS` in `stock-price-chart.tsx` specifying minimum visible candle limits per range:
+  - Day (`day`): minimum 70 candles.
+  - Week (`week`): minimum 70 candles.
+  - Month (`month`): minimum 100 candles.
+  - Year (`year`): minimum 150 candles.
+- Passed `minimumCandles={limits.minimum}` to `MarketCandlestickChart` in `StockPriceChart`.
+- Added unit tests in `stock-price-chart.test.tsx` verifying:
+  - `STOCK_DETAIL_CHART_LIMITS` configuration values.
+  - Clamping of initial and zoomed candle counts to at least 70 (day/week), 100 (month), and 150 (year).
+  - Zoom-in button disability when reaching minimum candle bounds.
+- Restored pristine UTF-8 encoding in `beginner-market-ui.test.tsx`.
+- All 101 frontend Vitest tests pass across all 24 suites. Typecheck (`tsc --noEmit`) and lint (`eslint .`) pass cleanly.
+
 
 - Addressed user requests:
   1. **Git Rules Specification (`.agents/rules/git.md`)**:
