@@ -45,7 +45,7 @@ class HnxCrawler(BaseNewsCrawler):
         "https://www.hnx.vn/3/vi_vn/thong-tin-cong-bo-tu-to-chuc-phat-hanh.rss",
     )
     title_selectors = (".Box-TieuDe label", "title")
-    content_selectors = ()
+    content_selectors = (".divContentArticlesDetail", ".Box-Noidung", ".Box-Tomtat label")
     description_selectors = (".Box-Tomtat label",)
 
     def __init__(self, client: BoundedHttpClient | None = None) -> None:

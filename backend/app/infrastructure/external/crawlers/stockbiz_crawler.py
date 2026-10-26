@@ -18,7 +18,8 @@ class StockBizCrawler(BaseNewsCrawler):
         "https://web.stockbiz.vn/RSS/News/Market.ashx",
         "https://web.stockbiz.vn/RSS/News/Company.ashx",
     )
-    content_selectors = ()
+    title_selectors = (".news_title", "h1")
+    content_selectors = (".news_content", ".newsContent", "#news_content")
     description_selectors = (".news_summary",)
     naive_datetime_timezone = ZoneInfo("Asia/Ho_Chi_Minh")
 

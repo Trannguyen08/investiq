@@ -245,20 +245,25 @@ class SqlNewsRepository:
     def find_securities(self, symbols: tuple[str, ...]) -> tuple[Security, ...]:
         if not symbols:
             return ()
+        symbols_list = list(symbols)
         with (
             self._pool.connection() as connection,
             connection.cursor(row_factory=dict_row) as cursor,
         ):
             rows = cursor.execute(
                 """
-                SELECT sec.id::text, si.symbol, si.exchange, sec.issuer_name
+                SELECT DISTINCT ON (si.symbol)
+                    sec.id::text, si.symbol, si.exchange, sec.issuer_name
                 FROM securities sec
                 JOIN security_identifiers si
                   ON si.security_id = sec.id AND si.valid_to IS NULL
-                WHERE sec.is_active AND (si.exchange || ':' || si.symbol) = ANY(%s)
-                ORDER BY si.exchange, si.symbol
+                WHERE sec.is_active AND (
+                    (si.exchange || ':' || si.symbol) = ANY(%s)
+                    OR si.symbol = ANY(%s)
+                ORDER BY si.symbol,
+                    (CASE si.exchange WHEN 'HOSE' THEN 1 WHEN 'HNX' THEN 2 ELSE 3 END)
                 """,
-                (list(symbols),),
+                (symbols_list, symbols_list),
             ).fetchall()
         return tuple(self._map_security(row) for row in rows)
 

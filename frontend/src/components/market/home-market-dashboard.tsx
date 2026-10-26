@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { useState } from "react";
 
 import { InfoTip, MarketColorLegend, MarketLineChart, SectorHeatmap, SentimentGauge } from "@/components/market/beginner-market-ui";
 import { changeTone, formatChange, formatDecimal, formatEventDate, formatMarketTime, formatMoney, formatPercent } from "@/components/market/formatters";
@@ -63,6 +64,45 @@ export function MarketSnapshotRibbon({ indices }: { indices: MarketIndex[] }) {
   );
 }
 
+export type PulseTimeRange = "1D" | "1W" | "1M" | "3M" | "6M" | "1Y";
+
+export const PULSE_RANGES: { id: PulseTimeRange; label: string; daysApprox: number }[] = [
+  { id: "1D", label: "Ngày", daysApprox: 1 },
+  { id: "1W", label: "Tuần", daysApprox: 5 },
+  { id: "1M", label: "Tháng", daysApprox: 21 },
+  { id: "3M", label: "3 tháng", daysApprox: 63 },
+  { id: "6M", label: "6 tháng", daysApprox: 126 },
+  { id: "1Y", label: "Năm", daysApprox: 252 },
+];
+
+function calculateRangeChange(item: MarketInstrument, range: PulseTimeRange): number {
+  if (range === "1D") {
+    return Number(item.change_percent) || 0;
+  }
+  const candles = item.candles ?? [];
+  if (!candles.length) {
+    return Number(item.change_percent) || 0;
+  }
+  const rangeConfig = PULSE_RANGES.find((r) => r.id === range);
+  const targetIndex = rangeConfig ? rangeConfig.daysApprox : 1;
+  const pastCandle = candles.length > targetIndex
+    ? candles.at(-(targetIndex + 1))
+    : candles[0];
+
+  const currentPrice = Number(item.price);
+  const pastClose = pastCandle ? Number(pastCandle.close) : 0;
+  if (pastClose > 0 && currentPrice > 0) {
+    return ((currentPrice - pastClose) / pastClose) * 100;
+  }
+  return Number(item.change_percent) || 0;
+}
+
+type PulseItem = {
+  instrument: MarketInstrument;
+  changePercent: number;
+  matchedValue: number;
+};
+
 function StockPulseColumn({
   title,
   description,
@@ -71,17 +111,17 @@ function StockPulseColumn({
 }: {
   title: string;
   description: string;
-  items: MarketInstrument[];
+  items: PulseItem[];
   metric: "change" | "liquidity";
 }) {
   return (
     <article className="home-stock-pulse-column">
       <header><div><h3>{title}</h3><p>{description}</p></div><span>{items.length} mã</span></header>
       {items.length ? <ol>{items.map((item, index) => (
-        <li key={item.symbol}>
+        <li key={item.instrument.symbol}>
           <span className="home-stock-rank">{index + 1}</span>
-          <Link href={`/market/stocks/${item.symbol}?from=${encodeURIComponent("/#home-stock-pulse")}`} prefetch={false}><strong>{item.symbol}</strong><small>{item.name}</small></Link>
-          <span className="home-stock-price"><strong>{formatDecimal(item.price)}</strong><small className={changeTone(item.change_percent)}>{metric === "liquidity" ? formatMoney(item.matched_value) : formatPercent(item.change_percent)}</small></span>
+          <Link href={`/market/stocks/${item.instrument.symbol}?from=${encodeURIComponent("/#home-stock-pulse")}`} prefetch={false}><strong>{item.instrument.symbol}</strong><small>{item.instrument.name}</small></Link>
+          <span className="home-stock-price"><strong>{formatDecimal(item.instrument.price)}</strong><small className={changeTone(String(item.changePercent))}>{metric === "liquidity" ? formatMoney(String(item.matchedValue)) : formatPercent(item.changePercent.toFixed(2))}</small></span>
         </li>
       ))}</ol> : <div className="market-empty compact"><p>Chưa có mã phù hợp trong snapshot.</p></div>}
     </article>
@@ -89,15 +129,48 @@ function StockPulseColumn({
 }
 
 export function HomeStockPulse({ instruments, meta }: { instruments: MarketInstrument[]; meta: MarketMeta }) {
-  const gainers = [...instruments].filter((item) => Number(item.change_percent) > 0).sort((left, right) => Number(right.change_percent) - Number(left.change_percent)).slice(0, 4);
-  const decliners = [...instruments].filter((item) => Number(item.change_percent) < 0).sort((left, right) => Number(left.change_percent) - Number(right.change_percent)).slice(0, 4);
-  const liquid = [...instruments].sort((left, right) => Number(right.matched_value) - Number(left.matched_value)).slice(0, 4);
+  const [timeRange, setTimeRange] = useState<PulseTimeRange>("1D");
+
+  const enriched: PulseItem[] = instruments.map((item) => ({
+    instrument: item,
+    changePercent: calculateRangeChange(item, timeRange),
+    matchedValue: Number(item.matched_value) || 0,
+  }));
+
+  const gainers = [...enriched].filter((item) => item.changePercent > 0).sort((left, right) => right.changePercent - left.changePercent).slice(0, 4);
+  const decliners = [...enriched].filter((item) => item.changePercent < 0).sort((left, right) => left.changePercent - right.changePercent).slice(0, 4);
+  const liquid = [...enriched].sort((left, right) => right.matchedValue - left.matchedValue).slice(0, 4);
+  const rangeLabel = PULSE_RANGES.find((r) => r.id === timeRange)?.label.toLowerCase() ?? "ngày";
+
   return (
     <section id="home-stock-pulse" className="home-stock-pulse" aria-labelledby="home-stock-pulse-title">
-      <div className="beginner-heading"><div><p className="eyebrow">BẢNG QUAN SÁT NHANH</p><h2 id="home-stock-pulse-title">Mã nào đang đáng chú ý?</h2><p>Xếp hạng trong {instruments.length} mã nổi bật do snapshot trang chủ cung cấp, không phải toàn bộ thị trường.</p></div><Link href="/market/stocks">Mở bảng giá đầy đủ →</Link></div>
+      <div className="beginner-heading">
+        <div>
+          <p className="eyebrow">BẢNG QUAN SÁT NHANH</p>
+          <h2 id="home-stock-pulse-title">Mã nào đang đáng chú ý?</h2>
+          <p>Xếp hạng trong {instruments.length} mã nổi bật do snapshot trang chủ cung cấp, không phải toàn bộ thị trường.</p>
+        </div>
+        <div className="home-stock-pulse-controls">
+          <div className="stock-pulse-time-filters" role="tablist" aria-label="Lọc thời gian biến động">
+            {PULSE_RANGES.map((range) => (
+              <button
+                key={range.id}
+                type="button"
+                role="tab"
+                aria-selected={timeRange === range.id}
+                className={`stock-pulse-filter-btn ${timeRange === range.id ? "active" : ""}`}
+                onClick={() => setTimeRange(range.id)}
+              >
+                {range.label}
+              </button>
+            ))}
+          </div>
+          <Link href="/market/stocks">Mở bảng giá đầy đủ →</Link>
+        </div>
+      </div>
       <div className="home-stock-pulse-grid">
-        <StockPulseColumn title="Tăng nổi bật" description="Biến động dương lớn nhất" items={gainers} metric="change" />
-        <StockPulseColumn title="Giảm đáng chú ý" description="Ưu tiên kiểm tra nguyên nhân" items={decliners} metric="change" />
+        <StockPulseColumn title="Tăng nổi bật" description={timeRange === "1D" ? "Biến động dương lớn nhất" : `Tăng mạnh nhất (${rangeLabel})`} items={gainers} metric="change" />
+        <StockPulseColumn title="Giảm đáng chú ý" description={timeRange === "1D" ? "Ưu tiên kiểm tra nguyên nhân" : `Giảm sâu nhất (${rangeLabel})`} items={decliners} metric="change" />
         <StockPulseColumn title="Giao dịch sôi động" description="Xếp theo giá trị khớp" items={liquid} metric="liquidity" />
       </div>
       <p className="home-section-source">Quan sát lúc {formatMarketTime(meta.market_time)} · Nguồn {meta.provider_name} · {meta.partial ? "Phạm vi dữ liệu một phần" : "Phạm vi snapshot hiện có"}. Thứ hạng không phải khuyến nghị mua bán.</p>

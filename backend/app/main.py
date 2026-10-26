@@ -1,6 +1,8 @@
 """FastAPI application entry point and platform health endpoints."""
 
 import asyncio
+import contextlib
+import logging
 from collections.abc import AsyncIterator, Awaitable
 from contextlib import asynccontextmanager
 from typing import Any
@@ -29,14 +31,10 @@ from app.api.v1.news import router as news_router
 from app.api.v1.portfolio import router as paper_portfolio_router
 from app.application.use_cases.auth.auth_service import AuthError
 from app.application.use_cases.market_data.errors import MarketDataUnavailable
-from app.infrastructure.config.logging_config import configure_logging
 from app.infrastructure.config.settings import settings
 from app.infrastructure.db.session import close_pool
 from app.infrastructure.security.jwt_handler import JwtError
 from app.middleware.request_logging import RequestLoggingMiddleware
-
-import logging
-
 from app.workers.news_ingestion_worker import run_direct_ingestion_cycle
 
 logger = logging.getLogger("investiq.news.lifecycle")
@@ -66,10 +64,8 @@ async def lifespan(_: FastAPI) -> AsyncIterator[None]:
     finally:
         if news_task:
             news_task.cancel()
-            try:
+            with contextlib.suppress(asyncio.CancelledError):
                 await news_task
-            except asyncio.CancelledError:
-                pass
         await close_market_provider()
         close_pool()
 

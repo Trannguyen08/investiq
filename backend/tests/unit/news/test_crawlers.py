@@ -4,6 +4,7 @@ from datetime import UTC, date, datetime
 import pytest
 
 from app.infrastructure.external.crawlers.base import (
+    BaseNewsCrawler,
     BoundedHttpClient,
     NewsProviderError,
     UnsafeProviderUrl,
@@ -425,3 +426,15 @@ def test_vietstock_archive_discovers_only_in_range_articles() -> None:
     assert crawler.discover_history_page(2, date(2026, 7, 4), date(2026, 10, 4)) == (
         "https://vietstock.vn/2026/09/market-123.htm",
     )
+
+
+def test_symbol_candidates_recognizes_enterprise_aliases_and_parentheses() -> None:
+    text = (
+        "2 cổ phiếu nhà Masan và Vinamilk chiếm gần 74% vốn hóa toàn ngành thực phẩm. "
+        "Trong khi đó Tập đoàn Hòa Phát (HPG) và Thế Giới Di Động (mã MWG) cũng bứt phá."
+    )
+    candidates = BaseNewsCrawler._symbol_candidates(text)
+    assert "MSN" in candidates
+    assert "VNM" in candidates
+    assert "HPG" in candidates
+    assert "MWG" in candidates

@@ -473,6 +473,24 @@ def run_direct_ingestion_cycle(
     pool = get_pool()
     stats = {"discovered": 0, "ingested": 0, "deleted": 0, "skipped": 0, "failed": 0}
 
+    # Step 0: Ensure configured news sources are active with full_text storage mode
+    try:
+        with pool.connection() as connection, connection.transaction():
+            connection.execute(
+                """
+                UPDATE news_sources
+                SET status = 'active',
+                    storage_mode = 'full_text',
+                    display_mode = 'full_text',
+                    blocked_reason = NULL,
+                    updated_at = now()
+                WHERE slug = ANY(%s)
+                """,
+                (list(source_slugs),),
+            )
+    except Exception as exc:
+        logger.warning("Could not auto-activate news sources: %s", exc)
+
     # Step 1: Cleanup old articles beyond retention days (90 days)
     try:
         cleanup_res = cleanup_old_news.run(

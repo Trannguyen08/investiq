@@ -9,6 +9,7 @@ import json
 import re
 import socket
 import ssl
+import unicodedata
 import urllib.error
 import urllib.parse
 import urllib.request
@@ -247,6 +248,118 @@ def _json_ld_articles(soup: BeautifulSoup) -> Iterable[dict[str, object]]:
                         "ReportageNewsArticle",
                     }:
                         yield candidate
+
+
+VIETNAM_STOCK_ALIASES: Final[tuple[tuple[str, str], ...]] = (
+    ("masan", "MSN"),
+    ("vinamilk", "VNM"),
+    ("vingroup", "VIC"),
+    ("vinhomes", "VHM"),
+    ("vincom retail", "VRE"),
+    ("hoa phat", "HPG"),
+    ("the gioi di dong", "MWG"),
+    ("bach hoa xanh", "MWG"),
+    ("fpt retail", "FRT"),
+    ("long chau", "FRT"),
+    ("vietcombank", "VCB"),
+    ("techcombank", "TCB"),
+    ("vietinbank", "CTG"),
+    ("bidv", "BID"),
+    ("mbbank", "MBB"),
+    ("mb bank", "MBB"),
+    ("ngan hang quan doi", "MBB"),
+    ("vpbank", "VPB"),
+    ("vp bank", "VPB"),
+    ("sacombank", "STB"),
+    ("hdbank", "HDB"),
+    ("hd bank", "HDB"),
+    ("tpbank", "TPB"),
+    ("tp bank", "TPB"),
+    ("tien phong bank", "TPB"),
+    ("vib", "VIB"),
+    ("shb", "SHB"),
+    ("msb", "MSB"),
+    ("lpbank", "LPB"),
+    ("lienvietpostbank", "LPB"),
+    ("seabank", "SSB"),
+    ("ocb", "OCB"),
+    ("pnj", "PNJ"),
+    ("phu nhuan", "PNJ"),
+    ("chung khoan ssi", "SSI"),
+    ("chung khoan vndirect", "VND"),
+    ("vndirect", "VND"),
+    ("chung khoan vietcap", "VCI"),
+    ("vietcap", "VCI"),
+    ("vcsc", "VCI"),
+    ("chung khoan hcm", "HCM"),
+    ("chung khoan hsc", "HCM"),
+    ("chung khoan vix", "VIX"),
+    ("chung khoan shs", "SHS"),
+    ("chung khoan mbs", "MBS"),
+    ("novaland", "NVL"),
+    ("dat xanh", "DXG"),
+    ("phat dat", "PDR"),
+    ("khang dien", "KDH"),
+    ("nam long", "NLG"),
+    ("sabeco", "SAB"),
+    ("bia sai gon", "SAB"),
+    ("habeco", "BHN"),
+    ("bia ha noi", "BHN"),
+    ("bao viet", "BVH"),
+    ("pv gas", "GAS"),
+    ("khi viet nam", "GAS"),
+    ("petrolimex", "PLX"),
+    ("loc hoa dau binh son", "BSR"),
+    ("pv power", "POW"),
+    ("dien luc dau khi", "POW"),
+    ("khoan dau khi", "PVD"),
+    ("ky thuat dau khi", "PVS"),
+    ("gelex", "GEX"),
+    ("co dien lanh", "REE"),
+    ("hoa chat duc giang", "DGC"),
+    ("duc giang", "DGC"),
+    ("dam phu my", "DPM"),
+    ("dam ca mau", "DCM"),
+    ("hoang anh gia lai", "HAG"),
+    ("hagl", "HAG"),
+    ("vietjet", "VJC"),
+    ("vietnam airlines", "HVN"),
+    ("viettel post", "VTP"),
+    ("viettel construction", "CTR"),
+    ("viettel global", "VGI"),
+    ("cao su viet nam", "GVR"),
+    ("cao su phuoc hoa", "PHR"),
+    ("cao su dong phu", "DPR"),
+    ("kinh bac", "KBC"),
+    ("idico", "IDC"),
+    ("sonadezi chau duc", "SZC"),
+    ("viglacera", "VGC"),
+    ("vinaconex", "VCG"),
+    ("deo ca", "HHV"),
+    ("coteccons", "CTD"),
+    ("thuy san nam viet", "ANV"),
+    ("vinh hoan", "VHC"),
+    ("sao ta", "FMC"),
+    ("dabaco", "DBC"),
+    ("nong nghiep baf", "BAF"),
+    ("digiworld", "DGW"),
+    ("petrosetco", "PET"),
+    ("hoa sen", "HSG"),
+    ("nam kim", "NKG"),
+    ("thep tien len", "TLH"),
+    ("nhua an phat", "AAA"),
+    ("an phat holdings", "APH"),
+    ("nhua binh minh", "BMP"),
+    ("nhua tien phong", "NTP"),
+    ("viconship", "VSC"),
+    ("gemadept", "GMD"),
+    ("van tai hai an", "HAH"),
+)
+
+
+def _normalize_alias_text(value: str) -> str:
+    decomposed = unicodedata.normalize("NFKD", value.casefold())
+    return "".join(ch for ch in decomposed if not unicodedata.combining(ch))
 
 
 class BaseNewsCrawler:
@@ -653,12 +766,29 @@ class BaseNewsCrawler:
         )
         candidates = [f"{exchange}:{symbol}" for exchange, symbol in qualified_matches]
         contextual_matches = re.findall(
-            r"\b(?:[Cc]ổ phiếu|[Mm]ã(?: chứng khoán)?)\s+(?:của\s+)?"
+            r"\b(?:[Cc]ổ phiếu|[Mm]ã(?:\s+chứng\s+khoán|\s+CK|\s+cp)?)\s+(?:của\s+|nhà\s+)?"
             r"([A-Z][A-Z0-9]{2,7})\b",
             text,
         )
         candidates.extend(contextual_matches)
-        ignored_abbreviations = {"CEO", "FDI", "GDP", "IMF", "IPO", "PTE", "UOB", "USD"}
+        parenthesis_matches = re.findall(
+            r"\((?:(?:mã|mã\s+CK|mã\s+cp|mã\s+chứng\s+khoán|cp)[:\s]*)?([A-Z]{3})\)",
+            text,
+            flags=re.IGNORECASE,
+        )
+        candidates.extend(symbol.upper() for symbol in parenthesis_matches)
+
+        # Enterprise & brand alias matching from article headline and text
+        normalized = _normalize_alias_text(text[:2500])
+        for alias, symbol in VIETNAM_STOCK_ALIASES:
+            pattern = rf"\b{re.escape(alias)}\b"
+            if re.search(pattern, normalized):
+                candidates.append(symbol)
+
+        ignored_abbreviations = {
+            "BCTC", "BKS", "CEO", "CTCK", "FDI", "GDP", "HDQT", "IMF",
+            "IPO", "LNST", "LNTT", "ODA", "PTE", "UBCK", "UOB", "USD", "VND",
+        }
         for tag in tags:
             for symbol in re.findall(r"\b[A-Z][A-Z0-9]{2,7}\b", tag):
                 standalone_ticker_tag = tag.strip() == symbol

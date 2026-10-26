@@ -1,6 +1,29 @@
 # Current Task
 
-## Google OAuth Deployment Investigation, Resilience Fallback & Console Guide - 2026-10-26 (complete)
+## UX, Ticker Recognition, 6-Source Crawlers, Stock Pulse Time Filters & Instant Market Load - 2026-10-26 (complete)
+
+- Switched to dedicated branch `fix/UX`.
+- Addressed 4 user requests:
+  1. **Stock Ticker Recognition Improvement**:
+     - Root Cause: `BaseNewsCrawler._symbol_candidates` only matched strict `HOSE:ABC` or `cổ phiếu ABC`, ignoring enterprise/brand aliases common in Vietnamese media (e.g. "nhà Masan", "Vinamilk", "Hòa Phát", "Vingroup", "Thế Giới Di Động"). Furthermore, `sql_news_repository.find_securities` matched only qualified exchange symbols `si.exchange || ':' || si.symbol = ANY(%s)`, failing to link bare symbols like `MSN` and `VNM` to securities.
+     - Solution: Added `VIETNAM_STOCK_ALIASES` dictionary (90+ prominent Vietnamese public company/group aliases with diacritic normalization) and regex matching for bracketed ticker formats `(MSN)`, `(mã MSN)`, `(CK: MSN)`. Updated `sql_news_repository.find_securities` with `DISTINCT ON (si.symbol)` matching both bare and qualified symbols with HOSE -> HNX -> UPCOM exchange priority. Added unit test `test_symbol_candidates_recognizes_enterprise_aliases_and_parentheses`.
+  2. **Expanded Crawl Sources to 6 Reputable Outlets**:
+     - Configured and activated `vietstock`, `cafef`, `vneconomy`, `vnexpress`, `stockbiz`, and `hnx` with valid CSS content/title selectors and `storage_mode = 'full_text'` via migration `0015_activate_six_reputable_news_sources.sql`.
+     - Added automatic activation in `run_direct_ingestion_cycle` ensuring all 6 sources remain active and enabled for full-text extraction across deployments.
+  3. **Stock Pulse Time Range Filters (Ảnh 2)**:
+     - Added time range selector (`PulseTimeRange`: 1D, 1W, 1M, 3M, 6M, 1Y) to `HomeStockPulse` in `home-market-dashboard.tsx`.
+     - Computed dynamic performance from daily candle intervals (1D: 1 candle, 1W: 5 candles, 1M: 21 candles, 3M: 63 candles, 6M: 126 candles, 1Y: 252 candles).
+     - Styled tab buttons with sleek dark-navy aesthetic and mint green active indicator matching the InvestIQ design system.
+  4. **Eliminated White Skeleton Loading Flashes (Ảnh 3)**:
+     - Removed 4 jarring bright white skeleton boxes in `frontend/src/app/(user)/market/loading.tsx` by returning `null` and setting `.market-loading` display to `none`.
+     - Enabled Next.js link prefetching for `/market/stocks` in `user-header.tsx`, allowing instant zero-latency transitions to the Market tab.
+- Validation:
+  - All 100 frontend Vitest tests pass (including new `HomeStockPulse` time filter test).
+  - TypeScript type check (`tsc --noEmit`) and ESLint (`eslint .`) pass cleanly with 0 errors.
+  - All 103 backend unit tests pass (`pytest tests/unit/`).
+  - Backend Ruff linter (`ruff check app/ tests/`) passes cleanly.
+  - Clean `git diff --check`.
+
 
 - Created and switched to dedicated branch `fix/auth`.
 - Investigated root cause of deployed Google login failures on Render:
