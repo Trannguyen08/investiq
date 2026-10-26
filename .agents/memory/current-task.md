@@ -16,6 +16,14 @@
   4. Backend `auth.py`: Updated `google_exchange` to accept `redirect_uri` from the trusted BFF `GoogleExchangeRequest` body if `settings.auth_google_redirect_uri` is not set.
   5. `render.yaml` & `docs/deploy.md`: Synchronized all environment variables (`AUTH_GOOGLE_REDIRECT_URI`, `AUTH_SESSION_REDIS_URL`, `REDIS_URL`) and provided comprehensive Google Cloud Console setup instructions.
   6. Added regression test `test_auth_rate_limiter_local_fallback_enforces_limit`. All 5 backend auth tests and 99 frontend tests pass. TypeScript and ESLint pass with zero errors.
+- Live Deployment & Verification:
+  1. Configured `AUTH_GOOGLE_REDIRECT_URI=https://investiq-frontend-zd01.onrender.com/auth-api/google/callback` on both Frontend (`srv-dbdn1s8473hc73cuqp40`) and Backend (`srv-dbdn1s8473hc73cuqp4g`) via Render REST API.
+  2. Switched deployment branch on Render for both services to `fix/auth` and triggered deploys (`dep-dbfg7cq9lscs73a1ie2g` for backend, `dep-dbfg7d8473hc73d2ng70` for frontend).
+  3. Both services built, passed health checks, and reached `live` status.
+  4. Backend `/healthz` returned `200 OK {"status":"ok"}`.
+  5. Frontend `/login` returned `200 OK`.
+  6. Tested `GET https://investiq-frontend-zd01.onrender.com/auth-api/google/start`: returned `307 Temporary Redirect` to Google OAuth with valid client ID, redirect URI, PKCE code challenge, and state, setting `__Host-investiq-preauth` and `investiq_csrf` cookies.
+  7. Verified Google's authorize response with the generated parameters: Google returned HTTP 200 OK (Sign in consent page rendered without `redirect_uri_mismatch`).
 
 ## Production News Module Strict Market Ingestion & Continuous Deployment Crawl - 2026-10-25 (complete)
 
