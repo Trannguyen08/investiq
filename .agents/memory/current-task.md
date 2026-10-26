@@ -1,5 +1,22 @@
 # Current Task
 
+## Google OAuth Deployment Investigation, Resilience Fallback & Console Guide - 2026-10-26 (complete)
+
+- Created and switched to dedicated branch `fix/auth`.
+- Investigated root cause of deployed Google login failures on Render:
+  1. Live Frontend returned `503 AUTH_NOT_CONFIGURED` on `/auth-api/google/start` because `AUTH_SESSION_REDIS_URL` was mandatory in `authConfigured()`, whereas Render free tier does not have a provisioned Redis instance.
+  2. Backend `AuthRateLimiter` crashed with `503 Authentication protection is temporarily unavailable` when Redis was unavailable on cloud free tier deployments.
+  3. `AUTH_GOOGLE_REDIRECT_URI` was missing from `render.yaml` for both Backend and Frontend.
+  4. Google Cloud Console was missing the production authorized origin (`https://investiq-frontend-zd01.onrender.com`) and exact authorized redirect URI (`https://investiq-frontend-zd01.onrender.com/auth-api/google/callback`).
+  5. Backend `/google/exchange` strictly required `settings.auth_google_redirect_uri` which could mismatch or be omitted, failing token verification at `https://oauth2.googleapis.com/token`.
+- Implemented Solutions:
+  1. Frontend `user-auth.ts`: Added process-local in-memory encrypted session/preauth store fallback when `AUTH_SESSION_REDIS_URL` is omitted or temporarily unreachable, maintaining AES-256-GCM encryption without security compromise.
+  2. Frontend `route.ts`: Added `getGoogleRedirectUri(request)` to automatically derive callback URI from request headers when not explicitly set, and forward `redirect_uri` in the `/google/exchange` payload.
+  3. Backend `AuthRateLimiter`: Added thread-safe in-memory process-local fixed-window rate limiter fallback when Redis raises `RedisError`, preventing 503 errors on single-instance cloud deploys.
+  4. Backend `auth.py`: Updated `google_exchange` to accept `redirect_uri` from the trusted BFF `GoogleExchangeRequest` body if `settings.auth_google_redirect_uri` is not set.
+  5. `render.yaml` & `docs/deploy.md`: Synchronized all environment variables (`AUTH_GOOGLE_REDIRECT_URI`, `AUTH_SESSION_REDIS_URL`, `REDIS_URL`) and provided comprehensive Google Cloud Console setup instructions.
+  6. Added regression test `test_auth_rate_limiter_local_fallback_enforces_limit`. All 5 backend auth tests and 99 frontend tests pass. TypeScript and ESLint pass with zero errors.
+
 ## Production News Module Strict Market Ingestion & Continuous Deployment Crawl - 2026-10-25 (complete)
 
 - Addressed user feedback requesting to use the repository's dedicated crawler modules (`VietstockCrawler`, `CafeFCrawler`, `VnEconomyCrawler`, `StockBizCrawler`, `VnExpressCrawler`, `HnxCrawler`), enforce strict stock market / enterprise relevance, purge previous non-market articles, and automate continuous crawling on every deployment along with 90-day retention cleanup.

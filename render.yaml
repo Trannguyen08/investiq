@@ -44,6 +44,10 @@ services:
         sync: false
       - key: AUTH_GOOGLE_CLIENT_SECRET
         sync: false
+      - key: AUTH_GOOGLE_REDIRECT_URI
+        sync: false
+      - key: REDIS_URL
+        sync: false
       - key: AUTH_MAIL_FROM
         sync: false
       - key: AUTH_SMTP_HOST
@@ -87,4 +91,8 @@ services:
       - key: AUTH_SESSION_ENCRYPTION_KEY
         sync: false
       - key: AUTH_GOOGLE_CLIENT_ID
+        sync: false
+      - key: AUTH_GOOGLE_REDIRECT_URI
+        sync: false
+      - key: AUTH_SESSION_REDIS_URL
         sync: false

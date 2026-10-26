@@ -124,3 +124,20 @@ def test_google_login_rejects_disabled_identity_before_creating_session() -> Non
     assert error.value.code == "INVALID_CREDENTIALS"
     assert repository.session_created is False
     assert repository.audit == [("google_login", "denied")]
+
+
+def test_auth_rate_limiter_local_fallback_enforces_limit() -> None:
+    from app.middleware.rate_limiter import AuthRateLimiter, RateLimitExceeded
+
+    # Using an invalid port so Redis connection immediately fails and triggers local fallback
+    limiter = AuthRateLimiter("redis://127.0.0.1:1/0", "test-secret-key-32-bytes-long!")
+    # Should allow up to 2 calls
+    limiter.check("test", "user1", limit=2, window_seconds=10)
+    limiter.check("test", "user1", limit=2, window_seconds=10)
+    # Third call should exceed
+    with pytest.raises(RateLimitExceeded) as exc_info:
+        limiter.check("test", "user1", limit=2, window_seconds=10)
+    assert exc_info.value.retry_after > 0
+
+    # Different identity should have separate count
+    limiter.check("test", "user2", limit=2, window_seconds=10)

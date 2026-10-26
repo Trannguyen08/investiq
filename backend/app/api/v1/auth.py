@@ -298,13 +298,14 @@ def google_exchange(
     _private(response)
     _limit(request, "google", _client_ip(request), 10, 900)
     secret = settings.auth_google_client_secret
-    if not settings.auth_google_client_id or not secret or not settings.auth_google_redirect_uri:
+    redirect_uri = body.redirect_uri or settings.auth_google_redirect_uri
+    if not settings.auth_google_client_id or not secret or not redirect_uri:
         raise HTTPException(503, "Google authentication is not configured")
     try:
         identity = GoogleOidcClient(
             settings.auth_google_client_id,
             secret.get_secret_value(),
-            settings.auth_google_redirect_uri,
+            redirect_uri,
         ).exchange(body.code, body.code_verifier, body.nonce)
     except GoogleOidcError as exc:
         raise AuthError("GOOGLE_AUTH_FAILED", "Không thể xác minh tài khoản Google.", 401) from exc

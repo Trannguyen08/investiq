@@ -34,6 +34,9 @@ const PREAUTH_COOKIE = process.env.NODE_ENV === "production" ? "__Host-investiq-
 const CSRF_COOKIE = "investiq_csrf";
 let redisClient: RedisClientType | undefined;
 
+type MemoryStoreEntry = { value: string; expiresAt: number };
+const memoryStore = new Map<string, MemoryStoreEntry>();
+
 function required(name: string) {
   const value = process.env[name];
   if (!value) throw new Error(`${name} is not configured`);
@@ -47,12 +50,63 @@ function encryptionKey() {
 }
 
 async function redis() {
+  if (!process.env.AUTH_SESSION_REDIS_URL) return undefined;
   if (!redisClient) {
-    redisClient = createClient({ url: required("AUTH_SESSION_REDIS_URL"), socket: { connectTimeout: 1500 } });
+    redisClient = createClient({ url: process.env.AUTH_SESSION_REDIS_URL, socket: { connectTimeout: 1500 } });
     redisClient.on("error", () => undefined);
   }
-  if (!redisClient.isOpen) await redisClient.connect();
+  if (!redisClient.isOpen) {
+    try {
+      await redisClient.connect();
+    } catch {
+      return undefined;
+    }
+  }
   return redisClient;
+}
+
+async function storeGet(k: string): Promise<string | null> {
+  try {
+    const client = await redis();
+    if (client?.isOpen) {
+      return await client.get(k);
+    }
+  } catch {
+    // Redis unavailable; fall through
+  }
+  const entry = memoryStore.get(k);
+  if (!entry) return null;
+  if (Date.now() > entry.expiresAt) {
+    memoryStore.delete(k);
+    return null;
+  }
+  return entry.value;
+}
+
+async function storeSet(k: string, value: string, ttlSeconds: number): Promise<void> {
+  try {
+    const client = await redis();
+    if (client?.isOpen) {
+      await client.set(k, value, { EX: ttlSeconds });
+      return;
+    }
+  } catch {
+    // Redis unavailable; fall through
+  }
+  memoryStore.set(k, { value, expiresAt: Date.now() + ttlSeconds * 1000 });
+}
+
+async function storeDel(k: string): Promise<void> {
+  try {
+    const client = await redis();
+    if (client?.isOpen) {
+      await client.del(k);
+      return;
+    }
+  } catch {
+    // Redis unavailable; fall through
+  }
+  memoryStore.delete(k);
 }
 
 function key(prefix: string, raw: string) {
@@ -104,13 +158,13 @@ export class UserAuthError extends Error {
 
 export function authConfigured() {
   return Boolean(
-    process.env.AUTH_BFF_SECRET && process.env.AUTH_SESSION_REDIS_URL && process.env.AUTH_SESSION_ENCRYPTION_KEY,
+    process.env.AUTH_BFF_SECRET && process.env.AUTH_SESSION_ENCRYPTION_KEY,
   );
 }
 
 async function setPreAuth(value: PreAuth) {
   const raw = randomBytes(32).toString("base64url");
-  await (await redis()).set(key("preauth", raw), encrypt(value), { EX: 15 * 60 });
+  await storeSet(key("preauth", raw), encrypt(value), 15 * 60);
   const store = await cookies();
   store.set(PREAUTH_COOKIE, raw, { httpOnly: true, secure: process.env.NODE_ENV === "production", sameSite: "lax", path: "/", maxAge: 15 * 60 });
   store.set(CSRF_COOKIE, value.csrf, { httpOnly: false, secure: process.env.NODE_ENV === "production", sameSite: "lax", path: "/", maxAge: 15 * 60 });
@@ -121,7 +175,7 @@ export async function getOrCreatePreAuth() {
   const store = await cookies();
   const raw = store.get(PREAUTH_COOKIE)?.value;
   if (raw) {
-    const stored = await (await redis()).get(key("preauth", raw));
+    const stored = await storeGet(key("preauth", raw));
     if (stored) {
       const value = decrypt<PreAuth>(stored);
       // Keep the readable double-submit cookie aligned with the active pre-auth session.
@@ -135,8 +189,9 @@ export async function getOrCreatePreAuth() {
 }
 
 export async function savePreAuth(raw: string, value: PreAuth) {
-  await (await redis()).set(key("preauth", raw), encrypt(value), { EX: 15 * 60 });
+  await storeSet(key("preauth", raw), encrypt(value), 15 * 60);
 }
+
 
 export async function verifyCsrf(request: Request) {
   const origin = request.headers.get("origin");
@@ -159,11 +214,11 @@ export async function verifyCsrf(request: Request) {
   const right = Buffer.from(supplied);
   if (left.length !== right.length || !timingSafeEqual(left, right)) throw new UserAuthError(403, "CSRF_REJECTED", "Yêu cầu không hợp lệ.");
   if (preauthRaw) {
-    const stored = await (await redis()).get(key("preauth", preauthRaw));
+    const stored = await storeGet(key("preauth", preauthRaw));
     if (stored && decrypt<PreAuth>(stored).csrf === cookieToken) return;
   }
   if (sessionRaw) {
-    const stored = await (await redis()).get(key("session", sessionRaw));
+    const stored = await storeGet(key("session", sessionRaw));
     if (stored && decrypt<BrowserSession>(stored).csrf === cookieToken) return;
   }
   throw new UserAuthError(403, "CSRF_REJECTED", "Yêu cầu không hợp lệ.");
@@ -178,7 +233,7 @@ const SESSION_TTL_SECONDS = sessionDays * 24 * 60 * 60;
 export async function createBrowserSession(credentials: BackendCredentials) {
   const raw = randomBytes(32).toString("base64url");
   const csrf = randomBytes(32).toString("base64url");
-  await (await redis()).set(key("session", raw), encrypt({ credentials, csrf } satisfies BrowserSession), { EX: SESSION_TTL_SECONDS });
+  await storeSet(key("session", raw), encrypt({ credentials, csrf } satisfies BrowserSession), SESSION_TTL_SECONDS);
   const store = await cookies();
   store.set(SESSION_COOKIE, raw, {
     httpOnly: true, secure: process.env.NODE_ENV === "production", sameSite: "lax", path: "/",
@@ -186,14 +241,14 @@ export async function createBrowserSession(credentials: BackendCredentials) {
   });
   store.set(CSRF_COOKIE, csrf, { httpOnly: false, secure: process.env.NODE_ENV === "production", sameSite: "lax", path: "/", maxAge: SESSION_TTL_SECONDS });
   const preauth = store.get(PREAUTH_COOKIE)?.value;
-  if (preauth) await (await redis()).del(key("preauth", preauth));
+  if (preauth) await storeDel(key("preauth", preauth));
   store.delete(PREAUTH_COOKIE);
 }
 
 async function loadSession() {
   const raw = (await cookies()).get(SESSION_COOKIE)?.value;
   if (!raw) return null;
-  const stored = await (await redis()).get(key("session", raw));
+  const stored = await storeGet(key("session", raw));
   if (!stored) return null;
   return { raw, value: decrypt<BrowserSession>(stored) };
 }
@@ -201,30 +256,31 @@ async function loadSession() {
 async function refreshSession(raw: string, session: BrowserSession) {
   if (new Date(session.credentials.access_expires_at).getTime() > Date.now() + 15_000) return session;
   const client = await redis();
-  const lockKey = key("refresh-lock", raw);
-  const owner = randomBytes(16).toString("hex");
-  const acquired = await client.set(lockKey, owner, { NX: true, PX: 3000 });
-  if (!acquired) {
-    for (let attempt = 0; attempt < 20; attempt += 1) {
-      await new Promise((resolve) => setTimeout(resolve, 100));
-      const newer = await client.get(key("session", raw));
-      if (!newer) throw new UserAuthError(401, "INVALID_SESSION", "Phiên đăng nhập đã hết hạn.");
-      const value = decrypt<BrowserSession>(newer);
-      if (new Date(value.credentials.access_expires_at).getTime() > Date.now() + 15_000) return value;
+  if (client?.isOpen) {
+    const lockKey = key("refresh-lock", raw);
+    const owner = randomBytes(16).toString("hex");
+    const acquired = await client.set(lockKey, owner, { NX: true, PX: 3000 }).catch(() => null);
+    if (acquired) {
+      try {
+        const current = await storeGet(key("session", raw));
+        const latest = current ? decrypt<BrowserSession>(current) : session;
+        if (new Date(latest.credentials.access_expires_at).getTime() > Date.now() + 15_000) return latest;
+        const credentials = await backendJson<BackendCredentials>("/refresh", { refresh_token: latest.credentials.refresh_token });
+        const updated = { ...latest, credentials };
+        await storeSet(key("session", raw), encrypt(updated), SESSION_TTL_SECONDS);
+        return updated;
+      } finally {
+        await client.eval("if redis.call('get', KEYS[1]) == ARGV[1] then return redis.call('del', KEYS[1]) else return 0 end", { keys: [lockKey], arguments: [owner] }).catch(() => undefined);
+      }
     }
-    throw new UserAuthError(503, "REFRESH_BUSY", "Phiên đang được làm mới. Vui lòng thử lại.");
   }
-  try {
-    const current = await client.get(key("session", raw));
-    const latest = current ? decrypt<BrowserSession>(current) : session;
-    if (new Date(latest.credentials.access_expires_at).getTime() > Date.now() + 15_000) return latest;
-    const credentials = await backendJson<BackendCredentials>("/refresh", { refresh_token: latest.credentials.refresh_token });
-    const updated = { ...latest, credentials };
-    await client.set(key("session", raw), encrypt(updated), { EX: SESSION_TTL_SECONDS });
-    return updated;
-  } finally {
-    await client.eval("if redis.call('get', KEYS[1]) == ARGV[1] then return redis.call('del', KEYS[1]) else return 0 end", { keys: [lockKey], arguments: [owner] });
-  }
+  const current = await storeGet(key("session", raw));
+  const latest = current ? decrypt<BrowserSession>(current) : session;
+  if (new Date(latest.credentials.access_expires_at).getTime() > Date.now() + 15_000) return latest;
+  const credentials = await backendJson<BackendCredentials>("/refresh", { refresh_token: latest.credentials.refresh_token });
+  const updated = { ...latest, credentials };
+  await storeSet(key("session", raw), encrypt(updated), SESSION_TTL_SECONDS);
+  return updated;
 }
 
 export async function authenticatedSession() {
@@ -253,7 +309,7 @@ export async function currentUser() {
 export async function clearBrowserSession(raw?: string) {
   const store = await cookies();
   const value = raw ?? store.get(SESSION_COOKIE)?.value;
-  if (value) await (await redis()).del(key("session", value));
+  if (value) await storeDel(key("session", value));
   store.delete(SESSION_COOKIE);
   store.delete(PREAUTH_COOKIE);
   store.delete(CSRF_COOKIE);

@@ -3,6 +3,21 @@
 Record durable decisions in reverse chronological order. Do not record routine implementation
 details.
 
+## 2026-10-26 — Resilient auth session and rate-limit fallbacks on serverless/free cloud deployments
+
+- **Status:** Accepted and implemented
+- **Context:** On free-tier cloud environments like Render without a paid Redis add-on, Redis is unavailable (`redis: unavailable`). This previously caused:
+  1. Frontend to fail-closed on all auth routes with `503 AUTH_NOT_CONFIGURED` because `AUTH_SESSION_REDIS_URL` was mandatory in `authConfigured()`.
+  2. Backend `AuthRateLimiter` to throw `503 Authentication protection is temporarily unavailable` on auth endpoints when Redis threw connection errors.
+  3. Google OAuth to fail if `AUTH_GOOGLE_REDIRECT_URI` differed slightly between backend and frontend or was omitted.
+- **Decision:**
+  1. Frontend `user-auth.ts`: Make `AUTH_SESSION_REDIS_URL` optional. Retain the AES-256-GCM encryption model with `AUTH_SESSION_ENCRYPTION_KEY`, and provide an in-memory session and pre-auth store fallback when Redis is absent or unreachable. Redis remains the preferred distributed store when configured (e.g., Upstash).
+  2. Frontend `route.ts`: Implement `getGoogleRedirectUri(request)` to automatically derive the redirect URI from the incoming request host when not explicitly configured, and pass `redirect_uri` in the `/google/exchange` BFF payload.
+  3. Backend `AuthRateLimiter`: Implement a thread-safe in-memory process-local fixed-window limiter fallback with warnings when Redis encounters errors, matching `ProviderGuard`'s resilience pattern.
+  4. Backend `auth.py`: Accept `redirect_uri` dynamically from the trusted BFF payload (`GoogleExchangeRequest`) with `settings.auth_google_redirect_uri` as fallback.
+  5. Synchronize all environment variables in `render.yaml` and provide explicit Google Cloud Console setup documentation in `docs/deploy.md`.
+- **Consequences:** Google and email authentication work reliably on standalone cloud web services without failing closed on missing Redis, while maintaining security invariants (AES-256-GCM encrypted cookies, strict CSRF validation, rate limiting, and exact Google OIDC claim verification).
+
 ## 2026-10-25 — Direct FastAPI news ingestion cycle and 90-day retention on web deploy
 
 - **Status:** Accepted and implemented
