@@ -154,13 +154,14 @@ export function getRelatedStockNews(
   exchange: string,
   symbol: string,
   limit = 6,
+  timeoutMs = 1500,
 ): Promise<NewsCollection> {
   const query = new URLSearchParams({
     symbol: `${exchange.toUpperCase()}:${symbol.toUpperCase()}`,
     limit: String(limit),
     page: "1",
   });
-  return getNews(query, 10000);
+  return getNews(query, timeoutMs);
 }
 
 export function getNewsArticle(id: string): Promise<Envelope<NewsDetail>> {

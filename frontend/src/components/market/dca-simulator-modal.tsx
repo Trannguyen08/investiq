@@ -10,7 +10,6 @@ type Props = {
   onClose: () => void;
 };
 
-const SUGGESTED_SYMBOLS = ["HPG", "FPT", "VNM", "MWG", "TCB", "MBB", "SSI", "VIC"];
 const DURATION_OPTIONS = [
   { value: 1, label: "1 Năm" },
   { value: 2, label: "2 Năm" },
@@ -26,12 +25,12 @@ export function DCASimulatorModal({ initialSymbol = "HPG", isOpen, onClose }: Pr
   const [error, setError] = useState<string | null>(null);
   const [isPending, startTransition] = useTransition();
 
-  // Keep symbol in sync if initialSymbol changes
+  // Keep symbol in sync with endpoint's selected stock
   useEffect(() => {
     if (initialSymbol) {
       setSymbol(initialSymbol.toUpperCase());
     }
-  }, [initialSymbol]);
+  }, [initialSymbol, isOpen]);
 
   // Fetch simulation data
   useEffect(() => {
@@ -116,30 +115,13 @@ export function DCASimulatorModal({ initialSymbol = "HPG", isOpen, onClose }: Pr
         {/* Simulator Controls */}
         <section className="dca-controls-grid">
           <div className="control-group">
-            <label htmlFor="dca-symbol-input" className="control-label">
+            <label className="control-label">
               Mã cổ phiếu tích sản:
             </label>
             <div className="symbol-input-wrapper">
-              <input
-                id="dca-symbol-input"
-                type="text"
-                className="symbol-input"
-                value={symbol}
-                onChange={(e) => setSymbol(e.target.value.toUpperCase().slice(0, 5))}
-                placeholder="HPG, FPT..."
-                maxLength={5}
-              />
-              <div className="symbol-pills">
-                {SUGGESTED_SYMBOLS.map((s) => (
-                  <button
-                    key={s}
-                    type="button"
-                    className={`symbol-pill ${symbol === s ? "active" : ""}`}
-                    onClick={() => setSymbol(s)}
-                  >
-                    {s}
-                  </button>
-                ))}
+              <div className="dca-endpoint-stock-badge">
+                <span className="badge-ticker">{symbol}</span>
+                <span className="badge-tag">Cổ phiếu đang xem</span>
               </div>
             </div>
           </div>

@@ -103,7 +103,7 @@ describe("StocksView navigation", () => {
 
     fireEvent.click(screen.getByRole("row", { name: /FPT/ }));
 
-    expect(push).toHaveBeenCalledWith(expect.stringContaining("selected=FPT"));
+    expect(push).toHaveBeenCalledWith(expect.stringContaining("/market/stocks/FPT"));
   });
 
   it("supports opening the row with the keyboard", () => {
@@ -111,7 +111,7 @@ describe("StocksView navigation", () => {
 
     fireEvent.keyDown(screen.getByRole("row", { name: /FPT/ }), { key: "Enter" });
 
-    expect(push).toHaveBeenCalledWith(expect.stringContaining("selected=FPT"));
+    expect(push).toHaveBeenCalledWith(expect.stringContaining("/market/stocks/FPT"));
   });
 
   it("keeps the highlighted VN-Index chart between 50 and 120 visible sessions", () => {

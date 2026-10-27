@@ -1,5 +1,47 @@
 # Current Task
 
+## Stock Detail Navigation, DCA Modal Endpoint Stock, Forensics UI & Rendering Optimization - 2026-10-27 (complete)
+
+- **User Request**:
+  1. "ở ảnh 1 đổi hiển thị 1 dòng cổ phiếu mặc định thành cổ phiếu được chọn để xem trong endpoint đó chứ k hiển thị 1 dãy mã cổ"
+  2. "ở ảnh 2 hiển thi lại các nội dung ở các ô cho dễ nhìn chứ nó cứ bị xuống dòng khó nhìn và phần phân tích chi tiết khi ấn vào k khác gì lúc đầu"
+  3. "Fix lỗi khi click vào 1 mã cổ nào đó thì k cần hiển thị 1 tab bên phải mà vào thẳng luôn trang chi tiết mã cổ"
+  4. "và fix thêm thời gian rendering khá lâu khi click vào"
+
+- **Implementation Details**:
+  1. **DCA Modal Endpoint Stock Binding ([dca-simulator-modal.tsx](file:///c:/investiq/frontend/src/components/market/dca-simulator-modal.tsx))**:
+     - Removed hardcoded `SUGGESTED_SYMBOLS` pill row.
+     - Bound modal symbol to always synchronize with `initialSymbol` from the current endpoint route (`/market/stocks/[symbol]`).
+     - Replaced the input/pill row with `.dca-endpoint-stock-badge` displaying the selected stock (`symbol`) with "Cổ phiếu đang xem".
+     - Styled badge in [globals.css](file:///c:/investiq/frontend/src/app/globals.css) with dark-teal glassmorphic look, glowing border, and monospace ticker.
+  2. **Quantitative Forensics Layout & Deep-Dive Expansion ([financial-forensics-panel.tsx](file:///c:/investiq/frontend/src/components/market/financial-forensics-panel.tsx))**:
+     - Redesigned card metric metrics from fragile 2-column flex to `.flag-metrics-table` and `.metric-row` with `justify-content: space-between` and `white-space: nowrap`, eliminating all awkward line breaks ("GIÁ TRỊ QUAN / SÁT:").
+     - Replaced plain text implication with `.flag-implication` featuring warning icon badge, border highlight, and high-contrast typography.
+     - Implemented `getForensicDetail(flagId, severity, sym)` providing rich, contextual audit deep-dives for all 4 tests:
+       - Quantitative formulas (e.g., CFO/LNST > 0.8, ICR = EBIT / Lãi vay, PEG ratio, CCC = DIO + DSO - DPO).
+       - In-depth accounting risk diagnosis tailored to the stock.
+       - Red flag warning signs.
+       - Actionable 3-point quarterly BCTC auditing checklist.
+     - Styled `.flag-expanded-panel` in [globals.css](file:///c:/investiq/frontend/src/app/globals.css) with dark sapphire container, distinct block sections, and glowing formula chips.
+  3. **Direct Stock Detail Navigation & Drawer Elimination ([market-stocks-beginner.tsx](file:///c:/investiq/frontend/src/components/market/market-stocks-beginner.tsx))**:
+     - Changed row click handler and ticker link from `selected=SYMBOL` query param to direct App Router path `/market/stocks/${item.symbol}?from=...`.
+     - Removed the unnecessary side drawer (`<aside className="stock-drawer">`) so clicks immediately navigate to the full stock detail view.
+     - Updated unit tests in [market-stocks-beginner.test.tsx](file:///c:/investiq/frontend/src/components/market/market-stocks-beginner.test.tsx) to assert direct navigation.
+  4. **Stock Detail Rendering Performance & Latency Reduction ([page.tsx](file:///c:/investiq/frontend/src/app/(user)/market/stocks/[symbol]/page.tsx) & [api-client.ts](file:///c:/investiq/frontend/src/lib/api-client.ts))**:
+     - Parallelized `getMarketInstrument` alongside `getMarketCandles`, `getMarketIntradayTrades`, `getMarketGrowth`, and `getMarketForensics` in `Promise.all` (eliminating sequential waiting).
+     - Reduced `getRelatedStockNews` timeout from 10,000ms to 1,200ms with non-blocking fallback so slow news fetches never delay page TTFB.
+     - Enabled link prefetching on stock table links.
+
+- **Validation**:
+  - `npm --prefix frontend run typecheck`: 0 errors.
+  - `npm --prefix frontend run lint`: 0 errors.
+  - `npm --prefix frontend test`: 116/116 tests passed across 28 test files.
+  - Verified in browser with `browser_subagent` at `http://localhost:3000/market/stocks` and `http://localhost:3000/market/stocks/MSN`:
+    - Clicking MSN navigates directly to `/market/stocks/MSN` with no side drawer.
+    - DCA modal displays `Mô Phỏng Tích Sản: MSN vs Gửi Tiết Kiệm` and `[ MSN | Cổ phiếu đang xem ]` without preset pills.
+    - Forensics cards have clean, un-wrapped key-value metric rows.
+    - Clicking "Chi tiết phân tích ▼" expands rich accounting diagnosis, formula, deep dive, and BCTC checklist.
+
 ## Community & Social Trading: Fix NaN ₫ Price Formatting - 2026-10-27 (complete)
 
 - **User Request**: "fix lỗi k hiển thị giá" (Fix bug where prices are displayed as `NaN ₫` on community thesis cards at `http://localhost:3000/community`).

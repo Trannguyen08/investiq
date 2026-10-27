@@ -62,26 +62,29 @@ export default async function StockDetailPage({
   const initialTab = typeof query.tab === "string" ? query.tab : "chart";
   const selected = rangeConfig[range];
 
+  const instrumentPromise = getMarketInstrument(symbol).then(
+    (value) => ({ status: "fulfilled" as const, value }),
+    () => ({ status: "rejected" as const }),
+  );
   const candlesPromise = getMarketCandles(symbol, selected.interval, selected.limit).catch(() => null);
   const intradayPromise = getMarketIntradayTrades(symbol, 100).catch(() => null);
   const growthPromise = getMarketGrowth(symbol).catch(() => null);
   const forensicsPromise = getMarketForensics(symbol).catch(() => null);
 
-  const instrumentResult = await getMarketInstrument(symbol).then(
-    (value) => ({ status: "fulfilled" as const, value }),
-    () => ({ status: "rejected" as const }),
-  );
+  const [instrumentResult, candles, intraday, growthEnvelope, forensicsEnvelope] =
+    await Promise.all([
+      instrumentPromise,
+      candlesPromise,
+      intradayPromise,
+      growthPromise,
+      forensicsPromise,
+    ]);
+
   if (instrumentResult.status === "rejected") notFound();
   const envelope: InstrumentEnvelope = instrumentResult.value;
   const item = envelope.data;
 
-  const [candles, intraday, relatedNews, growthEnvelope, forensicsEnvelope] = await Promise.all([
-    candlesPromise,
-    intradayPromise,
-    getRelatedStockNews(item.exchange, item.symbol).catch(() => null),
-    growthPromise,
-    forensicsPromise,
-  ]);
+  const relatedNews = await getRelatedStockNews(item.exchange, item.symbol, 6, 1200).catch(() => null);
 
   // Guaranteed multi-tier fallback for 100% stock coverage
   const capBillions = item.market_cap ? (parseFloat(item.market_cap) / 1e9).toFixed(0) : "1,000";
