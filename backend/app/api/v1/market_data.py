@@ -170,9 +170,7 @@ def instruments(
     direction: Literal["asc", "desc"] = "desc",
     min_change: Annotated[Decimal | None, Query(ge=-100, le=100)] = None,
     max_change: Annotated[Decimal | None, Query(ge=-100, le=100)] = None,
-    min_matched_value_billion: Annotated[
-        Decimal | None, Query(ge=0, le=1_000_000_000)
-    ] = None,
+    min_matched_value_billion: Annotated[Decimal | None, Query(ge=0, le=1_000_000_000)] = None,
     min_market_cap_billion: Annotated[Decimal | None, Query(ge=0, le=1_000_000_000)] = None,
     min_volume_ratio: Annotated[Decimal | None, Query(ge=0, le=1000)] = None,
     vn30: bool = False,

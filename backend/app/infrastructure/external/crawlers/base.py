@@ -212,9 +212,7 @@ def _meta_content(soup: BeautifulSoup, *keys: tuple[str, str]) -> str | None:
     return None
 
 
-def _parse_datetime(
-    value: str | None, *, naive_timezone: tzinfo = UTC
-) -> datetime | None:
+def _parse_datetime(value: str | None, *, naive_timezone: tzinfo = UTC) -> datetime | None:
     if not value:
         return None
     normalized = unescape(value.strip()).replace("Z", "+00:00")
@@ -786,8 +784,23 @@ class BaseNewsCrawler:
                 candidates.append(symbol)
 
         ignored_abbreviations = {
-            "BCTC", "BKS", "CEO", "CTCK", "FDI", "GDP", "HDQT", "IMF",
-            "IPO", "LNST", "LNTT", "ODA", "PTE", "UBCK", "UOB", "USD", "VND",
+            "BCTC",
+            "BKS",
+            "CEO",
+            "CTCK",
+            "FDI",
+            "GDP",
+            "HDQT",
+            "IMF",
+            "IPO",
+            "LNST",
+            "LNTT",
+            "ODA",
+            "PTE",
+            "UBCK",
+            "UOB",
+            "USD",
+            "VND",
         }
         for tag in tags:
             for symbol in re.findall(r"\b[A-Z][A-Z0-9]{2,7}\b", tag):

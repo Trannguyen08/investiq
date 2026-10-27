@@ -170,9 +170,7 @@ class PaperTradingService:
             sector=instrument.sector,
             quantity=command.quantity,
             limit_price=instrument.price,
-            reserved_cash=(
-                reserved_gross + reserved_fee if command.side == "buy" else Decimal()
-            ),
+            reserved_cash=(reserved_gross + reserved_fee if command.side == "buy" else Decimal()),
             reserved_quantity=command.quantity if command.side == "sell" else 0,
             provider=self._provider.slug,
             price_at=_market_datetime(self._provider.market_time),
@@ -262,9 +260,7 @@ class PaperTradingService:
             else:
                 total_market_value += market_value
             unrealized = (
-                market_value - holding.total_cost_basis
-                if market_value is not None
-                else None
+                market_value - holding.total_cost_basis if market_value is not None else None
             )
             unrealized_percent = (
                 unrealized / holding.total_cost_basis * Decimal("100")
@@ -344,9 +340,7 @@ class PaperTradingService:
         total_value = portfolio.cash_balance + total_market_value if not missing_prices else None
         total_pnl = total_value - portfolio.starting_cash if total_value is not None else None
         total_return = (
-            total_pnl / portfolio.starting_cash * Decimal("100")
-            if total_pnl is not None
-            else None
+            total_pnl / portfolio.starting_cash * Decimal("100") if total_pnl is not None else None
         )
         for holding_payload in holdings:
             raw_market_value = holding_payload["market_value"]
@@ -356,9 +350,7 @@ class PaperTradingService:
                 else None
             )
             holding_payload["portfolio_weight_percent"] = (
-                decimal_text(weight.quantize(Decimal("0.01")))
-                if weight is not None
-                else None
+                decimal_text(weight.quantize(Decimal("0.01"))) if weight is not None else None
             )
             if weight is not None and weight > Decimal("40"):
                 notices.append(
@@ -439,6 +431,8 @@ class PaperTradingService:
                 ),
                 "valuation_partial": missing_prices > 0,
                 "version": portfolio.version,
+                "is_public": portfolio.is_public,
+                "nickname": portfolio.nickname,
                 "created_at": _iso(portfolio.created_at),
                 "updated_at": _iso(portfolio.updated_at),
             },
@@ -496,17 +490,13 @@ class PaperTradingService:
             }
         if not close_by_symbol:
             return []
-        common_days = set.intersection(
-            *(set(values) for values in close_by_symbol.values())
-        )
+        common_days = set.intersection(*(set(values) for values in close_by_symbol.values()))
         holding_by_symbol = {item.symbol: item for item in portfolio.holdings}
         by_date = {
             day: portfolio.cash_balance
             + sum(
                 (
-                    round_vnd(
-                        values[day] * Decimal(holding_by_symbol[symbol].quantity)
-                    )
+                    round_vnd(values[day] * Decimal(holding_by_symbol[symbol].quantity))
                     for symbol, values in close_by_symbol.items()
                 ),
                 Decimal(),
@@ -517,3 +507,94 @@ class PaperTradingService:
             {"timestamp": f"{day}T08:00:00Z", "value": decimal_text(value)}
             for day, value in sorted(by_date.items())[-90:]
         ]
+
+    def set_public_visibility(
+        self, user_id: str, is_public: bool, nickname: str | None = None
+    ) -> dict[str, object]:
+        self._portfolio_repository.set_public_status(
+            user_id=user_id, is_public=is_public, nickname=nickname
+        )
+        return self.portfolio(user_id)
+
+    def get_social_leaderboard(self, limit: int = 10) -> list[dict[str, object]]:
+        rows = self._portfolio_repository.get_public_leaderboard(limit=limit)
+        result: list[dict[str, object]] = []
+        for r in rows:
+            starting = Decimal(str(r.get("starting_cash", 100000000)))
+            realized = Decimal(str(r.get("realized_pnl", 0)))
+            roi = (
+                (realized / starting * Decimal("100")).quantize(Decimal("0.01"))
+                if starting
+                else Decimal("0")
+            )
+            result.append(
+                {
+                    "portfolio_id": r["portfolio_id"],
+                    "nickname": r["nickname"],
+                    "starting_cash": f"{starting:,.0f} đ",
+                    "cash_balance": f"{Decimal(str(r.get('cash_balance', 0))):,.0f} đ",
+                    "realized_pnl": f"{realized:+,.0f} đ",
+                    "roi_percent": f"{roi:+.2f}%",
+                    "roi_number": float(roi),
+                    "holding_count": int(r.get("holding_count", 0)),
+                    "total_trades": int(r.get("total_trades", 0)),
+                    "win_trades": int(r.get("win_trades", 0)),
+                }
+            )
+        return result
+
+    def get_public_portfolio_detail(self, portfolio_id: str) -> dict[str, object] | None:
+        portfolio = self._portfolio_repository.get_public_portfolio(portfolio_id)
+        if not portfolio:
+            return None
+
+        # Build asset allocation and public trades list
+        instruments = {item.symbol: item for item in self._provider.instruments()}
+        holdings_list: list[dict[str, object]] = []
+        total_market_value = Decimal()
+
+        for h in portfolio.holdings:
+            inst = instruments.get(h.symbol)
+            cur_price = inst.price if inst and inst.price > 0 else Decimal("30000")
+            mv = round_vnd(cur_price * Decimal(h.quantity))
+            total_market_value += mv
+            unrealized = mv - h.total_cost_basis
+            roi = (
+                ((unrealized / h.total_cost_basis) * Decimal("100")).quantize(Decimal("0.01"))
+                if h.total_cost_basis
+                else Decimal("0")
+            )
+            holdings_list.append(
+                {
+                    "symbol": h.symbol,
+                    "name": h.name,
+                    "exchange": h.exchange,
+                    "sector": h.sector,
+                    "quantity": h.quantity,
+                    "current_price": f"{cur_price:,.0f} đ",
+                    "cost_basis": f"{h.total_cost_basis:,.0f} đ",
+                    "market_value": f"{mv:,.0f} đ",
+                    "unrealized_pnl": f"{unrealized:+,.0f} đ",
+                    "roi_percent": f"{roi:+.2f}%",
+                }
+            )
+
+        total_assets = portfolio.cash_balance + total_market_value
+        realized = portfolio.realized_pnl
+        total_roi = (
+            (realized / portfolio.starting_cash * Decimal("100")).quantize(Decimal("0.01"))
+            if portfolio.starting_cash
+            else Decimal("0")
+        )
+
+        return {
+            "id": portfolio.id,
+            "nickname": portfolio.nickname or "Nhà đầu tư ẩn danh",
+            "starting_cash": f"{portfolio.starting_cash:,.0f} đ",
+            "cash_balance": f"{portfolio.cash_balance:,.0f} đ",
+            "total_assets": f"{total_assets:,.0f} đ",
+            "realized_pnl": f"{realized:+,.0f} đ",
+            "roi_percent": f"{total_roi:+.2f}%",
+            "holdings": holdings_list,
+            "trades": [_trade_payload(t) for t in portfolio.trades[:30]],
+        }

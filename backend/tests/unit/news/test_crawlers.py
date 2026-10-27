@@ -377,9 +377,7 @@ def test_beat_start_queues_initial_discovery_for_every_source(
     monkeypatch.setattr(
         celery_module.celery_app,
         "send_task",
-        lambda task, *, args, queue, countdown: published.append(
-            (task, args, queue, countdown)
-        ),
+        lambda task, *, args, queue, countdown: published.append((task, args, queue, countdown)),
     )
 
     celery_module.discover_news_on_beat_start(object())

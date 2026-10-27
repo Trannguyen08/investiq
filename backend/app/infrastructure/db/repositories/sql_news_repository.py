@@ -197,8 +197,7 @@ class SqlNewsRepository:
 
     def get_article(self, article_id: str) -> NewsArticle | None:
         sql = (
-            ARTICLE_SELECT
-            + " WHERE a.id = %s::uuid AND a.visibility = 'published' "
+            ARTICLE_SELECT + " WHERE a.id = %s::uuid AND a.visibility = 'published' "
             "AND r.extraction_status = 'complete' AND a.feed_at >= %s"
         )
         cutoff = datetime.now(UTC) - timedelta(days=settings.news_retention_days)

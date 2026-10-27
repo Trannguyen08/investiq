@@ -28,7 +28,13 @@ from app.api.v1.market_data import (
     stream_router as market_stream_router,
 )
 from app.api.v1.news import router as news_router
-from app.api.v1.portfolio import router as paper_portfolio_router
+from app.api.v1.portfolio import (
+    public_portfolio_router,
+)
+from app.api.v1.portfolio import (
+    router as paper_portfolio_router,
+)
+from app.api.v1.theses import router as thesis_router
 from app.application.use_cases.auth.auth_service import AuthError
 from app.application.use_cases.market_data.errors import MarketDataUnavailable
 from app.infrastructure.config.settings import settings
@@ -80,6 +86,8 @@ app.include_router(market_router)
 app.include_router(market_stream_router)
 app.include_router(watchlist_router)
 app.include_router(paper_portfolio_router)
+app.include_router(public_portfolio_router)
+app.include_router(thesis_router)
 
 
 def _request_id(request: Request) -> str:

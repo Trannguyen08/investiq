@@ -324,14 +324,16 @@ def test_stock_candles_fall_back_to_vci_when_kbs_is_temporarily_unavailable() ->
         @staticmethod
         def to_dict(*, orient: str) -> list[dict[str, object]]:
             assert orient == "records"
-            return [{
-                "time": "2026-10-13",
-                "open": 24.35,
-                "high": 24.5,
-                "low": 23.95,
-                "close": 24.4,
-                "volume": 15_227_600,
-            }]
+            return [
+                {
+                    "time": "2026-10-13",
+                    "open": 24.35,
+                    "high": 24.5,
+                    "low": 23.95,
+                    "close": 24.4,
+                    "volume": 15_227_600,
+                }
+            ]
 
     class Equity:
         @staticmethod

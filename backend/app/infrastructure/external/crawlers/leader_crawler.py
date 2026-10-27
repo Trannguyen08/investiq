@@ -51,13 +51,8 @@ _BASELINE_LEADERS: tuple[LeaderProfile, ...] = (
         ownership_percent=D("17.87"),
         base_price=D("237000"),
         net_worth_total="4.5 tỷ USD (~114.300 tỷ ₫)",
-        net_worth_external=(
-            "Ước tính ngoài sàn: VinFast quốc tế (VFS), VMI JSC, Taxi Xanh GSM"
-        ),
-        bio=(
-            "Tỷ phú giàu nhất Việt Nam, người sáng lập Vingroup "
-            "và thương hiệu xe điện VinFast."
-        ),
+        net_worth_external=("Ước tính ngoài sàn: VinFast quốc tế (VFS), VMI JSC, Taxi Xanh GSM"),
+        bio=("Tỷ phú giàu nhất Việt Nam, người sáng lập Vingroup và thương hiệu xe điện VinFast."),
         holding_public_date=datetime(2026, 9, 30, tzinfo=UTC),
     ),
     LeaderProfile(
@@ -181,8 +176,7 @@ _BASELINE_LEADERS: tuple[LeaderProfile, ...] = (
             "Quỹ đất KCN tại Hải Phòng, Bắc Ninh, Vũng Tàu; hạ tầng viễn thông Sài Gòn Tel"
         ),
         bio=(
-            "Doanh nhân tiên phong phát triển các đại KCN "
-            "và thu hút dòng vốn FDI công nghệ vào VN."
+            "Doanh nhân tiên phong phát triển các đại KCN và thu hút dòng vốn FDI công nghệ vào VN."
         ),
         holding_public_date=datetime(2026, 9, 22, tzinfo=UTC),
     ),
@@ -198,9 +192,7 @@ _BASELINE_LEADERS: tuple[LeaderProfile, ...] = (
         ownership_percent=D("38.30"),
         base_price=D("21500"),
         net_worth_total="8.200 tỷ ₫ (~325 triệu USD)",
-        net_worth_external=(
-            "Quỹ đất dự án đô thị và khu dân cư cao cấp tại Bình Định, Quảng Ngãi"
-        ),
+        net_worth_external=("Quỹ đất dự án đô thị và khu dân cư cao cấp tại Bình Định, Quảng Ngãi"),
         bio=(
             "Nhà sáng lập Phát Đạt, chuyên phát triển các dự án "
             "bất động sản nhà ở cao cấp và đô thị biển."

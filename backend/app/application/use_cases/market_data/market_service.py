@@ -96,8 +96,7 @@ def _instrument(value: MarketInstrument, include_candles: bool = True) -> dict[s
 def _depth_levels(value: MarketInstrument) -> dict[str, object]:
     def serialize(levels: tuple[MarketDepthLevel, ...]) -> list[dict[str, str]]:
         return [
-            {"price": _decimal(level.price), "volume": _decimal(level.volume)}
-            for level in levels
+            {"price": _decimal(level.price), "volume": _decimal(level.volume)} for level in levels
         ]
 
     return {
@@ -301,13 +300,16 @@ class MarketService:
                 Decimal(),
             )
             if matched_value > 0:
-                change_percent = sum(
-                    (
-                        item.change_percent * max(item.matched_value, Decimal())
-                        for item in members
-                    ),
-                    Decimal(),
-                ) / matched_value
+                change_percent = (
+                    sum(
+                        (
+                            item.change_percent * max(item.matched_value, Decimal())
+                            for item in members
+                        ),
+                        Decimal(),
+                    )
+                    / matched_value
+                )
             else:
                 change_percent = sum(
                     (item.change_percent for item in members), Decimal()
@@ -324,9 +326,7 @@ class MarketService:
                     "foreign_net_value": _decimal(
                         sum((item.foreign_net_value for item in members), Decimal())
                     ),
-                    "market_cap": _decimal(
-                        sum((item.market_cap for item in members), Decimal())
-                    ),
+                    "market_cap": _decimal(sum((item.market_cap for item in members), Decimal())),
                 }
             )
         sectors.sort(
@@ -477,13 +477,12 @@ class MarketService:
         price_change_1y = None
 
         if candles and cur_price > Decimal("0"):
+
             def _calc_growth(index_back: int, min_len: int) -> tuple[str | None, str | None]:
                 if len(candles) < min_len:
                     return None, None
                 past_price = (
-                    candles[-index_back].close
-                    if len(candles) >= index_back
-                    else candles[0].close
+                    candles[-index_back].close if len(candles) >= index_back else candles[0].close
                 )
                 if past_price <= Decimal("0"):
                     return None, None
@@ -543,6 +542,7 @@ class MarketService:
         bvps: str | None = None
 
         if raw_growth_rows:
+
             def _int(val: object) -> int:
                 try:
                     return int(str(val).strip())
@@ -559,7 +559,8 @@ class MarketService:
                     return None
 
             ttm_rows = [
-                r for r in raw_growth_rows
+                r
+                for r in raw_growth_rows
                 if str(r.get("ratio_type", "")).upper() == "RATIO_TTM"
                 and 1 <= _int(r.get("quarter")) <= 4
             ]
@@ -591,9 +592,7 @@ class MarketService:
                         prev_profit = prev_equity * prev_roe
                         if prev_profit != Decimal("0"):
                             p_growth = (
-                                (cur_profit - prev_profit)
-                                / abs(prev_profit)
-                                * Decimal("100")
+                                (cur_profit - prev_profit) / abs(prev_profit) * Decimal("100")
                             )
                             profit_yoy = f"{'+' if p_growth >= Decimal('0') else ''}{p_growth:.1f}%"
 
@@ -606,11 +605,7 @@ class MarketService:
                                 cur_rev = cur_profit / margin_val
                                 prev_rev = prev_profit / prev_margin
                                 if prev_rev != Decimal("0"):
-                                    r_growth = (
-                                        (cur_rev - prev_rev)
-                                        / abs(prev_rev)
-                                        * Decimal("100")
-                                    )
+                                    r_growth = (cur_rev - prev_rev) / abs(prev_rev) * Decimal("100")
                                     rev_yoy = (
                                         f"{'+' if r_growth >= Decimal('0') else ''}{r_growth:.1f}%"
                                     )
@@ -626,9 +621,7 @@ class MarketService:
                         "revenue_growth_yoy": rev_yoy,
                         "profit_growth_yoy": profit_yoy,
                         "roe": (
-                            f"{roe_val * Decimal('100'):.1f}%"
-                            if roe_val is not None
-                            else None
+                            f"{roe_val * Decimal('100'):.1f}%" if roe_val is not None else None
                         ),
                         "net_margin": (
                             f"{margin_val * Decimal('100'):.1f}%"
@@ -636,9 +629,7 @@ class MarketService:
                             else None
                         ),
                         "gross_margin": (
-                            f"{gross_val * Decimal('100'):.1f}%"
-                            if gross_val is not None
-                            else None
+                            f"{gross_val * Decimal('100'):.1f}%" if gross_val is not None else None
                         ),
                     }
                 )
@@ -787,8 +778,7 @@ class MarketService:
             else "phản ánh kỳ vọng cao từ thị trường vào chu kỳ kinh doanh mới."
         )
         insight_2 = (
-            f"Định giá P/E: Hiện ở mức {pe_str} với quy mô vốn hóa {market_cap_str}, "
-            f"{pe_eval}"
+            f"Định giá P/E: Hiện ở mức {pe_str} với quy mô vốn hóa {market_cap_str}, {pe_eval}"
         )
         insight_3 = (
             f"Dòng tiền & Khuyến nghị F0: Thanh khoản đạt {volume_growth_20d}. "
@@ -826,9 +816,7 @@ class MarketService:
                 "eps": eps_str,
                 "bvps": bvps,
                 "roe_percent": (
-                    f"{instrument.roe_percent:.1f}%"
-                    if instrument.roe_percent is not None
-                    else None
+                    f"{instrument.roe_percent:.1f}%" if instrument.roe_percent is not None else None
                 ),
                 "roa_percent": roa_percent,
                 "gross_margin_percent": gross_margin_percent,

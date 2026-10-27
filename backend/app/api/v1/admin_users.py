@@ -61,6 +61,7 @@ def _encode_cursor(created_at: datetime, user_id: str, direction: str, page: int
     ).encode()
     return base64.urlsafe_b64encode(payload).decode().rstrip("=")
 
+
 router = APIRouter(
     prefix="/api/v1/admin/users",
     tags=["admin-users"],

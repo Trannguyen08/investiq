@@ -165,9 +165,9 @@ def test_repository_withdraws_incomplete_articles_from_public_reads(
         fetched_at=datetime.now(UTC),
     )
 
-    article_id, changed = IngestNews(
-        news_repository, VietnameseRuleSentimentAnalyzer()
-    ).execute(parsed)
+    article_id, changed = IngestNews(news_repository, VietnameseRuleSentimentAnalyzer()).execute(
+        parsed
+    )
     items, _ = news_repository.list_articles(NewsQuery(limit=20, complete_only=True))
 
     assert changed is True

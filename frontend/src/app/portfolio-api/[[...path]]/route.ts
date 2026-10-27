@@ -27,6 +27,8 @@ async function proxy(request: Request, context: Context, method: "GET" | "POST" 
   try {
     if (method !== "GET") await verifyCsrf(request);
     const path = (await context.params).path?.join("/") ?? "";
+    const url = new URL(request.url);
+    const search = url.search;
     const text = method === "POST" ? await request.text() : undefined;
     if (text && new TextEncoder().encode(text).length > 16_384) {
       return NextResponse.json(
@@ -34,7 +36,7 @@ async function proxy(request: Request, context: Context, method: "GET" | "POST" 
         { status: 413 },
       );
     }
-    const response = await paperTradingRequest(path, {
+    const response = await paperTradingRequest(path + search, {
       method,
       body: text || undefined,
       headers: request.headers.get("idempotency-key")

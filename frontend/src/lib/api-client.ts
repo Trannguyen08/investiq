@@ -10,6 +10,12 @@ import type {
   SectorCollection,
   StockGrowthEnvelope,
 } from "@/types/market";
+import type {
+  AnalystReputationItem,
+  InvestmentThesisItem,
+  PublicPortfolioDetailData,
+  SocialLeaderboardItem,
+} from "@/types/thesis";
 import { resolveApiBase } from "@/lib/api-base";
 
 export type Source = {
@@ -242,3 +248,28 @@ export function getMarketGrowth(symbol: string): Promise<StockGrowthEnvelope> {
     60,
   );
 }
+
+export function getTheses(
+  query?: URLSearchParams,
+): Promise<{ data: InvestmentThesisItem[]; total: number }> {
+  const suffix = query && query.size ? `?${query.toString()}` : "";
+  return requestJson<{ data: InvestmentThesisItem[]; total: number }>(`/v1/theses${suffix}`, 5);
+}
+
+export function getAnalystLeaderboard(): Promise<{ data: AnalystReputationItem[] }> {
+  return requestJson<{ data: AnalystReputationItem[] }>("/v1/theses/leaderboard", 5);
+}
+
+export function getSocialLeaderboard(): Promise<{ data: SocialLeaderboardItem[] }> {
+  return requestJson<{ data: SocialLeaderboardItem[] }>("/v1/paper-portfolio/leaderboard", 5);
+}
+
+export function getPublicPortfolioDetail(
+  portfolioId: string,
+): Promise<PublicPortfolioDetailData> {
+  return requestJson<PublicPortfolioDetailData>(
+    `/v1/paper-portfolio/public/${encodeURIComponent(portfolioId)}`,
+    5,
+  );
+}
+

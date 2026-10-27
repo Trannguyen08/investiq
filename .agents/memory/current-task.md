@@ -1,6 +1,34 @@
 # Current Task
 
-## High Contrast Event Schedule, Prominent Business Leaders Valuation Crawler & Complete TCBS Deprecation - 2026-10-26 (complete)
+## Strategic Innovation & Expansion: Market Intelligence & Community Proof-of-Thesis Arena (2 Branches) - 2026-10-27 (complete)
+
+- **User Request**:
+  1. Đề xuất và triển khai tất cả các tính năng mới đặc sắc, giá trị thực tiễn cao thay vì mạng xã hội chung chung (Proof-of-Thesis Arena, Quantitative Forensics, Conglomerate Graphs, Social Paper Trading, Daily Digest, DCA Simulator).
+  2. Mở rộng cơ sở dữ liệu doanh nhân nổi bật vượt xa con số 8 (thu thập hồ sơ 22 doanh nhân hàng đầu).
+  3. Tách biệt thành 2 hướng chiến lược độc lập tương ứng với 2 git branch:
+     - **Nhánh 1**: `feature/market-intelligence-analytics` (Đã hoàn thành, kiểm thử & push remote).
+     - **Nhánh 2**: `feature/community-thesis-paper-trading` (Đã hoàn thành, kiểm thử & push remote).
+
+- **Implementation Details**:
+  1. **Branch 1 (`feature/market-intelligence-analytics`)**:
+     - *Extended Business Leaders*: Mở rộng crawler từ 8 lên 22 doanh nhân hàng đầu Việt Nam thuộc các ngành Bất động sản, Thép, Công nghệ, Bán lẻ, Ngân hàng, Hàng không, Thủy sản, Năng lượng; hỗ trợ tìm kiếm và lọc theo ngành.
+     - *Corporate Conglomerate Ecosystem Graphs*: Mô hình hóa đồ thị 6 hệ sinh thái tập đoàn lớn nhất Việt Nam (Vingroup, Masan Group, Hòa Phát, FPT Group, Sovico Group, SSI/PAN Group) với tỷ lệ sở hữu chéo và dòng luân chuyển vốn.
+     - *Quantitative Forensics & Red Flags*: Động cơ tính Altman Z-Score và phát hiện 4 cờ đỏ kiểm toán (Chất lượng lợi nhuận, Đột biến phải thu, Tồn kho bất thường, Rủi ro thanh khoản).
+     - *DCA & Investment Strategy Simulator*: Mô phỏng đầu tư định kỳ cổ phiếu vs gửi tiết kiệm 12 tháng, trực quan hóa Alpha và biến động danh mục.
+     - *15h30 Market Close Daily Digest*: Tổng hợp nhật báo sau giờ giao dịch với điểm tin sắc nét, độ rộng dòng tiền và khuyến nghị quan sát.
+  2. **Branch 2 (`feature/community-thesis-paper-trading`)**:
+     - *Proof-of-Thesis Arena (Đấu trường Luận điểm Đầu tư)*:
+       - Hệ thống đăng luận điểm đầu tư có cấu trúc (Symbol, Stance: Bullish/Bearish, Target Price, Stop Loss, Horizon, Catalysts, Thesis Body).
+       - Cơ chế chống gian lận (Anti-cheat): Tự động đối chiếu và khóa giá thị trường thực tế ngay lúc đăng (Entry Price). Tự động theo dõi tiến độ và đánh giá trạng thái hoàn thành (`hit_target` / `stopped_out`) minh bạch.
+       - Bảng xếp hạng Uy tín Chuyên gia (Analyst Reputation Leaderboard): Vinh danh Top chuyên gia dựa trên Win Rate % và ROI thực tế kiểm chứng.
+     - *Social Paper Trading (Bảng Xếp Hạng Nhà Đầu Tư Mô Phỏng)*:
+       - Cung cấp tùy chọn công khai danh mục kèm biệt danh (`nickname`) từ trang Dashboard cá nhân.
+       - Bảng xếp hạng Top nhà đầu tư có hiệu suất sinh lời cao nhất, hiển thị chi tiết cơ cấu phân bổ tài sản (Holdings) và nhật ký vào/ra lệnh minh bạch.
+       - Giao diện Dark Navy glassmorphism cao cấp, navigation link và route handlers chuẩn BFF proxy Next.js.
+- **Validation**:
+  - Backend: 100% tests passed (11/11 community & paper trading tests, 43/43 market intelligence tests), `ruff check` và `ruff format` 0 lỗi.
+  - Frontend: 100% tests passed (112/112 tests across 27 files), `tsc --noEmit` 0 lỗi TypeScript.
+
 
 - **User Request**:
   1. Ảnh 1 (`/market/events`): Cho màu chữ rõ hơn (ngày tháng `time`, mã cổ phiếu, nội dung sự kiện đang quá tối trên nền Dark Navy).

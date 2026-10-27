@@ -223,4 +223,3 @@ def test_paper_order_rejects_missing_idempotency_key() -> None:
     assert response.status_code == 422
     assert response.json()["error"]["code"] == "VALIDATION_ERROR"
     assert response.headers["cache-control"] == "no-store"
-

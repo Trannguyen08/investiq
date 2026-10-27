@@ -351,6 +351,10 @@ export function PaperTradingDashboard({
   const [orderSide, setOrderSide] = useState("all");
   const [orderSymbol, setOrderSymbol] = useState("");
   const [pnlDialog, setPnlDialog] = useState<"unrealized" | "realized" | null>(null);
+  const [isPublic, setIsPublic] = useState(false);
+  const [nickname, setNickname] = useState("");
+  const [savingVisibility, setSavingVisibility] = useState(false);
+  const [visibilityMessage, setVisibilityMessage] = useState("");
   const currentPrices = useMemo(
     () => new Map(marketInstruments.map((item) => [item.symbol, item.price])),
     [marketInstruments],
@@ -360,12 +364,67 @@ export function PaperTradingDashboard({
     if (auth.status !== "authenticated") return;
     let cancelled = false;
     requestPaperDashboard().then((value) => {
-      if (!cancelled) { setDashboard(value); setError(""); }
+      if (!cancelled) {
+        setDashboard(value);
+        setError("");
+        setIsPublic(value.account.is_public ?? false);
+        setNickname(value.account.nickname ?? "");
+      }
     }).catch((value: unknown) => {
       if (!cancelled) setError(value instanceof Error ? value.message : "Không thể tải danh mục.");
     });
     return () => { cancelled = true; };
   }, [auth.status]);
+
+  async function handleSaveVisibility(nextPublic: boolean) {
+    if (!nickname.trim() && nextPublic) {
+      setVisibilityMessage("Vui lòng nhập biệt danh của bạn khi công khai danh mục.");
+      return;
+    }
+    setSavingVisibility(true);
+    setVisibilityMessage("");
+    try {
+      const csrfRes = await fetch("/auth-api/csrf", { cache: "no-store" });
+      const csrfBody = (await csrfRes.json()) as { csrf_token?: string };
+      if (!csrfRes.ok || !csrfBody.csrf_token) throw new Error("Không thể xác thực thao tác.");
+
+      const res = await fetch("/portfolio-api/visibility", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "x-csrf-token": csrfBody.csrf_token,
+        },
+        body: JSON.stringify({
+          is_public: nextPublic,
+          nickname: nickname.trim() || null,
+        }),
+      });
+      if (!res.ok) {
+        const err = (await res.json().catch(() => null)) as { detail?: string } | null;
+        throw new Error(err?.detail || "Không thể cập nhật quyền hiển thị.");
+      }
+      setIsPublic(nextPublic);
+      if (dashboard) {
+        setDashboard({
+          ...dashboard,
+          account: {
+            ...dashboard.account,
+            is_public: nextPublic,
+            nickname: nickname.trim() || null,
+          },
+        });
+      }
+      setVisibilityMessage(
+        nextPublic
+          ? "🎉 Đã công khai danh mục lên Bảng Xếp Hạng Cộng Đồng thành công!"
+          : "Đã chuyển danh mục về chế độ riêng tư an toàn.",
+      );
+    } catch (err) {
+      setVisibilityMessage(err instanceof Error ? err.message : "Chưa thể lưu cấu hình.");
+    } finally {
+      setSavingVisibility(false);
+    }
+  }
 
   const holdingBySymbol = useMemo(
     () => new Map((dashboard?.holdings ?? []).map((holding) => [holding.symbol, holding])),
@@ -537,9 +596,75 @@ export function PaperTradingDashboard({
       </section>
 
       <section className="paper-section">
-        <div className="paper-section-heading"><div><p className="eyebrow">TIN TÍCH CỰC TRONG 24 GIỜ</p><h2>Mã được nhắc đến trong tin tốt</h2></div><Link href="/news?sentiment=positive">Xem toàn bộ tin</Link></div>
         {positiveNews.length ? <div className="paper-news-grid">{positiveNews.map((item) => <article key={item.id}><div>{item.symbols.map((itemSymbol) => <button type="button" key={itemSymbol} onClick={() => prepareOrder("buy", itemSymbol)}>{itemSymbol}</button>)}</div><h3><Link href={`/news/${item.id}`}>{item.title}</Link></h3><p>{item.summary}</p><small>{item.source}{item.publishedAt ? ` · ${timeFormat.format(new Date(item.publishedAt))}` : ""}</small></article>)}</div> : <div className="paper-empty compact"><p>Chưa có tin tích cực đã phân tích và gắn mã trong 24 giờ gần nhất.</p></div>}
         <p className="paper-data-limit">Nhãn tích cực phản ánh nội dung bài viết, không dự báo giá tương lai và không bảo đảm lợi nhuận.</p>
+      </section>
+
+      <section className="paper-section social-visibility-section">
+        <div className="paper-section-heading">
+          <div>
+            <p className="eyebrow">CỘNG ĐỒNG & BẢNG XẾP HẠNG</p>
+            <h2>Chia sẻ danh mục mô phỏng (Social Paper Trading)</h2>
+          </div>
+          <Link href="/community" className="text-cyan font-semibold">
+            Xem Bảng Xếp Hạng Cộng Đồng →
+          </Link>
+        </div>
+        <div className="social-visibility-card">
+          <div className="visibility-info">
+            <p className="visibility-status-text">
+              Trạng thái hiện tại:{" "}
+              {isPublic ? (
+                <strong className="text-emerald">🟢 Đang công khai trên Bảng Xếp Hạng</strong>
+              ) : (
+                <strong className="text-neutral">🔒 Riêng tư (Chỉ mình bạn xem)</strong>
+              )}
+            </p>
+            <p className="visibility-desc">
+              Khi bật công khai, danh mục của bạn (tỷ suất ROI, cơ cấu danh mục, lịch sử lệnh) sẽ hiển thị minh bạch trên Bảng Xếp Hạng Nhà Đầu Tư tại mục Cộng Đồng. Email cá nhân và thông tin riêng tư được bảo mật 100%.
+            </p>
+          </div>
+
+          <div className="visibility-controls">
+            <div className="nickname-field">
+              <label htmlFor="portfolioNickname">Biệt danh hiển thị trên BXH:</label>
+              <input
+                id="portfolioNickname"
+                type="text"
+                placeholder="VD: Alpha Trader, Dragon Capital Fan..."
+                value={nickname}
+                onChange={(e) => setNickname(e.target.value)}
+                maxLength={60}
+                className="nickname-input"
+              />
+            </div>
+
+            <div className="visibility-buttons">
+              {isPublic ? (
+                <button
+                  type="button"
+                  disabled={savingVisibility}
+                  onClick={() => handleSaveVisibility(false)}
+                  className="btn-toggle-private"
+                >
+                  {savingVisibility ? "Đang lưu..." : "🔒 Đặt về Riêng tư"}
+                </button>
+              ) : (
+                <button
+                  type="button"
+                  disabled={savingVisibility}
+                  onClick={() => handleSaveVisibility(true)}
+                  className="btn-toggle-public"
+                >
+                  {savingVisibility ? "Đang lưu..." : "🌐 Công khai Danh mục lên BXH"}
+                </button>
+              )}
+            </div>
+          </div>
+          {visibilityMessage && (
+            <p className="visibility-msg">{visibilityMessage}</p>
+          )}
+        </div>
       </section>
 
       <section className="paper-section">

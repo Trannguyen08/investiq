@@ -223,6 +223,8 @@ def test_dashboard_separates_cash_cost_value_and_unrealized_profit() -> None:
         "total_return_percent": "-24.99",
         "valuation_partial": False,
         "version": 2,
+        "is_public": False,
+        "nickname": None,
         "created_at": "2026-10-08T00:00:00Z",
         "updated_at": "2026-10-08T00:00:00Z",
     }
@@ -296,4 +298,3 @@ def test_legacy_waiting_order_auto_fills_at_the_latest_observed_price() -> None:
     assert isinstance(orders, list)
     assert isinstance(orders[0], dict)
     assert orders[0]["status"] == "filled"
-
