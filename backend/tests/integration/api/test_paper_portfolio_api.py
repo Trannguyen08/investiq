@@ -3,12 +3,14 @@ from __future__ import annotations
 from datetime import UTC, datetime
 from decimal import Decimal
 
+import pytest
 from fastapi.testclient import TestClient
 
 from app.api import deps
 from app.api.v1 import portfolio as portfolio_api
 from app.application.dto.portfolio_dto import PlacePaperOrder
 from app.domain.entities.portfolio import PaperOrder, PaperTrade
+from app.infrastructure.config.settings import settings
 from app.main import app
 
 
@@ -157,7 +159,10 @@ class FakeService:
         )
 
 
-def test_paper_portfolio_requires_the_private_bff_boundary() -> None:
+def test_paper_portfolio_requires_the_private_bff_boundary(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(settings, "auth_enabled", False)
     response = TestClient(app).get("/api/v1/paper-portfolio")
 
     assert response.status_code == 503

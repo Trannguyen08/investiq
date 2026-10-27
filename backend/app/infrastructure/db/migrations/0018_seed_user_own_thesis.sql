@@ -1,11 +1,16 @@
 -- Migration 0018: Seed thesis for logged in user trannguyen08py@gmail.com
+INSERT INTO users (id, email, display_name, role, status, email_verified_at)
+VALUES ('838fc348-aa4e-4cc2-be39-cd12dca71145', 'trannguyen08py@gmail.com', 'Nguyễn Trần', 'user', 'active', now())
+ON CONFLICT (email) DO UPDATE
+SET display_name = EXCLUDED.display_name;
+
 INSERT INTO investment_theses (
     id, user_id, author_name, symbol, stance, entry_price, target_price, stop_loss_price,
     horizon_months, title, thesis_body, catalysts, status, outcome_roi, closed_at, closed_price, upvotes, created_at
-) VALUES
-(
+)
+SELECT
     'e1111111-1111-4111-e111-111111111111',
-    '838fc348-aa4e-4cc2-be39-cd12dca71145',
+    id,
     'Nguyễn Trần (Tôi)',
     'FPT',
     'bullish',
@@ -22,5 +27,5 @@ INSERT INTO investment_theses (
     NULL,
     35,
     now() - interval '1 hour'
-)
+FROM users WHERE email = 'trannguyen08py@gmail.com'
 ON CONFLICT (id) DO NOTHING;

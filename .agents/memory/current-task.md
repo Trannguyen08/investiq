@@ -23,10 +23,15 @@
   - Refactored `financial_report_crawler.py` to use Python standard library `urllib.request` (consistent with all other crawlers in `crawlers/`).
   - Added `[[tool.mypy.overrides]] module = ["httpx", "httpx.*"] ignore_missing_imports = true` to `pyproject.toml`.
   - Fixed `requirements-dev.txt` to install `httpx==0.28.1`.
+- **CI Test Step & Migration Fix (`0018_seed_user_own_thesis.sql`)**:
+  - In CI `backend-ci.yml`, the `Test` step runs `python -m pytest` with `TEST_DATABASE_URL` pointing to PostgreSQL container.
+  - `apply_migrations` failed on `0018_seed_user_own_thesis.sql` with `ForeignKeyViolation` because user `838fc348-aa4e-4cc2-be39-cd12dca71145` (`trannguyen08py@gmail.com`) was not inserted in `users` table on clean DB.
+  - Updated `0018_seed_user_own_thesis.sql` to insert `trannguyen08py@gmail.com` into `users` first with `ON CONFLICT (email) DO UPDATE`.
+  - Updated `test_auth_api.py` and `test_paper_portfolio_api.py` to monkeypatch `auth_enabled=False` for unconfigured behavior assertions.
 - **Validation**:
   - `backend/`: `ruff check .` -> All checks passed (0 errors).
   - `backend/`: `mypy` -> Success: no issues found in 34 source files (0 errors).
-  - `backend/`: `python -m pytest tests/unit/ -v` -> 111 passed.
+  - `backend/`: `python -m pytest` -> 143 passed, 0 failed.
   - `backend/`: `python -m pytest tests/unit/community/ -v` -> 5 passed.
   - `frontend/`: `npm run lint` -> 0 errors.
   - `frontend/`: `npm run typecheck` -> 0 errors.
