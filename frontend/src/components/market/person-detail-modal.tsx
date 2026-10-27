@@ -9,9 +9,10 @@ const LEADER_ECOSYSTEM_MAP: Record<string, { id: string; name: string }> = {
   "Phạm Nhật Vượng": { id: "vingroup", name: "Tập đoàn Vingroup" },
   "Trần Đình Long": { id: "hoaphat", name: "Tập đoàn Hòa Phát" },
   "Nguyễn Thị Phương Thảo": { id: "sovico", name: "Tập đoàn Sovico & Vietjet" },
-  "Hồ Hùng Anh": { id: "techcombank", name: "Hệ sinh thái Techcombank & One Mount" },
-  "Nguyễn Đăng Quang": { id: "masan", name: "Tập đoàn Masan" },
+  "Hồ Hùng Anh": { id: "masan-techcombank", name: "Hệ sinh thái Masan & Techcombank" },
+  "Nguyễn Đăng Quang": { id: "masan-techcombank", name: "Hệ sinh thái Masan & Techcombank" },
   "Trương Gia Bình": { id: "fpt", name: "Tập đoàn FPT" },
+  "Nguyễn Duy Hưng": { id: "ssi-pan", name: "Hệ sinh thái SSI & The PAN Group" },
 };
 
 export function PersonDetailModal({
@@ -231,16 +232,16 @@ export function PersonDetailModal({
               <h4>Bản đồ Hệ Sinh Thái {ecoLink.name}</h4>
               <p>Khám phá toàn cảnh mối liên kết giữa công ty mẹ, công ty con và cổ đông sáng lập.</p>
             </div>
-            <button
-              type="button"
+            <Link
+              href={`/market/ecosystems?eco=${ecoLink.id}`}
               className="eco-banner-btn"
               onClick={() => {
                 onClose();
-                onOpenEcosystem(ecoLink.id);
+                if (onOpenEcosystem) onOpenEcosystem(ecoLink.id);
               }}
             >
               Khám phá Bản đồ Hệ Sinh Thái →
-            </button>
+            </Link>
           </div>
         )}
 

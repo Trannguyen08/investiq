@@ -1,5 +1,40 @@
 # Current Task
 
+## Conglomerate Ecosystem Explorer: Dedicated Route `/market/ecosystems` & Complete Visual Redesign - 2026-10-27 (complete)
+
+- **User Request**:
+  1. "k ăn css ở hệ sinh thái": Fix broken CSS on the conglomerate ecosystems view.
+  2. "thiết kế lại UI sao cho đẹp mắt hơn chứu thấy toàn chữ và chữ": Redesign the UI to be visually stunning, interactive, and structured rather than walls of plain text.
+  3. "và cho trang này có 1 endpoint riêng đi": Provide a dedicated first-class route/endpoint (`/market/ecosystems`) with its own navigation tab.
+
+- **Implementation Details**:
+  1. **Dedicated Endpoint & Navigation Routing (`/market/ecosystems`)**:
+     - Updated [market-routes.ts](file:///c:/investiq/frontend/src/lib/market-routes.ts): Added `"ecosystems"` to `MARKET_TABS` array (`export const MARKET_TABS = ["stocks", "watchlist", "indices", "events", "people", "ecosystems"] as const;`).
+     - Updated [market-workspace.tsx](file:///c:/investiq/frontend/src/components/market/market-workspace.tsx): Added distinct sub-navigation tab `{ value: "ecosystems", label: "Hệ sinh thái" }` alongside `{ value: "people", label: "Doanh nhân" }`.
+     - Exported `EcosystemsView` component in `market-workspace.tsx` accepting `initialEcosystems` and `initialEcoId` query parameter.
+     - Updated App Router [market/[tab]/page.tsx](file:///c:/investiq/frontend/src/app/(user)/market/[tab]/page.tsx): Added handler for `tab === "ecosystems"`, fetching `getMarketEcosystems()` on SSR and rendering `EcosystemsView`.
+     - Updated [person-detail-modal.tsx](file:///c:/investiq/frontend/src/components/market/person-detail-modal.tsx): Updated "Khám phá Bản đồ Hệ Sinh Thái →" to link directly to `/market/ecosystems?eco=${ecoLink.id}`.
+  2. **Complete Visual UI Redesign (`ecosystem-graph.tsx`)**:
+     - **Conglomerate Carousel Selector Strip**: 6 rich cards with custom conglomerate brand themes (Vingroup, Masan & Techcombank, Hòa Phát, FPT, Sovico, SSI & PAN), monograms, founder names, core ticker chips (`VIC`, `VHM`, `VRE`...), and total market cap badges with glowing active halos.
+     - **Hero Overview Banner**: Dynamic gradient background per conglomerate, sector badge, ecosystem ID, founder badge with avatar icon, concise overview description, and 4-column key metrics matrix (Tổng vốn hóa niêm yết, Quy mô doanh nghiệp, Mạng lưới dòng vốn, Hạt nhân chi phối).
+     - **Interactive Layout Switcher**:
+       - *Layout 1: 🌳 Sơ đồ Cấu trúc Phân nhánh (Visual Tree Flow)*: Central glowing Parent Holding Card (`👑 TRỤ CỘT CHI PHỐI & ĐIỀU PHỐI DÒNG VỐN`), ticker link capsule, live price, daily change %, exchange; dynamic branching connector divider; Listed Subsidiaries grid with ownership progress bar gauge; Unlisted Subsidiaries grid with dark purple/sapphire styling and synergy descriptions.
+       - *Layout 2: 📊 Ma trận Thẻ Chi tiết (Matrix Grid View)*: Filterable by `Tất cả`, `Cổ phiếu niêm yết`, `Doanh nghiệp ngoài sàn`.
+     - **Value Chain & Capital Synergies (Dòng luân chuyển vốn & Chuỗi giá trị liên kết)**: Interactive visual cards showing ownership stakes %, supply chain relationships, and strategic alliances with flow arrow badges (`[ SOURCE ] ──► [ TARGET ]`).
+  3. **Design System & Styling (`globals.css`)**:
+     - Added comprehensive dark navy styles for `.ecosystems-view`, `.eco-explorer-root`, `.eco-selector-strip`, `.eco-strip-card`, `.eco-hero-banner`, `.eco-hero-stats-grid`, `.eco-parent-hub-card`, `.eco-subsidiary-grid`, `.eco-card-node`, `.node-ownership-box`, `.eco-synergies-section`.
+     - Full mobile responsive rules for small screen devices (`@media (max-width: 960px)` and `@media (max-width: 640px)`).
+
+- **Validation**:
+  - Frontend TypeScript (`npm --prefix frontend run typecheck`): 0 errors.
+  - Frontend Lint (`npm --prefix frontend run lint`): 0 errors.
+  - Frontend Vitest (`npm --prefix frontend test`): 116/116 tests passed across 28 test files.
+  - Browser Subagent verified at `http://localhost:3000/market/ecosystems`:
+    - Tested dedicated endpoint `/market/ecosystems`, verified title and all 6 conglomerate cards (`ecosystems_dedicated_page.png`).
+    - Tested switching to Hòa Phát ecosystem (`ecosystems_hoaphat_view.png`).
+    - Tested switching to Matrix layout (`ecosystems_matrix_layout.png`).
+    - Confirmed 0 console errors.
+
 ## Console Errors, CORS, UI CSS Alignment, and System Dark Theme Restoration - 2026-10-27 (complete)
 
 - **User Request**:

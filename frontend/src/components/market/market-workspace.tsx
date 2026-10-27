@@ -14,14 +14,15 @@ import { PersonDetailModal } from "@/components/market/person-detail-modal";
 import { MarketStreamProvider, useMarketStreamState } from "@/hooks/use-realtime-price";
 import { useVisibleFundamentals } from "@/hooks/use-visible-fundamentals";
 import { marketPath, type MarketTab } from "@/lib/market-routes";
-import type { EventCollection, IndexCollection, InstrumentCollection, MarketMeta, MarketPerson, PeopleCollection } from "@/types/market";
+import type { EcosystemSummary, EventCollection, IndexCollection, InstrumentCollection, MarketMeta, MarketPerson, PeopleCollection } from "@/types/market";
 
 const tabs: { value: MarketTab; label: string }[] = [
   { value: "stocks", label: "Cổ phiếu" },
   { value: "watchlist", label: "Watchlist" },
   { value: "indices", label: "Chỉ số" },
   { value: "events", label: "Sự kiện" },
-  { value: "people", label: "Doanh nhân & Hệ sinh thái" },
+  { value: "people", label: "Doanh nhân" },
+  { value: "ecosystems", label: "Hệ sinh thái" },
 ];
 
 export function MarketShell({ tab, meta, symbols, children }: { tab: MarketTab; meta: MarketMeta; symbols: string[]; children: ReactNode }) {
@@ -202,24 +203,22 @@ export function PeopleView({ collection }: { collection: PeopleCollection }) {
     <section className="market-tab-panel people-view">
       <div className="market-tab-heading">
         <div>
-          <h2>Doanh nhân &amp; Hệ sinh thái Tập đoàn</h2>
+          <h2>Top 22 Doanh nhân &amp; Tỷ phú Việt Nam</h2>
           <p>{collection.methodology.label} · Cập nhật theo thị giá trực tiếp Vnstock và công bố Forbes.</p>
         </div>
         <div className="view-mode-toggle">
           <button
             type="button"
-            className={`view-toggle-btn ${viewMode === "leaders" ? "active" : ""}`}
-            onClick={() => setViewMode("leaders")}
+            className="view-toggle-btn active"
           >
             Top Doanh Nhân ({collection.data.length})
           </button>
-          <button
-            type="button"
-            className={`view-toggle-btn ${viewMode === "ecosystems" ? "active" : ""}`}
-            onClick={() => setViewMode("ecosystems")}
+          <Link
+            href="/market/ecosystems"
+            className="view-toggle-btn"
           >
-            Bản đồ Hệ Sinh Thái (6 Tập đoàn)
-          </button>
+            Bản đồ Hệ Sinh Thái (6 Tập đoàn) →
+          </Link>
         </div>
       </div>
 
@@ -466,4 +465,30 @@ export function PeopleView({ collection }: { collection: PeopleCollection }) {
 export function WatchlistView({ instruments }: { instruments: InstrumentCollection }) {
   return <section className="market-tab-panel watchlist-panel"><WatchlistPanel instruments={instruments.data} /></section>;
 }
+
+export function EcosystemsView({
+  initialEcosystems,
+  initialEcoId,
+}: {
+  initialEcosystems?: EcosystemSummary[];
+  initialEcoId?: string;
+}) {
+  return (
+    <section className="market-tab-panel ecosystems-view">
+      <div className="market-tab-heading">
+        <div>
+          <h2>Bản đồ Hệ Sinh Thái &amp; Tập đoàn Kinh tế</h2>
+          <p>Mạng lưới sở hữu chéo, dòng luân chuyển vốn và cấu trúc doanh nghiệp của 6 tập đoàn tư nhân lớn nhất Việt Nam.</p>
+        </div>
+        <div className="view-mode-toggle">
+          <Link href="/market/people" className="view-toggle-btn">
+            ← Xem Bảng 22 Doanh nhân
+          </Link>
+        </div>
+      </div>
+      <EcosystemGraph initialEcosystemId={initialEcoId} initialEcosystems={initialEcosystems} />
+    </section>
+  );
+}
+
 
