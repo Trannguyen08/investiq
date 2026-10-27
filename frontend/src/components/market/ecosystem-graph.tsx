@@ -116,7 +116,7 @@ export function EcosystemGraph({
     if (initialEcosystemId && initialEcosystemId !== selectedId) {
       setSelectedId(initialEcosystemId);
     }
-  }, [initialEcosystemId]);
+  }, [initialEcosystemId, selectedId]);
 
   // Load ecosystems list if not provided
   useEffect(() => {

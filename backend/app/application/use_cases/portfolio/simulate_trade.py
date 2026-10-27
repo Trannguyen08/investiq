@@ -511,9 +511,7 @@ class PaperTradingService:
     def set_public_visibility(
         self, user_id: str, is_public: bool, nickname: str | None = None
     ) -> dict[str, object]:
-        self._repository.set_public_status(
-            user_id=user_id, is_public=is_public, nickname=nickname
-        )
+        self._repository.set_public_status(user_id=user_id, is_public=is_public, nickname=nickname)
         return self.dashboard(user_id)
 
     def get_social_leaderboard(self, limit: int = 10) -> list[dict[str, object]]:

@@ -1,5 +1,42 @@
 # Current Task
 
+## Codebase Audit, Dead Placeholder Removal & Clean Code Structure - 2026-10-27 (complete)
+
+- **User Request**: "đổi nhánh và thực hiện task sau: rà soát lại cấu trúc frontend và backend, check xem các file k có nội dung xóa bớt, clean code, cho các file nằm đúng folder"
+- **Branch**: Created and switched to `refactor/codebase-structure-cleanup` from `feature/community-thesis-paper-trading`.
+- **Audit & Structural Actions**:
+  1. **Dead/Empty Placeholder Cleanup**:
+     - Identified 106 empty or 1-line scaffold placeholder files across frontend and backend that were never implemented, never imported, and had zero test coverage.
+     - **Frontend**: Removed 20 obsolete files:
+       - `src/components/charts/` (6 unused chart stubs: `candlestick-chart.tsx`, `confidence-gauge.tsx`, `equity-curve-chart.tsx`, `model-accuracy-chart.tsx`, `sentiment-timeline.tsx`, `system-health-chart.tsx`).
+       - `src/components/portfolio/allocation-donut.tsx` and `holdings-table.tsx` (unused stubs; real components live in `paper-trading-dashboard.tsx`).
+       - `src/components/prediction/signal-badge.tsx`, `src/components/layout/admin-header.tsx`, `src/components/admin/model-registry-table.tsx`.
+       - `src/hooks/use-portfolio.ts` and `use-prediction.ts`.
+       - `src/store/portfolio-store.ts`, `src/types/alert.ts`, `src/types/prediction.ts`, `src/lib/utils.ts`, `tailwind.config.ts`.
+       - Redundant `.gitkeep` files in `public/` and `src/components/ui/`.
+     - **Backend**: Removed 86 unused stub/placeholder files:
+       - Unused API routes: `api/v1/alert.py`, `backtest.py`, `prediction.py`, `api/ws/realtime.py`.
+       - Unused DTOs: `alert_dto.py`, `auth_dto.py`, `backtest_dto.py`, `prediction_dto.py`, `i_unit_of_work.py`.
+       - Unused use cases in `admin/` (`get_system_health.py`, `manage_models.py`, `moderate_content.py`), `alerts/`, `backtesting/`, `market_data/` (`get_price_history.py`, `get_realtime_intraday.py`, `ingest_price_data.py`), `news/get_sentiment_timeline.py`, `portfolio/` (`add_holding.py`, `suggest_rebalance.py`, `create_portfolio.py`), `prediction/`.
+       - Unused domain entities, repositories, and services for alerts, backtesting, predictions.
+       - Unused DB models (`alert_model.py`, `news_model.py`, `portfolio_model.py`, `prediction_model.py`, `price_candle_model.py`, `user_model.py`, `sql_alert_repository.py`, `timescale_price_repository.py`).
+       - Entire unimplemented `infrastructure/ml/` folder (notebooks, training stubs, models, feature pipelines).
+       - Redundant `.gitkeep` files in migrations, test fixtures.
+  2. **Code Cleanliness & Folder Structure**:
+     - Verified all active frontend components are cleanly organized by domain (`admin`, `auth`, `community`, `layout`, `learn`, `market`, `news`, `portfolio`, `ui`).
+     - Fixed React Hook dependency warnings in `social-paper-trading.tsx`, `thesis-arena.tsx`, and `ecosystem-graph.tsx`.
+     - Added `// eslint-disable-next-line @next/next/no-img-element` to portrait images in `market-workspace.tsx` and `person-detail-modal.tsx`.
+     - Ran `ruff format .` on backend to ensure 100% adherence to formatting guidelines.
+- **Validation**:
+  - `backend/`: `ruff check .` -> All checks passed (0 errors, 0 warnings).
+  - `backend/`: `ruff format --check .` -> 108 files formatted (0 reformatting needed).
+  - `backend/`: `mypy` -> Success (0 errors in 34 source files).
+  - `backend/`: `pytest tests/unit` -> 111 passed in 7.92s.
+  - `backend/`: `pytest tests/integration` -> 32 passed, 17 skipped.
+  - `frontend/`: `npm run lint` -> 0 errors, 0 warnings.
+  - `frontend/`: `npm run typecheck` -> 0 errors.
+  - `frontend/`: `npm test` -> 28 test files passed (116 tests passed).
+
 ## Comprehensive CI Pipeline Fix: DB News Migration Tests & Vitest Async Window Teardown - 2026-10-27 (complete)
 
 - **User Request**: "đụ má sao càng sửa càng sai nhiều v, fix triệt để luôn đi, tao k muốn nói lại nhiều lần"

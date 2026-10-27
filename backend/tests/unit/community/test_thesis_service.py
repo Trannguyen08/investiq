@@ -211,8 +211,7 @@ def test_publish_thesis_bullish_success() -> None:
         horizon_months=6,
         title="HPG bước vào chu kỳ tăng trưởng Dung Quất 2",
         thesis_body=(
-            "Lò cao Dung Quất 2 đi vào vận hành giúp sản lượng HRC tăng 80%, "
-            "biên gộp hồi phục."
+            "Lò cao Dung Quất 2 đi vào vận hành giúp sản lượng HRC tăng 80%, biên gộp hồi phục."
         ),
         catalysts=("Dung Quất 2 vận hành", "Nhu cầu đầu tư công"),
     )
@@ -331,8 +330,7 @@ def test_upvote_and_leaderboard() -> None:
         horizon_months=12,
         title="FPT dẫn đầu công nghệ và AI toàn cầu",
         thesis_body=(
-            "Hợp đồng ký mới chuyển đổi số và AI tại Mỹ, Nhật Bản duy trì "
-            "tăng trưởng trên 25%."
+            "Hợp đồng ký mới chuyển đổi số và AI tại Mỹ, Nhật Bản duy trì tăng trưởng trên 25%."
         ),
         catalysts=("Doanh thu AI tăng trưởng",),
     )
