@@ -1,5 +1,40 @@
 # Current Task
 
+## Prominent Business Leaders Full Expansion: 22 Leaders, Custom Vector Avatars, & Interactive Detail Modal - 2026-10-27 (complete)
+
+- **User Request**:
+  1. "hình như code của feature trước chưa được pull về nhánh này à": Hợp nhất toàn bộ thay đổi từ nhánh `feature/market-intelligence-analytics` sang nhánh `feature/community-thesis-paper-trading`.
+  2. "phần people vẫn chỉ có 8 doanh nhân và click vào k hiện ra gì cả": Hiển thị trọn vẹn 22 doanh nhân hàng đầu Việt Nam trên tab People (`/market/people`) và hỗ trợ tương tác click mở modal chi tiết chuyên sâu cho từng doanh nhân.
+  3. "và mỗi doanh nhân cần thêm avatar": Thiết kế và bổ sung avatar chân dung cho toàn bộ 22 doanh nhân (thay vì chỉ hiển thị vòng tròn ký tự viết tắt initials).
+
+- **Implementation Details**:
+  1. **Git Branch Synchronization & Merge**:
+     - Đã merge nhánh `feature/market-intelligence-analytics` vào `feature/community-thesis-paper-trading` (`commit 544f1ae`), giải quyết xung đột ở `frontend/src/lib/api-client.ts` và `frontend/src/app/globals.css`.
+  2. **Custom Vector Executive Avatars (22 Doanh nhân)**:
+     - Tạo bộ 22 file avatar SVG chuẩn vector sắc nét lưu tại `frontend/public/images/leaders/person-1.svg` đến `person-22.svg`.
+     - Mỗi avatar được thiết kế theo tone màu đặc trưng của từng tập đoàn/ngành nghề (Vingroup Gold/Blue, Hòa Phát Steel Green, Vietjet Crimson, FPT Tech Blue, MWG Gold/Black, Masan Orange,...), có hiệu ứng outer glow, viền kim loại 3D và monogram initials sang trọng.
+     - Cập nhật [leader_crawler.py](file:///c:/investiq/backend/app/infrastructure/external/crawlers/leader_crawler.py) gán `avatar_url` cho toàn bộ 22 doanh nhân.
+  3. **Interactive Person Detail Modal (`PersonDetailModal`)**:
+     - Tạo component [person-detail-modal.tsx](file:///c:/investiq/frontend/src/components/market/person-detail-modal.tsx):
+       - Header: Avatar lớn (76x76px) có viền neon và badge thứ hạng (#1, #2,...), Họ tên, Chức vụ, Tập đoàn, Ngành nghề, Ngày công bố sở hữu.
+       - Thống kê tài sản 3 thẻ: Tài sản cổ phiếu niêm yết (VND kèm % thay đổi phiên theo Vnstock), Tổng tài sản ròng Forbes / Ước tính (USD & VND), Cổ phần niêm yết trực tiếp nắm giữ và tỷ lệ sở hữu %.
+       - Khối chi tiết Tài sản ngoài sàn & Doanh nghiệp liên quan.
+       - Khối Dấu ấn lãnh đạo & Tiểu sử chuyên sâu.
+       - Danh mục cổ phiếu niêm yết trực tiếp kèm liên kết chuyển nhanh tới biểu đồ phân tích kỹ thuật `/market/stocks/[sym]`.
+       - Nút chuyển hướng thông minh "Khám phá Bản đồ Hệ sinh thái Tập đoàn →" liên kết trực tiếp tới đồ thị hệ sinh thái của 6 tập đoàn lớn (Vingroup, Hòa Phát, Masan, Techcombank, FPT, Sovico).
+  4. **Frontend Integration & UX Polishing**:
+     - Cập nhật [market-workspace.tsx](file:///c:/investiq/frontend/src/components/market/market-workspace.tsx): Thêm state `selectedPerson`, `selectedRank`, `targetEcosystemId`; gắn `onClick`, `role="button"`, `tabIndex={0}`, hiệu ứng hover viền sáng và CTA `Chi tiết hồ sơ →`.
+     - Cập nhật [globals.css](file:///c:/investiq/frontend/src/app/globals.css): Thiết kế toàn bộ animation mượt mà (`modalFadeIn`, `modalPop`), backdrop làm mờ cao cấp, styling Dark Navy hài hòa với hệ thống InvestIQ.
+     - Giảm `revalidate` cache từ 30s xuống 5s trong [api-client.ts](file:///c:/investiq/frontend/src/lib/api-client.ts) giúp cập nhật thị giá trực tiếp gần như tức thì.
+
+- **Validation**:
+  - Frontend TypeScript (`tsc --noEmit`): 0 lỗi.
+  - Backend Unit tests (`pytest tests/unit/market_data/test_leader_crawler.py`): 4/4 passed.
+  - Browser Verification: Subagent đã kiểm tra trực quan trên `http://localhost:3000/market/people`, xác nhận:
+    1. Hiển thị đúng `22 doanh nhân` và `Top Doanh Nhân (22)`.
+    2. Cả 22 doanh nhân đều hiển thị avatar vector executive sắc nét, không bị vỡ hạt.
+    3. Click vào card bất kỳ mở modal chi tiết mượt mà, đầy đủ thông tin tài sản, cổ phần, tiểu sử và nút điều hướng hệ sinh thái.
+
 ## Strategic Innovation & Expansion: Market Intelligence & Community Proof-of-Thesis Arena (2 Branches) - 2026-10-27 (complete)
 
 - **User Request**:

@@ -249,7 +249,7 @@ export function getMarketPeople(query?: string, sector?: string): Promise<People
   if (query) params.set("q", query);
   if (sector) params.set("sector", sector);
   const suffix = params.size ? `?${params.toString()}` : "";
-  return requestJson<PeopleCollection>(`/v1/market/people${suffix}`, 30);
+  return requestJson<PeopleCollection>(`/v1/market/people${suffix}`, 5);
 }
 
 export function getMarketGrowth(symbol: string): Promise<StockGrowthEnvelope> {

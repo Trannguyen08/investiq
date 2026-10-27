@@ -35,6 +35,7 @@ class LeaderProfile:
     net_worth_external: str
     bio: str
     holding_public_date: datetime
+    avatar_url: str = ""
 
 
 # Authoritative baseline dataset of 22 prominent Vietnamese business leaders
@@ -583,7 +584,7 @@ class LeaderCrawler:
                     net_worth_total=profile.net_worth_total,
                     net_worth_external=profile.net_worth_external,
                     bio=profile.bio,
-                    avatar_url=None,
+                    avatar_url=profile.avatar_url or f"/images/leaders/{profile.id}.svg",
                 )
             )
 

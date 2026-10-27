@@ -10,10 +10,11 @@ import { MiniCandles } from "@/components/market/mini-candles";
 import { mergeLiveIndex, mergeLiveInstrument } from "@/components/market/live-market";
 import { WatchlistPanel } from "@/components/market/watchlist-panel";
 import { EcosystemGraph } from "@/components/market/ecosystem-graph";
+import { PersonDetailModal } from "@/components/market/person-detail-modal";
 import { MarketStreamProvider, useMarketStreamState } from "@/hooks/use-realtime-price";
 import { useVisibleFundamentals } from "@/hooks/use-visible-fundamentals";
 import { marketPath, type MarketTab } from "@/lib/market-routes";
-import type { EventCollection, IndexCollection, InstrumentCollection, MarketMeta, PeopleCollection } from "@/types/market";
+import type { EventCollection, IndexCollection, InstrumentCollection, MarketMeta, MarketPerson, PeopleCollection } from "@/types/market";
 
 const tabs: { value: MarketTab; label: string }[] = [
   { value: "stocks", label: "Cổ phiếu" },
@@ -110,27 +111,13 @@ export function EventsView({ collection, filters }: { collection: EventCollectio
 }
 
 export function PeopleView({ collection }: { collection: PeopleCollection }) {
-  if (!collection.data.length) {
-    return (
-      <section className="market-tab-panel people-view">
-        <div className="market-tab-heading">
-          <div>
-            <h2>Doanh nhân &amp; Tài sản nổi bật</h2>
-            <p>{collection.methodology.label}. Dữ liệu tài sản ròng và sở hữu doanh nghiệp.</p>
-          </div>
-        </div>
-        <div className="market-empty">
-          <h3>Hiện chưa có dữ liệu doanh nhân</h3>
-          <p>Vui lòng thử lại sau hoặc làm mới trang.</p>
-        </div>
-      </section>
-    );
-  }
-
   const [viewMode, setViewMode] = useState<"leaders" | "ecosystems">("leaders");
   const [search, setSearch] = useState("");
   const [selectedSector, setSelectedSector] = useState("Tất cả");
   const [sortBy, setSortBy] = useState<"equity" | "change">("equity");
+  const [selectedPerson, setSelectedPerson] = useState<MarketPerson | null>(null);
+  const [selectedRank, setSelectedRank] = useState<number | undefined>(undefined);
+  const [targetEcosystemId, setTargetEcosystemId] = useState<string | undefined>(undefined);
 
   const sectors = useMemo(() => {
     return [
@@ -181,6 +168,25 @@ export function PeopleView({ collection }: { collection: PeopleCollection }) {
       });
   }, [collection.data, search, selectedSector, sortBy]);
 
+  if (!collection.data.length) {
+    return (
+      <section className="market-tab-panel people-view">
+        <div className="market-tab-heading">
+          <div>
+            <h2>Doanh nhân &amp; Tài sản nổi bật</h2>
+            <p>{collection.methodology.label}. Dữ liệu tài sản ròng và sở hữu doanh nghiệp.</p>
+          </div>
+        </div>
+        <div className="market-empty">
+          <h3>Hiện chưa có dữ liệu doanh nhân</h3>
+          <p>Vui lòng thử lại sau hoặc làm mới trang.</p>
+        </div>
+      </section>
+    );
+  }
+
+
+
   const totalListedEquity = filteredLeaders.reduce(
     (sum, person) => sum + Number(person.estimated_listed_equity_value || 0),
     0,
@@ -216,7 +222,7 @@ export function PeopleView({ collection }: { collection: PeopleCollection }) {
       </div>
 
       {viewMode === "ecosystems" ? (
-        <EcosystemGraph />
+        <EcosystemGraph initialEcosystemId={targetEcosystemId} />
       ) : (
         <>
           {/* Controls Bar: Search, Sector Chips, Sort */}
@@ -305,18 +311,53 @@ export function PeopleView({ collection }: { collection: PeopleCollection }) {
                 const changeVal = Number(person.daily_change_percent || 0);
                 const displayRank = index + 1;
                 return (
-                  <article key={person.id} className="person-card">
+                  <article
+                    key={person.id}
+                    className="person-card interactive"
+                    onClick={() => {
+                      setSelectedPerson(person);
+                      setSelectedRank(displayRank);
+                    }}
+                    role="button"
+                    tabIndex={0}
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter" || e.key === " ") {
+                        e.preventDefault();
+                        setSelectedPerson(person);
+                        setSelectedRank(displayRank);
+                      }
+                    }}
+                    aria-label={`Xem chi tiết hồ sơ ${person.full_name}`}
+                  >
                     <div className="person-card-header">
                       <span className={`person-rank-badge rank-${displayRank <= 3 ? displayRank : "other"}`}>
                         #{displayRank}
                       </span>
-                      <span className="person-avatar" aria-hidden="true">
-                        {person.initials}
-                      </span>
+                      <div className="person-avatar-wrap">
+                        {person.avatar_url ? (
+                          <img
+                            src={person.avatar_url}
+                            alt={person.full_name}
+                            className="person-avatar-img"
+                            onError={(e) => {
+                              e.currentTarget.style.display = "none";
+                              const fallback = e.currentTarget.nextElementSibling as HTMLElement;
+                              if (fallback) fallback.style.display = "flex";
+                            }}
+                          />
+                        ) : null}
+                        <span
+                          className="person-avatar"
+                          style={{ display: person.avatar_url ? "none" : "flex" }}
+                          aria-hidden="true"
+                        >
+                          {person.initials}
+                        </span>
+                      </div>
                       <div className="person-identity">
                         <div className="person-title-row">
                           <h3>{person.full_name}</h3>
-                          <div className="leader-tickers">
+                          <div className="leader-tickers" onClick={(e) => e.stopPropagation()}>
                             {person.symbols.map((sym) => (
                               <Link
                                 href={`/market/stocks/${sym}`}
@@ -328,6 +369,7 @@ export function PeopleView({ collection }: { collection: PeopleCollection }) {
                               </Link>
                             ))}
                           </div>
+                          <span className="person-card-cta">Chi tiết hồ sơ →</span>
                         </div>
                         <p className="person-role-company">
                           {person.role} · <strong>{person.company}</strong>
@@ -399,6 +441,17 @@ export function PeopleView({ collection }: { collection: PeopleCollection }) {
           </details>
         </>
       )}
+
+      {/* Profile Detail Interactive Modal */}
+      <PersonDetailModal
+        person={selectedPerson}
+        rank={selectedRank}
+        onClose={() => setSelectedPerson(null)}
+        onOpenEcosystem={(ecoId) => {
+          setTargetEcosystemId(ecoId);
+          setViewMode("ecosystems");
+        }}
+      />
     </section>
   );
 }

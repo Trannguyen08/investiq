@@ -6,9 +6,13 @@ import { getMarketEcosystemDetail, getMarketEcosystems } from "@/lib/api-client"
 import { formatMoney, formatPercent, changeTone } from "@/components/market/formatters";
 import type { EcosystemDetailData, EcosystemSummary } from "@/types/market";
 
-export function EcosystemGraph() {
+export function EcosystemGraph({
+  initialEcosystemId,
+}: {
+  initialEcosystemId?: string;
+} = {}) {
   const [ecosystems, setEcosystems] = useState<EcosystemSummary[]>([]);
-  const [selectedId, setSelectedId] = useState<string>("vingroup");
+  const [selectedId, setSelectedId] = useState<string>(initialEcosystemId ?? "vingroup");
   const [detail, setDetail] = useState<EcosystemDetailData | null>(null);
   const [loading, setLoading] = useState<boolean>(true);
   const [activeFilter, setActiveFilter] = useState<string>("all");
