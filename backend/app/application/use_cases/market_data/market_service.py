@@ -19,6 +19,10 @@ from app.domain.entities.market import (
 )
 from app.domain.repositories.i_market_provider import IMarketProvider
 from app.infrastructure.external.crawlers.financial_report_crawler import financial_report_crawler
+from app.infrastructure.external.digest.daily_digest_service import generate_daily_digest
+from app.infrastructure.external.ecosystem.ecosystem_service import get_ecosystem_service
+from app.infrastructure.external.forensics.financial_forensics import compute_forensics
+from app.infrastructure.external.simulator.dca_simulator import simulate_dca
 
 
 def _decimal(value: Decimal) -> str:
@@ -398,9 +402,25 @@ class MarketService:
             "meta": self.meta(),
         }
 
-    def people(self) -> dict[str, object]:
+    def people(self, query: str | None = None, sector: str | None = None) -> dict[str, object]:
+        raw_values = self._provider.people()
+        q = query.strip().lower() if query else None
+        s = sector.strip().lower() if sector else None
+
+        filtered = []
+        for item in raw_values:
+            if q:
+                match_name = q in item.full_name.lower()
+                match_comp = q in item.company.lower()
+                match_sym = any(q in sym.lower() for sym in item.symbols)
+                if not (match_name or match_comp or match_sym):
+                    continue
+            if s and s != "tất cả" and s not in item.sector.lower():
+                continue
+            filtered.append(item)
+
         values = sorted(
-            self._provider.people(),
+            filtered,
             key=lambda item: item.estimated_listed_equity_value,
             reverse=True,
         )
@@ -832,3 +852,60 @@ class MarketService:
             },
             "meta": self.meta(),
         }
+
+    def forensics(self, symbol: str) -> dict[str, object] | None:
+        instrument = self._provider.instrument(symbol, include_fundamentals=True)
+        if instrument is None:
+            return None
+        report = compute_forensics(instrument)
+        return {"data": report, "meta": self.meta()}
+
+    def ecosystems(self) -> dict[str, object]:
+        instruments = self._provider.instruments()
+        service = get_ecosystem_service()
+        data = service.list_ecosystems(instruments)
+        return {"data": data, "meta": self.meta()}
+
+    def ecosystem(self, ecosystem_id: str) -> dict[str, object] | None:
+        instruments = self._provider.instruments()
+        service = get_ecosystem_service()
+        detail = service.get_ecosystem_detail(ecosystem_id, instruments)
+        if detail is None:
+            return None
+        return {"data": detail, "meta": self.meta()}
+
+    def simulate_dca(
+        self,
+        symbol: str,
+        monthly_amount: Decimal,
+        duration_years: int = 3,
+        annual_savings_rate: Decimal = Decimal("6.0"),
+    ) -> dict[str, object]:
+        instrument = self._provider.instrument(symbol, include_fundamentals=False)
+        current_price = (
+            instrument.price if instrument and instrument.price > 0 else Decimal("30000")
+        )
+        candles = self._provider.candles(symbol, "1d")
+        result = simulate_dca(
+            symbol=symbol,
+            monthly_amount=monthly_amount,
+            duration_years=duration_years,
+            annual_savings_rate=annual_savings_rate,
+            current_price=current_price,
+            history_candles=candles,
+        )
+        return {"data": result, "meta": self.meta()}
+
+    def daily_digest(self) -> dict[str, object]:
+        indices = self._provider.indices()
+        instruments = self._provider.instruments()
+        raw_events = self._provider.events()
+        events = (
+            raw_events[0]
+            if isinstance(raw_events, tuple)
+            and len(raw_events) == 2
+            and isinstance(raw_events[0], tuple)
+            else raw_events
+        )
+        data = generate_daily_digest(indices=indices, instruments=instruments, events=events)
+        return {"data": data, "meta": self.meta()}

@@ -140,3 +140,50 @@ async def test_vnstock_provider_is_initialized_once_during_application_startup(
     await market_data.start_market_provider()
 
     assert calls == [provider]
+
+
+def test_market_intelligence_endpoints(monkeypatch: pytest.MonkeyPatch) -> None:
+    provider = FixtureMarketProvider()
+    monkeypatch.setattr(market_data, "_provider", lambda: provider)
+
+    with TestClient(app) as client:
+        # 1. People search and filter
+        people_resp = client.get("/api/v1/market/people", params={"q": "Vượng"})
+        assert people_resp.status_code == 200
+        assert len(people_resp.json()["data"]) >= 1
+
+        # 2. Forensics endpoint
+        forensics_resp = client.get("/api/v1/market/instruments/FPT/forensics")
+        assert forensics_resp.status_code == 200
+        assert forensics_resp.json()["data"]["symbol"] == "FPT"
+        assert "z_score" in forensics_resp.json()["data"]
+
+        # 3. Ecosystems list and detail
+        ecosystems_resp = client.get("/api/v1/market/ecosystems")
+        assert ecosystems_resp.status_code == 200
+        assert len(ecosystems_resp.json()["data"]) >= 4
+
+        eco_detail_resp = client.get("/api/v1/market/ecosystems/fpt")
+        assert eco_detail_resp.status_code == 200
+        assert eco_detail_resp.json()["data"]["id"] == "fpt"
+        assert len(eco_detail_resp.json()["data"]["nodes"]) >= 2
+
+        # 4. DCA Simulator
+        dca_resp = client.post(
+            "/api/v1/market/simulator/dca",
+            json={
+                "symbol": "FPT",
+                "monthly_amount": 5000000,
+                "duration_years": 2,
+                "savings_rate": 6.0,
+            },
+        )
+        assert dca_resp.status_code == 200
+        assert dca_resp.json()["data"]["symbol"] == "FPT"
+        assert dca_resp.json()["data"]["duration_months"] == 24
+
+        # 5. Daily Digest
+        digest_resp = client.get("/api/v1/market/daily-digest")
+        assert digest_resp.status_code == 200
+        assert "headline" in digest_resp.json()["data"]
+        assert "key_drivers" in digest_resp.json()["data"]

@@ -270,3 +270,173 @@ export type StockGrowthEnvelope = {
   data: StockGrowthData;
   meta: MarketMeta;
 };
+
+export type ForensicRedFlag = {
+  flag_id: string;
+  name: string;
+  severity: "high" | "medium" | "low" | "clean";
+  title: string;
+  description: string;
+  indicator_value: string;
+  threshold: string;
+  implication: string;
+};
+
+export type FinancialForensicsData = {
+  symbol: string;
+  z_score: string;
+  z_zone: "safe" | "grey" | "distress";
+  z_label: string;
+  health_score: number;
+  red_flags: ForensicRedFlag[];
+  risk_summary: string;
+  recommendation: string;
+  is_finance?: boolean;
+};
+
+export type FinancialForensicsEnvelope = {
+  data: FinancialForensicsData;
+  meta: MarketMeta;
+};
+
+export type EcosystemTicker = {
+  symbol: string;
+  price: string;
+  change_percent: string;
+  market_cap: string;
+};
+
+export type EcosystemSummary = {
+  id: string;
+  name: string;
+  founder_id: string;
+  founder_name: string;
+  sector: string;
+  overview: string;
+  core_tickers: EcosystemTicker[];
+  total_market_cap: string;
+  node_count: number;
+  link_count: number;
+};
+
+export type EcosystemNode = {
+  id: string;
+  name: string;
+  ticker: string | null;
+  node_type: "parent" | "listed_subsidiary" | "unlisted_subsidiary" | "strategic_partner";
+  role: string;
+  ownership_percent: string;
+  exchange: string;
+  description: string;
+  price?: string | null;
+  change_percent?: string | null;
+  market_cap?: string | null;
+};
+
+export type EcosystemLink = {
+  source: string;
+  target: string;
+  relation_type: string;
+  percentage: string;
+  label: string;
+};
+
+export type EcosystemDetailData = {
+  id: string;
+  name: string;
+  founder_id: string;
+  founder_name: string;
+  sector: string;
+  overview: string;
+  nodes: EcosystemNode[];
+  links: EcosystemLink[];
+};
+
+export type EcosystemDetailEnvelope = {
+  data: EcosystemDetailData;
+  meta: MarketMeta;
+};
+
+export type DCATimelinePoint = {
+  month: number;
+  label: string;
+  price: string;
+  shares_bought: number;
+  total_shares: number;
+  invested: string;
+  portfolio_value: string;
+  savings_value: string;
+};
+
+export type DCASimulatorData = {
+  symbol: string;
+  duration_years: number;
+  duration_months: number;
+  monthly_amount: string;
+  total_invested: string;
+  total_shares: number;
+  average_buy_price: string;
+  current_price: string;
+  portfolio_value: string;
+  stock_profit: string;
+  stock_roi_percent: string;
+  savings_rate_percent: string;
+  savings_value: string;
+  savings_profit: string;
+  savings_roi_percent: string;
+  alpha_amount: string;
+  alpha_percent: string;
+  outperformed: boolean;
+  timeline: DCATimelinePoint[];
+};
+
+export type DCASimulatorEnvelope = {
+  data: DCASimulatorData;
+  meta: MarketMeta;
+};
+
+export type DailyDigestData = {
+  date: string;
+  headline: string;
+  tone: "positive" | "cautious";
+  session_summary: {
+    vnindex_value: string;
+    vnindex_change: string;
+    is_positive: boolean;
+    liquidity: string;
+    breadth: {
+      advances: number;
+      declines: number;
+      unchanged: number;
+    };
+  };
+  key_drivers: string[];
+  gainers: Array<{
+    symbol: string;
+    price: string;
+    change_pct: string;
+    sector: string;
+  }>;
+  volume_breakouts: Array<{
+    symbol: string;
+    surge_label: string;
+    price: string;
+    change_pct: string;
+    sector: string;
+  }>;
+  upcoming_events: Array<{
+    symbol: string;
+    title: string;
+    event_type: string;
+    date: string;
+  }>;
+  meta: {
+    generated_at: string;
+    source: string;
+  };
+};
+
+export type DailyDigestEnvelope = {
+  data: DailyDigestData;
+  meta: MarketMeta;
+};
