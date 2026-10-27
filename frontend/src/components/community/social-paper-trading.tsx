@@ -74,15 +74,13 @@ export function SocialPaperTrading({ initialLeaderboard = [] }: SocialPaperTradi
       {/* Header Row */}
       <div className="social-trading-header-row">
         <div>
-          <h2 className="social-trading-title">
-            Bảng Xếp Hạng Nhà Đầu Tư <span className="thesis-badge-highlight">Social Paper Trading</span>
-          </h2>
+          <h2 className="social-trading-title">Bảng Xếp Hạng Nhà Đầu Tư</h2>
           <p className="social-trading-desc">
-            Khám phá chiến lược, tỷ trọng tài sản và nhật ký vào/ra lệnh của những nhà đầu tư có hiệu suất sinh lời cao nhất. Minh bạch 100% không thể giả mạo.
+            Khám phá chiến lược, tỷ trọng tài sản và nhật ký vào/ra lệnh của những nhà đầu tư có hiệu suất sinh lời cao nhất. Minh bạch và cập nhật theo thời gian thực.
           </p>
         </div>
         <Link href="/portfolio" className="btn-primary">
-          💼 Quản lý & Công khai Danh mục của bạn
+          Quản lý & Công khai Danh mục
         </Link>
       </div>
 
@@ -105,7 +103,7 @@ export function SocialPaperTrading({ initialLeaderboard = [] }: SocialPaperTradi
                 <th>Nhà đầu tư</th>
                 <th className="text-right">Vốn ban đầu</th>
                 <th className="text-right">Lãi đã chốt</th>
-                <th className="text-right">Hiệu suất (ROI)</th>
+                <th className="text-right">Hiệu suất sinh lời</th>
                 <th className="text-center">Nắm giữ</th>
                 <th className="text-center">Tỷ lệ thắng lệnh</th>
                 <th className="text-center">Chi tiết</th>
@@ -122,15 +120,9 @@ export function SocialPaperTrading({ initialLeaderboard = [] }: SocialPaperTradi
                 return (
                   <tr key={item.portfolio_id} className="social-table-row">
                     <td className="text-center">
-                      {idx === 0 ? (
-                        <span className="rank-badge rank-1">🥇 #1</span>
-                      ) : idx === 1 ? (
-                        <span className="rank-badge rank-2">🥈 #2</span>
-                      ) : idx === 2 ? (
-                        <span className="rank-badge rank-3">🥉 #3</span>
-                      ) : (
-                        <span className="rank-badge rank-normal">#{idx + 1}</span>
-                      )}
+                      <span className={`rank-badge ${idx === 0 ? "rank-1" : idx === 1 ? "rank-2" : idx === 2 ? "rank-3" : "rank-normal"}`}>
+                        #{idx + 1}
+                      </span>
                     </td>
                     <td>
                       <div className="investor-name-cell">
@@ -169,7 +161,7 @@ export function SocialPaperTrading({ initialLeaderboard = [] }: SocialPaperTradi
                         onClick={() => openPortfolioDetail(item.portfolio_id)}
                         className="btn-view-portfolio"
                       >
-                        👁️ Xem danh mục
+                        Xem danh mục
                       </button>
                     </td>
                   </tr>
@@ -223,7 +215,7 @@ export function SocialPaperTrading({ initialLeaderboard = [] }: SocialPaperTradi
                     </strong>
                   </div>
                   <div className="public-stat-box">
-                    <span className="lbl">Hiệu suất tổng thể (ROI):</span>
+                    <span className="lbl">Hiệu suất tổng thể:</span>
                     <strong className={`val ${Number(detailData.roi_percent) >= 0 ? "text-emerald" : "text-rose"}`}>
                       {Number(detailData.roi_percent) > 0 ? `+${detailData.roi_percent}%` : `${detailData.roi_percent}%`}
                     </strong>
@@ -237,14 +229,14 @@ export function SocialPaperTrading({ initialLeaderboard = [] }: SocialPaperTradi
                     className={`subtab-btn ${detailTab === "holdings" ? "subtab-active" : ""}`}
                     onClick={() => setDetailTab("holdings")}
                   >
-                    📊 Cổ phiếu đang nắm giữ ({detailData.holdings.length})
+                    Cổ phiếu đang nắm giữ ({detailData.holdings.length})
                   </button>
                   <button
                     type="button"
                     className={`subtab-btn ${detailTab === "trades" ? "subtab-active" : ""}`}
                     onClick={() => setDetailTab("trades")}
                   >
-                    📜 Nhật ký vào/ra lệnh ({detailData.trades.length})
+                    Nhật ký vào/ra lệnh ({detailData.trades.length})
                   </button>
                 </div>
 

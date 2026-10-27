@@ -66,6 +66,10 @@ def list_theses(
     status_filter: str | None = Query(
         None, alias="status", description="Lọc theo trạng thái: active, hit_target, stopped_out"
     ),
+    sort: str = Query(
+        "engagement",
+        description="Sắp xếp: engagement (tương tác cao nhất & mới nhất) hoặc recent (mới nhất)",
+    ),
     limit: int = Query(50, ge=1, le=100),
     offset: int = Query(0, ge=0),
 ) -> dict[str, object]:
@@ -74,6 +78,7 @@ def list_theses(
         status=status_filter,
         limit=limit,
         offset=offset,
+        sort=sort,
     )
     return {"data": items, "total": len(items)}
 

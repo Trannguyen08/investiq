@@ -1608,8 +1608,11 @@ button:disabled { cursor: not-allowed; opacity: 0.55; }
   .market-loading { grid-template-columns: repeat(2, 1fr); padding-top: 3rem; }
 }
 
-/* Beginner paper-trading workspace */
-body:has(.paper-page) { background: #06111f; }
+html:has(.paper-page),
+body:has(.paper-page) {
+  background: #06111f !important;
+  min-height: 100vh;
+}
 body:has(.paper-page) .site-header { border-color: #18324a; background: rgb(6 17 31 / 94%); }
 body:has(.paper-page) .nav-link { color: #9eb2c8; }
 body:has(.paper-page) .nav-link:hover,
@@ -4523,4 +4526,327 @@ body:has(.learn-page) .mobile-menu summary span { background: #d9e8f5; }
     width: 100%;
   }
 }
+
+/* Unauthenticated Portfolio Showcase */
+.paper-unauth-page {
+  padding-bottom: 4rem;
+  min-height: calc(100vh - 72px);
+}
+
+.paper-unauth-hero {
+  position: relative;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  padding: 3.5rem 1.5rem 3rem;
+  background: radial-gradient(circle at 50% 20%, rgb(16 46 70 / 55%), rgb(6 17 31 / 95%));
+  border: 1px solid #18354c;
+  border-radius: 1.25rem;
+  box-shadow: 0 20px 50px rgb(0 0 0 / 30%);
+}
+
+.paper-unauth-kicker {
+  display: inline-block;
+  margin-bottom: 0.75rem;
+  color: #38e1b0;
+  font-size: 0.75rem;
+  font-weight: 900;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+
+.paper-unauth-title {
+  margin: 0 0 1rem;
+  max-width: 52rem;
+  color: #f8fafc;
+  font-size: clamp(2rem, 4vw, 3rem);
+  font-weight: 850;
+  line-height: 1.25;
+  letter-spacing: -0.03em;
+}
+
+.paper-unauth-subtitle {
+  margin: 0 auto 2rem;
+  max-width: 44rem;
+  color: #94a3b8;
+  font-size: 0.95rem;
+  line-height: 1.65;
+}
+
+.paper-unauth-actions {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-wrap: wrap;
+  gap: 1rem;
+}
+
+.btn-unauth-primary {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 48px;
+  padding: 0 1.65rem;
+  border-radius: 0.65rem;
+  background: #38e1b0;
+  color: #061826;
+  font-size: 0.92rem;
+  font-weight: 850;
+  text-decoration: none;
+  box-shadow: 0 4px 18px rgb(56 225 176 / 28%);
+  transition: all 0.2s ease;
+}
+
+.btn-unauth-primary:hover {
+  background: #4ae8bc;
+  transform: translateY(-2px);
+  box-shadow: 0 6px 22px rgb(56 225 176 / 38%);
+}
+
+.btn-unauth-secondary {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 48px;
+  padding: 0 1.5rem;
+  border-radius: 0.65rem;
+  background: #0d2235;
+  border: 1px solid #23486a;
+  color: #e2e8f0;
+  font-size: 0.92rem;
+  font-weight: 750;
+  text-decoration: none;
+  transition: all 0.2s ease;
+}
+
+.btn-unauth-secondary:hover {
+  background: #132f48;
+  border-color: #3b74a3;
+  color: #fff;
+  transform: translateY(-2px);
+}
+
+.link-unauth-community {
+  display: inline-flex;
+  align-items: center;
+  padding: 0.5rem 1rem;
+  color: #38bdf8;
+  font-size: 0.88rem;
+  font-weight: 700;
+  text-decoration: none;
+  transition: color 0.2s ease;
+}
+
+.link-unauth-community:hover {
+  color: #7dd3fc;
+  text-decoration: underline;
+}
+
+/* 3 Feature cards */
+.paper-unauth-features {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 1.25rem;
+  margin-top: 1.5rem;
+}
+
+.unauth-feature-card {
+  padding: 1.5rem;
+  border-radius: 1rem;
+  background: #091a2a;
+  border: 1px solid #16324a;
+  box-shadow: 0 10px 30px rgb(0 0 0 / 20%);
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+.feature-card-header {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+}
+
+.feature-card-num {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  background: rgb(56 225 176 / 15%);
+  border: 1px solid rgb(56 225 176 / 35%);
+  color: #38e1b0;
+  font-size: 0.8rem;
+  font-weight: 900;
+}
+
+.unauth-feature-card h3 {
+  margin: 0;
+  font-size: 1.05rem;
+  font-weight: 800;
+  color: #f1f5f9;
+}
+
+.unauth-feature-card p {
+  margin: 0;
+  color: #94a3b8;
+  font-size: 0.85rem;
+  line-height: 1.6;
+}
+
+/* Market preview table */
+.paper-unauth-market-preview {
+  margin-top: 2rem;
+  padding: 1.5rem;
+  border-radius: 1rem;
+  background: #091a2a;
+  border: 1px solid #16324a;
+}
+
+.preview-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 1rem;
+}
+
+.preview-header h2 {
+  margin: 0.2rem 0 0;
+  color: #f8fafc;
+  font-size: 1.25rem;
+}
+
+.preview-badge {
+  font-size: 0.72rem;
+  font-weight: 800;
+  padding: 0.35rem 0.65rem;
+  border-radius: 99px;
+  background: #11283c;
+  color: #38bdf8;
+  border: 1px solid #1e4566;
+}
+
+.preview-table-wrap {
+  overflow-x: auto;
+}
+
+.preview-table {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.preview-table th,
+.preview-table td {
+  padding: 0.85rem 1rem;
+  border-bottom: 1px solid #142e44;
+  font-size: 0.82rem;
+}
+
+.preview-table th {
+  color: #64748b;
+  font-weight: 700;
+  background: #071522;
+  text-align: left;
+}
+
+.preview-table td {
+  color: #cbd5e1;
+}
+
+.btn-table-trade {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0.35rem 0.85rem;
+  border-radius: 0.45rem;
+  background: #163753;
+  color: #38e1b0;
+  font-size: 0.78rem;
+  font-weight: 800;
+  text-decoration: none;
+  transition: all 0.2s ease;
+}
+
+.btn-table-trade:hover {
+  background: #38e1b0;
+  color: #061826;
+}
+
+/* Thesis Scope Bar */
+.thesis-scope-bar {
+  display: flex;
+  gap: 0.5rem;
+  margin-bottom: 1.25rem;
+  border-bottom: 1px solid #18334c;
+  padding-bottom: 0.5rem;
+}
+
+.thesis-scope-btn {
+  background: transparent;
+  border: none;
+  padding: 0.55rem 1.15rem;
+  font-size: 0.9rem;
+  font-weight: 750;
+  color: #8fa5b8;
+  border-radius: 0.5rem;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.thesis-scope-btn:hover {
+  color: #f1f5f9;
+  background: #0e2437;
+}
+
+.thesis-scope-btn.active {
+  color: #38e1b0;
+  background: #0e293f;
+  font-weight: 850;
+}
+
+.thesis-auth-gate-box {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  padding: 3rem 2rem;
+  background: #091b2c;
+  border: 1px dashed #21435f;
+  border-radius: 1rem;
+  gap: 0.75rem;
+}
+
+.auth-gate-title {
+  margin: 0;
+  color: #f1f5f9;
+  font-size: 1.15rem;
+  font-weight: 800;
+}
+
+.auth-gate-sub {
+  margin: 0;
+  max-width: 32rem;
+  color: #8da4b8;
+  font-size: 0.88rem;
+  line-height: 1.6;
+}
+
+.auth-gate-btn {
+  margin-top: 0.5rem;
+  text-decoration: none;
+}
+
+.thesis-create-first-btn {
+  margin-top: 0.75rem;
+}
+
+@media (max-width: 900px) {
+  .paper-unauth-features {
+    grid-template-columns: 1fr;
+  }
+}
+
 

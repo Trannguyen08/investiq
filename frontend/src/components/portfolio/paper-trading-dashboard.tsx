@@ -416,7 +416,7 @@ export function PaperTradingDashboard({
       }
       setVisibilityMessage(
         nextPublic
-          ? "🎉 Đã công khai danh mục lên Bảng Xếp Hạng Cộng Đồng thành công!"
+          ? "Đã công khai danh mục lên Bảng Xếp Hạng Cộng Đồng thành công!"
           : "Đã chuyển danh mục về chế độ riêng tư an toàn.",
       );
     } catch (err) {
@@ -450,19 +450,122 @@ export function PaperTradingDashboard({
     && (!orderSymbol.trim() || order.symbol.includes(orderSymbol.trim().toUpperCase()))
   )), [dashboard, orderSide, orderSymbol]);
 
-  if (auth.status === "loading") {
+  const isUnauthenticated = auth.status === "anonymous" || (auth.status !== "loading" && !auth.user) || error.includes("chưa đăng nhập");
+
+  if (auth.status === "loading" && !error) {
     return <main id="main-content" className="paper-page"><div className="paper-state">Đang mở tài khoản mô phỏng…</div></main>;
   }
-  if (auth.status !== "authenticated") {
+  if (isUnauthenticated) {
     return (
-      <main id="main-content" className="paper-page">
-        <section className="paper-auth-gate">
-          <span aria-hidden="true">₫</span>
-          <p className="eyebrow">TÀI KHOẢN RIÊNG TƯ</p>
-          <h1>Thử đầu tư với 100 triệu đồng mô phỏng</h1>
-          <p>Mua bán theo giá quan sát, theo dõi lời/lỗ và học cách quản trị rủi ro mà không dùng tiền thật.</p>
-          <Link href="/login">Đăng nhập để bắt đầu</Link>
+      <main id="main-content" className="paper-page paper-unauth-page">
+        {/* Unauthenticated Hero Showcase */}
+        <section className="paper-unauth-hero">
+          <span className="paper-unauth-kicker">GIAO DỊCH MÔ PHỎNG THỰC TẾ</span>
+          <h1 className="paper-unauth-title">Trải nghiệm Đầu tư Thực chiến với 1 Tỷ đồng Vốn Giả lập</h1>
+          <p className="paper-unauth-subtitle">
+            Hệ thống quản lý danh mục và khớp lệnh theo giá quan sát thời gian thực sàn HOSE & HNX. Rèn luyện tư duy kỷ luật, kiểm chứng chiến lược quản trị vốn và tích lũy kinh nghiệm mà không chịu bất kỳ rủi ro tài chính nào.
+          </p>
+          <div className="paper-unauth-actions">
+            <Link href="/login" className="btn-unauth-primary">
+              Đăng nhập để bắt đầu
+            </Link>
+            <Link href="/register" className="btn-unauth-secondary">
+              Tạo tài khoản miễn phí
+            </Link>
+            <Link href="/community" className="link-unauth-community">
+              Khám phá Bảng Xếp Hạng Cộng Đồng →
+            </Link>
+          </div>
         </section>
+
+        {/* 3 Key Feature Highlights */}
+        <section className="paper-unauth-features" aria-label="Tính năng nổi bật của danh mục mô phỏng">
+          <article className="unauth-feature-card">
+            <div className="feature-card-header">
+              <span className="feature-card-num">01</span>
+              <h3>1 Tỷ Vốn Khởi Đầu</h3>
+            </div>
+            <p>
+              Cấp sẵn 1.000.000.000 VND vốn tiền mặt mô phỏng vào tài khoản để bạn thỏa sức phân bổ danh mục, thử nghiệm chiến lược mua gom, trading ngắn hạn hoặc tích sản dài hạn.
+            </p>
+          </article>
+
+          <article className="unauth-feature-card">
+            <div className="feature-card-header">
+              <span className="feature-card-num">02</span>
+              <h3>Khớp Lệnh Thực Tế</h3>
+            </div>
+            <p>
+              Khớp lệnh theo giá thị trường quan sát trên sàn HOSE và HNX, tính toán phí và thuế giao dịch giả định chuẩn xác giúp trải nghiệm giao dịch sát sao thực tế nhất.
+            </p>
+          </article>
+
+          <article className="unauth-feature-card">
+            <div className="feature-card-header">
+              <span className="feature-card-num">03</span>
+              <h3>Minh Bạch Hiệu Suất</h3>
+            </div>
+            <p>
+              Tự động tính toán lãi/lỗ đã chốt, tỷ suất sinh lời theo thời gian thực và tùy chọn công khai thành tích lên Bảng Xếp Hạng Nhà Đầu Tư để cùng cộng đồng so tài.
+            </p>
+          </article>
+        </section>
+
+        {/* Live Market Preview Table */}
+        {marketInstruments.length > 0 && (
+          <section className="paper-unauth-market-preview">
+            <div className="preview-header">
+              <div>
+                <p className="eyebrow">DỮ LIỆU THỊ TRƯỜNG TRỰC TIẾP</p>
+                <h2>Cổ phiếu sẵn sàng giao dịch</h2>
+              </div>
+              <span className="preview-badge">Sàn HOSE & HNX</span>
+            </div>
+            <div className="preview-table-wrap">
+              <table className="preview-table">
+                <thead>
+                  <tr>
+                    <th>Mã CP</th>
+                    <th>Tên doanh nghiệp</th>
+                    <th className="text-right">Giá quan sát</th>
+                    <th className="text-right">Biến động</th>
+                    <th className="text-right">P/E</th>
+                    <th className="text-right">P/B</th>
+                    <th className="text-center">Thao tác</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {marketInstruments.slice(0, 8).map((inst) => {
+                    const priceNum = Number(inst.price);
+                    const changePct = Number(inst.change_percent);
+                    const isUp = changePct > 0;
+                    const isDown = changePct < 0;
+
+                    return (
+                      <tr key={inst.symbol}>
+                        <td className="font-bold text-cyan">{inst.symbol}</td>
+                        <td className="text-neutral">{inst.name}</td>
+                        <td className="text-right font-mono font-bold">
+                          {priceNum ? `${priceNum.toLocaleString("vi-VN")} đ` : "—"}
+                        </td>
+                        <td className={`text-right font-mono font-bold ${isUp ? "text-emerald" : isDown ? "text-rose" : "text-neutral"}`}>
+                          {changePct ? `${isUp ? "+" : ""}${changePct.toFixed(2)}%` : "0.00%"}
+                        </td>
+                        <td className="text-right font-mono text-neutral">{inst.pe ?? "—"}</td>
+                        <td className="text-right font-mono text-neutral">{inst.pb ?? "—"}</td>
+                        <td className="text-center">
+                          <Link href="/login" className="btn-table-trade">
+                            Đặt lệnh
+                          </Link>
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+          </section>
+        )}
       </main>
     );
   }
@@ -604,7 +707,7 @@ export function PaperTradingDashboard({
         <div className="paper-section-heading">
           <div>
             <p className="eyebrow">CỘNG ĐỒNG & BẢNG XẾP HẠNG</p>
-            <h2>Chia sẻ danh mục mô phỏng (Social Paper Trading)</h2>
+            <h2>Chia sẻ danh mục mô phỏng</h2>
           </div>
           <Link href="/community" className="text-cyan font-semibold">
             Xem Bảng Xếp Hạng Cộng Đồng →
@@ -615,13 +718,13 @@ export function PaperTradingDashboard({
             <p className="visibility-status-text">
               Trạng thái hiện tại:{" "}
               {isPublic ? (
-                <strong className="text-emerald">🟢 Đang công khai trên Bảng Xếp Hạng</strong>
+                <strong className="text-emerald">Đang công khai trên Bảng Xếp Hạng</strong>
               ) : (
-                <strong className="text-neutral">🔒 Riêng tư (Chỉ mình bạn xem)</strong>
+                <strong className="text-neutral">Riêng tư (Chỉ mình bạn xem)</strong>
               )}
             </p>
             <p className="visibility-desc">
-              Khi bật công khai, danh mục của bạn (tỷ suất ROI, cơ cấu danh mục, lịch sử lệnh) sẽ hiển thị minh bạch trên Bảng Xếp Hạng Nhà Đầu Tư tại mục Cộng Đồng. Email cá nhân và thông tin riêng tư được bảo mật 100%.
+              Khi bật công khai, danh mục của bạn (tỷ suất sinh lời, cơ cấu danh mục, lịch sử lệnh) sẽ hiển thị minh bạch trên Bảng Xếp Hạng Nhà Đầu Tư tại mục Cộng Đồng. Email cá nhân và thông tin riêng tư được bảo mật 100%.
             </p>
           </div>
 
@@ -647,7 +750,7 @@ export function PaperTradingDashboard({
                   onClick={() => handleSaveVisibility(false)}
                   className="btn-toggle-private"
                 >
-                  {savingVisibility ? "Đang lưu..." : "🔒 Đặt về Riêng tư"}
+                  {savingVisibility ? "Đang lưu..." : "Đặt về Riêng tư"}
                 </button>
               ) : (
                 <button
@@ -656,7 +759,7 @@ export function PaperTradingDashboard({
                   onClick={() => handleSaveVisibility(true)}
                   className="btn-toggle-public"
                 >
-                  {savingVisibility ? "Đang lưu..." : "🌐 Công khai Danh mục lên BXH"}
+                  {savingVisibility ? "Đang lưu..." : "Công khai Danh mục lên BXH"}
                 </button>
               )}
             </div>

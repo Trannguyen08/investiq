@@ -98,6 +98,7 @@ class SqlThesisRepository(IThesisRepository):
         status: str | None = None,
         limit: int = 50,
         offset: int = 0,
+        sort: str = "engagement",
     ) -> tuple[InvestmentThesis, ...]:
         query = "SELECT * FROM investment_theses WHERE 1=1"
         params: list[Any] = []
@@ -109,7 +110,10 @@ class SqlThesisRepository(IThesisRepository):
             query += " AND status = %s"
             params.append(status)
 
-        query += " ORDER BY created_at DESC LIMIT %s OFFSET %s"
+        if sort == "recent":
+            query += " ORDER BY created_at DESC LIMIT %s OFFSET %s"
+        else:
+            query += " ORDER BY upvotes DESC, created_at DESC LIMIT %s OFFSET %s"
         params.extend([limit, offset])
 
         with (

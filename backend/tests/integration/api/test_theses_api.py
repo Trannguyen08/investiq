@@ -84,6 +84,7 @@ class FakeThesisService:
         status: str | None = None,
         limit: int = 50,
         offset: int = 0,
+        sort: str = "engagement",
     ) -> list[dict[str, object]]:
         return [
             {

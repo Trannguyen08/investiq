@@ -53,7 +53,7 @@ const mockAnalysts: AnalystReputationItem[] = [
     stopped_theses: 0,
     win_rate_percent: "80.0",
     avg_roi_percent: "18.5",
-    rank_tier: "🏆 Grandmaster Analyst",
+    rank_tier: "Grandmaster Analyst",
   },
 ];
 
@@ -82,19 +82,19 @@ describe("Community & Proof-of-Thesis Components", () => {
       />,
     );
 
-    expect(screen.getByText("Cộng đồng & Đấu trường Luận điểm InvestIQ")).toBeInTheDocument();
+    expect(screen.getByText("Cộng đồng & Luận điểm Đầu tư")).toBeInTheDocument();
     expect(screen.getByText("HPG - Dung Quất 2 bùng nổ công suất")).toBeInTheDocument();
 
     const socialTab = screen.getByRole("button", {
-      name: /Bảng xếp hạng Mô phỏng/i,
+      name: /Bảng xếp hạng Nhà đầu tư/i,
     });
     fireEvent.click(socialTab);
 
     expect(screen.getByText("Dragon Investor")).toBeInTheDocument();
-    expect(screen.getByText("🥇 #1")).toBeInTheDocument();
+    expect(screen.getByText("#1")).toBeInTheDocument();
   });
 
-  it("renders ThesisArena with analyst reputation and thesis card details", () => {
+  it("renders ThesisArena with analyst reputation, sorting, and thesis card details", () => {
     render(
       <ThesisArena
         initialTheses={mockTheses}
@@ -102,20 +102,22 @@ describe("Community & Proof-of-Thesis Components", () => {
       />,
     );
 
-    expect(screen.getByText("🏆 BẢNG VINH DANH CHUYÊN GIA (TOP ANALYSTS)")).toBeInTheDocument();
-    expect(screen.getByText("🏆 Grandmaster Analyst")).toBeInTheDocument();
+    expect(screen.getByText("BẢNG VINH DANH NHÀ PHÂN TÍCH")).toBeInTheDocument();
+    expect(screen.getByText("Grandmaster Analyst")).toBeInTheDocument();
     expect(screen.getByText("HPG")).toBeInTheDocument();
-    expect(screen.getByText("📈 Bullish")).toBeInTheDocument();
+    expect(screen.getByText("Tăng giá")).toBeInTheDocument();
     expect(screen.getByText("Kỳ hạn 3T")).toBeInTheDocument();
-    expect(screen.getByText("⚡ Lò cao số 2")).toBeInTheDocument();
+    expect(screen.getByText("Lò cao số 2")).toBeInTheDocument();
     expect(screen.getByText(/Hữu ích \(12\)/)).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Nhiều tương tác nhất" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Bài viết của tôi" })).toBeInTheDocument();
   });
 
-  it("renders SocialPaperTrading leaderboard and rank medals", () => {
+  it("renders SocialPaperTrading leaderboard and rank numbers", () => {
     render(<SocialPaperTrading initialLeaderboard={mockLeaderboard} />);
 
     expect(screen.getByText("Dragon Investor")).toBeInTheDocument();
-    expect(screen.getByText("🥇 #1")).toBeInTheDocument();
+    expect(screen.getByText("#1")).toBeInTheDocument();
     expect(screen.getByText("+12.5%")).toBeInTheDocument();
     expect(screen.getByText("3 mã")).toBeInTheDocument();
   });

@@ -31,8 +31,12 @@ type ThesisArenaProps = {
 export function ThesisArena({ initialTheses = [], initialLeaderboard = [] }: ThesisArenaProps) {
   const { status: authStatus } = useAuth();
   const [theses, setTheses] = useState<InvestmentThesisItem[]>(initialTheses);
+  const [myTheses, setMyTheses] = useState<InvestmentThesisItem[]>([]);
   const [leaderboard, setLeaderboard] = useState<AnalystReputationItem[]>(initialLeaderboard);
   const [loading, setLoading] = useState(false);
+  const [loadingMyTheses, setLoadingMyTheses] = useState(false);
+  const [scope, setScope] = useState<"community" | "my">("community");
+  const [sortOrder, setSortOrder] = useState<"engagement" | "recent">("engagement");
   const [statusFilter, setStatusFilter] = useState<string>("all");
   const [stanceFilter, setStanceFilter] = useState<string>("all");
   const [searchSymbol, setSearchSymbol] = useState<string>("");
@@ -63,6 +67,7 @@ export function ThesisArena({ initialTheses = [], initialLeaderboard = [] }: The
       const query = new URLSearchParams();
       if (statusFilter !== "all") query.set("status", statusFilter);
       if (searchSymbol.trim()) query.set("symbol", searchSymbol.trim().toUpperCase());
+      query.set("sort", sortOrder);
 
       const [thesesRes, leaderboardRes] = await Promise.all([
         fetch(`/theses-api${query.size ? `?${query.toString()}` : ""}`, { cache: "no-store" }),
@@ -82,22 +87,59 @@ export function ThesisArena({ initialTheses = [], initialLeaderboard = [] }: The
     } finally {
       setLoading(false);
     }
-  }, [statusFilter, searchSymbol]);
+  }, [statusFilter, searchSymbol, sortOrder]);
+
+  const loadMyTheses = useCallback(async () => {
+    if (authStatus !== "authenticated") return;
+    setLoadingMyTheses(true);
+    try {
+      const res = await fetch("/theses-api/my", { cache: "no-store" });
+      if (res.ok) {
+        const data = (await res.json()) as { data: InvestmentThesisItem[] };
+        setMyTheses(data.data || []);
+      }
+    } catch {
+      // ignore
+    } finally {
+      setLoadingMyTheses(false);
+    }
+  }, [authStatus]);
 
   useEffect(() => {
     loadData();
   }, [loadData]);
 
+  useEffect(() => {
+    if (scope === "my" && authStatus === "authenticated") {
+      loadMyTheses();
+    }
+  }, [scope, authStatus, loadMyTheses]);
+
+  const displayedList = scope === "my" ? myTheses : theses;
+
   const filteredTheses = useMemo(() => {
-    return theses.filter((item) => {
-      if (stanceFilter !== "all" && item.stance !== stanceFilter) return false;
-      return true;
-    });
-  }, [theses, stanceFilter]);
+    return displayedList
+      .filter((item) => {
+        if (stanceFilter !== "all" && item.stance !== stanceFilter) return false;
+        if (scope === "my") {
+          if (statusFilter !== "all" && item.status !== statusFilter) return false;
+          if (searchSymbol.trim() && !item.symbol.includes(searchSymbol.trim().toUpperCase())) return false;
+        }
+        return true;
+      })
+      .sort((a, b) => {
+        if (sortOrder === "engagement") {
+          const diffVotes = (b.upvotes || 0) - (a.upvotes || 0);
+          if (diffVotes !== 0) return diffVotes;
+          return new Date(b.created_at).getTime() - new Date(a.created_at).getTime();
+        }
+        return new Date(b.created_at).getTime() - new Date(a.created_at).getTime();
+      });
+  }, [displayedList, stanceFilter, scope, statusFilter, searchSymbol, sortOrder]);
 
   async function handleUpvote(thesisId: string) {
     if (authStatus !== "authenticated") {
-      setMessage({ text: "Vui lòng đăng nhập để bình chọn (upvote) luận điểm.", type: "error" });
+      setMessage({ text: "Vui lòng đăng nhập để bình chọn luận điểm.", type: "error" });
       return;
     }
     setUpvotingId(thesisId);
@@ -113,10 +155,11 @@ export function ThesisArena({ initialTheses = [], initialLeaderboard = [] }: The
       }
       const updated = (await res.json()) as InvestmentThesisItem;
       setTheses((prev) => prev.map((t) => (t.id === thesisId ? updated : t)));
-      setMessage({ text: "Đã upvote luận điểm thành công!", type: "success" });
+      setMyTheses((prev) => prev.map((t) => (t.id === thesisId ? updated : t)));
+      setMessage({ text: "Đã ghi nhận bình chọn thành công!", type: "success" });
     } catch (err) {
       setMessage({
-        text: err instanceof Error ? err.message : "Chưa thể upvote luận điểm.",
+        text: err instanceof Error ? err.message : "Chưa thể bình chọn luận điểm.",
         type: "error",
       });
     } finally {
@@ -189,7 +232,7 @@ export function ThesisArena({ initialTheses = [], initialLeaderboard = [] }: The
       }
 
       setMessage({
-        text: "🎉 Xuất bản luận điểm thành công! Giá vào đã được khóa tự động theo thời gian thực.",
+        text: "Xuất bản luận điểm thành công! Giá vào đã được khóa tự động theo giá thị trường.",
         type: "success",
       });
       setShowCreateModal(false);
@@ -201,6 +244,9 @@ export function ThesisArena({ initialTheses = [], initialLeaderboard = [] }: The
       setFormBody("");
       setFormCatalysts("");
       loadData();
+      if (scope === "my") {
+        loadMyTheses();
+      }
     } catch (err) {
       setMessage({
         text: err instanceof Error ? err.message : "Đăng luận điểm thất bại.",
@@ -226,11 +272,9 @@ export function ThesisArena({ initialTheses = [], initialLeaderboard = [] }: The
       {/* Header and Action */}
       <div className="thesis-header-row">
         <div>
-          <h2 className="thesis-arena-title">
-            Đấu trường Luận điểm Đầu tư <span className="thesis-badge-highlight">Proof-of-Thesis Arena</span>
-          </h2>
+          <h2 className="thesis-arena-title">Góc nhìn & Luận điểm Đầu tư</h2>
           <p className="thesis-arena-desc">
-            Không nhận định suông. Mỗi luận điểm đều được hệ thống khóa giá thực tế tự động (anti-cheat), theo dõi minh bạch kết quả chạm Target hoặc Cắt lỗ và xếp hạng uy tín chuyên gia.
+            Mỗi luận điểm đều được hệ thống khóa giá thực tế tự động, theo dõi minh bạch kết quả đạt giá mục tiêu hoặc cắt lỗ và ghi nhận hiệu suất nhà phân tích.
           </p>
         </div>
         <button
@@ -244,16 +288,34 @@ export function ThesisArena({ initialTheses = [], initialLeaderboard = [] }: The
           }}
           className="btn-primary thesis-publish-btn"
         >
-          ✍️ Đăng luận điểm mới
+          Đăng luận điểm mới
         </button>
       </div>
 
-      {/* Top Analyst Reputation Bar */}
-      {leaderboard.length > 0 && (
+      {/* Scope Subtabs: Tất cả luận điểm vs Bài viết của tôi */}
+      <div className="thesis-scope-bar">
+        <button
+          type="button"
+          className={`thesis-scope-btn ${scope === "community" ? "active" : ""}`}
+          onClick={() => setScope("community")}
+        >
+          Tất cả luận điểm
+        </button>
+        <button
+          type="button"
+          className={`thesis-scope-btn ${scope === "my" ? "active" : ""}`}
+          onClick={() => setScope("my")}
+        >
+          Bài viết của tôi
+        </button>
+      </div>
+
+      {/* Top Analyst Reputation Bar (Only in community scope) */}
+      {scope === "community" && leaderboard.length > 0 && (
         <div className="analyst-leaderboard-banner">
           <div className="analyst-banner-header">
-            <span className="analyst-banner-tag">🏆 BẢNG VINH DANH CHUYÊN GIA (TOP ANALYSTS)</span>
-            <span className="analyst-banner-sub">Dựa trên tỷ lệ thắng (Win Rate) và lợi nhuận thực tế kiểm chứng</span>
+            <span className="analyst-banner-tag">BẢNG VINH DANH NHÀ PHÂN TÍCH</span>
+            <span className="analyst-banner-sub">Dựa trên tỷ lệ dự báo chính xác và hiệu suất sinh lời kiểm chứng</span>
           </div>
           <div className="analyst-cards-scroll">
             {leaderboard.slice(0, 6).map((analyst, idx) => (
@@ -261,7 +323,7 @@ export function ThesisArena({ initialTheses = [], initialLeaderboard = [] }: The
                 <div className="analyst-rank-number">#{idx + 1}</div>
                 <div className="analyst-info">
                   <div className="analyst-name">{analyst.author_name}</div>
-                  <div className="analyst-tier-tag">{analyst.rank_tier}</div>
+                  <div className="analyst-tier-tag">{analyst.rank_tier.replace(/^[^\w\s\u00C0-\u1EF9]+/, "").trim()}</div>
                 </div>
                 <div className="analyst-stats">
                   <div className="analyst-stat-row">
@@ -269,7 +331,7 @@ export function ThesisArena({ initialTheses = [], initialLeaderboard = [] }: The
                     <strong className="text-emerald">{analyst.win_rate_percent}</strong>
                   </div>
                   <div className="analyst-stat-row">
-                    <span>ROI TB:</span>
+                    <span>Lợi nhuận TB:</span>
                     <strong className={Number(analyst.avg_roi_percent) >= 0 ? "text-emerald" : "text-rose"}>
                       {Number(analyst.avg_roi_percent) > 0 ? `+${analyst.avg_roi_percent}%` : `${analyst.avg_roi_percent}%`}
                     </strong>
@@ -286,13 +348,33 @@ export function ThesisArena({ initialTheses = [], initialLeaderboard = [] }: The
 
       {/* Filter and Search Bar */}
       <div className="thesis-filter-bar">
+        {/* Sort Selector */}
+        <div className="thesis-filter-group">
+          <span className="filter-label">Sắp xếp:</span>
+          <button
+            type="button"
+            className={`filter-chip ${sortOrder === "engagement" ? "filter-chip-active" : ""}`}
+            onClick={() => setSortOrder("engagement")}
+          >
+            Nhiều tương tác nhất
+          </button>
+          <button
+            type="button"
+            className={`filter-chip ${sortOrder === "recent" ? "filter-chip-active" : ""}`}
+            onClick={() => setSortOrder("recent")}
+          >
+            Mới nhất
+          </button>
+        </div>
+
+        {/* Status Filter */}
         <div className="thesis-filter-group">
           <span className="filter-label">Trạng thái:</span>
           {[
             { id: "all", label: "Tất cả" },
             { id: "active", label: "Đang diễn ra" },
-            { id: "hit_target", label: "🎯 Đã chạm Target" },
-            { id: "stopped_out", label: "🛑 Đã cắt lỗ" },
+            { id: "hit_target", label: "Đã chạm mục tiêu" },
+            { id: "stopped_out", label: "Đã cắt lỗ" },
           ].map((item) => (
             <button
               key={item.id}
@@ -305,12 +387,13 @@ export function ThesisArena({ initialTheses = [], initialLeaderboard = [] }: The
           ))}
         </div>
 
+        {/* Stance Filter */}
         <div className="thesis-filter-group">
           <span className="filter-label">Xu hướng:</span>
           {[
             { id: "all", label: "Tất cả" },
-            { id: "bullish", label: "📈 Tăng giá (Bullish)" },
-            { id: "bearish", label: "📉 Giảm giá (Bearish)" },
+            { id: "bullish", label: "Kỳ vọng tăng giá" },
+            { id: "bearish", label: "Cảnh báo giảm giá" },
           ].map((item) => (
             <button
               key={item.id}
@@ -323,6 +406,7 @@ export function ThesisArena({ initialTheses = [], initialLeaderboard = [] }: The
           ))}
         </div>
 
+        {/* Search */}
         <div className="thesis-search-box">
           <input
             type="text"
@@ -334,13 +418,39 @@ export function ThesisArena({ initialTheses = [], initialLeaderboard = [] }: The
         </div>
       </div>
 
-      {/* Theses Grid */}
-      {loading ? (
-        <div className="thesis-loading-placeholder">Đang tải danh sách luận điểm kiểm chứng...</div>
+      {/* Theses Content Area */}
+      {scope === "my" && authStatus !== "authenticated" ? (
+        <div className="thesis-auth-gate-box">
+          <p className="auth-gate-title">Vui lòng đăng nhập để xem danh sách luận điểm của bạn</p>
+          <p className="auth-gate-sub">
+            Theo dõi trạng thái, tỷ suất sinh lời thực tế và phản hồi từ cộng đồng nhà đầu tư trên sàn InvestIQ.
+          </p>
+          <Link href="/login" className="btn-primary auth-gate-btn">
+            Đăng nhập ngay
+          </Link>
+        </div>
+      ) : loading || (scope === "my" && loadingMyTheses) ? (
+        <div className="thesis-loading-placeholder">Đang tải danh sách luận điểm đầu tư...</div>
       ) : filteredTheses.length === 0 ? (
         <div className="thesis-empty-box">
-          <p className="empty-title">Chưa có luận điểm nào phù hợp tiêu chí lọc.</p>
-          <p className="empty-sub">Hãy là người đầu tiên đưa ra luận điểm đầu tư sắc bén trên sàn!</p>
+          {scope === "my" ? (
+            <>
+              <p className="empty-title">Bạn chưa đăng tải luận điểm đầu tư nào.</p>
+              <p className="empty-sub">Hãy chia sẻ góc nhìn sắc bén của bạn để cùng cộng đồng kiểm chứng và ghi nhận uy tín chuyên môn.</p>
+              <button
+                type="button"
+                onClick={() => setShowCreateModal(true)}
+                className="btn-primary thesis-create-first-btn"
+              >
+                Đăng luận điểm đầu tiên
+              </button>
+            </>
+          ) : (
+            <>
+              <p className="empty-title">Chưa có luận điểm nào phù hợp tiêu chí lọc.</p>
+              <p className="empty-sub">Hãy là người đầu tiên đưa ra luận điểm đầu tư sắc bén trên sàn!</p>
+            </>
+          )}
         </div>
       ) : (
         <div className="theses-grid">
@@ -357,21 +467,21 @@ export function ThesisArena({ initialTheses = [], initialLeaderboard = [] }: The
                       {thesis.symbol}
                     </Link>
                     <span className={`thesis-stance-badge ${isBullish ? "stance-bullish" : "stance-bearish"}`}>
-                      {isBullish ? "📈 Bullish" : "📉 Bearish"}
+                      {isBullish ? "Tăng giá" : "Giảm giá"}
                     </span>
                     <span className="thesis-horizon-badge">Kỳ hạn {thesis.horizon_months}T</span>
                   </div>
                   <div className="thesis-status-wrap">
                     {isHitTarget ? (
                       <span className="status-badge status-hit-target">
-                        🎯 Đạt Target {thesis.outcome_roi ? `(+${thesis.outcome_roi}%)` : ""}
+                        Đạt mục tiêu {thesis.outcome_roi ? `(+${thesis.outcome_roi}%)` : ""}
                       </span>
                     ) : isStopped ? (
                       <span className="status-badge status-stopped">
-                        🛑 Cắt lỗ {thesis.outcome_roi ? `(${thesis.outcome_roi}%)` : ""}
+                        Cắt lỗ {thesis.outcome_roi ? `(${thesis.outcome_roi}%)` : ""}
                       </span>
                     ) : (
-                      <span className="status-badge status-active">⚡ Đang mở</span>
+                      <span className="status-badge status-active">Đang theo dõi</span>
                     )}
                   </div>
                 </div>
@@ -379,7 +489,7 @@ export function ThesisArena({ initialTheses = [], initialLeaderboard = [] }: The
                 <h3 className="thesis-card-title">{thesis.title}</h3>
 
                 <div className="thesis-author-row">
-                  <span className="thesis-author-name">👤 {thesis.author_name}</span>
+                  <span className="thesis-author-name">{thesis.author_name}</span>
                   <span className="thesis-timestamp">
                     {new Date(thesis.created_at).toLocaleDateString("vi-VN", {
                       day: "2-digit",
@@ -392,7 +502,7 @@ export function ThesisArena({ initialTheses = [], initialLeaderboard = [] }: The
                 {/* Price Metrics Bar */}
                 <div className="thesis-metrics-grid">
                   <div className="metric-box">
-                    <span className="metric-lbl">Giá vào (Locked):</span>
+                    <span className="metric-lbl">Giá vào:</span>
                     <span className="metric-val text-neutral">{formatVnd(thesis.entry_price)}</span>
                   </div>
                   <div className="metric-box">
@@ -432,7 +542,7 @@ export function ThesisArena({ initialTheses = [], initialLeaderboard = [] }: The
                   <div className="thesis-catalysts-row">
                     {thesis.catalysts.map((cat, i) => (
                       <span key={i} className="catalyst-chip">
-                        ⚡ {cat}
+                        {cat}
                       </span>
                     ))}
                   </div>
@@ -443,14 +553,14 @@ export function ThesisArena({ initialTheses = [], initialLeaderboard = [] }: The
 
                 {/* Footer and Upvote */}
                 <div className="thesis-card-footer">
-                  <span className="anti-cheat-note">🔒 Giá vào tự động khớp theo thị trường lúc đăng</span>
+                  <span className="anti-cheat-note">Giá vào được khóa tự động theo thị trường lúc xuất bản</span>
                   <button
                     type="button"
                     onClick={() => handleUpvote(thesis.id)}
                     disabled={upvotingId === thesis.id}
                     className="thesis-upvote-btn"
                   >
-                    👍 Hữu ích ({thesis.upvotes})
+                    Hữu ích ({thesis.upvotes})
                   </button>
                 </div>
               </div>
@@ -467,7 +577,7 @@ export function ThesisArena({ initialTheses = [], initialLeaderboard = [] }: The
               <div>
                 <h3 className="modal-title">Xuất bản Luận điểm Đầu tư</h3>
                 <p className="modal-sub">
-                  Cam kết minh bạch: Giá vào (Entry Price) sẽ được hệ thống đối chiếu và khóa tự động theo giá thị trường thực tế ngay khi bấm Đăng.
+                  Cam kết minh bạch: Giá vào sẽ được hệ thống đối chiếu và khóa tự động theo giá thị trường thực tế ngay khi xuất bản.
                 </p>
               </div>
               <button
@@ -502,8 +612,8 @@ export function ThesisArena({ initialTheses = [], initialLeaderboard = [] }: The
                     onChange={(e) => setFormStance(e.target.value as "bullish" | "bearish")}
                     className="form-select"
                   >
-                    <option value="bullish">📈 Tăng giá (Bullish) - Kỳ vọng giá lên</option>
-                    <option value="bearish">📉 Giảm giá (Bearish) - Cảnh báo giá xuống</option>
+                    <option value="bullish">Tăng giá - Kỳ vọng xu hướng đi lên</option>
+                    <option value="bearish">Giảm giá - Cảnh báo rủi ro điều chỉnh</option>
                   </select>
                 </div>
               </div>
@@ -547,10 +657,10 @@ export function ThesisArena({ initialTheses = [], initialLeaderboard = [] }: The
                     onChange={(e) => setFormHorizon(e.target.value)}
                     className="form-select"
                   >
-                    <option value="1">1 Tháng (Ngắn hạn)</option>
-                    <option value="3">3 Tháng (Trung hạn)</option>
-                    <option value="6">6 Tháng (Trung & Dài hạn)</option>
-                    <option value="12">12 Tháng (Dài hạn)</option>
+                    <option value="1">1 Tháng - Ngắn hạn</option>
+                    <option value="3">3 Tháng - Trung hạn</option>
+                    <option value="6">6 Tháng - Trung và dài hạn</option>
+                    <option value="12">12 Tháng - Dài hạn</option>
                   </select>
                 </div>
               </div>
@@ -569,7 +679,7 @@ export function ThesisArena({ initialTheses = [], initialLeaderboard = [] }: The
               </div>
 
               <div className="form-field">
-                <label htmlFor="formCatalysts">Các động lực chính (Catalysts - phân tách bằng dấu phẩy)</label>
+                <label htmlFor="formCatalysts">Các động lực tăng trưởng chính, phân tách bằng dấu phẩy</label>
                 <input
                   id="formCatalysts"
                   type="text"
@@ -594,7 +704,7 @@ export function ThesisArena({ initialTheses = [], initialLeaderboard = [] }: The
               </div>
 
               <div className="anti-cheat-alert">
-                🛡️ <strong>Chống gian lận (Anti-cheat):</strong> Bạn không thể tự nhập giá vào. Giá vào (Entry Price) sẽ được chốt tự động bằng giá khớp lệnh thực tế hiện tại của mã trên HOSE/HNX. Với thế Bullish, giá mục tiêu phải lớn hơn giá hiện tại và giá cắt lỗ phải thấp hơn giá hiện tại.
+                <strong>Cơ chế khóa giá tự động:</strong> Bạn không thể tự nhập giá vào. Giá vào sẽ được hệ thống chốt tự động bằng giá khớp lệnh thực tế hiện tại của cổ phiếu trên sàn giao dịch. Với xu hướng tăng, giá mục tiêu cần cao hơn giá hiện tại và giá cắt lỗ thấp hơn giá hiện tại.
               </div>
 
               <div className="modal-actions">
@@ -610,7 +720,7 @@ export function ThesisArena({ initialTheses = [], initialLeaderboard = [] }: The
                   disabled={submitting}
                   className="btn-primary"
                 >
-                  {submitting ? "Đang xác thực & Khóa giá..." : "🚀 Xuất bản Luận điểm"}
+                  {submitting ? "Đang xác thực & Khóa giá..." : "Xuất bản Luận điểm"}
                 </button>
               </div>
             </form>

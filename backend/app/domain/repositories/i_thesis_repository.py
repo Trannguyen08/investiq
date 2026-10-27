@@ -30,6 +30,7 @@ class IThesisRepository(Protocol):
         status: str | None = None,
         limit: int = 50,
         offset: int = 0,
+        sort: str = "engagement",
     ) -> tuple[InvestmentThesis, ...]: ...
 
     def get_by_id(self, thesis_id: str) -> InvestmentThesis | None: ...

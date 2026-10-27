@@ -66,6 +66,7 @@ class MockThesisRepository(IThesisRepository):
         status: str | None = None,
         limit: int = 50,
         offset: int = 0,
+        sort: str = "engagement",
     ) -> tuple[InvestmentThesis, ...]:
         items = list(self.theses.values())
         if symbol:

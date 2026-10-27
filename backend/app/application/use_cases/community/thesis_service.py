@@ -103,8 +103,11 @@ class ThesisService:
         status: str | None = None,
         limit: int = 50,
         offset: int = 0,
+        sort: str = "engagement",
     ) -> list[dict[str, Any]]:
-        theses = self._repo.list_all(symbol=symbol, status=status, limit=limit, offset=offset)
+        theses = self._repo.list_all(
+            symbol=symbol, status=status, limit=limit, offset=offset, sort=sort
+        )
         result: list[dict[str, Any]] = []
 
         for item in theses:
