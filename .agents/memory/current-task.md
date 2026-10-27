@@ -18,6 +18,11 @@
      - [test_thesis_service.py](file:///c:/investiq/backend/tests/unit/community/test_thesis_service.py): Inherited `MockMarketProvider` from `FixtureMarketProvider` and properly typed `candles` return as `tuple[Candle, ...]`.
      - [news_ingestion_worker.py](file:///c:/investiq/backend/app/workers/news_ingestion_worker.py): Imported `ConnectionPool` and typed `pool: ConnectionPool | None` instead of bare `object`.
      - [test_market_data_api.py](file:///c:/investiq/backend/tests/integration/api/test_market_data_api.py): Annotated return type `-> MarketInstrument | None:` on `FailingProvider.instrument`.
+- **CI Missing Import Fix (`httpx`)**:
+  - `financial_report_crawler.py` imported `httpx`, which was not present in clean CI environment (`requirements-dev.txt` had typo `httpx2==2.13.1`).
+  - Refactored `financial_report_crawler.py` to use Python standard library `urllib.request` (consistent with all other crawlers in `crawlers/`).
+  - Added `[[tool.mypy.overrides]] module = ["httpx", "httpx.*"] ignore_missing_imports = true` to `pyproject.toml`.
+  - Fixed `requirements-dev.txt` to install `httpx==0.28.1`.
 - **Validation**:
   - `backend/`: `ruff check .` -> All checks passed (0 errors).
   - `backend/`: `mypy` -> Success: no issues found in 34 source files (0 errors).

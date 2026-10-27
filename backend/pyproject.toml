@@ -43,6 +43,10 @@ ignore_missing_imports = true
 module = ["vnstock", "vnstock.*"]
 ignore_missing_imports = true
 
+[[tool.mypy.overrides]]
+module = ["httpx", "httpx.*"]
+ignore_missing_imports = true
+
 [dependency-groups]
 dev = [
     "allure-pytest==2.16.2",
