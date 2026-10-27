@@ -3,7 +3,32 @@
 Record durable decisions in reverse chronological order. Do not record routine implementation
 details.
 
-## 2026-10-26 â€” Resilient auth session and rate-limit fallbacks on serverless/free cloud deployments
+## 2026-10-27 — Proof-of-Thesis Arena & Social Paper Trading Architecture
+
+- **Status:** Accepted and implemented on `feature/community-thesis-paper-trading`
+- **Context:** Generic social networks (unstructured feeds, comments, likes) offer low differentiation and devolve into noise, hype, and untraceable pump-and-dump claims. Users requested high-value community capabilities where analytical skill is verifiable and transparent.
+- **Decision:**
+  1. *Proof-of-Thesis Arena*:
+     - Structured thesis schema: symbol, stance (bullish/bearish), target price, stop-loss price, horizon (1-12M), catalysts, and detailed analysis body.
+     - Anti-cheat Entry Stamping: To prevent hindsight bias and manipulated entry claims, `ThesisService` queries `market_provider.instrument(symbol)` upon publish to lock the exact real-time execution price. Users cannot supply their own entry prices.
+     - Automated Outcome Evaluation: Background/real-time checks compare live market prices against target/stop-loss. Bullish theses hit target if `current >= target` or stop out if `current <= stop_loss` (vice versa for bearish).
+     - Analyst Reputation: Win rate and average ROI are calculated strictly from completed theses. Tiers (Grandmaster, Senior, Equity, Junior Analyst) reward proven analytical accuracy.
+  2. *Social Paper Trading*:
+     - Portfolios remain private by default (`is_public = False`).
+     - Users can explicitly opt-in to public leaderboard participation with a custom nickname.
+     - Public view renders transparent asset allocation (holdings weight) and immutable execution diary (past trades) without exposing private user identity or sensitive credentials.
+
+## 2026-10-27 — Quantitative Financial Forensics, Conglomerate Graphs & Extended Leaders
+
+- **Status:** Accepted and implemented on `feature/market-intelligence-analytics`
+- **Context:** Retail investors in Vietnam struggle with corporate governance transparency (hidden subsidiaries, cross-holdings, accounting earnings manipulation).
+- **Decision:**
+  1. *Extended Prominent Leaders*: Scaled from 8 to 22 business leaders across 8 key sectors, dynamically valuing listed equity portfolios against real-time market quotes.
+  2. *Conglomerate Ecosystem Graphs*: Hardened relational models for Vietnam's 6 largest corporate groups (Vingroup, Masan, Hòa Phát, FPT, Sovico, SSI/PAN) mapping tier-1 and tier-2 entities, parent-subsidiary equity stakes, and capital flows.
+  3. *Quantitative Forensics*: Implemented Altman Z-Score for emerging market manufacturing/non-manufacturing, coupled with 4 automated red flags (low cash-to-net-income quality, abnormal receivables surge, inventory turnover degradation, working capital liquidity stress).
+  4. *DCA Simulator & Daily Digest*: Monthly dollar-cost averaging backtester against 12M bank deposits and automated 15h30 market close summary digest.
+
+## 2026-10-26 — Resilient auth session and rate-limit fallbacks on serverless/free cloud deployments
 
 - **Status:** Accepted and implemented
 - **Context:** On free-tier cloud environments like Render without a paid Redis add-on, Redis is unavailable (`redis: unavailable`). This previously caused:

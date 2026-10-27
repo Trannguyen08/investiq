@@ -12,8 +12,8 @@ export const userNavigationLinks = [
   ["/", "Tổng quan"],
   ["/market/stocks", "Thị trường"],
   ["/portfolio", "Danh mục"],
+  ["/community", "Cộng đồng"],
   ["/learn", "Chứng khoán căn bản"],
-  ["/backtesting", "Kiểm thử chiến lược"],
   ["/news", "Tin tức"],
 ] as const;
 

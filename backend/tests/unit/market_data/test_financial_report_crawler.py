@@ -46,10 +46,11 @@ def test_financial_report_crawler_parsing_and_filtering() -> None:
     crawler = FinancialReportCrawler()
 
     mock_resp = MagicMock()
-    mock_resp.status_code = 200
-    mock_resp.text = SAMPLE_CAFEF_HTML
+    mock_resp.status = 200
+    mock_resp.read.return_value = SAMPLE_CAFEF_HTML.encode("utf-8")
+    mock_resp.__enter__.return_value = mock_resp
 
-    with patch("httpx.Client.get", return_value=mock_resp):
+    with patch("urllib.request.urlopen", return_value=mock_resp):
         reports = crawler.get_financial_reports("FPT", limit=5)
 
     # 3 recent articles should pass, 1 outdated (< 2025) should be skipped
@@ -79,22 +80,23 @@ def test_financial_report_crawler_cache_reuse() -> None:
     crawler = FinancialReportCrawler()
 
     mock_resp = MagicMock()
-    mock_resp.status_code = 200
-    mock_resp.text = SAMPLE_CAFEF_HTML
+    mock_resp.status = 200
+    mock_resp.read.return_value = SAMPLE_CAFEF_HTML.encode("utf-8")
+    mock_resp.__enter__.return_value = mock_resp
 
-    with patch("httpx.Client.get", return_value=mock_resp) as mock_get:
+    with patch("urllib.request.urlopen", return_value=mock_resp) as mock_urlopen:
         res1 = crawler.get_financial_reports("FPT", limit=2)
         res2 = crawler.get_financial_reports("FPT", limit=2)
         assert len(res1) == 2
         assert len(res2) == 2
         # HTTP client should only be called once due to cache
-        assert mock_get.call_count == 1
+        assert mock_urlopen.call_count == 1
 
 
 def test_financial_report_crawler_handles_http_failure() -> None:
     crawler = FinancialReportCrawler()
 
-    with patch("httpx.Client.get", side_effect=Exception("Network connection timeout")):
+    with patch("urllib.request.urlopen", side_effect=Exception("Network connection timeout")):
         reports = crawler.get_financial_reports("UNKNOWN_SYM", limit=5)
         # Should gracefully return empty list without crashing
         assert reports == []

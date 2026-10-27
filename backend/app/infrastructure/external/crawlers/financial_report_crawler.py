@@ -4,11 +4,13 @@ from __future__ import annotations
 
 import logging
 import re
+import urllib.error
+import urllib.parse
+import urllib.request
 from datetime import UTC, datetime
 from threading import RLock
 from typing import Any
 
-import httpx
 from bs4 import BeautifulSoup
 
 logger = logging.getLogger(__name__)
@@ -51,130 +53,133 @@ class FinancialReportCrawler:
         return reports[:limit]
 
     def _crawl_cafef(self, symbol: str, limit: int = 6) -> list[dict[str, Any]]:
-        url = f"https://cafef.vn/tim-kiem.chn?keywords={symbol}"
+        encoded_keyword = urllib.parse.quote(symbol)
+        url = f"https://cafef.vn/tim-kiem.chn?keywords={encoded_keyword}"
         headers = {"User-Agent": _USER_AGENT}
         results: list[dict[str, Any]] = []
 
         try:
-            with httpx.Client(timeout=6.0, follow_redirects=True, headers=headers) as client:
-                response = client.get(url)
-                if response.status_code != 200:
+            req = urllib.request.Request(url, headers=headers)
+            with urllib.request.urlopen(req, timeout=6.0) as response:
+                status_code = getattr(response, "status", 200)
+                if status_code != 200:
                     logger.warning(
                         "cafef_financial_search_status_not_200",
-                        extra={"symbol": symbol, "status": response.status_code},
+                        extra={"symbol": symbol, "status": status_code},
                     )
                     return []
+                html_content = response.read().decode("utf-8", errors="replace")
 
-                soup = BeautifulSoup(response.text, "html.parser")
-                container = soup.find(class_="search-content-wrap") or soup.find(class_="timeline")
-                if not container:
-                    return []
+            soup = BeautifulSoup(html_content, "html.parser")
+            container = soup.find(class_="search-content-wrap") or soup.find(class_="timeline")
+            if not container:
+                return []
 
-                blocks = container.find_all(["li", "div"], recursive=True)
-                seen_links: set[str] = set()
+            blocks = container.find_all(["li", "div"], recursive=True)
+            seen_links: set[str] = set()
 
-                for block in blocks:
-                    h_tag = block.find(["h3", "h2"])
-                    if not h_tag:
-                        continue
+            for block in blocks:
+                h_tag = block.find(["h3", "h2"])
+                if not h_tag:
+                    continue
 
-                    a_tag = h_tag.find("a")
-                    if not a_tag or not a_tag.get("href"):
-                        continue
+                a_tag = h_tag.find("a")
+                if not a_tag or not a_tag.get("href"):
+                    continue
 
-                    href = str(a_tag["href"]).strip()
-                    if not href.endswith(".chn") or href in seen_links:
-                        continue
+                href = str(a_tag["href"]).strip()
+                if not href.endswith(".chn") or href in seen_links:
+                    continue
 
-                    title = a_tag.get_text(strip=True)
-                    if len(title) < 15:
-                        continue
+                title = a_tag.get_text(strip=True)
+                if len(title) < 15:
+                    continue
 
-                    # Sapo / Summary extraction
-                    sapo_el = block.find(
-                        class_=lambda c: bool(
-                            c and any(k in str(c).lower() for k in ["sapo", "summary", "desc"])
-                        )
+                # Sapo / Summary extraction
+                sapo_el = block.find(
+                    class_=lambda c: bool(
+                        c and any(k in str(c).lower() for k in ["sapo", "summary", "desc"])
                     )
-                    summary = sapo_el.get_text(strip=True) if sapo_el else ""
+                )
+                summary = sapo_el.get_text(strip=True) if sapo_el else ""
 
-                    # Image extraction
-                    img_el = block.find("img")
-                    image_url: str | None = None
-                    if img_el:
-                        img_src = img_el.get("src") or img_el.get("data-src")
-                        if img_src and str(img_src).startswith("http"):
-                            image_url = str(img_src)
+                # Image extraction
+                img_el = block.find("img")
+                image_url: str | None = None
+                if img_el:
+                    img_src = img_el.get("src") or img_el.get("data-src")
+                    if img_src and str(img_src).startswith("http"):
+                        image_url = str(img_src)
 
-                    # Extract publication date and filter out outdated records (< 2025)
-                    pub_date: str | None = None
-                    m = re.search(r"-188(\d{2})(\d{2})(\d{2})", href)
-                    if m:
-                        yy, mm, dd = m.groups()
-                        year = int(f"20{yy}")
-                        if year < 2025:
-                            # Skip outdated articles to ensure freshness & forward utility
-                            continue
-                        pub_date = f"{dd}/{mm}/{year}"
+                # Extract publication date and filter out outdated records (< 2025)
+                pub_date: str | None = None
+                m = re.search(r"-188(\d{2})(\d{2})(\d{2})", href)
+                if m:
+                    yy, mm, dd = m.groups()
+                    year = int(f"20{yy}")
+                    if year < 2025:
+                        # Skip outdated articles to ensure freshness & forward utility
+                        continue
+                    pub_date = f"{dd}/{mm}/{year}"
 
-                    # Classify tag based on content
-                    title_lower = title.lower()
-                    tag = "Hoạt động & Tăng trưởng"
-                    if any(
-                        w in title_lower
-                        for w in [
-                            "bctc",
-                            "lợi nhuận",
-                            "lãi",
-                            "kỷ lục",
-                            "doanh thu",
-                            "quý",
-                            "báo cáo",
-                        ]
-                    ):
-                        tag = "Kết quả kinh doanh & BCTC"
-                    elif any(
-                        w in title_lower
-                        for w in [
-                            "dự báo",
-                            "dự phóng",
-                            "mục tiêu",
-                            "triển vọng",
-                            "định giá",
-                            "khuyến nghị",
-                        ]
-                    ):
-                        tag = "Dự phóng & Triển vọng"
-                    elif any(
-                        w in title_lower
-                        for w in [
-                            "hợp tác",
-                            "đầu tư",
-                            "khởi công",
-                            "dự án",
-                            "mở rộng",
-                            "nhà máy",
-                        ]
-                    ):
-                        tag = "Đầu tư & Mở rộng"
+                # Classify tag based on content
+                title_lower = title.lower()
+                tag = "Hoạt động & Tăng trưởng"
+                if any(
+                    w in title_lower
+                    for w in [
+                        "bctc",
+                        "lợi nhuận",
+                        "lãi",
+                        "kỷ lục",
+                        "doanh thu",
+                        "quý",
+                        "báo cáo",
+                    ]
+                ):
+                    tag = "Kết quả kinh doanh & BCTC"
+                elif any(
+                    w in title_lower
+                    for w in [
+                        "dự báo",
+                        "dự phóng",
+                        "mục tiêu",
+                        "triển vọng",
+                        "định giá",
+                        "khuyến nghị",
+                    ]
+                ):
+                    tag = "Dự phóng & Triển vọng"
+                elif any(
+                    w in title_lower
+                    for w in [
+                        "hợp tác",
+                        "đầu tư",
+                        "khởi công",
+                        "dự án",
+                        "mở rộng",
+                        "nhà máy",
+                    ]
+                ):
+                    tag = "Đầu tư & Mở rộng"
 
-                    full_url = href if href.startswith("http") else f"https://cafef.vn{href}"
-                    seen_links.add(href)
+                full_url = href if href.startswith("http") else f"https://cafef.vn{href}"
+                seen_links.add(href)
 
-                    results.append(
-                        {
-                            "title": title,
-                            "summary": summary,
-                            "image_url": image_url,
-                            "source": "CafeF / BCTC Doanh Nghiệp",
-                            "published_at": pub_date,
-                            "article_url": full_url,
-                            "category": "Báo cáo tài chính & Tăng trưởng",
-                            "tag": tag,
-                        }
-                    )
-                    if len(results) >= limit:
-                        break
+                results.append(
+                    {
+                        "title": title,
+                        "summary": summary,
+                        "image_url": image_url,
+                        "source": "CafeF / BCTC Doanh Nghiệp",
+                        "published_at": pub_date,
+                        "article_url": full_url,
+                        "category": "Báo cáo tài chính & Tăng trưởng",
+                        "tag": tag,
+                    }
+                )
+                if len(results) >= limit:
+                    break
 
         except Exception as exc:
             logger.warning(

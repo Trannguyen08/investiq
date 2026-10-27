@@ -3,6 +3,7 @@ from __future__ import annotations
 from dataclasses import replace
 from datetime import UTC, datetime
 from decimal import Decimal
+from typing import Any
 
 from app.application.dto.portfolio_dto import PlacePaperOrder
 from app.application.use_cases.portfolio.simulate_trade import PaperTradingService
@@ -128,6 +129,17 @@ class RecordingPortfolioRepository:
     def expire_orders(self, _: str, __: datetime) -> int:
         return 0
 
+    def set_public_status(
+        self, user_id: str, is_public: bool, nickname: str | None = None
+    ) -> PaperPortfolio:
+        return self.portfolio
+
+    def get_public_leaderboard(self, limit: int = 10) -> tuple[dict[str, Any], ...]:
+        return ()
+
+    def get_public_portfolio(self, portfolio_id: str) -> PaperPortfolio | None:
+        return self.portfolio
+
 
 def portfolio(*holdings: PaperHolding) -> PaperPortfolio:
     now = datetime(2026, 10, 8, tzinfo=UTC)
@@ -223,6 +235,8 @@ def test_dashboard_separates_cash_cost_value_and_unrealized_profit() -> None:
         "total_return_percent": "-24.99",
         "valuation_partial": False,
         "version": 2,
+        "is_public": False,
+        "nickname": None,
         "created_at": "2026-10-08T00:00:00Z",
         "updated_at": "2026-10-08T00:00:00Z",
     }
@@ -296,4 +310,3 @@ def test_legacy_waiting_order_auto_fills_at_the_latest_observed_price() -> None:
     assert isinstance(orders, list)
     assert isinstance(orders[0], dict)
     assert orders[0]["status"] == "filled"
-

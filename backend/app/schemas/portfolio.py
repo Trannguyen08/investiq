@@ -36,6 +36,8 @@ class PaperAccountResponse(StrictModel):
     total_return_percent: str | None
     valuation_partial: bool
     version: int
+    is_public: bool = False
+    nickname: str | None = None
     created_at: datetime
     updated_at: datetime
 

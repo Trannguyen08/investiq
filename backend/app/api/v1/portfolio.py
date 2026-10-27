@@ -28,6 +28,11 @@ from app.schemas.portfolio import (
     PlacePaperOrderRequest,
     PlacePaperOrderResponse,
 )
+from app.schemas.thesis import (
+    PublicPortfolioDetailResponse,
+    SetPublicVisibilityRequest,
+    SocialLeaderboardResponse,
+)
 
 router = APIRouter(
     prefix="/api/v1/paper-portfolio",
@@ -154,3 +159,47 @@ def cancel_paper_order(
     except (OrderNotCancellableError, PortfolioConflictError) as exc:
         raise HTTPException(status_code=409, detail=str(exc)) from exc
     return {"order": _order_response(order), "data": service.dashboard(user_id)}
+
+
+@router.post(
+    "/visibility",
+    response_model=PaperDashboardResponse,
+)
+def set_visibility(
+    body: SetPublicVisibilityRequest,
+    response: Response,
+    user_id: Annotated[str, Depends(authenticated_user_id)],
+    service: Annotated[PaperTradingService, Depends(get_paper_trading_service)],
+) -> dict[str, object]:
+    _private(response)
+    service.set_public_visibility(
+        user_id=user_id,
+        is_public=body.is_public,
+        nickname=body.nickname,
+    )
+    return service.dashboard(user_id)
+
+
+public_portfolio_router = APIRouter(
+    prefix="/api/v1/paper-portfolio",
+    tags=["paper-portfolio"],
+)
+
+
+@public_portfolio_router.get("/leaderboard", response_model=SocialLeaderboardResponse)
+def get_social_leaderboard(
+    service: Annotated[PaperTradingService, Depends(get_paper_trading_service)],
+    limit: int = 10,
+) -> dict[str, object]:
+    return {"data": service.get_social_leaderboard(limit=min(50, max(1, limit)))}
+
+
+@public_portfolio_router.get("/public/{portfolio_id}", response_model=PublicPortfolioDetailResponse)
+def get_public_portfolio(
+    portfolio_id: UUID,
+    service: Annotated[PaperTradingService, Depends(get_paper_trading_service)],
+) -> dict[str, object]:
+    result = service.get_public_portfolio_detail(str(portfolio_id))
+    if not result:
+        raise HTTPException(status_code=404, detail="Không tìm thấy danh mục công khai này.")
+    return result

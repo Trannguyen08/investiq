@@ -7,6 +7,7 @@ import { InfoTip, MarketColorLegend, MarketLineChart, SentimentGauge } from "@/c
 import { changeTone, formatChange, formatDecimal, formatEventDate, formatMarketTime, formatMoney, formatPercent } from "@/components/market/formatters";
 import { mergeLiveIndex, mergeLiveInstrument } from "@/components/market/live-market";
 import { MarketStatus } from "@/components/market/market-status";
+import { DailyDigestBanner } from "@/components/market/daily-digest-banner";
 import { MarketStreamProvider, useMarketStreamState } from "@/hooks/use-realtime-price";
 import type { NewsSummary } from "@/lib/api-client";
 import type { MarketEvent, MarketIndex, MarketInstrument, MarketMeta, MarketOverview, MarketSector } from "@/types/market";
@@ -358,6 +359,7 @@ function HomeMarketContent({ overview, sectors, news }: { overview: MarketOvervi
     <main id="main-content" className="market-home beginner-home">
       <MarketColorLegend />
       <MarketSnapshotRibbon indices={indices} />
+      <DailyDigestBanner />
       <MarketStatus meta={overview.meta} />
       <section className="beginner-hero" aria-labelledby="today-market-title">
         <div className="beginner-hero-copy">

@@ -10,6 +10,7 @@ from typing import Any
 import psycopg
 from fastapi import FastAPI, HTTPException, Request, status
 from fastapi.exceptions import RequestValidationError
+from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from redis.asyncio import Redis
 
@@ -28,7 +29,13 @@ from app.api.v1.market_data import (
     stream_router as market_stream_router,
 )
 from app.api.v1.news import router as news_router
-from app.api.v1.portfolio import router as paper_portfolio_router
+from app.api.v1.portfolio import (
+    public_portfolio_router,
+)
+from app.api.v1.portfolio import (
+    router as paper_portfolio_router,
+)
+from app.api.v1.theses import router as thesis_router
 from app.application.use_cases.auth.auth_service import AuthError
 from app.application.use_cases.market_data.errors import MarketDataUnavailable
 from app.infrastructure.config.settings import settings
@@ -71,6 +78,18 @@ async def lifespan(_: FastAPI) -> AsyncIterator[None]:
 
 
 app = FastAPI(title=settings.app_name, version="0.1.0", lifespan=lifespan)
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=[
+        "http://localhost:3000",
+        "http://127.0.0.1:3000",
+        "http://localhost:8000",
+        "http://127.0.0.1:8000",
+    ],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 app.add_middleware(RequestLoggingMiddleware)
 app.include_router(news_router)
 app.include_router(news_admin_router)
@@ -80,6 +99,8 @@ app.include_router(market_router)
 app.include_router(market_stream_router)
 app.include_router(watchlist_router)
 app.include_router(paper_portfolio_router)
+app.include_router(public_portfolio_router)
+app.include_router(thesis_router)
 
 
 def _request_id(request: Request) -> str:

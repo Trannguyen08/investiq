@@ -1,6 +1,7 @@
 import { notFound } from "next/navigation";
 
 import {
+  EcosystemsView,
   EventsView,
   IndicesView,
   MarketShell,
@@ -10,6 +11,7 @@ import {
 import { StocksView } from "@/components/market/market-stocks-beginner";
 import {
   getMarketCandles,
+  getMarketEcosystems,
   getMarketEvents,
   getMarketIndices,
   getMarketInstrument,
@@ -97,6 +99,18 @@ export default async function MarketTabPage({
     return (
       <MarketShell tab={tab} meta={collection.meta} symbols={symbols}>
         <PeopleView collection={collection} />
+      </MarketShell>
+    );
+  }
+
+  if (tab === "ecosystems") {
+    const ecosystemsRes = await getMarketEcosystems();
+    return (
+      <MarketShell tab={tab} meta={ecosystemsRes.meta ?? indexCollection.meta} symbols={symbols}>
+        <EcosystemsView
+          initialEcosystems={ecosystemsRes.data}
+          initialEcoId={value(queryParams, "eco") || undefined}
+        />
       </MarketShell>
     );
   }

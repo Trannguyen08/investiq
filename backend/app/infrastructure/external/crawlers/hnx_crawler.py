@@ -51,9 +51,7 @@ class HnxCrawler(BaseNewsCrawler):
     def __init__(self, client: BoundedHttpClient | None = None) -> None:
         if client is None:
             context = ssl.create_default_context()
-            context.load_verify_locations(
-                cafile=Path(__file__).with_name("hnx_intermediate.pem")
-            )
+            context.load_verify_locations(cafile=Path(__file__).with_name("hnx_intermediate.pem"))
             client = BoundedHttpClient(self.allowed_domains, ssl_context=context)
         super().__init__(client)
 

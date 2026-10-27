@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from datetime import datetime
+from decimal import Decimal
 
 from pydantic import BaseModel, ConfigDict, Field
 
@@ -329,4 +330,187 @@ class StockGrowthResponse(StrictModel):
 
 class StockGrowthEnvelope(StrictModel):
     data: StockGrowthResponse
+    meta: MarketMeta
+
+
+class ForensicRedFlagItem(StrictModel):
+    flag_id: str
+    name: str
+    severity: str
+    title: str
+    description: str
+    indicator_value: str
+    threshold: str
+    implication: str
+
+
+class FinancialForensicsResponse(StrictModel):
+    symbol: str
+    z_score: str
+    z_zone: str
+    z_label: str
+    health_score: int
+    red_flags: list[ForensicRedFlagItem]
+    risk_summary: str
+    recommendation: str
+    is_finance: bool = False
+
+
+class FinancialForensicsEnvelope(StrictModel):
+    data: FinancialForensicsResponse
+    meta: MarketMeta
+
+
+class EcosystemTickerItem(StrictModel):
+    symbol: str
+    price: str
+    change_percent: str
+    market_cap: str
+
+
+class EcosystemSummaryItem(StrictModel):
+    id: str
+    name: str
+    founder_id: str
+    founder_name: str
+    sector: str
+    overview: str
+    core_tickers: list[EcosystemTickerItem]
+    total_market_cap: str
+    node_count: int
+    link_count: int
+
+
+class EcosystemsResponse(StrictModel):
+    data: list[EcosystemSummaryItem]
+    meta: MarketMeta
+
+
+class EcosystemNodeItem(StrictModel):
+    id: str
+    name: str
+    ticker: str | None = None
+    node_type: str
+    role: str
+    ownership_percent: str
+    exchange: str
+    description: str
+    price: str | None = None
+    change_percent: str | None = None
+    market_cap: str | None = None
+
+
+class EcosystemLinkItem(StrictModel):
+    source: str
+    target: str
+    relation_type: str
+    percentage: str
+    label: str
+
+
+class EcosystemDetailData(StrictModel):
+    id: str
+    name: str
+    founder_id: str
+    founder_name: str
+    sector: str
+    overview: str
+    nodes: list[EcosystemNodeItem]
+    links: list[EcosystemLinkItem]
+
+
+class EcosystemDetailEnvelope(StrictModel):
+    data: EcosystemDetailData
+    meta: MarketMeta
+
+
+class DCASimulatorRequest(StrictModel):
+    symbol: str = Field(min_length=1, max_length=12)
+    monthly_amount: Decimal = Field(default=Decimal("5000000"), gt=0)
+    duration_years: int = Field(default=3, ge=1, le=10)
+    savings_rate: Decimal = Field(default=Decimal("6.0"), ge=0, le=25)
+
+
+class DCATimelinePoint(StrictModel):
+    month: int
+    label: str
+    price: str
+    shares_bought: int
+    total_shares: int
+    invested: str
+    portfolio_value: str
+    savings_value: str
+
+
+class DCASimulatorData(StrictModel):
+    symbol: str
+    duration_years: int
+    duration_months: int
+    monthly_amount: str
+    total_invested: str
+    total_shares: int
+    average_buy_price: str
+    current_price: str
+    portfolio_value: str
+    stock_profit: str
+    stock_roi_percent: str
+    savings_rate_percent: str
+    savings_value: str
+    savings_profit: str
+    savings_roi_percent: str
+    alpha_amount: str
+    alpha_percent: str
+    outperformed: bool
+    timeline: list[DCATimelinePoint]
+
+
+class DCASimulatorEnvelope(StrictModel):
+    data: DCASimulatorData
+    meta: MarketMeta
+
+
+class DailyDigestSessionSummary(StrictModel):
+    vnindex_value: str
+    vnindex_change: str
+    is_positive: bool
+    liquidity: str
+    breadth: dict[str, int]
+
+
+class DailyDigestGainer(StrictModel):
+    symbol: str
+    price: str
+    change_pct: str
+    sector: str
+
+
+class DailyDigestSpike(StrictModel):
+    symbol: str
+    surge_label: str
+    price: str
+    change_pct: str
+    sector: str
+
+
+class DailyDigestEvent(StrictModel):
+    symbol: str
+    title: str
+    event_type: str
+    date: str
+
+
+class DailyDigestData(StrictModel):
+    date: str
+    headline: str
+    tone: str
+    session_summary: DailyDigestSessionSummary
+    key_drivers: list[str]
+    gainers: list[DailyDigestGainer]
+    volume_breakouts: list[DailyDigestSpike]
+    upcoming_events: list[DailyDigestEvent]
+    meta: dict[str, str]
+
+
+class DailyDigestEnvelope(StrictModel):
+    data: DailyDigestData
     meta: MarketMeta

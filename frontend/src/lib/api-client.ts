@@ -1,15 +1,27 @@
 import type {
+  DailyDigestEnvelope,
+  DCASimulatorEnvelope,
+  EcosystemDetailEnvelope,
+  EcosystemSummary,
   EventCollection,
+  FinancialForensicsEnvelope,
   IndexCollection,
   InstrumentCollection,
   InstrumentEnvelope,
   MarketCandles,
   MarketIntradayTrades,
+  MarketMeta,
   MarketOverview,
   PeopleCollection,
   SectorCollection,
   StockGrowthEnvelope,
 } from "@/types/market";
+import type {
+  AnalystReputationItem,
+  InvestmentThesisItem,
+  PublicPortfolioDetailData,
+  SocialLeaderboardItem,
+} from "@/types/thesis";
 import { resolveApiBase } from "@/lib/api-base";
 
 export type Source = {
@@ -142,13 +154,14 @@ export function getRelatedStockNews(
   exchange: string,
   symbol: string,
   limit = 6,
+  timeoutMs = 1500,
 ): Promise<NewsCollection> {
   const query = new URLSearchParams({
     symbol: `${exchange.toUpperCase()}:${symbol.toUpperCase()}`,
     limit: String(limit),
     page: "1",
   });
-  return getNews(query, 10000);
+  return getNews(query, timeoutMs);
 }
 
 export function getNewsArticle(id: string): Promise<Envelope<NewsDetail>> {
@@ -232,8 +245,12 @@ export function getMarketEvents(query = new URLSearchParams()): Promise<EventCol
   return requestJson<EventCollection>(`/v1/market/events${suffix}`, 300);
 }
 
-export function getMarketPeople(): Promise<PeopleCollection> {
-  return requestJson<PeopleCollection>("/v1/market/people", 30);
+export function getMarketPeople(query?: string, sector?: string): Promise<PeopleCollection> {
+  const params = new URLSearchParams();
+  if (query) params.set("q", query);
+  if (sector) params.set("sector", sector);
+  const suffix = params.size ? `?${params.toString()}` : "";
+  return requestJson<PeopleCollection>(`/v1/market/people${suffix}`, 5);
 }
 
 export function getMarketGrowth(symbol: string): Promise<StockGrowthEnvelope> {
@@ -241,4 +258,64 @@ export function getMarketGrowth(symbol: string): Promise<StockGrowthEnvelope> {
     `/v1/market/instruments/${encodeURIComponent(symbol)}/growth`,
     60,
   );
+}
+
+export function getTheses(
+  query?: URLSearchParams,
+): Promise<{ data: InvestmentThesisItem[]; total: number }> {
+  const suffix = query && query.size ? `?${query.toString()}` : "";
+  return requestJson<{ data: InvestmentThesisItem[]; total: number }>(`/v1/theses${suffix}`, 5);
+}
+
+export function getAnalystLeaderboard(): Promise<{ data: AnalystReputationItem[] }> {
+  return requestJson<{ data: AnalystReputationItem[] }>("/v1/theses/leaderboard", 5);
+}
+
+export function getSocialLeaderboard(): Promise<{ data: SocialLeaderboardItem[] }> {
+  return requestJson<{ data: SocialLeaderboardItem[] }>("/v1/paper-portfolio/leaderboard", 5);
+}
+
+export function getPublicPortfolioDetail(
+  portfolioId: string,
+): Promise<PublicPortfolioDetailData> {
+  return requestJson<PublicPortfolioDetailData>(
+    `/v1/paper-portfolio/public/${encodeURIComponent(portfolioId)}`,
+    5,
+  );
+}
+
+export function getMarketForensics(symbol: string): Promise<FinancialForensicsEnvelope> {
+  return requestJson<FinancialForensicsEnvelope>(
+    `/v1/market/instruments/${encodeURIComponent(symbol)}/forensics`,
+    60,
+  );
+}
+
+export function getMarketEcosystems(): Promise<{ data: EcosystemSummary[]; meta: MarketMeta }> {
+  return requestJson<{ data: EcosystemSummary[]; meta: MarketMeta }>("/v1/market/ecosystems", 60);
+}
+
+export function getMarketEcosystemDetail(id: string): Promise<EcosystemDetailEnvelope> {
+  return requestJson<EcosystemDetailEnvelope>(`/v1/market/ecosystems/${encodeURIComponent(id)}`, 60);
+}
+
+export function simulateDCA(payload: {
+  symbol: string;
+  monthly_amount: number;
+  duration_years: number;
+  savings_rate?: number;
+}): Promise<DCASimulatorEnvelope> {
+  const base = resolveApiBase();
+  return fetch(`${base}/v1/market/simulator/dca`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(payload),
+  }).then((res) => {
+    if (!res.ok) throw new InvestIqApiError(res.status);
+    return res.json() as Promise<DCASimulatorEnvelope>;
+  });
+}
+
+export function getMarketDailyDigest(): Promise<DailyDigestEnvelope> {
+  return requestJson<DailyDigestEnvelope>("/v1/market/daily-digest", 60);
 }

@@ -13,10 +13,13 @@ import { StockDetailTabs } from "@/components/market/stock-detail-tabs";
 import { StockGrowthPanel } from "@/components/market/stock-growth-panel";
 import { StockIntradayTable } from "@/components/market/stock-intraday-table";
 import { StockRelatedNews } from "@/components/market/stock-related-news";
+import { FinancialForensicsPanel } from "@/components/market/financial-forensics-panel";
+import { DCASimulatorButton } from "@/components/market/dca-simulator-modal";
 import { StockTradeActions } from "@/components/portfolio/stock-trade-actions";
 import { MarketStreamProvider } from "@/hooks/use-realtime-price";
 import {
   getMarketCandles,
+  getMarketForensics,
   getMarketGrowth,
   getMarketInstrument,
   getMarketIntradayTrades,
@@ -59,24 +62,29 @@ export default async function StockDetailPage({
   const initialTab = typeof query.tab === "string" ? query.tab : "chart";
   const selected = rangeConfig[range];
 
-  const candlesPromise = getMarketCandles(symbol, selected.interval, selected.limit).catch(() => null);
-  const intradayPromise = getMarketIntradayTrades(symbol, 100).catch(() => null);
-  const growthPromise = getMarketGrowth(symbol).catch(() => null);
-
-  const instrumentResult = await getMarketInstrument(symbol).then(
+  const instrumentPromise = getMarketInstrument(symbol).then(
     (value) => ({ status: "fulfilled" as const, value }),
     () => ({ status: "rejected" as const }),
   );
+  const candlesPromise = getMarketCandles(symbol, selected.interval, selected.limit).catch(() => null);
+  const intradayPromise = getMarketIntradayTrades(symbol, 100).catch(() => null);
+  const growthPromise = getMarketGrowth(symbol).catch(() => null);
+  const forensicsPromise = getMarketForensics(symbol).catch(() => null);
+
+  const [instrumentResult, candles, intraday, growthEnvelope, forensicsEnvelope] =
+    await Promise.all([
+      instrumentPromise,
+      candlesPromise,
+      intradayPromise,
+      growthPromise,
+      forensicsPromise,
+    ]);
+
   if (instrumentResult.status === "rejected") notFound();
   const envelope: InstrumentEnvelope = instrumentResult.value;
   const item = envelope.data;
 
-  const [candles, intraday, relatedNews, growthEnvelope] = await Promise.all([
-    candlesPromise,
-    intradayPromise,
-    getRelatedStockNews(item.exchange, item.symbol).catch(() => null),
-    growthPromise,
-  ]);
+  const relatedNews = await getRelatedStockNews(item.exchange, item.symbol, 6, 1200).catch(() => null);
 
   // Guaranteed multi-tier fallback for 100% stock coverage
   const capBillions = item.market_cap ? (parseFloat(item.market_cap) / 1e9).toFixed(0) : "1,000";
@@ -160,23 +168,27 @@ export default async function StockDetailPage({
             <p>
               {item.name} · {item.sector}
             </p>
-            <StockTradeActions
-              symbol={item.symbol}
-              name={item.name}
-              price={item.price}
-            />
+            <div className="stock-header-actions-row">
+              <StockTradeActions
+                symbol={item.symbol}
+                name={item.name}
+                price={item.price}
+              />
+              <DCASimulatorButton symbol={symbol} />
+            </div>
           </div>
           <StockLivePrice item={item} />
         </header>
         <MarketStatus meta={envelope.meta} />
 
-        {/* 3 Main Tabs: Biểu đồ & Sổ lệnh | Tăng trưởng & Tài chính | Tin tức doanh nghiệp */}
+        {/* 4 Main Tabs: Biểu đồ & Sổ lệnh | Tăng trưởng & Tài chính | Rủi ro BCTC (Forensics) | Tin tức */}
         <StockDetailTabs
           symbol={symbol}
           initialTab={initialTab}
           newsCount={newsCount}
           chartContent={chartSection}
           growthContent={growthSection}
+          forensicsContent={<FinancialForensicsPanel data={forensicsEnvelope?.data} symbol={symbol} />}
           newsContent={newsSection}
         />
 
