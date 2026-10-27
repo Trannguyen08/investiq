@@ -514,7 +514,7 @@ class PaperTradingService:
         self._repository.set_public_status(
             user_id=user_id, is_public=is_public, nickname=nickname
         )
-        return self.portfolio(user_id)
+        return self.dashboard(user_id)
 
     def get_social_leaderboard(self, limit: int = 10) -> list[dict[str, object]]:
         rows = self._repository.get_public_leaderboard(limit=limit)

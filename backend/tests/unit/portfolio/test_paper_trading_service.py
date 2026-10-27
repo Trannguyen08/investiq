@@ -3,6 +3,7 @@ from __future__ import annotations
 from dataclasses import replace
 from datetime import UTC, datetime
 from decimal import Decimal
+from typing import Any
 
 from app.application.dto.portfolio_dto import PlacePaperOrder
 from app.application.use_cases.portfolio.simulate_trade import PaperTradingService
@@ -127,6 +128,17 @@ class RecordingPortfolioRepository:
 
     def expire_orders(self, _: str, __: datetime) -> int:
         return 0
+
+    def set_public_status(
+        self, user_id: str, is_public: bool, nickname: str | None = None
+    ) -> PaperPortfolio:
+        return self.portfolio
+
+    def get_public_leaderboard(self, limit: int = 10) -> tuple[dict[str, Any], ...]:
+        return ()
+
+    def get_public_portfolio(self, portfolio_id: str) -> PaperPortfolio | None:
+        return self.portfolio
 
 
 def portfolio(*holdings: PaperHolding) -> PaperPortfolio:

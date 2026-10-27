@@ -9,6 +9,7 @@ from uuid import UUID, uuid4
 
 from celery import Task
 from psycopg.rows import dict_row
+from psycopg_pool import ConnectionPool
 
 from app.application.use_cases.news.analyze_sentiment import VietnameseRuleSentimentAnalyzer
 from app.application.use_cases.news.freshness import (
@@ -250,7 +251,9 @@ def dispatch_news_jobs(limit: int = 20) -> dict[str, int]:
     return {"dispatched": len(job_ids)}
 
 
-def process_ingestion_job(job_id: str, *, pool: object | None = None) -> dict[str, str | bool]:
+def process_ingestion_job(
+    job_id: str, *, pool: ConnectionPool | None = None
+) -> dict[str, str | bool]:
     db_pool = pool or get_pool()
     now = datetime.now(UTC)
     with db_pool.connection() as connection, connection.transaction():
@@ -363,7 +366,7 @@ def _finish_job(
     *,
     article_id: str | None = None,
     next_attempt_at: datetime | None = None,
-    pool: object | None = None,
+    pool: ConnectionPool | None = None,
 ) -> None:
     db_pool = pool or get_pool()
     with db_pool.connection() as connection:

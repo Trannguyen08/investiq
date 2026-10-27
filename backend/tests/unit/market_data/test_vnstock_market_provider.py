@@ -189,6 +189,9 @@ class FakeVnstockGateway:
             {"item_id": "roe", "2026-Q2": 5.89},
         ]
 
+    def fundamental_quarterly_rows(self, symbol: str) -> list[dict[str, object]]:
+        return []
+
     def trade_rows(self, symbol: str, limit: int) -> list[dict[str, object]]:
         assert symbol == "FPT"
         assert limit >= 2

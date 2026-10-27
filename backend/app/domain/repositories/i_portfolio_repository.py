@@ -5,7 +5,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from datetime import datetime
 from decimal import Decimal
-from typing import Protocol
+from typing import Any, Protocol
 
 from app.domain.entities.portfolio import PaperOrder, PaperPortfolio, PaperTrade
 
@@ -109,6 +109,6 @@ class IPortfolioRepository(Protocol):
         self, user_id: str, is_public: bool, nickname: str | None = None
     ) -> PaperPortfolio: ...
 
-    def get_public_leaderboard(self, limit: int = 10) -> tuple[dict, ...]: ...
+    def get_public_leaderboard(self, limit: int = 10) -> tuple[dict[str, Any], ...]: ...
 
     def get_public_portfolio(self, portfolio_id: str) -> PaperPortfolio | None: ...

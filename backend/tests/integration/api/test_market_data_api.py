@@ -5,6 +5,7 @@ from fastapi.testclient import TestClient
 
 from app.api.v1 import market_data
 from app.application.use_cases.market_data.errors import MarketDataUnavailable
+from app.domain.entities.market import MarketInstrument
 from app.infrastructure.config.settings import settings
 from app.infrastructure.external.market_fixture_provider import FixtureMarketProvider
 from app.main import app
@@ -108,7 +109,9 @@ def test_index_endpoint_exposes_candles(
 
 def test_market_provider_failures_return_safe_503(monkeypatch: pytest.MonkeyPatch) -> None:
     class FailingProvider(FixtureMarketProvider):
-        def instrument(self, symbol: str, *, include_fundamentals: bool = False):
+        def instrument(
+            self, symbol: str, *, include_fundamentals: bool = False
+        ) -> MarketInstrument | None:
             raise MarketDataUnavailable("upstream detail must not leak")
 
     provider = FailingProvider()

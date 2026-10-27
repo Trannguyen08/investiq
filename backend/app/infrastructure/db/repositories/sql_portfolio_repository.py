@@ -738,7 +738,7 @@ class SqlPortfolioRepository:
             )
         return self._load(user_id)
 
-    def get_public_leaderboard(self, limit: int = 10) -> tuple[dict, ...]:
+    def get_public_leaderboard(self, limit: int = 10) -> tuple[dict[str, Any], ...]:
         with (
             self._pool.connection() as connection,
             connection.cursor(row_factory=dict_row) as cursor,

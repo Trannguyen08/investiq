@@ -11,9 +11,10 @@ from app.application.use_cases.community.thesis_service import (
     ThesisService,
     ThesisValidationError,
 )
-from app.domain.entities.market import MarketInstrument
+from app.domain.entities.market import Candle, MarketInstrument
 from app.domain.entities.thesis import AnalystReputation, InvestmentThesis
 from app.domain.repositories.i_thesis_repository import IThesisRepository
+from app.infrastructure.external.market_fixture_provider import FixtureMarketProvider
 
 
 class MockThesisRepository(IThesisRepository):
@@ -157,11 +158,13 @@ class MockThesisRepository(IThesisRepository):
         return tuple(t for t in self.theses.values() if t.user_id == user_id)
 
 
-class MockMarketProvider:
+class MockMarketProvider(FixtureMarketProvider):
     def __init__(self, price: Decimal = Decimal("28000")) -> None:
         self.current_price = price
 
-    def instrument(self, symbol: str) -> MarketInstrument | None:
+    def instrument(
+        self, symbol: str, *, include_fundamentals: bool = False
+    ) -> MarketInstrument | None:
         return MarketInstrument(
             symbol=symbol,
             name=f"Company {symbol}",
@@ -189,7 +192,7 @@ class MockMarketProvider:
             is_vn30=True,
         )
 
-    def candles(self, symbol: str, interval: str) -> tuple:
+    def candles(self, symbol: str, interval: str) -> tuple[Candle, ...]:
         return ()
 
 
