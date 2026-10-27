@@ -11,8 +11,22 @@ const moneyFormat = new Intl.NumberFormat("vi-VN", {
   maximumFractionDigits: 0,
 });
 
-function formatVnd(value: string | number) {
-  return moneyFormat.format(Number(value));
+function parsePriceNumber(value: string | number | undefined | null): number {
+  if (value === undefined || value === null || value === "") return 0;
+  if (typeof value === "number") return Number.isFinite(value) ? value : 0;
+  let str = String(value).replace(/[+₫đVNDvnd\s]/gi, "").trim();
+  if (str.includes(",")) {
+    str = str.replace(/,/g, "");
+  } else if (/^\d{1,3}(\.\d{3})+$/.test(str)) {
+    str = str.replace(/\./g, "");
+  }
+  const parsed = Number(str);
+  return Number.isFinite(parsed) ? parsed : 0;
+}
+
+function formatVnd(value: string | number | undefined | null): string {
+  const num = parsePriceNumber(value);
+  return moneyFormat.format(num);
 }
 
 type SocialPaperTradingProps = {
@@ -111,7 +125,7 @@ export function SocialPaperTrading({ initialLeaderboard = [] }: SocialPaperTradi
             </thead>
             <tbody>
               {leaderboard.map((item, idx) => {
-                const isPositive = Number(item.roi_number) >= 0;
+                const isPositive = parsePriceNumber(item.roi_number) >= 0;
                 const winRate =
                   item.total_trades > 0
                     ? Math.round((item.win_trades / item.total_trades) * 100)
@@ -138,8 +152,8 @@ export function SocialPaperTrading({ initialLeaderboard = [] }: SocialPaperTradi
                     <td className="text-right font-mono text-neutral">
                       {formatVnd(item.starting_cash)}
                     </td>
-                    <td className={`text-right font-mono ${Number(item.realized_pnl) >= 0 ? "text-emerald" : "text-rose"}`}>
-                      {Number(item.realized_pnl) > 0 ? `+${formatVnd(item.realized_pnl)}` : formatVnd(item.realized_pnl)}
+                    <td className={`text-right font-mono ${parsePriceNumber(item.realized_pnl) >= 0 ? "text-emerald" : "text-rose"}`}>
+                      {parsePriceNumber(item.realized_pnl) > 0 ? `+${formatVnd(item.realized_pnl)}` : formatVnd(item.realized_pnl)}
                     </td>
                     <td className="text-right">
                       <span className={`roi-pill ${isPositive ? "roi-positive" : "roi-negative"}`}>
@@ -210,14 +224,14 @@ export function SocialPaperTrading({ initialLeaderboard = [] }: SocialPaperTradi
                   </div>
                   <div className="public-stat-box">
                     <span className="lbl">Lãi/Lỗ đã chốt:</span>
-                    <strong className={`val ${Number(detailData.realized_pnl) >= 0 ? "text-emerald" : "text-rose"}`}>
-                      {Number(detailData.realized_pnl) > 0 ? `+${formatVnd(detailData.realized_pnl)}` : formatVnd(detailData.realized_pnl)}
+                    <strong className={`val ${parsePriceNumber(detailData.realized_pnl) >= 0 ? "text-emerald" : "text-rose"}`}>
+                      {parsePriceNumber(detailData.realized_pnl) > 0 ? `+${formatVnd(detailData.realized_pnl)}` : formatVnd(detailData.realized_pnl)}
                     </strong>
                   </div>
                   <div className="public-stat-box">
                     <span className="lbl">Hiệu suất tổng thể:</span>
-                    <strong className={`val ${Number(detailData.roi_percent) >= 0 ? "text-emerald" : "text-rose"}`}>
-                      {Number(detailData.roi_percent) > 0 ? `+${detailData.roi_percent}%` : `${detailData.roi_percent}%`}
+                    <strong className={`val ${parsePriceNumber(detailData.roi_percent) >= 0 ? "text-emerald" : "text-rose"}`}>
+                      {parsePriceNumber(detailData.roi_percent) > 0 ? `+${detailData.roi_percent}%` : `${detailData.roi_percent}%`}
                     </strong>
                   </div>
                 </div>
@@ -259,7 +273,7 @@ export function SocialPaperTrading({ initialLeaderboard = [] }: SocialPaperTradi
                         </thead>
                         <tbody>
                           {detailData.holdings.map((h) => {
-                            const isPos = Number(h.roi_percent) >= 0;
+                            const isPos = parsePriceNumber(h.roi_percent) >= 0;
                             return (
                               <tr key={h.symbol}>
                                 <td>
@@ -306,7 +320,7 @@ export function SocialPaperTrading({ initialLeaderboard = [] }: SocialPaperTradi
                         <tbody>
                           {detailData.trades.map((t) => {
                             const isBuy = t.side.toLowerCase() === "buy";
-                            const pnlNum = t.realized_pnl ? Number(t.realized_pnl) : null;
+                            const pnlNum = t.realized_pnl ? parsePriceNumber(t.realized_pnl) : null;
 
                             return (
                               <tr key={t.id}>

@@ -12,8 +12,22 @@ const moneyFormat = new Intl.NumberFormat("vi-VN", {
   maximumFractionDigits: 0,
 });
 
-function formatVnd(value: string | number) {
-  return moneyFormat.format(Number(value));
+function parsePriceNumber(value: string | number | undefined | null): number {
+  if (value === undefined || value === null || value === "") return 0;
+  if (typeof value === "number") return Number.isFinite(value) ? value : 0;
+  let str = String(value).replace(/[+₫đVNDvnd\s]/gi, "").trim();
+  if (str.includes(",")) {
+    str = str.replace(/,/g, "");
+  } else if (/^\d{1,3}(\.\d{3})+$/.test(str)) {
+    str = str.replace(/\./g, "");
+  }
+  const parsed = Number(str);
+  return Number.isFinite(parsed) ? parsed : 0;
+}
+
+function formatVnd(value: string | number | undefined | null): string {
+  const num = parsePriceNumber(value);
+  return moneyFormat.format(num);
 }
 
 async function fetchCsrfToken(): Promise<string> {
@@ -523,15 +537,15 @@ export function ThesisArena({ initialTheses = [], initialLeaderboard = [] }: The
                 <div className="thesis-progress-container">
                   <div className="progress-labels">
                     <span>Tiến độ mục tiêu</span>
-                    <span className={Number(thesis.progress_percent) >= 50 ? "text-emerald" : "text-neutral"}>
-                      {thesis.progress_percent}%
+                    <span className={parsePriceNumber(thesis.progress_percent) >= 50 ? "text-emerald" : "text-neutral"}>
+                      {parsePriceNumber(thesis.progress_percent).toFixed(1)}%
                     </span>
                   </div>
                   <div className="progress-track">
                     <div
                       className={`progress-fill ${isBullish ? "progress-bullish" : "progress-bearish"}`}
                       style={{
-                        width: `${Math.min(100, Math.max(0, Number(thesis.progress_percent)))}%`,
+                        width: `${Math.min(100, Math.max(0, parsePriceNumber(thesis.progress_percent)))}%`,
                       }}
                     />
                   </div>

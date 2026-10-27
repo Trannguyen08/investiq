@@ -1,5 +1,24 @@
 # Current Task
 
+## Community & Social Trading: Fix NaN ₫ Price Formatting - 2026-10-27 (complete)
+
+- **User Request**: "fix lỗi k hiển thị giá" (Fix bug where prices are displayed as `NaN ₫` on community thesis cards at `http://localhost:3000/community`).
+- **Root Cause**:
+  - In `backend/app/application/use_cases/community/thesis_service.py`, prices (`entry_price`, `target_price`, `stop_loss_price`, `current_price`) are formatted as comma-separated number strings (e.g., `"72,000"`).
+  - In frontend formatters (`thesis-arena.tsx` and `social-paper-trading.tsx`), `Number(value)` returned `NaN` when parsing strings containing comma thousand-separators or currency suffixes, causing `moneyFormat.format(NaN)` to display `"NaN ₫"`.
+- **Implementation Details**:
+  - Implemented `parsePriceNumber(value: string | number | undefined | null): number` in both [thesis-arena.tsx](file:///c:/investiq/frontend/src/components/community/thesis-arena.tsx) and [social-paper-trading.tsx](file:///c:/investiq/frontend/src/components/community/social-paper-trading.tsx).
+  - Sanitizes price inputs by stripping currency symbols (`₫`, `đ`, `VND`), spaces, signs, and thousand separator commas or dot groupings before numerical conversion with `Number.isFinite` fallback to 0.
+  - Updated `formatVnd(value)` to route through `parsePriceNumber`.
+  - Updated `progress_percent`, `realized_pnl`, `roi_percent`, `roi_number`, and holding/trade P&L calculations to safely handle string inputs.
+- **Validation**:
+  - `npm --prefix frontend run typecheck`: 0 errors.
+  - `npm --prefix frontend run lint`: 0 errors.
+  - `npm --prefix frontend test`: 116/116 tests passed across 28 test files.
+  - Verified in browser with `browser_subagent` at `http://localhost:3000/community`:
+    - All 4 thesis metrics (`Giá vào:`, `Giá hiện tại:`, `Mục tiêu:`, `Cắt lỗ:`) display formatted VND values (e.g. `128.000 ₫`, `55.400 ₫`, `72.000 ₫`, `88.000 ₫`, etc.) without `NaN`.
+    - Social leaderboard metrics (`Vốn ban đầu`, `Lãi đã chốt`, `Hiệu suất sinh lời`) display proper values.
+
 ## Conglomerate Ecosystem Explorer: Dedicated Route `/market/ecosystems` & Complete Visual Redesign - 2026-10-27 (complete)
 
 - **User Request**:
