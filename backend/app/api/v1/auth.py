@@ -187,9 +187,7 @@ def verify_email(
     _private(response)
     _limit(request, "verify", body.challenge_id, 10, 900)
     return _credentials(
-        _service(repository).verify_registration(
-            body.pre_auth_id, body.challenge_id, body.otp
-        )
+        _service(repository).verify_registration(body.pre_auth_id, body.challenge_id, body.otp)
     )
 
 
@@ -202,9 +200,7 @@ def login(
 ) -> CredentialsResponse:
     _private(response)
     _limit(request, "login", body.email.casefold(), 10, 900)
-    return _credentials(
-        _service(repository).login(body.email, body.password)
-    )
+    return _credentials(_service(repository).login(body.email, body.password))
 
 
 @router.post("/refresh", response_model=CredentialsResponse)

@@ -85,14 +85,28 @@ class SqlPortfolioRepository:
     def _order_columns(alias: str = "") -> str:
         prefix = f"{alias}." if alias else ""
         names = (
-            "idempotency_key", "side", "order_type", "status", "symbol",
-            "instrument_name", "exchange", "quantity", "filled_quantity", "limit_price",
-            "reserved_cash", "reserved_quantity", "provider", "price_at", "received_at",
-            "delay_class", "created_at", "updated_at", "expires_at", "cancelled_at",
+            "idempotency_key",
+            "side",
+            "order_type",
+            "status",
+            "symbol",
+            "instrument_name",
+            "exchange",
+            "quantity",
+            "filled_quantity",
+            "limit_price",
+            "reserved_cash",
+            "reserved_quantity",
+            "provider",
+            "price_at",
+            "received_at",
+            "delay_class",
+            "created_at",
+            "updated_at",
+            "expires_at",
+            "cancelled_at",
         )
-        return f"{prefix}id::text AS id, " + ", ".join(
-            f"{prefix}{name}" for name in names
-        )
+        return f"{prefix}id::text AS id, " + ", ".join(f"{prefix}{name}" for name in names)
 
     def get_or_create(self, user_id: str, starting_cash: Decimal) -> PaperPortfolio:
         with self._pool.connection() as connection, connection.transaction():
@@ -208,9 +222,7 @@ class SqlPortfolioRepository:
                     or existing["symbol"] != execution.symbol
                     or int(existing["quantity"]) != execution.quantity
                 ):
-                    raise PortfolioConflictError(
-                        "Idempotency-Key đã được dùng cho một lệnh khác."
-                    )
+                    raise PortfolioConflictError("Idempotency-Key đã được dùng cho một lệnh khác.")
                 return self._trade(existing)
 
             instrument = cursor.execute(
@@ -244,9 +256,7 @@ class SqlPortfolioRepository:
                             f"Danh mục mô phỏng chỉ hỗ trợ tối đa {max_holdings} mã."
                         )
                 new_quantity = (
-                    int(holding["quantity"]) + execution.quantity
-                    if holding
-                    else execution.quantity
+                    int(holding["quantity"]) + execution.quantity if holding else execution.quantity
                 )
                 old_basis = Decimal(holding["total_cost_basis"]) if holding else Decimal()
                 new_basis = old_basis + debit
@@ -269,9 +279,7 @@ class SqlPortfolioRepository:
                 allocated_basis = round_vnd(
                     old_basis * Decimal(execution.quantity) / Decimal(old_quantity)
                 )
-                net_proceeds = (
-                    execution.gross_amount - execution.fee_amount - execution.tax_amount
-                )
+                net_proceeds = execution.gross_amount - execution.fee_amount - execution.tax_amount
                 realized_pnl = net_proceeds - allocated_basis
                 remaining_quantity = old_quantity - execution.quantity
                 if remaining_quantity == 0:
@@ -377,9 +385,7 @@ class SqlPortfolioRepository:
                     or int(existing["quantity"]) != submission.quantity
                     or Decimal(existing["limit_price"]) != submission.limit_price
                 ):
-                    raise PortfolioConflictError(
-                        "Idempotency-Key đã được dùng cho một lệnh khác."
-                    )
+                    raise PortfolioConflictError("Idempotency-Key đã được dùng cho một lệnh khác.")
                 return self._order(existing)
 
             open_count = cursor.execute(
@@ -443,17 +449,16 @@ class SqlPortfolioRepository:
                         (instrument["id"], portfolio["id"], portfolio["id"]),
                     ).fetchone()
                     assert count_row is not None
-                    if (
-                        int(count_row["total"]) >= max_holdings
-                        and not bool(count_row["already_allocated"])
+                    if int(count_row["total"]) >= max_holdings and not bool(
+                        count_row["already_allocated"]
                     ):
                         raise HoldingLimitError(
                             f"Danh mục mô phỏng chỉ hỗ trợ tối đa {max_holdings} mã."
                         )
             else:
-                available_quantity = (
-                    int(holding["quantity"]) if holding is not None else 0
-                ) - int(reserved["shares"])
+                available_quantity = (int(holding["quantity"]) if holding is not None else 0) - int(
+                    reserved["shares"]
+                )
                 if available_quantity < submission.quantity:
                     raise InsufficientSharesError(
                         "Số cổ phiếu khả dụng không đủ vì một phần đang được giữ cho lệnh bán chờ."
@@ -558,9 +563,7 @@ class SqlPortfolioRepository:
                             f"Danh mục mô phỏng chỉ hỗ trợ tối đa {max_holdings} mã."
                         )
                 new_quantity = (
-                    int(holding["quantity"]) + execution.quantity
-                    if holding
-                    else execution.quantity
+                    int(holding["quantity"]) + execution.quantity if holding else execution.quantity
                 )
                 old_basis = Decimal(holding["total_cost_basis"]) if holding else Decimal()
                 new_basis = old_basis + debit
@@ -619,13 +622,27 @@ class SqlPortfolioRepository:
                              cash_effect, realized_pnl, provider, price_at, received_at,
                              delay_class, created_at""",
                 (
-                    portfolio["id"], order["instrument_id"], order_id,
-                    execution.idempotency_key, execution.side, execution.symbol,
-                    execution.name, execution.exchange, execution.quantity,
-                    execution.execution_price, execution.gross_amount, execution.fee_rate,
-                    execution.fee_amount, execution.tax_rate, execution.tax_amount,
-                    cash_effect, realized_pnl, execution.provider, execution.price_at,
-                    execution.received_at, execution.delay_class,
+                    portfolio["id"],
+                    order["instrument_id"],
+                    order_id,
+                    execution.idempotency_key,
+                    execution.side,
+                    execution.symbol,
+                    execution.name,
+                    execution.exchange,
+                    execution.quantity,
+                    execution.execution_price,
+                    execution.gross_amount,
+                    execution.fee_rate,
+                    execution.fee_amount,
+                    execution.tax_rate,
+                    execution.tax_amount,
+                    cash_effect,
+                    realized_pnl,
+                    execution.provider,
+                    execution.price_at,
+                    execution.received_at,
+                    execution.delay_class,
                 ),
             ).fetchone()
             assert trade is not None
@@ -687,7 +704,7 @@ class SqlPortfolioRepository:
                     FROM paper_portfolios p
                     WHERE o.id = %s AND o.portfolio_id = p.id AND p.user_id = %s
                       AND o.status = 'pending' AND o.expires_at > now()
-                    RETURNING {self._order_columns('o')}""",
+                    RETURNING {self._order_columns("o")}""",
                 (order_id, user_id),
             ).fetchone()
             if row is None:

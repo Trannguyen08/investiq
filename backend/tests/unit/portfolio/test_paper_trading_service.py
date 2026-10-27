@@ -296,4 +296,3 @@ def test_legacy_waiting_order_auto_fills_at_the_latest_observed_price() -> None:
     assert isinstance(orders, list)
     assert isinstance(orders[0], dict)
     assert orders[0]["status"] == "filled"
-

@@ -537,4 +537,3 @@ def run_direct_ingestion_cycle(
                 logger.warning("Failed processing news job %s: %s", job_id, exc)
 
     return stats
-

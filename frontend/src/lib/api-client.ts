@@ -1,10 +1,16 @@
 import type {
+  DailyDigestEnvelope,
+  DCASimulatorEnvelope,
+  EcosystemDetailEnvelope,
+  EcosystemSummary,
   EventCollection,
+  FinancialForensicsEnvelope,
   IndexCollection,
   InstrumentCollection,
   InstrumentEnvelope,
   MarketCandles,
   MarketIntradayTrades,
+  MarketMeta,
   MarketOverview,
   PeopleCollection,
   SectorCollection,
@@ -232,8 +238,12 @@ export function getMarketEvents(query = new URLSearchParams()): Promise<EventCol
   return requestJson<EventCollection>(`/v1/market/events${suffix}`, 300);
 }
 
-export function getMarketPeople(): Promise<PeopleCollection> {
-  return requestJson<PeopleCollection>("/v1/market/people", 30);
+export function getMarketPeople(query?: string, sector?: string): Promise<PeopleCollection> {
+  const params = new URLSearchParams();
+  if (query) params.set("q", query);
+  if (sector) params.set("sector", sector);
+  const suffix = params.size ? `?${params.toString()}` : "";
+  return requestJson<PeopleCollection>(`/v1/market/people${suffix}`, 30);
 }
 
 export function getMarketGrowth(symbol: string): Promise<StockGrowthEnvelope> {
@@ -241,4 +251,40 @@ export function getMarketGrowth(symbol: string): Promise<StockGrowthEnvelope> {
     `/v1/market/instruments/${encodeURIComponent(symbol)}/growth`,
     60,
   );
+}
+
+export function getMarketForensics(symbol: string): Promise<FinancialForensicsEnvelope> {
+  return requestJson<FinancialForensicsEnvelope>(
+    `/v1/market/instruments/${encodeURIComponent(symbol)}/forensics`,
+    60,
+  );
+}
+
+export function getMarketEcosystems(): Promise<{ data: EcosystemSummary[]; meta: MarketMeta }> {
+  return requestJson<{ data: EcosystemSummary[]; meta: MarketMeta }>("/v1/market/ecosystems", 60);
+}
+
+export function getMarketEcosystemDetail(id: string): Promise<EcosystemDetailEnvelope> {
+  return requestJson<EcosystemDetailEnvelope>(`/v1/market/ecosystems/${encodeURIComponent(id)}`, 60);
+}
+
+export function simulateDCA(payload: {
+  symbol: string;
+  monthly_amount: number;
+  duration_years: number;
+  savings_rate?: number;
+}): Promise<DCASimulatorEnvelope> {
+  const base = resolveApiBase();
+  return fetch(`${base}/v1/market/simulator/dca`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(payload),
+  }).then((res) => {
+    if (!res.ok) throw new InvestIqApiError(res.status);
+    return res.json() as Promise<DCASimulatorEnvelope>;
+  });
+}
+
+export function getMarketDailyDigest(): Promise<DailyDigestEnvelope> {
+  return requestJson<DailyDigestEnvelope>("/v1/market/daily-digest", 60);
 }

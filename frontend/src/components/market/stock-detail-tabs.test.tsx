@@ -26,22 +26,26 @@ describe("StockDetailTabs", () => {
     );
 
     const tabs = screen.getAllByRole("tab");
-    expect(tabs).toHaveLength(3);
+    expect(tabs).toHaveLength(4);
     expect(tabs[0]).toHaveTextContent("Biểu đồ & Sổ lệnh");
     expect(tabs[1]).toHaveTextContent("Tăng trưởng & Tài chính");
-    expect(tabs[2]).toHaveTextContent("Tin tức doanh nghiệp");
-    expect(tabs[2]).toHaveTextContent("5");
+    expect(tabs[2]).toHaveTextContent("Rủi ro BCTC & Altman Z");
+    expect(tabs[3]).toHaveTextContent("Tin tức doanh nghiệp");
+    expect(tabs[3]).toHaveTextContent("5");
 
     expect(tabs[0]).toHaveAttribute("aria-selected", "true");
     expect(tabs[1]).toHaveAttribute("aria-selected", "false");
     expect(tabs[2]).toHaveAttribute("aria-selected", "false");
+    expect(tabs[3]).toHaveAttribute("aria-selected", "false");
 
     const chartPanel = document.getElementById("panel-chart");
     const growthPanel = document.getElementById("panel-growth");
+    const forensicsPanel = document.getElementById("panel-forensics");
     const newsPanel = document.getElementById("panel-news");
 
     expect(chartPanel).toHaveClass("visible");
     expect(growthPanel).toHaveClass("hidden");
+    expect(forensicsPanel).toHaveClass("hidden");
     expect(newsPanel).toHaveClass("hidden");
   });
 
@@ -66,6 +70,28 @@ describe("StockDetailTabs", () => {
     const growthPanel = document.getElementById("panel-growth");
     const chartPanel = document.getElementById("panel-chart");
     expect(growthPanel).toHaveClass("visible");
+    expect(chartPanel).toHaveClass("hidden");
+  });
+
+  it("switches to forensics tab when clicked", () => {
+    render(
+      <StockDetailTabs
+        symbol="HPG"
+        newsCount={3}
+        chartContent={<div data-testid="chart-content">Biểu đồ</div>}
+        growthContent={<div data-testid="growth-content">Tăng trưởng</div>}
+        forensicsContent={<div data-testid="forensics-content">Rủi ro BCTC</div>}
+        newsContent={<div data-testid="news-content">Tin tức</div>}
+      />,
+    );
+
+    const forensicsTab = screen.getByRole("tab", { name: /Rủi ro BCTC & Altman Z/i });
+    fireEvent.click(forensicsTab);
+
+    expect(forensicsTab).toHaveAttribute("aria-selected", "true");
+    const forensicsPanel = document.getElementById("panel-forensics");
+    const chartPanel = document.getElementById("panel-chart");
+    expect(forensicsPanel).toHaveClass("visible");
     expect(chartPanel).toHaveClass("hidden");
   });
 

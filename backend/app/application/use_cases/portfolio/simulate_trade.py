@@ -170,9 +170,7 @@ class PaperTradingService:
             sector=instrument.sector,
             quantity=command.quantity,
             limit_price=instrument.price,
-            reserved_cash=(
-                reserved_gross + reserved_fee if command.side == "buy" else Decimal()
-            ),
+            reserved_cash=(reserved_gross + reserved_fee if command.side == "buy" else Decimal()),
             reserved_quantity=command.quantity if command.side == "sell" else 0,
             provider=self._provider.slug,
             price_at=_market_datetime(self._provider.market_time),
@@ -262,9 +260,7 @@ class PaperTradingService:
             else:
                 total_market_value += market_value
             unrealized = (
-                market_value - holding.total_cost_basis
-                if market_value is not None
-                else None
+                market_value - holding.total_cost_basis if market_value is not None else None
             )
             unrealized_percent = (
                 unrealized / holding.total_cost_basis * Decimal("100")
@@ -344,9 +340,7 @@ class PaperTradingService:
         total_value = portfolio.cash_balance + total_market_value if not missing_prices else None
         total_pnl = total_value - portfolio.starting_cash if total_value is not None else None
         total_return = (
-            total_pnl / portfolio.starting_cash * Decimal("100")
-            if total_pnl is not None
-            else None
+            total_pnl / portfolio.starting_cash * Decimal("100") if total_pnl is not None else None
         )
         for holding_payload in holdings:
             raw_market_value = holding_payload["market_value"]
@@ -356,9 +350,7 @@ class PaperTradingService:
                 else None
             )
             holding_payload["portfolio_weight_percent"] = (
-                decimal_text(weight.quantize(Decimal("0.01")))
-                if weight is not None
-                else None
+                decimal_text(weight.quantize(Decimal("0.01"))) if weight is not None else None
             )
             if weight is not None and weight > Decimal("40"):
                 notices.append(
@@ -496,17 +488,13 @@ class PaperTradingService:
             }
         if not close_by_symbol:
             return []
-        common_days = set.intersection(
-            *(set(values) for values in close_by_symbol.values())
-        )
+        common_days = set.intersection(*(set(values) for values in close_by_symbol.values()))
         holding_by_symbol = {item.symbol: item for item in portfolio.holdings}
         by_date = {
             day: portfolio.cash_balance
             + sum(
                 (
-                    round_vnd(
-                        values[day] * Decimal(holding_by_symbol[symbol].quantity)
-                    )
+                    round_vnd(values[day] * Decimal(holding_by_symbol[symbol].quantity))
                     for symbol, values in close_by_symbol.items()
                 ),
                 Decimal(),

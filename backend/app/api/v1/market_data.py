@@ -39,7 +39,13 @@ from app.schemas.market import (
     AddWatchlistItemRequest,
     CandlesResponse,
     CreateWatchlistRequest,
+    DailyDigestEnvelope,
+    DCASimulatorEnvelope,
+    DCASimulatorRequest,
+    EcosystemDetailEnvelope,
+    EcosystemsResponse,
     EventsResponse,
+    FinancialForensicsEnvelope,
     IndexEnvelope,
     IndicesResponse,
     InstrumentEnvelope,
@@ -170,9 +176,7 @@ def instruments(
     direction: Literal["asc", "desc"] = "desc",
     min_change: Annotated[Decimal | None, Query(ge=-100, le=100)] = None,
     max_change: Annotated[Decimal | None, Query(ge=-100, le=100)] = None,
-    min_matched_value_billion: Annotated[
-        Decimal | None, Query(ge=0, le=1_000_000_000)
-    ] = None,
+    min_matched_value_billion: Annotated[Decimal | None, Query(ge=0, le=1_000_000_000)] = None,
     min_market_cap_billion: Annotated[Decimal | None, Query(ge=0, le=1_000_000_000)] = None,
     min_volume_ratio: Annotated[Decimal | None, Query(ge=0, le=1000)] = None,
     vn30: bool = False,
@@ -325,9 +329,19 @@ def events(
 
 
 @router.get("/people", response_model=PeopleResponse)
-def people(response: Response) -> dict[str, object]:
+def people(
+    response: Response,
+    q: str | None = None,
+    sector: str | None = None,
+) -> dict[str, object]:
     _public_headers(response)
-    return _cached("people", {}, _service().people, get_market_read_cache())
+    service = _service()
+    return _cached(
+        "people",
+        {"q": q or "", "sector": sector or ""},
+        lambda: service.people(query=q, sector=sector),
+        get_market_read_cache(),
+    )
 
 
 @router.get("/people/{person_id}", response_model=PersonEnvelope)
@@ -337,6 +351,52 @@ def person(person_id: str, response: Response) -> dict[str, object]:
     if value is None:
         raise HTTPException(status_code=404, detail="Person not found")
     return value
+
+
+@router.get("/instruments/{symbol}/forensics", response_model=FinancialForensicsEnvelope)
+def forensics(symbol: str, response: Response) -> dict[str, object]:
+    _public_headers(response)
+    service = _service()
+    value = service.forensics(symbol)
+    if value is None:
+        raise HTTPException(status_code=404, detail="Instrument not found")
+    return value
+
+
+@router.get("/ecosystems", response_model=EcosystemsResponse)
+def ecosystems(response: Response) -> dict[str, object]:
+    _public_headers(response)
+    service = _service()
+    return _cached("ecosystems", {}, service.ecosystems, get_market_read_cache())
+
+
+@router.get("/ecosystems/{ecosystem_id}", response_model=EcosystemDetailEnvelope)
+def ecosystem_detail(ecosystem_id: str, response: Response) -> dict[str, object]:
+    _public_headers(response)
+    service = _service()
+    value = service.ecosystem(ecosystem_id)
+    if value is None:
+        raise HTTPException(status_code=404, detail="Ecosystem not found")
+    return value
+
+
+@router.post("/simulator/dca", response_model=DCASimulatorEnvelope)
+def simulate_dca_endpoint(req: DCASimulatorRequest, response: Response) -> dict[str, object]:
+    _public_headers(response)
+    service = _service()
+    return service.simulate_dca(
+        symbol=req.symbol,
+        monthly_amount=req.monthly_amount,
+        duration_years=req.duration_years,
+        annual_savings_rate=req.savings_rate,
+    )
+
+
+@router.get("/daily-digest", response_model=DailyDigestEnvelope)
+def daily_digest(response: Response) -> dict[str, object]:
+    _public_headers(response)
+    service = _service()
+    return _cached("daily_digest", {}, service.daily_digest, get_market_read_cache())
 
 
 @watchlist_router.get("", response_model=WatchlistsResponse)

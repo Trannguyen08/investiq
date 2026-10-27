@@ -8,7 +8,7 @@ def test_leader_crawler_returns_prominent_leaders() -> None:
     crawler = LeaderCrawler()
     leaders = crawler.get_prominent_leaders()
 
-    assert len(leaders) >= 8
+    assert len(leaders) >= 20
     # Sorted descending by listed equity value
     for i in range(len(leaders) - 1):
         val_cur = leaders[i].estimated_listed_equity_value
@@ -16,10 +16,29 @@ def test_leader_crawler_returns_prominent_leaders() -> None:
         assert val_cur >= val_next
 
     vuong = next(person for person in leaders if "Phạm Nhật Vượng" in person.full_name)
-    assert vuong.symbols == ("VIC",)
+    assert "VIC" in vuong.symbols
     assert vuong.net_worth_total is not None
     assert "tỷ USD" in vuong.net_worth_total
     assert vuong.net_worth_external is not None
+
+
+def test_leader_crawler_filters_by_query_and_sector() -> None:
+    crawler = LeaderCrawler()
+
+    # Filter by name query
+    fpt_leaders = crawler.get_prominent_leaders(query="Trương Gia Bình")
+    assert len(fpt_leaders) == 1
+    assert "Trương Gia Bình" in fpt_leaders[0].full_name
+
+    # Filter by ticker query
+    hpg_leaders = crawler.get_prominent_leaders(query="HPG")
+    assert len(hpg_leaders) >= 1
+    assert any("Trần Đình Long" in p.full_name for p in hpg_leaders)
+
+    # Filter by sector
+    steel_leaders = crawler.get_prominent_leaders(sector="Thép & Công nghiệp")
+    assert len(steel_leaders) >= 1
+    assert all("Thép" in p.sector for p in steel_leaders)
 
 
 def test_leader_crawler_dynamically_updates_equity_with_live_instruments() -> None:

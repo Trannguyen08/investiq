@@ -22,9 +22,7 @@ class UserRepositoryFake:
 def test_user_list_filters_are_validated_and_trimmed() -> None:
     repository = UserRepositoryFake()
 
-    assert ManageUsers(repository).list(
-        query="  alice ", role="user", limit=10
-    ) == ([], 0)
+    assert ManageUsers(repository).list(query="  alice ", role="user", limit=10) == ([], 0)
 
     assert repository.list_args == ("alice", "user", None, None, 10, None)
 

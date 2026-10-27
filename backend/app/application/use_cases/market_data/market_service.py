@@ -19,6 +19,10 @@ from app.domain.entities.market import (
 )
 from app.domain.repositories.i_market_provider import IMarketProvider
 from app.infrastructure.external.crawlers.financial_report_crawler import financial_report_crawler
+from app.infrastructure.external.digest.daily_digest_service import generate_daily_digest
+from app.infrastructure.external.ecosystem.ecosystem_service import get_ecosystem_service
+from app.infrastructure.external.forensics.financial_forensics import compute_forensics
+from app.infrastructure.external.simulator.dca_simulator import simulate_dca
 
 
 def _decimal(value: Decimal) -> str:
@@ -96,8 +100,7 @@ def _instrument(value: MarketInstrument, include_candles: bool = True) -> dict[s
 def _depth_levels(value: MarketInstrument) -> dict[str, object]:
     def serialize(levels: tuple[MarketDepthLevel, ...]) -> list[dict[str, str]]:
         return [
-            {"price": _decimal(level.price), "volume": _decimal(level.volume)}
-            for level in levels
+            {"price": _decimal(level.price), "volume": _decimal(level.volume)} for level in levels
         ]
 
     return {
@@ -301,13 +304,16 @@ class MarketService:
                 Decimal(),
             )
             if matched_value > 0:
-                change_percent = sum(
-                    (
-                        item.change_percent * max(item.matched_value, Decimal())
-                        for item in members
-                    ),
-                    Decimal(),
-                ) / matched_value
+                change_percent = (
+                    sum(
+                        (
+                            item.change_percent * max(item.matched_value, Decimal())
+                            for item in members
+                        ),
+                        Decimal(),
+                    )
+                    / matched_value
+                )
             else:
                 change_percent = sum(
                     (item.change_percent for item in members), Decimal()
@@ -324,9 +330,7 @@ class MarketService:
                     "foreign_net_value": _decimal(
                         sum((item.foreign_net_value for item in members), Decimal())
                     ),
-                    "market_cap": _decimal(
-                        sum((item.market_cap for item in members), Decimal())
-                    ),
+                    "market_cap": _decimal(sum((item.market_cap for item in members), Decimal())),
                 }
             )
         sectors.sort(
@@ -398,9 +402,25 @@ class MarketService:
             "meta": self.meta(),
         }
 
-    def people(self) -> dict[str, object]:
+    def people(self, query: str | None = None, sector: str | None = None) -> dict[str, object]:
+        raw_values = self._provider.people()
+        q = query.strip().lower() if query else None
+        s = sector.strip().lower() if sector else None
+
+        filtered = []
+        for item in raw_values:
+            if q:
+                match_name = q in item.full_name.lower()
+                match_comp = q in item.company.lower()
+                match_sym = any(q in sym.lower() for sym in item.symbols)
+                if not (match_name or match_comp or match_sym):
+                    continue
+            if s and s != "tất cả" and s not in item.sector.lower():
+                continue
+            filtered.append(item)
+
         values = sorted(
-            self._provider.people(),
+            filtered,
             key=lambda item: item.estimated_listed_equity_value,
             reverse=True,
         )
@@ -477,13 +497,12 @@ class MarketService:
         price_change_1y = None
 
         if candles and cur_price > Decimal("0"):
+
             def _calc_growth(index_back: int, min_len: int) -> tuple[str | None, str | None]:
                 if len(candles) < min_len:
                     return None, None
                 past_price = (
-                    candles[-index_back].close
-                    if len(candles) >= index_back
-                    else candles[0].close
+                    candles[-index_back].close if len(candles) >= index_back else candles[0].close
                 )
                 if past_price <= Decimal("0"):
                     return None, None
@@ -543,6 +562,7 @@ class MarketService:
         bvps: str | None = None
 
         if raw_growth_rows:
+
             def _int(val: object) -> int:
                 try:
                     return int(str(val).strip())
@@ -559,7 +579,8 @@ class MarketService:
                     return None
 
             ttm_rows = [
-                r for r in raw_growth_rows
+                r
+                for r in raw_growth_rows
                 if str(r.get("ratio_type", "")).upper() == "RATIO_TTM"
                 and 1 <= _int(r.get("quarter")) <= 4
             ]
@@ -591,9 +612,7 @@ class MarketService:
                         prev_profit = prev_equity * prev_roe
                         if prev_profit != Decimal("0"):
                             p_growth = (
-                                (cur_profit - prev_profit)
-                                / abs(prev_profit)
-                                * Decimal("100")
+                                (cur_profit - prev_profit) / abs(prev_profit) * Decimal("100")
                             )
                             profit_yoy = f"{'+' if p_growth >= Decimal('0') else ''}{p_growth:.1f}%"
 
@@ -606,11 +625,7 @@ class MarketService:
                                 cur_rev = cur_profit / margin_val
                                 prev_rev = prev_profit / prev_margin
                                 if prev_rev != Decimal("0"):
-                                    r_growth = (
-                                        (cur_rev - prev_rev)
-                                        / abs(prev_rev)
-                                        * Decimal("100")
-                                    )
+                                    r_growth = (cur_rev - prev_rev) / abs(prev_rev) * Decimal("100")
                                     rev_yoy = (
                                         f"{'+' if r_growth >= Decimal('0') else ''}{r_growth:.1f}%"
                                     )
@@ -626,9 +641,7 @@ class MarketService:
                         "revenue_growth_yoy": rev_yoy,
                         "profit_growth_yoy": profit_yoy,
                         "roe": (
-                            f"{roe_val * Decimal('100'):.1f}%"
-                            if roe_val is not None
-                            else None
+                            f"{roe_val * Decimal('100'):.1f}%" if roe_val is not None else None
                         ),
                         "net_margin": (
                             f"{margin_val * Decimal('100'):.1f}%"
@@ -636,9 +649,7 @@ class MarketService:
                             else None
                         ),
                         "gross_margin": (
-                            f"{gross_val * Decimal('100'):.1f}%"
-                            if gross_val is not None
-                            else None
+                            f"{gross_val * Decimal('100'):.1f}%" if gross_val is not None else None
                         ),
                     }
                 )
@@ -787,8 +798,7 @@ class MarketService:
             else "phản ánh kỳ vọng cao từ thị trường vào chu kỳ kinh doanh mới."
         )
         insight_2 = (
-            f"Định giá P/E: Hiện ở mức {pe_str} với quy mô vốn hóa {market_cap_str}, "
-            f"{pe_eval}"
+            f"Định giá P/E: Hiện ở mức {pe_str} với quy mô vốn hóa {market_cap_str}, {pe_eval}"
         )
         insight_3 = (
             f"Dòng tiền & Khuyến nghị F0: Thanh khoản đạt {volume_growth_20d}. "
@@ -826,9 +836,7 @@ class MarketService:
                 "eps": eps_str,
                 "bvps": bvps,
                 "roe_percent": (
-                    f"{instrument.roe_percent:.1f}%"
-                    if instrument.roe_percent is not None
-                    else None
+                    f"{instrument.roe_percent:.1f}%" if instrument.roe_percent is not None else None
                 ),
                 "roa_percent": roa_percent,
                 "gross_margin_percent": gross_margin_percent,
@@ -844,3 +852,60 @@ class MarketService:
             },
             "meta": self.meta(),
         }
+
+    def forensics(self, symbol: str) -> dict[str, object] | None:
+        instrument = self._provider.instrument(symbol, include_fundamentals=True)
+        if instrument is None:
+            return None
+        report = compute_forensics(instrument)
+        return {"data": report, "meta": self.meta()}
+
+    def ecosystems(self) -> dict[str, object]:
+        instruments = self._provider.instruments()
+        service = get_ecosystem_service()
+        data = service.list_ecosystems(instruments)
+        return {"data": data, "meta": self.meta()}
+
+    def ecosystem(self, ecosystem_id: str) -> dict[str, object] | None:
+        instruments = self._provider.instruments()
+        service = get_ecosystem_service()
+        detail = service.get_ecosystem_detail(ecosystem_id, instruments)
+        if detail is None:
+            return None
+        return {"data": detail, "meta": self.meta()}
+
+    def simulate_dca(
+        self,
+        symbol: str,
+        monthly_amount: Decimal,
+        duration_years: int = 3,
+        annual_savings_rate: Decimal = Decimal("6.0"),
+    ) -> dict[str, object]:
+        instrument = self._provider.instrument(symbol, include_fundamentals=False)
+        current_price = (
+            instrument.price if instrument and instrument.price > 0 else Decimal("30000")
+        )
+        candles = self._provider.candles(symbol, "1d")
+        result = simulate_dca(
+            symbol=symbol,
+            monthly_amount=monthly_amount,
+            duration_years=duration_years,
+            annual_savings_rate=annual_savings_rate,
+            current_price=current_price,
+            history_candles=candles,
+        )
+        return {"data": result, "meta": self.meta()}
+
+    def daily_digest(self) -> dict[str, object]:
+        indices = self._provider.indices()
+        instruments = self._provider.instruments()
+        raw_events = self._provider.events()
+        events = (
+            raw_events[0]
+            if isinstance(raw_events, tuple)
+            and len(raw_events) == 2
+            and isinstance(raw_events[0], tuple)
+            else raw_events
+        )
+        data = generate_daily_digest(indices=indices, instruments=instruments, events=events)
+        return {"data": data, "meta": self.meta()}

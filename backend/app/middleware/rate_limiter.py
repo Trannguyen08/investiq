@@ -32,7 +32,8 @@ class AuthRateLimiter:
             # Purge expired buckets periodically if dictionary grows
             if len(self._local_buckets) > 1000:
                 expired = [
-                    k for k, (_, start) in self._local_buckets.items()
+                    k
+                    for k, (_, start) in self._local_buckets.items()
                     if now - start >= window_seconds
                 ]
                 for k in expired:

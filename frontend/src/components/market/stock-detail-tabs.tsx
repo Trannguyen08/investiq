@@ -3,7 +3,7 @@
 import { useSearchParams } from "next/navigation";
 import { useState, type ReactNode } from "react";
 
-export type StockTabId = "chart" | "growth" | "news";
+export type StockTabId = "chart" | "growth" | "news" | "forensics";
 
 type StockDetailTabsProps = {
   symbol: string;
@@ -12,10 +12,11 @@ type StockDetailTabsProps = {
   chartContent: ReactNode;
   growthContent: ReactNode;
   newsContent: ReactNode;
+  forensicsContent?: ReactNode;
 };
 
 function resolveTab(tabParam: string | null | undefined): StockTabId {
-  if (tabParam === "growth" || tabParam === "news" || tabParam === "chart") {
+  if (tabParam === "growth" || tabParam === "news" || tabParam === "chart" || tabParam === "forensics") {
     return tabParam;
   }
   return "chart";
@@ -28,6 +29,7 @@ export function StockDetailTabs({
   chartContent,
   growthContent,
   newsContent,
+  forensicsContent,
 }: StockDetailTabsProps) {
   const searchParams = useSearchParams();
   const queryTab = searchParams.get("tab");
@@ -58,6 +60,11 @@ export function StockDetailTabs({
       id: "growth",
       label: "Tăng trưởng & Tài chính",
       badge: "Mới",
+    },
+    {
+      id: "forensics",
+      label: "Rủi ro BCTC & Altman Z",
+      badge: "Forensics",
     },
     {
       id: "news",
@@ -121,6 +128,15 @@ export function StockDetailTabs({
           className={`tab-panel ${activeTab === "growth" ? "visible" : "hidden"}`}
         >
           {growthContent}
+        </div>
+
+        <div
+          id="panel-forensics"
+          role="tabpanel"
+          aria-labelledby="tab-forensics"
+          className={`tab-panel ${activeTab === "forensics" ? "visible" : "hidden"}`}
+        >
+          {forensicsContent}
         </div>
 
         <div
