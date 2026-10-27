@@ -1,5 +1,32 @@
 # Current Task
 
+## Comprehensive CI Pipeline Fix: DB News Migration Tests & Vitest Async Window Teardown - 2026-10-27 (complete)
+
+- **User Request**: "đụ má sao càng sửa càng sai nhiều v, fix triệt để luôn đi, tao k muốn nói lại nhiều lần"
+  - Fix all remaining CI failures completely and thoroughly.
+  - Do NOT create a PR; commit and push directly to `feature/community-thesis-paper-trading`.
+- **Root Cause & Fixes**:
+  1. **Backend Integration Tests (`tests/integration/db/test_news_repository.py`)**:
+     - *Issue 1*: `test_source_migration_activates_three_metadata_only_rss_sources` failed asserting `metadata_only` because migration `0015_activate_six_reputable_news_sources.sql` explicitly updated `hnx`, `vneconomy`, and `vnexpress` to `active` with `storage_mode = 'full_text'` and `display_mode = 'full_text'`.
+     - *Fix 1*: Updated test assertion to expect `("hnx", "active", "full_text", "full_text", "hnx")`, `("vneconomy", "active", "full_text", "full_text", "vneconomy")`, and `("vnexpress", "active", "full_text", "full_text", "vnexpress")` to align with migration 0015.
+     - *Issue 2*: `test_repository_enforces_metadata_only_storage_policy` failed because `vneconomy` was no longer `metadata_only` after migration 0015, so `IngestNews` did not enforce the metadata-only policy.
+     - *Fix 2*: Explicitly updated `vneconomy`'s storage_mode to `metadata_only` during test setup and reliably restored it to `full_text` in a `finally:` block.
+  2. **Frontend Vitest Unhandled Error (`ReferenceError: window is not defined`)**:
+     - *Issue*: During Vitest test runs with React 19 / JSDOM, components using `next/link` scheduled tasks in React's scheduler (`performWorkOnRootViaSchedulerTask` in `react-dom-client`). Because `globals: true` was not configured in `vitest.config.mts`, `@testing-library/react` did not automatically register `afterEach(cleanup)`, leaving mounted components with active scheduler tasks when Vitest destroyed the JSDOM window, resulting in `ReferenceError: window is not defined` when `schedulerEvent = window.event` ran.
+     - *Fix*:
+       - In [setup.ts](file:///c:/investiq/frontend/src/test/setup.ts), registered `afterEach(() => { cleanup(); })` to cleanly unmount all components after each test.
+       - Mocked `next/link` in `setup.ts` using `React.createElement("a", { "data-next-link": "true", ...props }, children)` with filtered Next.js props (`prefetch`, `replace`, `scroll`, `shallow`) to prevent prefetch background tasks and React scheduler leaking beyond test lifecycle.
+- **Validation**:
+  - Backend `ruff check .`: All checks passed (0 errors).
+  - Backend `mypy`: Success (0 errors in 34 source files).
+  - Backend unit tests (`pytest tests/unit`): 111 passed in 7.75s.
+  - Backend integration tests (`pytest tests/integration`): 32 passed, 17 skipped (no DB locally).
+  - Frontend `npm run lint`: 0 errors.
+  - Frontend `npm run typecheck`: 0 errors.
+  - Frontend `npm test`: 28 test files passed (116 tests passed, 0 unhandled errors).
+- **Git Actions**:
+  - Committed and pushed directly to `feature/community-thesis-paper-trading`. No PR created.
+
 ## CI PR Validation Fix: Ruff Lint & Strict Mypy Typing - 2026-10-27 (complete)
 
 - **User Request**: "fix lỗi khi tạo pr với dev, lỗi ở lint và run ruff. Lưu ý chỉ fix lỗi và đảm bảo từ nay về sau khi tạo pr k bị lỗi như thế nữa, fix đi fix lại nhiều lần mệt lắm, làm 1 lần triệt để, và k tự tiện tạo pr, khi fix xong chỉ commit và push code"

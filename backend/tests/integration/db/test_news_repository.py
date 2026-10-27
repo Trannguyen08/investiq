@@ -313,51 +313,61 @@ def test_source_migration_activates_three_metadata_only_rss_sources(
         ).fetchall()
 
     assert rows == [
-        ("hnx", "active", "metadata_only", "metadata_only", "hnx"),
-        ("vneconomy", "active", "metadata_only", "metadata_only", "vneconomy"),
-        ("vnexpress", "active", "metadata_only", "metadata_only", "vnexpress"),
+        ("hnx", "active", "full_text", "full_text", "hnx"),
+        ("vneconomy", "active", "full_text", "full_text", "vneconomy"),
+        ("vnexpress", "active", "full_text", "full_text", "vnexpress"),
     ]
 
 
 def test_repository_enforces_metadata_only_storage_policy(
     news_repository: SqlNewsRepository,
 ) -> None:
-    parsed = VnEconomyCrawler().parse_article(
-        """
-        <html><head><meta property="og:title" content="Cổ phiếu FPT tăng giá"></head></html>
-        """,
-        "https://vneconomy.vn/co-phieu-fpt-tang-gia.htm",
-        fetched_at=datetime(2026, 9, 30, 10, 0, tzinfo=UTC),
-    )
-    parsed = replace(
-        parsed,
-        content_text="Nội dung toàn văn không được phép lưu ở nguồn metadata-only.",
-        content_blocks=(ContentBlock(id="b1", type="paragraph", text="Không được lưu"),),
-        extraction_status=ExtractionStatus.COMPLETE,
-    )
+    with news_repository._pool.connection() as connection, connection.transaction():
+        connection.execute(
+            "UPDATE news_sources SET storage_mode = 'metadata_only' WHERE slug = 'vneconomy'"
+        )
 
-    article_id, changed = IngestNews(news_repository, VietnameseRuleSentimentAnalyzer()).execute(
-        parsed
-    )
-
-    assert changed is True
-    with news_repository._pool.connection() as connection:
-        stored = connection.execute(
+    try:
+        parsed = VnEconomyCrawler().parse_article(
             """
-            SELECT r.content_text, r.content_blocks, r.extraction_status, r.quality_flags,
-                   a.visibility
-            FROM news_articles a
-            JOIN article_revisions r ON r.id = a.current_revision_id
-            WHERE a.id = %s::uuid
+            <html><head><meta property="og:title" content="Cổ phiếu FPT tăng giá"></head></html>
             """,
-            (article_id,),
-        ).fetchone()
-    assert stored is not None
-    assert stored[0] is None
-    assert stored[1] == []
-    assert stored[2] == "metadata_only"
-    assert "storage_policy_metadata_only" in stored[3]
-    assert stored[4] == "withdrawn"
+            "https://vneconomy.vn/co-phieu-fpt-tang-gia.htm",
+            fetched_at=datetime(2026, 9, 30, 10, 0, tzinfo=UTC),
+        )
+        parsed = replace(
+            parsed,
+            content_text="Nội dung toàn văn không được phép lưu ở nguồn metadata-only.",
+            content_blocks=(ContentBlock(id="b1", type="paragraph", text="Không được lưu"),),
+            extraction_status=ExtractionStatus.COMPLETE,
+        )
+
+        use_case = IngestNews(news_repository, VietnameseRuleSentimentAnalyzer())
+        article_id, changed = use_case.execute(parsed)
+
+        assert changed is True
+        with news_repository._pool.connection() as connection:
+            stored = connection.execute(
+                """
+                SELECT r.content_text, r.content_blocks, r.extraction_status, r.quality_flags,
+                       a.visibility
+                FROM news_articles a
+                JOIN article_revisions r ON r.id = a.current_revision_id
+                WHERE a.id = %s::uuid
+                """,
+                (article_id,),
+            ).fetchone()
+        assert stored is not None
+        assert stored[0] is None
+        assert stored[1] == []
+        assert stored[2] == "metadata_only"
+        assert "storage_policy_metadata_only" in stored[3]
+        assert stored[4] == "withdrawn"
+    finally:
+        with news_repository._pool.connection() as connection, connection.transaction():
+            connection.execute(
+                "UPDATE news_sources SET storage_mode = 'full_text' WHERE slug = 'vneconomy'"
+            )
 
 
 def test_repository_groups_same_headline_across_sources(
