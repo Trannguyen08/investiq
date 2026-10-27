@@ -498,6 +498,31 @@ _BASELINE_LEADERS: tuple[LeaderProfile, ...] = (
     ),
 )
 
+LEADER_REAL_AVATARS: dict[str, str] = {
+    "person-1": "https://upload.wikimedia.org/wikipedia/commons/b/b7/Phamnhatvuong2024.jpg",
+    "person-2": "https://cafefnew.mediacdn.vn/zoom/600_600/CEO/CEO_10089_20240829114403.png",
+    "person-3": "https://imageio.forbes.com/specials-images/imageserve/5deea6ee25ab5d000700a77f/0x0.jpg?format=jpg&crop=1828,1827,x1274,y485,safe&height=416&width=416&fit=bounds",
+    "person-4": "https://cafefnew.mediacdn.vn/zoom/600_600/CEO/CEO_61628_20211118085007.jpg",
+    "person-5": "https://imageio.forbes.com/specials-images/imageserve/5c7177efa7ea431000434654/0x0.jpg?format=jpg&crop=361,361,x138,y1,safe&height=416&width=416&fit=bounds",
+    "person-6": "https://imageio.forbes.com/specials-images/imageserve/5c717876a7ea431000434658/0x0.jpg?format=jpg&crop=592,592,x238,y0,safe&height=416&width=416&fit=bounds",
+    "person-7": "https://cafefnew.mediacdn.vn/zoom/600_600/CEO/CEO_00669_20240829154242.png",
+    "person-8": "https://cafefnew.mediacdn.vn/zoom/600_600/CEO/CEO_99818_20240829155840.png",
+    "person-9": "https://cafefnew.mediacdn.vn/zoom/600_600/CEO/CEO_61557_20240829160120.png",
+    "person-10": "https://upload.wikimedia.org/wikipedia/commons/1/1e/Dang_Thanh_Tam_-_World_Economic_Forum_on_East_Asia_2010.jpg",
+    "person-11": "https://cafefnew.mediacdn.vn/zoom/600_600/CEO/CEO_00948_20240612144016.jpg",
+    "person-12": "https://cafefcdn.com/203337114487263232/2024/9/19/avatar1726707550902-1726707551293812350811.png",
+    "person-13": "https://cafefnew.mediacdn.vn/zoom/600_600/CEO/CEO_00188_20240829155011.png",
+    "person-14": "https://cafefnew.mediacdn.vn/zoom/600_600/CEO/CEO_00996_20240829161315.png",
+    "person-15": "https://cafefnew.mediacdn.vn/zoom/600_600/CEO/CEO_00071.jpg",
+    "person-16": "https://cafefnew.mediacdn.vn/zoom/600_600/CEO/CEO_07480.jpg",
+    "person-17": "https://cafefcdn.com/thumb_w/1200/203337114487263232/2022/12/14/photo1670996708533-1670996708749269008671.jpeg",
+    "person-18": "https://cdn.24hmoney.vn/upload/images_cr/2026-02-18/upload/1-2026/images/2026-01-21/adt1769006625-jonathan-hanh-nguyen-la-ai-jonathan-__anh_cat_3_2-auto-crop-watermark-width698height391.jpg",
+    "person-19": "https://cafefcdn.com/thumb_w/1200/203337114487263232/2025/4/9/avatar1744216197060-1744216197476117152053.jpeg",
+    "person-20": "https://cafefcdn.com/thumb_w/1200/2016/phuc-20vu-1473037187404.jpg",
+    "person-21": "https://cafefnew.mediacdn.vn/zoom/600_600/CEO/CEO_05849_20260716110112.jpg",
+    "person-22": "https://upload.wikimedia.org/wikipedia/commons/3/31/20181013_Hu%E1%BB%B3nh_Uy_D%C5%A9ng.png",
+}
+
 
 class LeaderCrawler:
     """Crawler and valuation engine for prominent business leaders."""
@@ -584,7 +609,7 @@ class LeaderCrawler:
                     net_worth_total=profile.net_worth_total,
                     net_worth_external=profile.net_worth_external,
                     bio=profile.bio,
-                    avatar_url=profile.avatar_url or f"/images/leaders/{profile.id}.svg",
+                    avatar_url=LEADER_REAL_AVATARS.get(profile.id) or profile.avatar_url or None,
                 )
             )
 

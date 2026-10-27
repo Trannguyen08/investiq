@@ -1,5 +1,35 @@
 # Current Task
 
+## Console Errors, CORS, UI CSS Alignment, and System Dark Theme Restoration - 2026-10-27 (complete)
+
+- **User Request**:
+  1. Fix errors on console (Image 1: 404 image errors on `/images/leaders/person-X.svg`, CORS/ERR_FAILED on `/api/v1/market/ecosystems`).
+  2. Fix missing/broken CSS in Image 2 (`/market/people`: unstyled search box, misaligned search icon, unstyled sort select, unstyled subtab toggle).
+  3. Fix "mất font nền hệ thống ở ảnh 3" (Lost system dark navy theme background and unstyled buttons/tabs on `/community`).
+
+- **Implementation Details**:
+  1. **CORS & Console Error Elimination**:
+     - Updated [backend/app/main.py](file:///c:/investiq/backend/app/main.py) to configure `CORSMiddleware` with allowed origins `http://localhost:3000`, `http://127.0.0.1:3000`, `http://localhost:8000`, `http://127.0.0.1:8000`, wildcard methods and headers.
+     - Updated [leader_crawler.py](file:///c:/investiq/backend/app/infrastructure/external/crawlers/leader_crawler.py): Eliminated stale `.svg` fallback paths causing 404s; bound `LEADER_REAL_AVATARS` dictionary featuring verified real portrait photos for all 22 business leaders from authoritative sources (CafeF, Forbes, Wikimedia, 24hMoney); set fallback to `None` so initials badges render cleanly without network errors.
+     - Added `referrerPolicy="no-referrer"` to `<img>` tags in [market-workspace.tsx](file:///c:/investiq/frontend/src/components/market/market-workspace.tsx) preventing 403 Forbidden hotlink blocks on CDN images.
+  2. **Market People UI CSS Alignment (`/market/people`)**:
+     - Aligned class names in [market-workspace.tsx](file:///c:/investiq/frontend/src/components/market/market-workspace.tsx) to match design system styles: `.people-controls-row`, `.people-search-box`, `.people-search-input`, `.people-search-icon`, `.people-sort-wrap`, `.people-sort-select`, `.view-mode-toggle`, `.view-toggle-btn`.
+     - In [globals.css](file:///c:/investiq/frontend/src/app/globals.css), styled `.people-search-box`, `.people-sort-wrap`, `.people-sort-label`, and clear button with dark navy glassmorphic design and crisp typography.
+  3. **Community Page System Dark Theme Restoration (`/community`)**:
+     - Restored global dark theme selectors `html:has(.community-page)` and `body:has(.community-page)` in [globals.css](file:///c:/investiq/frontend/src/app/globals.css) ensuring seamless `#06111f` dark navy canvas, dark header, dark nav links, and dark search bar.
+     - Added styled `.thesis-publish-btn` with mint green accent (`#10b981`) and `.thesis-scope-bar` / `.thesis-scope-btn` dark pill subtabs.
+  4. **Linting & Code Quality**:
+     - Configured `eslint.config.mjs` to maintain compatibility with React 19 effects.
+     - Frontend typecheck (`npm --prefix frontend run typecheck`): 0 errors.
+     - Frontend lint (`npm --prefix frontend run lint`): 0 errors.
+     - Backend unit tests (`python -m pytest tests/unit/market_data/test_leader_crawler.py`): 4/4 passed.
+
+- **Validation**:
+  - Live browser subagent verified at `http://localhost:3000/market/people` and `http://localhost:3000/community`:
+    - Zero console CORS errors, zero 404 image errors.
+    - `/market/people` search bar, sort select, and view toggle pill render with dark theme styling.
+    - `/community` dark theme canvas, dark header, mint CTA button, and dark pill subtabs render with full design system consistency.
+
 ## Prominent Business Leaders Full Expansion: 22 Leaders, Custom Vector Avatars, & Interactive Detail Modal - 2026-10-27 (complete)
 
 - **User Request**:

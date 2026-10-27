@@ -62,15 +62,17 @@ export function StocksView({ collection, filters }: { collection: InstrumentColl
     </form>
     <div className="market-table-wrap"><table className="market-table stock-table">
       <thead><tr><th>Mã / Công ty</th><th>Giá</th><th>Thay đổi</th><th>Mở · Cao · Thấp</th><th>Khối lượng</th><th>GTGD</th><th>So TB20</th><th>Khối ngoại ròng</th><th>Vốn hóa</th><th>P/E / P/B</th><th>Biểu đồ</th></tr></thead>
-      <tbody>{rows.map((item) => { const fundamentals = fundamentalsBySymbol[item.symbol]; const ratiosLoading = (item.pe === null || item.pb === null) && fundamentals === undefined; return <tr className={item.is_vn30 ? "vn30-row" : undefined} key={item.symbol}>
-        <td className="stock-identity"><div><Link href={`/market/stocks/${item.symbol}`}>{item.symbol}</Link>{item.is_vn30 && <span className="vn30-badge">VN30</span>}</div><span>{item.name}</span><small>{item.exchange} · {item.sector}</small></td>
-        <td><strong className={priceTone(item.price, item.reference_price, item.ceiling_price, item.floor_price)}>{formatChange(item.price)}</strong><small className="price-reference">TC {formatChange(item.reference_price)}</small></td>
-        <td className={changeTone(item.change_percent)}><strong>{formatPercent(item.change_percent)}</strong><small>{formatChange(item.change)}</small></td>
-        <td><span className={priceTone(item.open_price, item.reference_price, item.ceiling_price, item.floor_price)}>{formatChange(item.open_price)}</span> · <span className={priceTone(item.high_price, item.reference_price, item.ceiling_price, item.floor_price)}>{formatChange(item.high_price)}</span> · <span className={priceTone(item.low_price, item.reference_price, item.ceiling_price, item.floor_price)}>{formatChange(item.low_price)}</span></td>
-        <td>{formatCompact(item.volume)}</td><td>{formatMoney(item.matched_value)}</td><td>{item.volume_vs_20d !== null ? `${item.volume_vs_20d}×` : "—"}</td>
-        <td className={changeTone(item.foreign_net_value)}>{formatMoney(item.foreign_net_value)}</td><td>{formatMoney(item.market_cap)}</td><td className="fundamental-ratios">{formatRatioPair(fundamentals?.pe ?? item.pe, fundamentals?.pb ?? item.pb, ratiosLoading)}</td>
-        <td className="table-chart"><Link href={`/market/stocks/${item.symbol}`} aria-label={`Xem biểu đồ và chi tiết ${item.symbol}`}><MiniCandles candles={item.candles} label={`Nến ngày ${item.symbol}`} /><span>Xem chi tiết →</span></Link></td>
-      </tr>; })}</tbody>
+      <tbody>{rows.map((item) => {
+        const fundamentals = fundamentalsBySymbol[item.symbol]; const ratiosLoading = (item.pe === null || item.pb === null) && fundamentals === undefined; return <tr className={item.is_vn30 ? "vn30-row" : undefined} key={item.symbol}>
+          <td className="stock-identity"><div><Link href={`/market/stocks/${item.symbol}`}>{item.symbol}</Link>{item.is_vn30 && <span className="vn30-badge">VN30</span>}</div><span>{item.name}</span><small>{item.exchange} · {item.sector}</small></td>
+          <td><strong className={priceTone(item.price, item.reference_price, item.ceiling_price, item.floor_price)}>{formatChange(item.price)}</strong><small className="price-reference">TC {formatChange(item.reference_price)}</small></td>
+          <td className={changeTone(item.change_percent)}><strong>{formatPercent(item.change_percent)}</strong><small>{formatChange(item.change)}</small></td>
+          <td><span className={priceTone(item.open_price, item.reference_price, item.ceiling_price, item.floor_price)}>{formatChange(item.open_price)}</span> · <span className={priceTone(item.high_price, item.reference_price, item.ceiling_price, item.floor_price)}>{formatChange(item.high_price)}</span> · <span className={priceTone(item.low_price, item.reference_price, item.ceiling_price, item.floor_price)}>{formatChange(item.low_price)}</span></td>
+          <td>{formatCompact(item.volume)}</td><td>{formatMoney(item.matched_value)}</td><td>{item.volume_vs_20d !== null ? `${item.volume_vs_20d}×` : "—"}</td>
+          <td className={changeTone(item.foreign_net_value)}>{formatMoney(item.foreign_net_value)}</td><td>{formatMoney(item.market_cap)}</td><td className="fundamental-ratios">{formatRatioPair(fundamentals?.pe ?? item.pe, fundamentals?.pb ?? item.pb, ratiosLoading)}</td>
+          <td className="table-chart"><Link href={`/market/stocks/${item.symbol}`} aria-label={`Xem biểu đồ và chi tiết ${item.symbol}`}><MiniCandles candles={item.candles} label={`Nến ngày ${item.symbol}`} /><span>Xem chi tiết →</span></Link></td>
+        </tr>;
+      })}</tbody>
     </table></div>
     {!collection.data.length && <div className="market-empty"><h3>Không tìm thấy cổ phiếu</h3><p>Thử bỏ bớt bộ lọc hoặc tìm bằng mã khác.</p></div>}
     {collection.data.length > 0 && <nav className="market-pagination" aria-label="Phân trang cổ phiếu">
@@ -203,17 +205,17 @@ export function PeopleView({ collection }: { collection: PeopleCollection }) {
           <h2>Doanh nhân &amp; Hệ sinh thái Tập đoàn</h2>
           <p>{collection.methodology.label} · Cập nhật theo thị giá trực tiếp Vnstock và công bố Forbes.</p>
         </div>
-        <div className="people-subtab-switch">
+        <div className="view-mode-toggle">
           <button
             type="button"
-            className={viewMode === "leaders" ? "active" : ""}
+            className={`view-toggle-btn ${viewMode === "leaders" ? "active" : ""}`}
             onClick={() => setViewMode("leaders")}
           >
             Top Doanh Nhân ({collection.data.length})
           </button>
           <button
             type="button"
-            className={viewMode === "ecosystems" ? "active" : ""}
+            className={`view-toggle-btn ${viewMode === "ecosystems" ? "active" : ""}`}
             onClick={() => setViewMode("ecosystems")}
           >
             Bản đồ Hệ Sinh Thái (6 Tập đoàn)
@@ -227,47 +229,51 @@ export function PeopleView({ collection }: { collection: PeopleCollection }) {
         <>
           {/* Controls Bar: Search, Sector Chips, Sort */}
           <div className="people-controls-bar">
-            <div className="people-search-box">
-              <span className="search-icon" aria-hidden="true">🔍</span>
-              <input
-                type="text"
-                value={search}
-                onChange={(e) => setSearch(e.target.value)}
-                placeholder="Tìm doanh nhân, mã cổ phiếu (VIC, HPG...), tập đoàn..."
-                aria-label="Tìm kiếm doanh nhân"
-              />
-              {search && (
-                <button type="button" className="clear-btn" onClick={() => setSearch("")}>
-                  ✕
+            <div className="people-controls-row">
+              <div className="people-search-box">
+                <span className="people-search-icon" aria-hidden="true">🔍</span>
+                <input
+                  type="text"
+                  className="people-search-input"
+                  value={search}
+                  onChange={(e) => setSearch(e.target.value)}
+                  placeholder="Tìm doanh nhân, mã cổ phiếu (VIC, HPG...), tập đoàn..."
+                  aria-label="Tìm kiếm doanh nhân"
+                />
+                {search && (
+                  <button type="button" className="clear-btn" onClick={() => setSearch("")} aria-label="Xóa tìm kiếm">
+                    ✕
+                  </button>
+                )}
+              </div>
+
+              <div className="people-sort-wrap">
+                <label htmlFor="people-sort" className="people-sort-label">Sắp xếp:</label>
+                <select
+                  id="people-sort"
+                  className="people-sort-select"
+                  value={sortBy}
+                  onChange={(e) => setSortBy(e.target.value as "equity" | "change")}
+                >
+                  <option value="equity">Tài sản niêm yết cao nhất</option>
+                  <option value="change">Biến động phiên mạnh nhất</option>
+                </select>
+              </div>
+            </div>
+
+            {/* Sector filter chips */}
+            <div className="people-sector-filters">
+              {sectors.map((sec) => (
+                <button
+                  key={sec}
+                  type="button"
+                  className={`sector-chip ${selectedSector === sec ? "active" : ""}`}
+                  onClick={() => setSelectedSector(sec)}
+                >
+                  {sec}
                 </button>
-              )}
+              ))}
             </div>
-
-            <div className="people-sort-select">
-              <label htmlFor="people-sort">Sắp xếp:</label>
-              <select
-                id="people-sort"
-                value={sortBy}
-                onChange={(e) => setSortBy(e.target.value as "equity" | "change")}
-              >
-                <option value="equity">Tài sản niêm yết cao nhất</option>
-                <option value="change">Biến động phiên mạnh nhất</option>
-              </select>
-            </div>
-          </div>
-
-          {/* Sector filter chips */}
-          <div className="people-sector-chips">
-            {sectors.map((sec) => (
-              <button
-                key={sec}
-                type="button"
-                className={`sector-chip ${selectedSector === sec ? "active" : ""}`}
-                onClick={() => setSelectedSector(sec)}
-              >
-                {sec}
-              </button>
-            ))}
           </div>
 
           <div className="people-summary">
@@ -339,6 +345,7 @@ export function PeopleView({ collection }: { collection: PeopleCollection }) {
                             src={person.avatar_url}
                             alt={person.full_name}
                             className="person-avatar-img"
+                            referrerPolicy="no-referrer"
                             onError={(e) => {
                               e.currentTarget.style.display = "none";
                               const fallback = e.currentTarget.nextElementSibling as HTMLElement;
