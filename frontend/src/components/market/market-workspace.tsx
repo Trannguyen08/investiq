@@ -340,6 +340,7 @@ export function PeopleView({ collection }: { collection: PeopleCollection }) {
                       </span>
                       <div className="person-avatar-wrap">
                         {person.avatar_url ? (
+                          // eslint-disable-next-line @next/next/no-img-element
                           <img
                             src={person.avatar_url}
                             alt={person.full_name}

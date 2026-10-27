@@ -101,7 +101,7 @@ export function ThesisArena({ initialTheses = [], initialLeaderboard = [] }: The
     } finally {
       setLoading(false);
     }
-  }, [statusFilter, searchSymbol, sortOrder]);
+  }, [statusFilter, searchSymbol, sortOrder, initialTheses.length, initialLeaderboard.length]);
 
   const loadMyTheses = useCallback(async () => {
     if (authStatus !== "authenticated") return;

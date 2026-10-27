@@ -73,6 +73,7 @@ export function PersonDetailModal({
         <div className="person-modal-header">
           <div className="person-modal-avatar-box">
             {person.avatar_url ? (
+              // eslint-disable-next-line @next/next/no-img-element
               <img
                 src={person.avatar_url}
                 alt={person.full_name}

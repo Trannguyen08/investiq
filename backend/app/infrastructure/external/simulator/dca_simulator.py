@@ -104,22 +104,16 @@ def simulate_dca(
         )
 
     final_portfolio_val = Decimal(total_shares) * current_price
-    avg_price = (
-        (total_invested / Decimal(total_shares)) if total_shares > 0 else current_price
-    )
+    avg_price = (total_invested / Decimal(total_shares)) if total_shares > 0 else current_price
 
     stock_profit = final_portfolio_val - total_invested
     stock_roi = (
-        (stock_profit / total_invested * Decimal("100"))
-        if total_invested > 0
-        else Decimal("0")
+        (stock_profit / total_invested * Decimal("100")) if total_invested > 0 else Decimal("0")
     )
 
     savings_profit = savings_value - total_invested
     savings_roi = (
-        (savings_profit / total_invested * Decimal("100"))
-        if total_invested > 0
-        else Decimal("0")
+        (savings_profit / total_invested * Decimal("100")) if total_invested > 0 else Decimal("0")
     )
 
     alpha_amount = final_portfolio_val - savings_value

@@ -59,7 +59,7 @@ export function SocialPaperTrading({ initialLeaderboard = [] }: SocialPaperTradi
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [initialLeaderboard.length]);
 
   useEffect(() => {
     loadLeaderboard();

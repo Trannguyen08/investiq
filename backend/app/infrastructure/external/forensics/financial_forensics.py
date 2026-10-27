@@ -49,9 +49,7 @@ def compute_forensics(
     pe = float(instrument.pe) if instrument.pe is not None else 14.5
     pb = float(instrument.pb) if instrument.pb is not None else 1.65
     roe = float(instrument.roe_percent) if instrument.roe_percent is not None else 12.0
-    market_cap = (
-        float(instrument.market_cap) if instrument.market_cap > 0 else 5_000_000_000_000.0
-    )
+    market_cap = float(instrument.market_cap) if instrument.market_cap > 0 else 5_000_000_000_000.0
 
     # Sector specific adjustments
     is_finance = any(
@@ -98,8 +96,7 @@ def compute_forensics(
                 "indicator_value": f"ROE {roe:.1f}%",
                 "threshold": "CFO/Lợi nhuận > 0.8",
                 "implication": (
-                    "Chất lượng doanh thu cao, ít rủi ro ghi nhận khống "
-                    "hoặc chôn vốn khách hàng."
+                    "Chất lượng doanh thu cao, ít rủi ro ghi nhận khống hoặc chôn vốn khách hàng."
                 ),
             }
         )
@@ -117,8 +114,7 @@ def compute_forensics(
                 "indicator_value": f"ROE thấp ({roe:.1f}%)",
                 "threshold": "CFO/Lợi nhuận < 0",
                 "implication": (
-                    "Nguy cơ đọng vốn, phải phụ thuộc vào vay nợ ngân hàng "
-                    "để duy trì hoạt động."
+                    "Nguy cơ đọng vốn, phải phụ thuộc vào vay nợ ngân hàng để duy trì hoạt động."
                 ),
             }
         )
