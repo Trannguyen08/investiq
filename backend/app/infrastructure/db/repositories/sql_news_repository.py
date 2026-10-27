@@ -259,6 +259,7 @@ class SqlNewsRepository:
                 WHERE sec.is_active AND (
                     (si.exchange || ':' || si.symbol) = ANY(%s)
                     OR si.symbol = ANY(%s)
+                )
                 ORDER BY si.symbol,
                     (CASE si.exchange WHEN 'HOSE' THEN 1 WHEN 'HNX' THEN 2 ELSE 3 END)
                 """,

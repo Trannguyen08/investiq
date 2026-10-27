@@ -1658,20 +1658,44 @@ body:has(.paper-page) .mobile-menu summary span { background: #d9e8f5; }
 
 /* Dark navy market workspace */
 body:has(.market-home),
-body:has(.market-page) { background: #06111f; }
-html:has(.stock-detail-page) { background: #06111f; }
+body:has(.market-page),
+body:has(.community-page) { background: #06111f; }
+html:has(.stock-detail-page),
+html:has(.community-page) { background: #06111f; }
 body:has(.market-home) .site-header,
-body:has(.market-page) .site-header { border-color: #18324a; background: rgb(6 17 31 / 94%); }
+body:has(.market-page) .site-header,
+body:has(.community-page) .site-header { border-color: #18324a; background: rgb(6 17 31 / 94%); }
 body:has(.market-home) .nav-link,
-body:has(.market-page) .nav-link { color: #9eb2c8; }
+body:has(.market-page) .nav-link,
+body:has(.community-page) .nav-link { color: #9eb2c8; }
 body:has(.market-home) .nav-link:hover,
 body:has(.market-page) .nav-link:hover,
+body:has(.community-page) .nav-link:hover,
 body:has(.market-home) .nav-link.active,
-body:has(.market-page) .nav-link.active { color: #f3f8fd; background: #10273d; }
+body:has(.market-page) .nav-link.active,
+body:has(.community-page) .nav-link.active { color: #f3f8fd; background: #10273d; }
 body:has(.market-home) .account-trigger,
-body:has(.market-page) .account-trigger { border-color: #24425d; color: #d9e8f5; background: #0b1c2e; }
+body:has(.market-page) .account-trigger,
+body:has(.community-page) .account-trigger { border-color: #24425d; color: #d9e8f5; background: #0b1c2e; }
+body:has(.market-home) .account-link,
+body:has(.market-page) .account-link,
+body:has(.community-page) .account-link,
+body:has(.paper-page) .account-link { border-color: #24425d; color: #d9e8f5; background: #0b1c2e; }
+body:has(.market-home) .header-search,
+body:has(.market-page) .header-search,
+body:has(.community-page) .header-search,
+body:has(.paper-page) .header-search { border-color: #1e3a58; background: #0b1c2e; }
+body:has(.market-home) .header-search input,
+body:has(.market-page) .header-search input,
+body:has(.community-page) .header-search input,
+body:has(.paper-page) .header-search input { color: #f1f7fb; }
+body:has(.market-home) .header-search svg,
+body:has(.market-page) .header-search svg,
+body:has(.community-page) .header-search svg,
+body:has(.paper-page) .header-search svg { stroke: #8da4b8; }
 body:has(.market-home) .mobile-menu summary span,
-body:has(.market-page) .mobile-menu summary span { background: #d9e8f5; }
+body:has(.market-page) .mobile-menu summary span,
+body:has(.community-page) .mobile-menu summary span { background: #d9e8f5; }
 
 .market-home,
 .market-page { color: #d7e5f2; }

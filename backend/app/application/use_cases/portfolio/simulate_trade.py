@@ -511,13 +511,13 @@ class PaperTradingService:
     def set_public_visibility(
         self, user_id: str, is_public: bool, nickname: str | None = None
     ) -> dict[str, object]:
-        self._portfolio_repository.set_public_status(
+        self._repository.set_public_status(
             user_id=user_id, is_public=is_public, nickname=nickname
         )
         return self.portfolio(user_id)
 
     def get_social_leaderboard(self, limit: int = 10) -> list[dict[str, object]]:
-        rows = self._portfolio_repository.get_public_leaderboard(limit=limit)
+        rows = self._repository.get_public_leaderboard(limit=limit)
         result: list[dict[str, object]] = []
         for r in rows:
             starting = Decimal(str(r.get("starting_cash", 100000000)))
@@ -544,7 +544,7 @@ class PaperTradingService:
         return result
 
     def get_public_portfolio_detail(self, portfolio_id: str) -> dict[str, object] | None:
-        portfolio = self._portfolio_repository.get_public_portfolio(portfolio_id)
+        portfolio = self._repository.get_public_portfolio(portfolio_id)
         if not portfolio:
             return None
 

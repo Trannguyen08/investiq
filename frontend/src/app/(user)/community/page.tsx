@@ -5,7 +5,7 @@ import { getAnalystLeaderboard, getSocialLeaderboard, getTheses } from "@/lib/ap
 import type { AnalystReputationItem, InvestmentThesisItem, SocialLeaderboardItem } from "@/types/thesis";
 
 export const metadata: Metadata = {
-  title: "Cộng đồng & Luận điểm Đầu tư | InvestIQ",
+  title: "Cộng đồng | InvestIQ",
   description:
     "Đấu trường luận điểm đầu tư kiểm chứng tự động (Proof-of-Thesis Arena) và bảng xếp hạng danh mục mô phỏng minh bạch.",
 };
@@ -38,7 +38,7 @@ export default async function CommunityPage() {
   }
 
   return (
-    <main className="community-page-main">
+    <main className="community-page community-page-main">
       <CommunityClientHub
         initialTheses={initialTheses}
         initialAnalystLeaderboard={initialAnalystLeaderboard}
