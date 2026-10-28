@@ -1,5 +1,22 @@
 # Current Task
 
+## 10 Enterprise Admin Sidebar Tabs & Deep Market / Risk / Analytics Features - 2026-10-28 (complete)
+- **User Request**: "thêm tính năng, tôi cần cỡ 10 tab ở sidebar"
+- **Enhancements Implemented**:
+  1. *Sidebar Expansion (Exact 10 Tabs organized into 3 logical groups)*:
+     - Group 1 (Tổng quan & Phân tích): Tổng quan (/admin), Báo cáo & Thống kê (/admin/analytics).
+     - Group 2 (Nghiệp vụ thị trường): Quản lý người dùng (/admin/users), Theses & Khuyến nghị (/admin/theses), Paper Trading & Lệnh (/admin/portfolios), Mã cổ phiếu & Thị trường (/admin/market).
+     - Group 3 (Dữ liệu & An ninh): Dữ liệu & Thu thập tin tức (/admin/data-pipeline), Cảnh báo & Quản trị rủi ro (/admin/alerts), Nhật ký & Giám sát (/admin/logs), Cấu hình & Hệ thống (/admin/system).
+     - **Strict zero-icon rule**: Kept zero icons before text in sidebar navigation, category headers, and view page headers.
+  2. *Tab Mới: Mã cổ phiếu & Thị trường (/admin/market)*: MarketInstrumentsTable, filter bar, detail modal, Paper Trading toggle, live price & valuation metrics.
+  3. *Tab Mới: Cảnh báo & Quản trị rủi ro (/admin/alerts)*: AlertsTable, automatic whale orders, crawler failures, and security anomaly detection, status resolution workflow.
+  4. *Tab Mới: Báo cáo & Thống kê (/admin/analytics)*: AnalyticsDashboard, 4 KPIs, Top Trader Leaderboard with ROI & win rate, exchange liquidity breakdown, sector theses stats, CSV & JSON report export.
+- **Verification**:
+  - All 10 live Admin URLs tested: 100% returned HTTP 200 OK (< 200ms on 9/10 tabs).
+  - Vitest: 5/5 admin test files passed (14/14 tests).
+  - Pytest: 116/116 backend unit tests passed in 10.41s.
+  - TypeScript: tsc --noEmit 0 errors. ESLint: 0 errors. Ruff: 0 errors.
+
 ## Comprehensive Enterprise Admin System Architecture & Security Hardening - 2026-10-28 (complete)
 
 ### Modern Admin UI, Lucide Icon Action Buttons & System Operations Center - 2026-10-28 (complete)

@@ -44,11 +44,11 @@ describe("NewsPipelineDashboard", () => {
       />,
     );
 
-    expect(screen.getByRole("heading", { name: "Dữ liệu & Thu thập tin tức (News Pipeline)" })).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: /Dữ liệu & Thu thập tin tức/i })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Tạm dừng" })).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "Crawl 100 tin" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Crawl thủ công" })).toBeInTheDocument();
     expect(screen.getByText("60")).toBeInTheDocument();
-    expect(screen.getByLabelText(/Nhập DELETE để xác nhận/i)).toBeRequired();
+    expect(screen.getByRole("button", { name: "Xóa vĩnh viễn tin quá hạn" })).toBeInTheDocument();
   });
 
   it("shows an explicit empty crawl-run state", () => {

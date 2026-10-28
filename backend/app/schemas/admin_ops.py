@@ -201,3 +201,131 @@ class AdminAuditLogPage(BaseModel):
     page: int
     limit: int
     total_pages: int
+
+
+# Market Instruments schemas
+class AdminMarketInstrumentItem(BaseModel):
+    model_config = ConfigDict(extra="ignore")
+    symbol: str
+    name: str
+    exchange: str
+    sector: str | None = None
+    price: float
+    reference_price: float
+    ceiling_price: float
+    floor_price: float
+    volume: float
+    matched_value: float
+    pe: float | None = None
+    pb: float | None = None
+    market_cap: float | None = None
+    is_vn30: bool = False
+    trading_status: Literal["normal", "warning", "halted"] = "normal"
+    paper_trading_enabled: bool = True
+
+
+class AdminMarketInstrumentPage(BaseModel):
+    model_config = ConfigDict(extra="ignore")
+    items: list[AdminMarketInstrumentItem]
+    total: int
+    page: int
+    limit: int
+    total_pages: int
+    total_market_cap_vnd: float
+    total_matched_value_vnd: float
+
+
+class AdminInstrumentStatusUpdate(BaseModel):
+    trading_status: Literal["normal", "warning", "halted"] | None = None
+    paper_trading_enabled: bool | None = None
+
+
+# Risk & Security Alerts schemas
+class AdminAlertItem(BaseModel):
+    model_config = ConfigDict(extra="ignore")
+    id: str
+    category: Literal[
+        "whale_trade", "thesis_flag", "crawler_failure", "security_anomaly", "market_volatility"
+    ]
+    severity: Literal["high", "medium", "low"]
+    title: str
+    description: str
+    entity_type: str
+    entity_id: str
+    occurred_at: str
+    status: Literal["active", "resolved", "dismissed"]
+    resolved_at: str | None = None
+    resolved_by: str | None = None
+    action_suggested: str
+
+
+class AdminAlertPage(BaseModel):
+    model_config = ConfigDict(extra="ignore")
+    items: list[AdminAlertItem]
+    total: int
+    page: int
+    limit: int
+    total_pages: int
+    high_count: int
+    medium_count: int
+    low_count: int
+    active_count: int
+
+
+class AdminAlertUpdate(BaseModel):
+    status: Literal["resolved", "dismissed"]
+    note: str | None = Field(default=None, max_length=500)
+
+
+# Analytics & Leaderboard schemas
+class TopTraderItem(BaseModel):
+    model_config = ConfigDict(extra="ignore")
+    rank: int
+    user_id: str
+    user_name: str
+    user_email: str
+    nickname: str | None = None
+    starting_cash: float
+    cash_balance: float
+    realized_pnl: float
+    roi_percent: float
+    win_rate: float
+    total_trades: int
+    holdings_count: int
+
+
+class ExchangeLiquidityItem(BaseModel):
+    model_config = ConfigDict(extra="ignore")
+    exchange: str
+    total_symbols: int
+    total_value_vnd: float
+    share_percent: float
+
+
+class AssetAllocationSummary(BaseModel):
+    model_config = ConfigDict(extra="ignore")
+    total_cash_vnd: float
+    total_equity_vnd: float
+    cash_share_percent: float
+    equity_share_percent: float
+
+
+class SectorThesisItem(BaseModel):
+    model_config = ConfigDict(extra="ignore")
+    sector: str
+    theses_count: int
+    win_rate: float
+    bullish_count: int
+    bearish_count: int
+
+
+class AdminAnalyticsResponse(BaseModel):
+    model_config = ConfigDict(extra="ignore")
+    generated_at: str
+    top_traders: list[TopTraderItem]
+    exchange_liquidity: list[ExchangeLiquidityItem]
+    asset_allocation: AssetAllocationSummary
+    sector_theses: list[SectorThesisItem]
+    total_capital_deployed_vnd: float
+    average_portfolio_roi: float
+

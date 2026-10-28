@@ -54,7 +54,7 @@ describe("PortfoliosTable", () => {
     expect(screen.getByRole("heading", { name: "Danh sách tài khoản Paper Trading" })).toBeInTheDocument();
     expect(screen.getByText("investor@example.com")).toBeInTheDocument();
     expect(screen.getByText("Trần Nhà Đầu Tư")).toBeInTheDocument();
-    expect(screen.getByText("2 cổ phiếu")).toBeInTheDocument();
+    expect(screen.getByText("2 mã")).toBeInTheDocument();
     expect(screen.getByText("8 lệnh")).toBeInTheDocument();
   });
 
@@ -68,7 +68,7 @@ describe("PortfoliosTable", () => {
     expect(loadDetail).toHaveBeenCalledWith("pf-1111-2222");
     expect(await screen.findByRole("heading", { name: /Chi tiết danh mục: Trần Nhà Đầu Tư/i })).toBeInTheDocument();
     expect(screen.getByText(/Cổ phiếu đang nắm giữ/i)).toBeInTheDocument();
-    expect(screen.getByText(/Lịch sử khớp lệnh gần đây/i)).toBeInTheDocument();
+    expect(screen.getByText(/Lịch sử 20 lệnh gần nhất/i)).toBeInTheDocument();
   });
 
   it("shows empty state when no portfolios are present", () => {

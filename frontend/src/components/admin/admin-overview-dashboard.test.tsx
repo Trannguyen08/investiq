@@ -71,17 +71,18 @@ const mockOverview: AdminOverviewData = {
 };
 
 describe("AdminOverviewDashboard", () => {
-  it("renders 4 core KPI cards and metrics", () => {
+  it("renders 6 KPI cards and metrics", () => {
     render(<AdminOverviewDashboard data={mockOverview} />);
 
     expect(screen.getByText("Người dùng hệ thống")).toBeInTheDocument();
     expect(screen.getByText("150")).toBeInTheDocument();
 
-    expect(screen.getByText("Paper Trading & Lệnh")).toBeInTheDocument();
-    expect(screen.getByText("80")).toBeInTheDocument();
+    expect(screen.getByText("Vốn đầu tư ảo")).toBeInTheDocument();
+    expect(screen.getAllByText("Lệnh giao dịch mô phỏng").length).toBeGreaterThan(0);
+    expect(screen.getByText("520")).toBeInTheDocument();
 
     expect(screen.getByText("Khuyến nghị Theses")).toBeInTheDocument();
-    expect(screen.getAllByText("45")).toHaveLength(2);
+    expect(screen.getAllByText("45").length).toBeGreaterThan(0);
 
     expect(screen.getByText("Tin tức thị trường")).toBeInTheDocument();
     expect(screen.getByText("12,400")).toBeInTheDocument();

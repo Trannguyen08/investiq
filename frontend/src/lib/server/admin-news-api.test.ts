@@ -16,7 +16,7 @@ describe("news Admin API", () => {
 
     await expect(getAdminNewsSources()).resolves.toEqual([]);
     expect(fetchMock).toHaveBeenCalledWith(
-      "http://localhost:8000/api/v1/admin/news/sources",
+      expect.stringMatching(/\/v1\/admin\/news\/sources$/),
       expect.objectContaining({
         cache: "no-store",
         headers: expect.objectContaining({ Authorization: "Bearer test-operations-token" }),

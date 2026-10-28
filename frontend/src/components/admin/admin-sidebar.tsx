@@ -5,14 +5,41 @@ import { usePathname } from "next/navigation";
 
 import { logoutAdmin } from "@/app/(admin)/admin/actions";
 
-const navItems = [
-  { href: "/admin", label: "Tổng quan", count: null },
-  { href: "/admin/users", label: "Quản lý người dùng", count: null },
-  { href: "/admin/theses", label: "Theses & Khuyến nghị", count: null },
-  { href: "/admin/portfolios", label: "Paper Trading & Lệnh", count: null },
-  { href: "/admin/data-pipeline", label: "Dữ liệu & Thu thập tin tức", count: null },
-  { href: "/admin/logs", label: "Nhật ký & Giám sát", count: null },
-  { href: "/admin/system", label: "Cấu hình & Hệ thống", count: null },
+interface NavGroup {
+  category: string;
+  items: {
+    href: string;
+    label: string;
+    count?: number | null;
+  }[];
+}
+
+const navGroups: NavGroup[] = [
+  {
+    category: "Tổng quan & Phân tích",
+    items: [
+      { href: "/admin", label: "Tổng quan", count: null },
+      { href: "/admin/analytics", label: "Báo cáo & Thống kê", count: null },
+    ],
+  },
+  {
+    category: "Nghiệp vụ thị trường",
+    items: [
+      { href: "/admin/users", label: "Quản lý người dùng", count: null },
+      { href: "/admin/theses", label: "Theses & Khuyến nghị", count: null },
+      { href: "/admin/portfolios", label: "Paper Trading & Lệnh", count: null },
+      { href: "/admin/market", label: "Mã cổ phiếu & Thị trường", count: null },
+    ],
+  },
+  {
+    category: "Dữ liệu & An ninh",
+    items: [
+      { href: "/admin/data-pipeline", label: "Dữ liệu & Thu thập tin tức", count: null },
+      { href: "/admin/alerts", label: "Cảnh báo & Quản trị rủi ro", count: null },
+      { href: "/admin/logs", label: "Nhật ký & Giám sát", count: null },
+      { href: "/admin/system", label: "Cấu hình & Hệ thống", count: null },
+    ],
+  },
 ];
 
 export function AdminSidebar({ userEmail }: { userEmail?: string }) {
@@ -28,26 +55,30 @@ export function AdminSidebar({ userEmail }: { userEmail?: string }) {
       </div>
 
       <nav className="admin-sidebar-nav">
-        <div className="admin-nav-category">Danh mục quản trị</div>
-        {navItems.map((item) => {
-          const isActive =
-            item.href === "/admin"
-              ? pathname === "/admin"
-              : pathname.startsWith(item.href);
+        {navGroups.map((group, groupIndex) => (
+          <div key={group.category} style={{ marginTop: groupIndex > 0 ? "0.85rem" : "0" }}>
+            <div className="admin-nav-category">{group.category}</div>
+            {group.items.map((item) => {
+              const isActive =
+                item.href === "/admin"
+                  ? pathname === "/admin"
+                  : pathname.startsWith(item.href);
 
-          return (
-            <Link
-              key={item.href}
-              href={item.href}
-              className={`admin-nav-link ${isActive ? "active" : ""}`}
-            >
-              <span>{item.label}</span>
-              {item.count !== null && (
-                <span className="admin-nav-count">{item.count}</span>
-              )}
-            </Link>
-          );
-        })}
+              return (
+                <Link
+                  key={item.href}
+                  href={item.href}
+                  className={`admin-nav-link ${isActive ? "active" : ""}`}
+                >
+                  <span>{item.label}</span>
+                  {item.count !== null && item.count !== undefined && (
+                    <span className="admin-nav-count">{item.count}</span>
+                  )}
+                </Link>
+              );
+            })}
+          </div>
+        ))}
       </nav>
 
       <div className="admin-sidebar-footer">

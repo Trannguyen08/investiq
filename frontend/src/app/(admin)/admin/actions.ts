@@ -17,6 +17,8 @@ import {
 import {
   deleteAdminThesis,
   invalidateAdminCache,
+  updateAdminAlert,
+  updateAdminMarketInstrument,
   updateAdminThesis,
 } from "@/lib/server/admin-ops-api";
 import { updateAdminUser } from "@/lib/server/admin-user-api";
@@ -188,3 +190,46 @@ export async function refreshAdminCacheAction() {
   redirect("/admin?notice=Đã làm mới dữ liệu thống kê");
 }
 
+export async function changeInstrumentStatusAction(formData: FormData) {
+  await requireAdminSession();
+  try {
+    const symbol = stringField(formData, "symbol");
+    const tradingStatus = stringField(formData, "trading_status");
+    const ptEnabledRaw = stringField(formData, "paper_trading_enabled");
+
+    if (!symbol) throw new Error("Mã chứng khoán không hợp lệ");
+
+    const payload: { trading_status?: string; paper_trading_enabled?: boolean } = {};
+    if (["normal", "warning", "halted"].includes(tradingStatus)) {
+      payload.trading_status = tradingStatus;
+    }
+    if (ptEnabledRaw === "true" || ptEnabledRaw === "false") {
+      payload.paper_trading_enabled = ptEnabledRaw === "true";
+    }
+
+    await updateAdminMarketInstrument(symbol, payload);
+  } catch (error) {
+    redirect(`/admin/market?error=${message(error instanceof Error ? error.message : "Không thể cập nhật mã cổ phiếu")}`);
+  }
+  revalidatePath("/admin/market");
+  redirect("/admin/market?notice=Đã cập nhật trạng thái cổ phiếu thành công");
+}
+
+export async function changeAlertStatusAction(formData: FormData) {
+  await requireAdminSession();
+  try {
+    const alertId = stringField(formData, "alert_id");
+    const status = stringField(formData, "status") as "resolved" | "dismissed";
+    const note = stringField(formData, "note");
+
+    if (!alertId || !["resolved", "dismissed"].includes(status)) {
+      throw new Error("Yêu cầu xử lý cảnh báo không hợp lệ");
+    }
+
+    await updateAdminAlert(alertId, { status, note });
+  } catch (error) {
+    redirect(`/admin/alerts?error=${message(error instanceof Error ? error.message : "Không thể cập nhật cảnh báo")}`);
+  }
+  revalidatePath("/admin/alerts");
+  redirect("/admin/alerts?notice=Đã cập nhật trạng thái cảnh báo");
+}

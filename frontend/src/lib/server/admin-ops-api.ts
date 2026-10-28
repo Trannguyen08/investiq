@@ -178,6 +178,117 @@ export type AdminAuditLogPage = {
   total_pages: number;
 };
 
+// Market Instruments types
+export type AdminMarketInstrumentItem = {
+  symbol: string;
+  name: string;
+  exchange: string;
+  sector: string | null;
+  price: number;
+  reference_price: number;
+  ceiling_price: number;
+  floor_price: number;
+  volume: number;
+  matched_value: number;
+  pe: number | null;
+  pb: number | null;
+  market_cap: number | null;
+  is_vn30: boolean;
+  trading_status: "normal" | "warning" | "halted";
+  paper_trading_enabled: boolean;
+};
+
+export type AdminMarketInstrumentPage = {
+  items: AdminMarketInstrumentItem[];
+  total: number;
+  page: number;
+  limit: number;
+  total_pages: number;
+  total_market_cap_vnd: number;
+  total_matched_value_vnd: number;
+};
+
+// Risk & Security Alerts types
+export type AdminAlertItem = {
+  id: string;
+  category:
+    | "whale_trade"
+    | "thesis_flag"
+    | "crawler_failure"
+    | "security_anomaly"
+    | "market_volatility";
+  severity: "high" | "medium" | "low";
+  title: string;
+  description: string;
+  entity_type: string;
+  entity_id: string;
+  occurred_at: string;
+  status: "active" | "resolved" | "dismissed";
+  resolved_at: string | null;
+  resolved_by: string | null;
+  action_suggested: string;
+};
+
+export type AdminAlertPage = {
+  items: AdminAlertItem[];
+  total: number;
+  page: number;
+  limit: number;
+  total_pages: number;
+  high_count: number;
+  medium_count: number;
+  low_count: number;
+  active_count: number;
+};
+
+// Analytics types
+export type TopTraderItem = {
+  rank: number;
+  user_id: string;
+  user_name: string;
+  user_email: string;
+  nickname: string | null;
+  starting_cash: number;
+  cash_balance: number;
+  realized_pnl: number;
+  roi_percent: number;
+  win_rate: number;
+  total_trades: number;
+  holdings_count: number;
+};
+
+export type ExchangeLiquidityItem = {
+  exchange: string;
+  total_symbols: number;
+  total_value_vnd: number;
+  share_percent: number;
+};
+
+export type AssetAllocationSummary = {
+  total_cash_vnd: number;
+  total_equity_vnd: number;
+  cash_share_percent: number;
+  equity_share_percent: number;
+};
+
+export type SectorThesisItem = {
+  sector: string;
+  theses_count: number;
+  win_rate: number;
+  bullish_count: number;
+  bearish_count: number;
+};
+
+export type AdminAnalyticsResponse = {
+  generated_at: string;
+  top_traders: TopTraderItem[];
+  exchange_liquidity: ExchangeLiquidityItem[];
+  asset_allocation: AssetAllocationSummary;
+  sector_theses: SectorThesisItem[];
+  total_capital_deployed_vnd: number;
+  average_portfolio_roi: number;
+};
+
 async function adminFetch<T>(path: string, init?: RequestInit): Promise<T> {
   let session;
   try {
@@ -298,3 +409,68 @@ export function getAdminAuditLogDetail(id: string) {
   return adminFetch<AdminAuditLogItem>(`/audit-logs/${encodeURIComponent(id)}`);
 }
 
+// Market Instruments
+export function getAdminMarketInstruments(params: {
+  symbol?: string;
+  exchange?: string;
+  sector?: string;
+  status?: string;
+  limit?: number;
+  page?: number;
+}) {
+  const query = new URLSearchParams();
+  for (const [key, val] of Object.entries(params)) {
+    if (val !== undefined && val !== "") {
+      query.set(key, String(val));
+    }
+  }
+  return adminFetch<AdminMarketInstrumentPage>(`/market/instruments?${query.toString()}`);
+}
+
+export function updateAdminMarketInstrument(
+  symbol: string,
+  payload: { trading_status?: string; paper_trading_enabled?: boolean }
+) {
+  return adminFetch<AdminMarketInstrumentItem>(
+    `/market/instruments/${encodeURIComponent(symbol)}`,
+    {
+      method: "PATCH",
+      body: JSON.stringify(payload),
+    }
+  );
+}
+
+// Risk & Security Alerts
+export function getAdminAlerts(params: {
+  severity?: string;
+  status?: string;
+  category?: string;
+  limit?: number;
+  page?: number;
+}) {
+  const query = new URLSearchParams();
+  for (const [key, val] of Object.entries(params)) {
+    if (val !== undefined && val !== "") {
+      query.set(key, String(val));
+    }
+  }
+  return adminFetch<AdminAlertPage>(`/alerts?${query.toString()}`);
+}
+
+export function updateAdminAlert(
+  alertId: string,
+  payload: { status: "resolved" | "dismissed"; note?: string }
+) {
+  return adminFetch<{ status: string; alert_id: string; new_status: string }>(
+    `/alerts/${encodeURIComponent(alertId)}`,
+    {
+      method: "PATCH",
+      body: JSON.stringify(payload),
+    }
+  );
+}
+
+// Analytics
+export function getAdminAnalytics() {
+  return adminFetch<AdminAnalyticsResponse>("/analytics");
+}
