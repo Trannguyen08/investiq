@@ -1,5 +1,18 @@
 # Current Task
 
+## Analytics Dashboard KPI Grid CSS Alignment & Styling Fix - 2026-10-28 (complete)
+- **User Request**: "k ăn css" (Hình ảnh đính kèm: 4 thẻ KPI đầu trang Báo cáo & Thống kê /admin/analytics bị dính chữ, thiếu CSS grid layout).
+- **Root Cause**: Trong component `analytics-dashboard.tsx`, các thẻ KPI sử dụng bộ class chưa được định nghĩa trong `globals.css` (`admin-overview-grid`, `admin-metric-card-v2`, `metric-header-v2`, `metric-label-v2`, `metric-value-v2`, `metric-sub-v2`, `admin-btn-action-primary`).
+- **Fixes Applied**:
+  1. *Design System Alignment*: Chuẩn hóa toàn bộ component `analytics-dashboard.tsx` sang hệ thống class chuẩn của Admin (`admin-kpi-grid`, `admin-kpi-card-v2` kèm các biến thể viền màu `.green`, `.amber`, `.purple`, `admin-kpi-header`, `admin-kpi-label`, `admin-kpi-trend`, `admin-kpi-value`, `admin-kpi-sub`, `admin-btn-primary`, `admin-btn-secondary`).
+  2. *CSS Global Extensions*: Bổ sung các rule CSS trong `globals.css` cho `.admin-kpi-header`, `.admin-analytics-charts-grid`, đồng thời tạo alias tương thích ngược cho `.admin-overview-grid`, `.admin-metric-card-v2`.
+  3. *Unit Testing*: Bổ sung file test `analytics-dashboard.test.tsx` (4 tests) kiểm tra toàn diện cả 4 thẻ KPI, Leaderboard table, detail modal và biểu đồ thanh khoản / ngành.
+- **Verification**:
+  - Frontend Vitest: 6/6 admin test files passed (18/18 tests).
+  - TypeScript Typecheck: 0 errors (`tsc --noEmit`).
+  - ESLint: 0 errors.
+  - Đã commit `e00471d` và push đồng bộ lên `origin/feature/admin`.
+
 ## Admin Auth Synchronization, Self-Healing Session & 500 Error Resolution - 2026-10-28 (complete)
 - **User Request**: Khắc phục triệt để toàn bộ 6 lỗi theo chuỗi ảnh: (1) Đăng nhập quay mãi, (2) Đăng nhập admin bị đẩy sang giao diện user, (3) Lỗi runtime "Bạn chưa đăng nhập" tại `authenticatedSession`, (4) Lỗi 500 tại `/admin`, (5) `NEWS_ADMIN_TOKEN is not configured`, (6) Lỗi 500 tại `/admin/analytics`.
 - **Root Causes & Systemic Fixes**:
