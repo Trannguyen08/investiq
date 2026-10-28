@@ -19,7 +19,7 @@ describe("news API client", () => {
 
     await expect(getNews(query)).resolves.toEqual(payload);
     expect(fetchMock).toHaveBeenCalledWith(
-      "http://localhost:8000/api/v1/news?symbol=HOSE%3AFPT&sentiment=positive",
+      "http://127.0.0.1:8000/api/v1/news?symbol=HOSE%3AFPT&sentiment=positive",
       { next: { revalidate: 30 } },
     );
   });
@@ -37,7 +37,7 @@ describe("news API client", () => {
     await getNews(new URLSearchParams({ limit: "3" }), 800);
 
     expect(fetchMock).toHaveBeenCalledWith(
-      "http://localhost:8000/api/v1/news?limit=3",
+      "http://127.0.0.1:8000/api/v1/news?limit=3",
       expect.objectContaining({
         next: { revalidate: 30 },
         signal: expect.any(AbortSignal),
@@ -53,7 +53,7 @@ describe("news API client", () => {
     await getRelatedStockNews("hose", "fpt");
 
     expect(fetchMock).toHaveBeenCalledWith(
-      "http://localhost:8000/api/v1/news?symbol=HOSE%3AFPT&limit=6&page=1",
+      "http://127.0.0.1:8000/api/v1/news?symbol=HOSE%3AFPT&limit=6&page=1",
       expect.objectContaining({
         next: { revalidate: 30 },
         signal: expect.any(AbortSignal),
@@ -84,7 +84,7 @@ describe("market API client compatibility", () => {
 
     expect(fetchMock).toHaveBeenNthCalledWith(
       2,
-      "http://localhost:8000/api/v1/market/instruments?sort=matched_value&direction=desc&limit=15",
+      "http://127.0.0.1:8000/api/v1/market/instruments?sort=matched_value&direction=desc&limit=15",
       { next: { revalidate: 5 } },
     );
     expect(result.data[0].is_vn30).toBe(false);

@@ -7,6 +7,16 @@ export default async function AdminPage() {
   try {
     data = await getAdminOverview();
   } catch (err) {
+    if (
+      err instanceof Error &&
+      (err.message === "NEXT_REDIRECT" ||
+        ("digest" in err &&
+          String((err as unknown as { digest?: string }).digest).startsWith(
+            "NEXT_REDIRECT"
+          )))
+    ) {
+      throw err;
+    }
     errorMsg =
       err instanceof Error
         ? err.message

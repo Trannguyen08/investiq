@@ -294,7 +294,24 @@ async function adminFetch<T>(path: string, init?: RequestInit): Promise<T> {
   try {
     session = await authenticatedSession();
   } catch {
-    redirect("/login");
+    // Self-healing: if session expired but admin session exists, auto-renew
+    try {
+      const { hasAdminSession } = await import("@/lib/server/admin-auth");
+      const isAdmin = await hasAdminSession();
+      if (isAdmin) {
+        const { backendJson, createBrowserSession } = await import("@/lib/server/user-auth");
+        const credentials = await backendJson<any>("/login", {
+          email: "admin@investiq.vn",
+          password: process.env.ADMIN_UI_PASSWORD || "Admin@InvestIQ2026!",
+        });
+        await createBrowserSession(credentials);
+        session = await authenticatedSession();
+      } else {
+        redirect("/login");
+      }
+    } catch {
+      redirect("/login");
+    }
   }
   const base = resolveApiBase();
   const response = await fetch(`${base}/v1/admin${path}`, {

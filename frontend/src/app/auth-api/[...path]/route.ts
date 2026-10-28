@@ -96,6 +96,14 @@ export async function GET(request: Request, context: Context) {
         redirect_uri: redirectUri,
       });
       await createBrowserSession(credentials);
+      if (credentials.user.role === "admin") {
+        try {
+          const { createAdminSession } = await import("@/lib/server/admin-auth");
+          await createAdminSession();
+        } catch {
+          // ignore
+        }
+      }
       return googleCallbackRedirect("/?auth=login-success", request);
     }
     return json({ error: { code: "NOT_FOUND", message: "Không tìm thấy endpoint." } }, 404);
@@ -119,6 +127,14 @@ export async function POST(request: Request, context: Context) {
         email: data.email, password: data.password,
       });
       await createBrowserSession(credentials);
+      if (credentials.user.role === "admin") {
+        try {
+          const { createAdminSession } = await import("@/lib/server/admin-auth");
+          await createAdminSession();
+        } catch {
+          // ignore
+        }
+      }
       return json({ user: credentials.user });
     }
     if (path === "register") {
@@ -137,6 +153,14 @@ export async function POST(request: Request, context: Context) {
         pre_auth_id: preauth.value.id, challenge_id: preauth.value.challengeId, otp: data.otp,
       });
       await createBrowserSession(credentials);
+      if (credentials.user.role === "admin") {
+        try {
+          const { createAdminSession } = await import("@/lib/server/admin-auth");
+          await createAdminSession();
+        } catch {
+          // ignore
+        }
+      }
       return json({ user: credentials.user }, 201);
     }
     if (path === "resend") {
