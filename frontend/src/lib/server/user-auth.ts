@@ -52,13 +52,17 @@ function encryptionKey() {
 async function redis() {
   if (!process.env.AUTH_SESSION_REDIS_URL) return undefined;
   if (!redisClient) {
-    redisClient = createClient({ url: process.env.AUTH_SESSION_REDIS_URL, socket: { connectTimeout: 1500 } });
+    redisClient = createClient({
+      url: process.env.AUTH_SESSION_REDIS_URL,
+      socket: { connectTimeout: 1000, reconnectStrategy: () => false },
+    });
     redisClient.on("error", () => undefined);
   }
   if (!redisClient.isOpen) {
     try {
       await redisClient.connect();
     } catch {
+      redisClient = undefined;
       return undefined;
     }
   }

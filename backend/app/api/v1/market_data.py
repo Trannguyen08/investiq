@@ -421,7 +421,10 @@ def create_watchlist(
         raise HTTPException(status_code=409, detail=str(exc)) from exc
 
 
-@watchlist_router.delete("/{watchlist_id}", status_code=status.HTTP_204_NO_CONTENT)
+@watchlist_router.delete(
+    "/{watchlist_id}", status_code=status.HTTP_204_NO_CONTENT,
+    response_model=None,
+)
 def delete_watchlist(
     watchlist_id: UUID,
     response: Response,
@@ -432,7 +435,10 @@ def delete_watchlist(
         raise HTTPException(status_code=404, detail="Watchlist not found")
 
 
-@watchlist_router.post("/{watchlist_id}/items", status_code=status.HTTP_204_NO_CONTENT)
+@watchlist_router.post(
+    "/{watchlist_id}/items", status_code=status.HTTP_204_NO_CONTENT,
+    response_model=None,
+)
 def add_watchlist_item(
     watchlist_id: UUID,
     body: AddWatchlistItemRequest,
@@ -460,7 +466,10 @@ def add_watchlist_item(
         raise HTTPException(status_code=404, detail=str(exc)) from exc
 
 
-@watchlist_router.delete("/{watchlist_id}/items/{symbol}", status_code=status.HTTP_204_NO_CONTENT)
+@watchlist_router.delete(
+    "/{watchlist_id}/items/{symbol}", status_code=status.HTTP_204_NO_CONTENT,
+    response_model=None,
+)
 def remove_watchlist_item(
     watchlist_id: UUID,
     symbol: str,
