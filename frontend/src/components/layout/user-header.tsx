@@ -22,6 +22,31 @@ function UserAvatar({ name, url }: { name: string; url: string | null }) {
   return <span className="account-avatar" aria-hidden="true">{name.trim().charAt(0).toLocaleUpperCase("vi")}</span>;
 }
 
+function AdminPortalShortcut() {
+  const { user, status } = useAuth();
+  if (status !== "authenticated" || user?.role !== "admin") return null;
+  return (
+    <Link
+      href="/admin"
+      style={{
+        display: "inline-flex",
+        alignItems: "center",
+        padding: "0.35rem 0.75rem",
+        borderRadius: "0.375rem",
+        background: "#2563eb",
+        color: "#ffffff",
+        fontSize: "0.82rem",
+        fontWeight: 600,
+        textDecoration: "none",
+        whiteSpace: "nowrap",
+        marginLeft: "0.25rem",
+      }}
+    >
+      Vào trang Admin
+    </Link>
+  );
+}
+
 function AccountMenu() {
   const { status, user, logout } = useAuth();
   const [open, setOpen] = useState(false);
@@ -64,7 +89,31 @@ function AccountMenu() {
         <UserAvatar name={user.display_name} url={user.avatar_url} />
         <span>{user.display_name}</span><span aria-hidden="true">⌄</span>
       </button>
-      {open && <div className="account-dropdown" role="menu"><button type="button" role="menuitem" onClick={signOut}>Đăng xuất</button>{error && <p role="alert">{error}</p>}</div>}
+      {open && (
+        <div className="account-dropdown" role="menu">
+          {user.role === "admin" && (
+            <Link
+              href="/admin"
+              role="menuitem"
+              onClick={() => setOpen(false)}
+              style={{
+                display: "block",
+                padding: "0.6rem 0.9rem",
+                color: "#2563eb",
+                fontWeight: 700,
+                fontSize: "0.85rem",
+                textDecoration: "none",
+                background: "rgba(37, 99, 235, 0.08)",
+                borderBottom: "1px solid rgba(226, 232, 240, 0.2)",
+              }}
+            >
+              Vào trang quản trị (Admin)
+            </Link>
+          )}
+          <button type="button" role="menuitem" onClick={signOut}>Đăng xuất</button>
+          {error && <p role="alert">{error}</p>}
+        </div>
+      )}
     </div>
   );
 }
@@ -99,7 +148,7 @@ export function UserHeader() {
         <Link className="brand" href="/" aria-label="InvestIQ — trang tổng quan"><img src="/investiq-logo.svg" width="118" height="32" alt="InvestIQ" /></Link>
         <nav className="desktop-nav" aria-label="Điều hướng chính">{userNavigationLinks.map(([href, label]) => { const active = href === "/" ? pathname === "/" : href.startsWith("/market/") ? pathname.startsWith("/market") : pathname.startsWith(href); return <Link className={active ? "nav-link active" : "nav-link"} href={href} key={href} aria-current={active ? "page" : undefined}>{label}</Link>; })}</nav>
         <form action="/market/stocks" className="header-search" role="search"><label className="sr-only" htmlFor="header-search">Tìm mã cổ phiếu hoặc công ty</label><svg aria-hidden="true" viewBox="0 0 24 24"><path d="m21 21-4.4-4.4m2.4-5.1A7.5 7.5 0 1 1 4 11.5a7.5 7.5 0 0 1 15 0Z" /></svg><input id="header-search" name="q" placeholder="Tìm mã cổ phiếu, công ty" /></form>
-        <AccountMenu /><MobileMenu />
+        <AccountMenu /><AdminPortalShortcut /><MobileMenu />
       </div></header>
       <Suspense fallback={null}><AuthMessage /></Suspense>
     </>
