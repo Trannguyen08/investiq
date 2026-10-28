@@ -37,6 +37,13 @@ export default async function AdminThesesPage({
       page,
     });
   } catch (err) {
+    if (
+      err instanceof Error &&
+      (err.message === "NEXT_REDIRECT" ||
+        ("digest" in err && String((err as { digest?: string }).digest).startsWith("NEXT_REDIRECT")))
+    ) {
+      throw err;
+    }
     errorMsg =
       err instanceof Error
         ? err.message

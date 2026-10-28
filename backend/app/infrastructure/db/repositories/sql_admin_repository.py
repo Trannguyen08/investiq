@@ -1059,7 +1059,7 @@ class SqlAdminRepository:
             equity_row = (
                 cur.execute(
                     """
-                    SELECT coalesce(sum(quantity * avg_price), 0)::float AS total_equity
+                    SELECT coalesce(sum(total_cost_basis), 0)::float AS total_equity
                     FROM paper_holdings WHERE quantity > 0;
                     """
                 ).fetchone()
