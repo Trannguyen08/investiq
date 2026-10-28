@@ -2,6 +2,12 @@
 
 ## Comprehensive Enterprise Admin System Architecture & Security Hardening - 2026-10-28 (complete)
 
+### Data Pipeline & News Admin Ingestion Token Hardening - 2026-10-28 (complete)
+- **Issue**: When accessing /admin/data-pipeline, UI displayed NEWS_ADMIN_TOKEN is not configured for the Admin UI.
+- **Root Cause**: Backend protected endpoints /api/v1/admin/news/* require dedicated operational Bearer token NEWS_ADMIN_TOKEN which was not provisioned in local environment.
+- **Fix**: Generated secure operational token and configured it across .env, backend/.env, and frontend/.env.local.
+- **Verification**: Re-launched both FastAPI backend and Next.js frontend; verified /api/v1/admin/news/sources returns 11 sources and crawl runs return 100 runs with HTTP 200 OK.
+
 - **User Request**: "chuyển nhánh feature/admin và xây dựng chức năng cho admin của hệ thống. Yêu cầu UI: có sidebar, màu sáng sủa (trắng xanh dương), không có icon trước text, các giao diện phải có sự hữu dụng. Yêu cầu chức năng: các tab danh mục cần thiết cho admin, cùng format css table, các bảng hiển thị cột cần thiết và nút xem chi tiết đồng nhất, dashboard đa dạng biểu đồ thống kê hiện đại. Yêu cầu coding: thiết kế jwt chặt chẽ (token phải chứa role admin mới được call api), nâng cao security, cache, phân trang, tối ưu truy vấn."
 - **Branch**: Created and switched to `feature/admin` from clean `origin/dev`.
 - **Backend Architecture & Security Hardening**:
