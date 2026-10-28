@@ -4,12 +4,12 @@ import { changeAdminUser } from "@/app/(admin)/admin/actions";
 import { UsersTable } from "@/components/admin/users-table";
 import { currentUser, UserAuthError } from "@/lib/server/user-auth";
 import { getAdminUsers } from "@/lib/server/admin-user-api";
+import { IconSearch, IconReset } from "@/components/admin/admin-icons";
 
 type SearchParams = Promise<{
   q?: string;
   role?: string;
   status?: string;
-  provider?: string;
   cursor?: string;
   notice?: string;
   error?: string;
@@ -56,10 +56,6 @@ export default async function AdminUsersPage({
     params.status === "active" || params.status === "disabled"
       ? params.status
       : "";
-  const provider =
-    params.provider === "password" || params.provider === "google"
-      ? params.provider
-      : "";
   const q = (params.q ?? "").slice(0, 120);
   const cursor =
     params.cursor && params.cursor.length <= 512 ? params.cursor : undefined;
@@ -71,7 +67,6 @@ export default async function AdminUsersPage({
       q,
       role,
       status: accountStatus,
-      provider,
       limit: 20,
       cursor,
     });
@@ -101,6 +96,7 @@ export default async function AdminUsersPage({
   const pages = Math.max(1, Math.ceil(result.total / result.limit));
   const previousUrl = pageUrl(params, result.previous_cursor);
   const nextUrl = pageUrl(params, result.next_cursor);
+  const hasFilters = Boolean(q || role || accountStatus);
 
   return (
     <div>
@@ -129,35 +125,35 @@ export default async function AdminUsersPage({
         </p>
       )}
 
-      {/* FILTER BAR */}
-      <form className="admin-filter-bar" action="/admin/users" method="get" style={{ borderRadius: "0.5rem", marginBottom: "1rem" }}>
+      {/* STREAMLINED FILTER BAR */}
+      <form className="admin-filter-bar-compact" action="/admin/users" method="get">
         <input
           type="search"
           name="q"
-          placeholder="Tìm theo email hoặc họ tên..."
+          placeholder="Tìm kiếm theo email hoặc họ tên..."
           maxLength={120}
           defaultValue={q}
-          className="admin-filter-input"
-          style={{ minWidth: "240px", flex: 1 }}
         />
-        <select name="role" defaultValue={role} className="admin-filter-select">
+        <select name="role" defaultValue={role} aria-label="Lọc theo vai trò">
           <option value="">Tất cả vai trò</option>
           <option value="user">Người dùng</option>
           <option value="admin">Quản trị viên</option>
         </select>
-        <select name="status" defaultValue={accountStatus} className="admin-filter-select">
+        <select name="status" defaultValue={accountStatus} aria-label="Lọc theo trạng thái">
           <option value="">Tất cả trạng thái</option>
           <option value="active">Hoạt động</option>
           <option value="disabled">Đã khóa</option>
         </select>
-        <select name="provider" defaultValue={provider} className="admin-filter-select">
-          <option value="">Tất cả đăng nhập</option>
-          <option value="password">Email</option>
-          <option value="google">Google</option>
-        </select>
-        <button type="submit" className="admin-btn-primary">
-          Lọc dữ liệu
+        <button type="submit" title="Tìm kiếm">
+          <IconSearch width={14} height={14} />
+          <span>Tìm</span>
         </button>
+        {hasFilters && (
+          <Link href="/admin/users" className="admin-reset-link" title="Xóa bộ lọc">
+            <IconReset width={14} height={14} style={{ marginRight: "0.3rem" }} />
+            <span>Đặt lại</span>
+          </Link>
+        )}
       </form>
 
       <UsersTable users={result.items} changeUser={changeAdminUser} />
@@ -191,12 +187,19 @@ export default async function AdminUsersPage({
   );
 }
 
-function pageUrl(params: Awaited<SearchParams>, cursor?: string | null) {
+function pageUrl(
+  params: {
+    q?: string;
+    role?: string;
+    status?: string;
+  },
+  cursor?: string | null
+) {
   const query = new URLSearchParams();
-  for (const key of ["q", "role", "status", "provider"] as const) {
-    const value = params[key];
-    if (value) query.set(key, value);
-  }
+  if (params.q) query.set("q", params.q);
+  if (params.role) query.set("role", params.role);
+  if (params.status) query.set("status", params.status);
   if (cursor) query.set("cursor", cursor);
-  return `/admin/users?${query.toString()}`;
+  const qs = query.toString();
+  return `/admin/users${qs ? `?${qs}` : ""}`;
 }

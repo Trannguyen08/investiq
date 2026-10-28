@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { getAdminTheses } from "@/lib/server/admin-ops-api";
 import { ThesesTable } from "@/components/admin/theses-table";
+import { IconSearch, IconReset } from "@/components/admin/admin-icons";
 
 type SearchParams = Promise<{
   symbol?: string;
@@ -60,6 +61,7 @@ export default async function AdminThesesPage({
 
   const prevPageUrl = pageQueryUrl(params, Math.max(1, page - 1));
   const nextPageUrl = pageQueryUrl(params, Math.min(result.total_pages, page + 1));
+  const hasFilters = Boolean(q || symbol || status || stance);
 
   return (
     <div>
@@ -88,47 +90,42 @@ export default async function AdminThesesPage({
         </p>
       )}
 
-      {/* FILTER BAR */}
+      {/* COMPACT & USEFUL FILTER BAR */}
       <form
-        className="admin-filter-bar"
+        className="admin-filter-bar-compact"
         action="/admin/theses"
         method="get"
-        style={{ borderRadius: "0.5rem", marginBottom: "1rem" }}
       >
         <input
           type="search"
           name="q"
-          placeholder="Tìm theo tiêu đề, tác giả..."
+          placeholder="Tìm kiếm mã CP, tiêu đề hoặc tác giả..."
           maxLength={120}
-          defaultValue={q}
-          className="admin-filter-input"
-          style={{ minWidth: "220px", flex: 1 }}
+          defaultValue={q || symbol}
         />
-        <input
-          type="text"
-          name="symbol"
-          placeholder="Mã CP (VCB, HPG...)"
-          maxLength={10}
-          defaultValue={symbol}
-          className="admin-filter-input"
-          style={{ width: "160px" }}
-        />
-        <select name="stance" defaultValue={stance} className="admin-filter-select">
+        <select name="stance" defaultValue={stance} aria-label="Lọc theo vị thế">
           <option value="">Tất cả vị thế</option>
           <option value="bullish">Tăng (Bullish)</option>
           <option value="bearish">Giảm (Bearish)</option>
           <option value="neutral">Trung lập (Neutral)</option>
         </select>
-        <select name="status" defaultValue={status} className="admin-filter-select">
+        <select name="status" defaultValue={status} aria-label="Lọc theo trạng thái">
           <option value="">Tất cả trạng thái</option>
           <option value="active">Đang theo dõi</option>
           <option value="hit_target">Chạm mục tiêu</option>
           <option value="stopped_out">Cắt lỗ</option>
           <option value="expired">Hết hạn</option>
         </select>
-        <button type="submit" className="admin-btn-primary">
-          Lọc dữ liệu
+        <button type="submit" title="Tìm kiếm">
+          <IconSearch width={14} height={14} />
+          <span>Tìm</span>
         </button>
+        {hasFilters && (
+          <Link href="/admin/theses" className="admin-reset-link" title="Xóa bộ lọc">
+            <IconReset width={14} height={14} style={{ marginRight: "0.3rem" }} />
+            <span>Đặt lại</span>
+          </Link>
+        )}
       </form>
 
       <ThesesTable theses={result.items} />
@@ -179,11 +176,10 @@ export default async function AdminThesesPage({
 
 function pageQueryUrl(params: Awaited<SearchParams>, targetPage: number) {
   const query = new URLSearchParams();
-  for (const key of ["symbol", "status", "stance", "q"] as const) {
-    const val = params[key];
-    if (val) query.set(key, val);
-  }
+  if (params.q) query.set("q", params.q);
+  if (params.symbol) query.set("symbol", params.symbol);
+  if (params.status) query.set("status", params.status);
+  if (params.stance) query.set("stance", params.stance);
   query.set("page", String(targetPage));
   return `/admin/theses?${query.toString()}`;
 }
-

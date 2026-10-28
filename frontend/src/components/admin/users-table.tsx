@@ -3,6 +3,7 @@
 import { useState, type FormEvent } from "react";
 import type { AdminUser } from "@/lib/server/admin-user-api";
 import { AdminDetailModal } from "@/components/admin/admin-detail-modal";
+import { IconView, IconCheck, IconLock, IconUnlock } from "@/components/admin/admin-icons";
 
 type FormAction = (formData: FormData) => Promise<void>;
 
@@ -36,10 +37,12 @@ export function UsersTable({
   return (
     <div className="admin-card">
       <div className="admin-card-header">
-        <h2 className="admin-card-title">Danh sách tài khoản người dùng</h2>
-        <span style={{ fontSize: "0.82rem", color: "#64748b" }}>
-          Khóa tài khoản sẽ lập tức thu hồi toàn bộ phiên đăng nhập
-        </span>
+        <div>
+          <h2 className="admin-card-title">Danh sách tài khoản người dùng</h2>
+          <span style={{ fontSize: "0.8rem", color: "#64748b" }}>
+            Khóa tài khoản sẽ lập tức thu hồi toàn bộ phiên làm việc của người dùng
+          </span>
+        </div>
       </div>
 
       <div className="admin-table-container">
@@ -52,8 +55,8 @@ export function UsersTable({
               <th>Trạng thái</th>
               <th>Xác minh</th>
               <th>Ngày tạo</th>
-              <th>Cập nhật quyền</th>
-              <th style={{ textAlign: "right" }}>Thao tác</th>
+              <th>Cập nhật quyền & Trạng thái</th>
+              <th style={{ textAlign: "right", width: "80px" }}>Thao tác</th>
             </tr>
           </thead>
           <tbody>
@@ -97,7 +100,7 @@ export function UsersTable({
                         fontSize: "0.8rem",
                       }}
                     >
-                      {user.email_verified_at ? "Đã xác minh" : "Chưa xác minh"}
+                      {user.email_verified_at ? "Đã xác minh" : "Chưa"}
                     </span>
                   </td>
                   <td>
@@ -119,7 +122,7 @@ export function UsersTable({
                         name="role"
                         defaultValue=""
                         className="admin-filter-select"
-                        style={{ height: "30px", fontSize: "0.75rem", padding: "0 0.5rem" }}
+                        style={{ height: "32px", fontSize: "0.78rem", padding: "0 0.5rem" }}
                         aria-label={`Vai trò mới của ${user.email}`}
                       >
                         <option value="">Giữ vai trò</option>
@@ -130,30 +133,35 @@ export function UsersTable({
                         name="status"
                         defaultValue=""
                         className="admin-filter-select"
-                        style={{ height: "30px", fontSize: "0.75rem", padding: "0 0.5rem" }}
+                        style={{ height: "32px", fontSize: "0.78rem", padding: "0 0.5rem" }}
                         aria-label={`Trạng thái mới của ${user.email}`}
                       >
                         <option value="">Giữ trạng thái</option>
-                        <option value="active">Hoạt động</option>
+                        <option value="active">Kích hoạt</option>
                         <option value="disabled">Khóa tài khoản</option>
                       </select>
                       <button
                         type="submit"
-                        className="admin-btn-detail"
-                        style={{ padding: "0.2rem 0.6rem" }}
+                        className="admin-icon-btn primary"
+                        title="Lưu thay đổi vai trò / trạng thái"
+                        aria-label="Lưu"
                       >
-                        Lưu
+                        <IconCheck width={15} height={15} />
                       </button>
                     </form>
                   </td>
                   <td style={{ textAlign: "right" }}>
-                    <button
-                      type="button"
-                      className="admin-btn-detail"
-                      onClick={() => setSelectedUser(user)}
-                    >
-                      Xem chi tiết
-                    </button>
+                    <div style={{ display: "inline-flex", gap: "0.35rem" }}>
+                      <button
+                        type="button"
+                        className="admin-icon-btn"
+                        title="Xem chi tiết người dùng"
+                        aria-label="Xem chi tiết"
+                        onClick={() => setSelectedUser(user)}
+                      >
+                        <IconView width={15} height={15} />
+                      </button>
+                    </div>
                   </td>
                 </tr>
               ))
@@ -180,13 +188,11 @@ export function UsersTable({
         >
           <div className="admin-detail-grid">
             <div className="admin-detail-item">
-              <span className="admin-detail-label">Mã tài khoản (User ID)</span>
-              <span className="admin-detail-val">
-                <code>{selectedUser.id}</code>
-              </span>
+              <span className="admin-detail-label">Mã định danh (UUID)</span>
+              <span className="admin-detail-val"><code>{selectedUser.id}</code></span>
             </div>
             <div className="admin-detail-item">
-              <span className="admin-detail-label">Email</span>
+              <span className="admin-detail-label">Địa chỉ Email</span>
               <span className="admin-detail-val">{selectedUser.email}</span>
             </div>
             <div className="admin-detail-item">
@@ -194,45 +200,39 @@ export function UsersTable({
               <span className="admin-detail-val">{selectedUser.display_name}</span>
             </div>
             <div className="admin-detail-item">
-              <span className="admin-detail-label">Phương thức đăng nhập</span>
-              <span className="admin-detail-val">
-                <span className="admin-badge user">
-                  {selectedUser.provider === "google" ? "Google OAuth" : "Mật khẩu (Email/Password)"}
-                </span>
-              </span>
-            </div>
-            <div className="admin-detail-item">
-              <span className="admin-detail-label">Vai trò hiện tại</span>
+              <span className="admin-detail-label">Vai trò hệ thống</span>
               <span className="admin-detail-val">
                 <span className={`admin-badge ${selectedUser.role}`}>
-                  {selectedUser.role === "admin" ? "Quản trị viên (Admin)" : "Người dùng (User)"}
+                  {selectedUser.role === "admin" ? "Quản trị viên" : "Người dùng"}
                 </span>
               </span>
             </div>
             <div className="admin-detail-item">
               <span className="admin-detail-label">Trạng thái tài khoản</span>
               <span className="admin-detail-val">
-                <span
-                  className={`admin-badge ${
-                    selectedUser.status === "active" ? "active" : "disabled"
-                  }`}
-                >
+                <span className={`admin-badge ${selectedUser.status === "active" ? "active" : "disabled"}`}>
                   {selectedUser.status === "active" ? "Đang hoạt động" : "Đã bị vô hiệu hóa"}
                 </span>
               </span>
             </div>
             <div className="admin-detail-item">
-              <span className="admin-detail-label">Xác minh Email</span>
+              <span className="admin-detail-label">Hình thức đăng nhập</span>
+              <span className="admin-detail-val">{selectedUser.provider}</span>
+            </div>
+            <div className="admin-detail-item">
+              <span className="admin-detail-label">Ngày khởi tạo</span>
               <span className="admin-detail-val">
-                {selectedUser.email_verified_at
-                  ? `Đã xác thực lúc ${new Date(selectedUser.email_verified_at).toLocaleString("vi-VN")}`
-                  : "Chưa xác thực OTP"}
+                {selectedUser.created_at
+                  ? new Date(selectedUser.created_at).toLocaleString("vi-VN")
+                  : "N/A"}
               </span>
             </div>
             <div className="admin-detail-item">
-              <span className="admin-detail-label">Ngày tham gia hệ thống</span>
+              <span className="admin-detail-label">Thời điểm xác thực Email</span>
               <span className="admin-detail-val">
-                {new Date(selectedUser.created_at).toLocaleString("vi-VN")}
+                {selectedUser.email_verified_at
+                  ? new Date(selectedUser.email_verified_at).toLocaleString("vi-VN")
+                  : "Chưa xác thực"}
               </span>
             </div>
           </div>

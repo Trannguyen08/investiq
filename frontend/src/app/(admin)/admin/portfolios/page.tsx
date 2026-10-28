@@ -1,6 +1,7 @@
 import Link from "next/link";
-import { getAdminPortfolioDetail, getAdminPortfolios } from "@/lib/server/admin-ops-api";
+import { getAdminPortfolios, getAdminPortfolioDetail } from "@/lib/server/admin-ops-api";
 import { PortfoliosTable } from "@/components/admin/portfolios-table";
+import { IconSearch, IconReset } from "@/components/admin/admin-icons";
 
 type SearchParams = Promise<{
   q?: string;
@@ -38,24 +39,25 @@ export default async function AdminPortfoliosPage({
       <div>
         <div className="admin-view-header">
           <div>
-            <h1>Paper Trading & Lệnh</h1>
+            <h1>Paper Trading & Sổ lệnh</h1>
             <p>Giám sát danh mục đầu tư mô phỏng, số dư vốn và lịch sử khớp lệnh của người dùng.</p>
           </div>
         </div>
         <p className="admin-alert error" role="alert">
-          {errorMsg ?? "Không thể tải danh sách tài khoản Paper Trading."}
+          {errorMsg ?? "Không thể tải danh sách tài khoản."}
         </p>
       </div>
     );
   }
 
-  async function loadDetailAction(id: string) {
-    "use server";
-    return getAdminPortfolioDetail(id).catch(() => null);
-  }
-
   const prevPageUrl = pageQueryUrl(params, Math.max(1, page - 1));
   const nextPageUrl = pageQueryUrl(params, Math.min(result.total_pages, page + 1));
+  const hasFilters = Boolean(q);
+
+  async function loadDetailAction(id: string) {
+    "use server";
+    return getAdminPortfolioDetail(id);
+  }
 
   return (
     <div>
@@ -84,25 +86,29 @@ export default async function AdminPortfoliosPage({
         </p>
       )}
 
-      {/* FILTER BAR */}
+      {/* COMPACT FILTER BAR */}
       <form
-        className="admin-filter-bar"
+        className="admin-filter-bar-compact"
         action="/admin/portfolios"
         method="get"
-        style={{ borderRadius: "0.5rem", marginBottom: "1rem" }}
       >
         <input
           type="search"
           name="q"
-          placeholder="Tìm theo email, tên hoặc nickname..."
+          placeholder="Tìm theo email, tên hiển thị hoặc biệt danh..."
           maxLength={120}
           defaultValue={q}
-          className="admin-filter-input"
-          style={{ minWidth: "260px", flex: 1 }}
         />
-        <button type="submit" className="admin-btn-primary">
-          Lọc danh mục
+        <button type="submit" title="Tìm kiếm">
+          <IconSearch width={14} height={14} />
+          <span>Tìm</span>
         </button>
+        {hasFilters && (
+          <Link href="/admin/portfolios" className="admin-reset-link" title="Xóa bộ lọc">
+            <IconReset width={14} height={14} style={{ marginRight: "0.3rem" }} />
+            <span>Đặt lại</span>
+          </Link>
+        )}
       </form>
 
       <PortfoliosTable
@@ -113,11 +119,11 @@ export default async function AdminPortfoliosPage({
       {/* PAGINATION BAR */}
       <nav
         className="admin-pagination-bar"
-        aria-label="Phân trang Paper Trading"
+        aria-label="Phân trang danh mục"
         style={{ borderRadius: "0.5rem" }}
       >
         <span>
-          Đang xem trang <strong>{result.page}</strong> / {result.total_pages} (Tổng {result.total} tài khoản)
+          Đang xem trang <strong>{result.page}</strong> / {result.total_pages} (Tổng {result.total} danh mục)
         </span>
         <div className="admin-pagination-controls">
           {page > 1 ? (
@@ -160,4 +166,3 @@ function pageQueryUrl(params: Awaited<SearchParams>, targetPage: number) {
   query.set("page", String(targetPage));
   return `/admin/portfolios?${query.toString()}`;
 }
-

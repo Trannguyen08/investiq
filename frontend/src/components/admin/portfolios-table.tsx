@@ -6,6 +6,7 @@ import type {
   AdminPortfolioItem,
 } from "@/lib/server/admin-ops-api";
 import { AdminDetailModal } from "@/components/admin/admin-detail-modal";
+import { IconView } from "@/components/admin/admin-icons";
 
 export function PortfoliosTable({
   portfolios,
@@ -32,10 +33,12 @@ export function PortfoliosTable({
   return (
     <div className="admin-card">
       <div className="admin-card-header">
-        <h2 className="admin-card-title">Danh sách tài khoản Paper Trading</h2>
-        <span style={{ fontSize: "0.82rem", color: "#64748b" }}>
-          Giám sát số dư, danh mục nắm giữ và lịch sử giao dịch mô phỏng
-        </span>
+        <div>
+          <h2 className="admin-card-title">Danh sách tài khoản Paper Trading</h2>
+          <span style={{ fontSize: "0.8rem", color: "#64748b" }}>
+            Giám sát số dư tiền mặt, danh mục nắm giữ và lịch sử giao dịch mô phỏng
+          </span>
+        </div>
       </div>
 
       <div className="admin-table-container">
@@ -50,7 +53,7 @@ export function PortfoliosTable({
               <th>Mã nắm giữ</th>
               <th>Tổng lệnh</th>
               <th>Chế độ</th>
-              <th style={{ textAlign: "right" }}>Thao tác</th>
+              <th style={{ textAlign: "right", width: "80px" }}>Thao tác</th>
             </tr>
           </thead>
           <tbody>
@@ -95,7 +98,7 @@ export function PortfoliosTable({
                     </td>
                     <td>
                       <span className="admin-badge user">
-                        {item.holdings_count} cổ phiếu
+                        {item.holdings_count} mã
                       </span>
                     </td>
                     <td>{item.trades_count} lệnh</td>
@@ -111,11 +114,13 @@ export function PortfoliosTable({
                     <td style={{ textAlign: "right" }}>
                       <button
                         type="button"
-                        className="admin-btn-detail"
+                        className="admin-icon-btn primary"
                         disabled={loadingId === item.id}
+                        title="Xem danh mục & Lịch sử khớp lệnh"
+                        aria-label="Xem chi tiết"
                         onClick={() => handleViewDetail(item)}
                       >
-                        {loadingId === item.id ? "Đang tải..." : "Xem chi tiết"}
+                        <IconView width={15} height={15} />
                       </button>
                     </td>
                   </tr>
@@ -151,25 +156,25 @@ export function PortfoliosTable({
               </span>
             </div>
             <div className="admin-detail-item">
-              <span className="admin-detail-label">Người sở hữu</span>
+              <span className="admin-detail-label">Chủ tài khoản</span>
               <span className="admin-detail-val">
                 {selectedDetail.portfolio.user_name} ({selectedDetail.portfolio.user_email})
               </span>
             </div>
             <div className="admin-detail-item">
-              <span className="admin-detail-label">Vốn khởi tạo</span>
+              <span className="admin-detail-label">Vốn ban đầu</span>
               <span className="admin-detail-val">
                 {selectedDetail.portfolio.starting_cash.toLocaleString("vi-VN")} ₫
               </span>
             </div>
             <div className="admin-detail-item">
-              <span className="admin-detail-label">Tiền mặt khả dụng</span>
+              <span className="admin-detail-label">Số dư tiền mặt hiện tại</span>
               <span className="admin-detail-val">
                 <strong>{selectedDetail.portfolio.cash_balance.toLocaleString("vi-VN")} ₫</strong>
               </span>
             </div>
             <div className="admin-detail-item">
-              <span className="admin-detail-label">Lãi/Lỗ đã chốt</span>
+              <span className="admin-detail-label">Lãi / Lỗ đã hiện thực</span>
               <span className="admin-detail-val">
                 <strong
                   style={{
@@ -177,118 +182,124 @@ export function PortfoliosTable({
                       selectedDetail.portfolio.realized_pnl >= 0 ? "#16a34a" : "#dc2626",
                   }}
                 >
-                  {selectedDetail.portfolio.realized_pnl > 0
-                    ? `+${selectedDetail.portfolio.realized_pnl.toLocaleString("vi-VN")} ₫`
-                    : `${selectedDetail.portfolio.realized_pnl.toLocaleString("vi-VN")} ₫`}
+                  {selectedDetail.portfolio.realized_pnl.toLocaleString("vi-VN")} ₫
                 </strong>
               </span>
             </div>
             <div className="admin-detail-item">
-              <span className="admin-detail-label">Trạng thái chia sẻ Leaderboard</span>
+              <span className="admin-detail-label">Chế độ hiển thị</span>
               <span className="admin-detail-val">
                 <span className={`admin-badge ${selectedDetail.portfolio.is_public ? "active" : "neutral"}`}>
-                  {selectedDetail.portfolio.is_public
-                    ? `Công khai (Nickname: ${selectedDetail.portfolio.nickname ?? "Chưa đặt"})`
-                    : "Chỉ riêng tư"}
+                  {selectedDetail.portfolio.is_public ? "Công khai" : "Riêng tư"}
                 </span>
               </span>
             </div>
           </div>
 
-          {/* HOLDINGS TABLE */}
+          {/* EMBEDDED HOLDINGS TABLE */}
           <div style={{ marginBottom: "1.5rem" }}>
-            <h3 style={{ fontSize: "0.95rem", fontWeight: 700, margin: "0 0 0.5rem", color: "#0f172a" }}>
+            <h4 style={{ margin: "0 0 0.5rem", fontSize: "0.95rem", fontWeight: 700, color: "#0f172a" }}>
               Cổ phiếu đang nắm giữ ({selectedDetail.holdings.length})
-            </h3>
-            {selectedDetail.holdings.length ? (
-              <div className="admin-table-container" style={{ border: "1px solid #e2e8f0", borderRadius: "0.5rem" }}>
-                <table className="admin-table-unified">
-                  <thead>
-                    <tr>
-                      <th>Mã CP</th>
-                      <th>Số lượng</th>
-                      <th>Giá vốn TB</th>
-                      <th>Tổng giá vốn</th>
-                      <th>Cập nhật</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {selectedDetail.holdings.map((h) => (
+            </h4>
+            <div className="admin-table-container">
+              <table className="admin-table-unified">
+                <thead>
+                  <tr>
+                    <th>Mã CP</th>
+                    <th>Khối lượng</th>
+                    <th>Giá vốn trung bình</th>
+                    <th>Tổng giá trị vốn</th>
+                    <th>Cập nhật</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {selectedDetail.holdings.length ? (
+                    selectedDetail.holdings.map((h) => (
                       <tr key={h.symbol}>
-                        <td><strong style={{ color: "#2563eb" }}>{h.symbol}</strong></td>
-                        <td>{h.quantity.toLocaleString("vi-VN")} CP</td>
-                        <td>{Math.round(h.avg_price).toLocaleString("vi-VN")} ₫</td>
+                        <td>
+                          <strong style={{ color: "#2563eb" }}>{h.symbol}</strong>
+                        </td>
+                        <td>{h.quantity.toLocaleString("vi-VN")}</td>
+                        <td>{h.avg_price ? h.avg_price.toLocaleString("vi-VN") + " ₫" : "—"}</td>
                         <td>{h.total_cost_basis.toLocaleString("vi-VN")} ₫</td>
-                        <td>{new Date(h.updated_at).toLocaleDateString("vi-VN")}</td>
+                        <td>{new Date(h.updated_at).toLocaleString("vi-VN")}</td>
                       </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            ) : (
-              <p style={{ color: "#64748b", fontSize: "0.82rem", margin: 0 }}>
-                Tài khoản hiện đang giữ 100% tiền mặt, chưa mua cổ phiếu nào.
-              </p>
-            )}
+                    ))
+                  ) : (
+                    <tr>
+                      <td colSpan={5} style={{ textAlign: "center", color: "#64748b", padding: "1.5rem" }}>
+                        Danh mục hiện đang giữ 100% tiền mặt.
+                      </td>
+                    </tr>
+                  )}
+                </tbody>
+              </table>
+            </div>
           </div>
 
-          {/* RECENT TRADES */}
+          {/* EMBEDDED RECENT TRADES TABLE */}
           <div>
-            <h3 style={{ fontSize: "0.95rem", fontWeight: 700, margin: "0 0 0.5rem", color: "#0f172a" }}>
-              Lịch sử khớp lệnh gần đây ({selectedDetail.recent_trades.length})
-            </h3>
-            {selectedDetail.recent_trades.length ? (
-              <div className="admin-table-container" style={{ border: "1px solid #e2e8f0", borderRadius: "0.5rem" }}>
-                <table className="admin-table-unified">
-                  <thead>
-                    <tr>
-                      <th>Thời gian</th>
-                      <th>Mã CP</th>
-                      <th>Chiều</th>
-                      <th>Khối lượng</th>
-                      <th>Giá khớp</th>
-                      <th>Giá trị</th>
-                      <th>Phí + Thuế</th>
-                      <th>Lãi/Lỗ</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {selectedDetail.recent_trades.map((t) => (
+            <h4 style={{ margin: "0 0 0.5rem", fontSize: "0.95rem", fontWeight: 700, color: "#0f172a" }}>
+              Lịch sử 20 lệnh gần nhất
+            </h4>
+            <div className="admin-table-container">
+              <table className="admin-table-unified">
+                <thead>
+                  <tr>
+                    <th>Thời gian</th>
+                    <th>Mã CP</th>
+                    <th>Chiều</th>
+                    <th>Khối lượng</th>
+                    <th>Giá khớp</th>
+                    <th>Tổng tiền</th>
+                    <th>Lãi/Lỗ</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {selectedDetail.recent_trades.length ? (
+                    selectedDetail.recent_trades.map((t) => (
                       <tr key={t.id}>
                         <td>{new Date(t.created_at).toLocaleString("vi-VN")}</td>
-                        <td><strong>{t.symbol}</strong></td>
                         <td>
-                          <span className={`admin-badge ${t.side === "buy" ? "bullish" : "bearish"}`}>
+                          <strong>{t.symbol}</strong>
+                        </td>
+                        <td>
+                          <span className={`admin-badge ${t.side === "buy" ? "active" : "disabled"}`}>
                             {t.side === "buy" ? "MUA" : "BÁN"}
                           </span>
                         </td>
                         <td>{t.quantity.toLocaleString("vi-VN")}</td>
                         <td>{t.execution_price.toLocaleString("vi-VN")} ₫</td>
                         <td>{t.gross_amount.toLocaleString("vi-VN")} ₫</td>
-                        <td>{(t.fee_amount + t.tax_amount).toLocaleString("vi-VN")} ₫</td>
                         <td>
                           {t.realized_pnl !== null ? (
-                            <strong style={{ color: t.realized_pnl >= 0 ? "#16a34a" : "#dc2626" }}>
-                              {t.realized_pnl > 0 ? `+${t.realized_pnl.toLocaleString("vi-VN")} ₫` : `${t.realized_pnl.toLocaleString("vi-VN")} ₫`}
-                            </strong>
+                            <span
+                              style={{
+                                color: t.realized_pnl >= 0 ? "#16a34a" : "#dc2626",
+                                fontWeight: 600,
+                              }}
+                            >
+                              {t.realized_pnl.toLocaleString("vi-VN")} ₫
+                            </span>
                           ) : (
-                            <span style={{ color: "#94a3b8" }}>—</span>
+                            "—"
                           )}
                         </td>
                       </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            ) : (
-              <p style={{ color: "#64748b", fontSize: "0.82rem", margin: 0 }}>
-                Chưa có lệnh giao dịch nào được thực hiện.
-              </p>
-            )}
+                    ))
+                  ) : (
+                    <tr>
+                      <td colSpan={7} style={{ textAlign: "center", color: "#64748b", padding: "1.5rem" }}>
+                        Chưa có lệnh giao dịch nào được ghi nhận.
+                      </td>
+                    </tr>
+                  )}
+                </tbody>
+              </table>
+            </div>
           </div>
         </AdminDetailModal>
       )}
     </div>
   );
 }
-

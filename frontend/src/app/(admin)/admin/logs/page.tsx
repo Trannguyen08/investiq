@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { getAdminAuditLogs } from "@/lib/server/admin-ops-api";
 import { AuditLogsTable } from "@/components/admin/audit-logs-table";
+import { IconSearch, IconReset, IconArrowUpRight } from "@/components/admin/admin-icons";
 
 type SearchParams = Promise<{
   category?: string;
@@ -10,7 +11,7 @@ type SearchParams = Promise<{
   error?: string;
 }>;
 
-export default async function AdminLogsPage({
+export default async function AdminAuditLogsPage({
   searchParams,
 }: {
   searchParams: SearchParams;
@@ -19,8 +20,6 @@ export default async function AdminLogsPage({
   const page = Math.max(1, Number(params.page || 1));
   const category = params.category ?? "";
   const outcome = params.outcome ?? "";
-  const logViewerUrl =
-    process.env.NEXT_PUBLIC_LOG_VIEWER_URL ?? "http://localhost:9999";
 
   let result = null;
   let errorMsg = null;
@@ -44,7 +43,7 @@ export default async function AdminLogsPage({
         <div className="admin-view-header">
           <div>
             <h1>Nhật ký & Giám sát hệ thống</h1>
-            <p>Kiểm toán an ninh, nhật ký truy cập và runtime console logs.</p>
+            <p>Kiểm toán an ninh, lưu vết truy cập và liên kết trực tiếp tới Runtime Container Logs.</p>
           </div>
         </div>
         <p className="admin-alert error" role="alert">
@@ -56,6 +55,8 @@ export default async function AdminLogsPage({
 
   const prevPageUrl = pageQueryUrl(params, Math.max(1, page - 1));
   const nextPageUrl = pageQueryUrl(params, Math.min(result.total_pages, page + 1));
+  const logViewerUrl = process.env.ADMIN_LOG_VIEWER_URL || "http://localhost:8888";
+  const hasFilters = Boolean(category || outcome);
 
   return (
     <div>
@@ -73,8 +74,10 @@ export default async function AdminLogsPage({
             target="_blank"
             rel="noreferrer"
             title="Mở trình xem log runtime Dozzle chạy trên localhost"
+            style={{ display: "inline-flex", alignItems: "center", gap: "0.35rem" }}
           >
-            Mở Dozzle Runtime Log Viewer ↗
+            <span>Dozzle Runtime Log Viewer</span>
+            <IconArrowUpRight width={14} height={14} />
           </a>
         </div>
       </div>
@@ -90,31 +93,35 @@ export default async function AdminLogsPage({
         </p>
       )}
 
-      {/* FILTER BAR */}
+      {/* COMPACT FILTER BAR */}
       <form
-        className="admin-filter-bar"
+        className="admin-filter-bar-compact"
         action="/admin/logs"
         method="get"
-        style={{ borderRadius: "0.5rem", marginBottom: "1rem" }}
       >
         <input
           type="search"
           name="category"
-          placeholder="Lọc loại sự kiện (auth, admin, thesis...)"
+          placeholder="Lọc loại sự kiện (auth, admin, thesis, status...)..."
           maxLength={60}
           defaultValue={category}
-          className="admin-filter-input"
-          style={{ minWidth: "260px", flex: 1 }}
         />
-        <select name="outcome" defaultValue={outcome} className="admin-filter-select">
+        <select name="outcome" defaultValue={outcome} aria-label="Lọc theo kết quả">
           <option value="">Tất cả kết quả</option>
-          <option value="succeeded">Thành công (Succeeded)</option>
-          <option value="denied">Bị từ chối (Denied)</option>
-          <option value="failed">Thất bại (Failed)</option>
+          <option value="succeeded">Thành công</option>
+          <option value="denied">Bị từ chối</option>
+          <option value="failed">Thất bại</option>
         </select>
-        <button type="submit" className="admin-btn-primary">
-          Lọc sự kiện
+        <button type="submit" title="Tìm kiếm">
+          <IconSearch width={14} height={14} />
+          <span>Tìm</span>
         </button>
+        {hasFilters && (
+          <Link href="/admin/logs" className="admin-reset-link" title="Xóa bộ lọc">
+            <IconReset width={14} height={14} style={{ marginRight: "0.3rem" }} />
+            <span>Đặt lại</span>
+          </Link>
+        )}
       </form>
 
       <AuditLogsTable logs={result.items} />
@@ -122,7 +129,7 @@ export default async function AdminLogsPage({
       {/* PAGINATION BAR */}
       <nav
         className="admin-pagination-bar"
-        aria-label="Phân trang Audit Logs"
+        aria-label="Phân trang kiểm toán"
         style={{ borderRadius: "0.5rem" }}
       >
         <span>
@@ -165,10 +172,8 @@ export default async function AdminLogsPage({
 
 function pageQueryUrl(params: Awaited<SearchParams>, targetPage: number) {
   const query = new URLSearchParams();
-  for (const key of ["category", "outcome"] as const) {
-    const val = params[key];
-    if (val) query.set(key, val);
-  }
+  if (params.category) query.set("category", params.category);
+  if (params.outcome) query.set("outcome", params.outcome);
   query.set("page", String(targetPage));
   return `/admin/logs?${query.toString()}`;
 }

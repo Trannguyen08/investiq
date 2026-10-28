@@ -3,6 +3,7 @@
 import { useState } from "react";
 import type { AdminAuditLogItem } from "@/lib/server/admin-ops-api";
 import { AdminDetailModal } from "@/components/admin/admin-detail-modal";
+import { IconView } from "@/components/admin/admin-icons";
 
 export function AuditLogsTable({ logs }: { logs: AdminAuditLogItem[] }) {
   const [selectedLog, setSelectedLog] = useState<AdminAuditLogItem | null>(null);
@@ -10,10 +11,12 @@ export function AuditLogsTable({ logs }: { logs: AdminAuditLogItem[] }) {
   return (
     <div className="admin-card">
       <div className="admin-card-header">
-        <h2 className="admin-card-title">Nhật ký kiểm toán an ninh hệ thống (Audit Logs)</h2>
-        <span style={{ fontSize: "0.82rem", color: "#64748b" }}>
-          Lưu vết bảo mật các hành vi quản trị, đăng nhập và phân quyền
-        </span>
+        <div>
+          <h2 className="admin-card-title">Nhật ký kiểm toán an ninh hệ thống (Audit Logs)</h2>
+          <span style={{ fontSize: "0.8rem", color: "#64748b" }}>
+            Lưu vết bảo mật bất biến các hành vi quản trị, đăng nhập và phân quyền
+          </span>
+        </div>
       </div>
 
       <div className="admin-table-container">
@@ -26,7 +29,7 @@ export function AuditLogsTable({ logs }: { logs: AdminAuditLogItem[] }) {
               <th>Đối tượng tác động</th>
               <th>Kết quả</th>
               <th>Mã Request</th>
-              <th style={{ textAlign: "right" }}>Thao tác</th>
+              <th style={{ textAlign: "right", width: "80px" }}>Thao tác</th>
             </tr>
           </thead>
           <tbody>
@@ -68,7 +71,7 @@ export function AuditLogsTable({ logs }: { logs: AdminAuditLogItem[] }) {
                         item.outcome === "succeeded" ? "active" : "disabled"
                       }`}
                     >
-                      {item.outcome === "succeeded" ? "Thành công" : "Từ chối / Lỗi"}
+                      {item.outcome === "succeeded" ? "Thành công" : "Từ chối"}
                     </span>
                   </td>
                   <td>
@@ -79,10 +82,12 @@ export function AuditLogsTable({ logs }: { logs: AdminAuditLogItem[] }) {
                   <td style={{ textAlign: "right" }}>
                     <button
                       type="button"
-                      className="admin-btn-detail"
+                      className="admin-icon-btn primary"
+                      title="Xem chi tiết sự kiện kiểm toán"
+                      aria-label="Xem chi tiết"
                       onClick={() => setSelectedLog(item)}
                     >
-                      Xem chi tiết
+                      <IconView width={15} height={15} />
                     </button>
                   </td>
                 </tr>
@@ -106,44 +111,37 @@ export function AuditLogsTable({ logs }: { logs: AdminAuditLogItem[] }) {
         <AdminDetailModal
           isOpen={Boolean(selectedLog)}
           onClose={() => setSelectedLog(null)}
-          title={`Chi tiết sự kiện: ${selectedLog.event_type}`}
-          isLarge
+          title={`Chi tiết sự kiện kiểm toán: ${selectedLog.event_type}`}
         >
-          <div className="admin-detail-grid" style={{ marginBottom: "1.5rem" }}>
+          <div className="admin-detail-grid">
             <div className="admin-detail-item">
-              <span className="admin-detail-label">Mã bản ghi (Log ID)</span>
+              <span className="admin-detail-label">Mã định danh sự kiện</span>
               <span className="admin-detail-val">
                 <code>{selectedLog.id}</code>
               </span>
             </div>
             <div className="admin-detail-item">
-              <span className="admin-detail-label">Thời gian phát sinh</span>
+              <span className="admin-detail-label">Nguồn sự kiện</span>
+              <span className="admin-detail-val">
+                <span className="admin-badge admin">{selectedLog.source_type}</span>
+              </span>
+            </div>
+            <div className="admin-detail-item">
+              <span className="admin-detail-label">Thời gian xảy ra</span>
               <span className="admin-detail-val">
                 {new Date(selectedLog.occurred_at).toLocaleString("vi-VN")}
               </span>
             </div>
             <div className="admin-detail-item">
-              <span className="admin-detail-label">Người thực hiện</span>
+              <span className="admin-detail-label">Tài khoản thực hiện</span>
               <span className="admin-detail-val">
-                {selectedLog.actor_email ? (
-                  <span>
-                    {selectedLog.actor_email} (<code>{selectedLog.actor_id}</code>)
-                  </span>
-                ) : (
-                  "Hệ thống (Tự động)"
-                )}
+                {selectedLog.actor_email ?? selectedLog.actor_id ?? "Hệ thống"}
               </span>
             </div>
             <div className="admin-detail-item">
-              <span className="admin-detail-label">Kết quả kiểm tra</span>
+              <span className="admin-detail-label">Loại sự kiện (Event Type)</span>
               <span className="admin-detail-val">
-                <span
-                  className={`admin-badge ${
-                    selectedLog.outcome === "succeeded" ? "active" : "disabled"
-                  }`}
-                >
-                  {selectedLog.outcome === "succeeded" ? "Thành công (Succeeded)" : "Bị chặn / Từ chối (Denied)"}
-                </span>
+                <code>{selectedLog.event_type}</code>
               </span>
             </div>
             <div className="admin-detail-item">
@@ -151,19 +149,28 @@ export function AuditLogsTable({ logs }: { logs: AdminAuditLogItem[] }) {
               <span className="admin-detail-val">{selectedLog.target ?? "N/A"}</span>
             </div>
             <div className="admin-detail-item">
-              <span className="admin-detail-label">Mã yêu cầu (Request ID)</span>
+              <span className="admin-detail-label">Kết quả xử lý</span>
               <span className="admin-detail-val">
-                <code>{selectedLog.request_id ?? "unknown"}</code>
+                <span
+                  className={`admin-badge ${
+                    selectedLog.outcome === "succeeded" ? "active" : "disabled"
+                  }`}
+                >
+                  {selectedLog.outcome === "succeeded" ? "Thành công" : "Bị chặn / Lỗi"}
+                </span>
               </span>
             </div>
-          </div>
-
-          <div>
-            <h3 style={{ fontSize: "0.95rem", fontWeight: 700, margin: "0 0 0.5rem", color: "#0f172a" }}>
-              Dữ liệu chi tiết sự kiện (JSON Payload)
-            </h3>
-            <div className="admin-json-viewer">
-              {JSON.stringify(selectedLog.details, null, 2)}
+            <div className="admin-detail-item">
+              <span className="admin-detail-label">Mã phiên truy vấn (Request ID)</span>
+              <span className="admin-detail-val">
+                <code>{selectedLog.request_id}</code>
+              </span>
+            </div>
+            <div className="admin-detail-item col-span-2">
+              <span className="admin-detail-label">Dữ liệu chi tiết đính kèm (JSON Payload)</span>
+              <pre className="admin-json-viewer">
+                {JSON.stringify(selectedLog.details, null, 2)}
+              </pre>
             </div>
           </div>
         </AdminDetailModal>
@@ -171,4 +178,3 @@ export function AuditLogsTable({ logs }: { logs: AdminAuditLogItem[] }) {
     </div>
   );
 }
-

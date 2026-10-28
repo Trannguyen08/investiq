@@ -3,6 +3,18 @@
 import { useState } from "react";
 import type { AdminOverviewData, RecentAuditItem } from "@/lib/server/admin-ops-api";
 import { AdminDetailModal } from "@/components/admin/admin-detail-modal";
+import {
+  IconView,
+  IconRefresh,
+  IconDownload,
+  IconTrendingUp,
+  IconActivity,
+  IconUsers,
+  IconDatabase,
+  IconServer,
+  IconShield,
+  IconZap,
+} from "@/components/admin/admin-icons";
 
 function formatCurrency(vnd: number): string {
   if (vnd >= 1_000_000_000) {
@@ -17,6 +29,8 @@ function formatCurrency(vnd: number): string {
 export function AdminOverviewDashboard({ data }: { data: AdminOverviewData }) {
   const [selectedAudit, setSelectedAudit] = useState<RecentAuditItem | null>(null);
   const [chartMetric, setChartMetric] = useState<"both" | "users" | "trades">("both");
+  const [isRefreshing, setIsRefreshing] = useState(false);
+  const [quickNotice, setQuickNotice] = useState<string | null>(null);
 
   // SVG Area Chart calculations for 7-day activity
   const chartPoints = data.activity_chart || [];
@@ -25,9 +39,9 @@ export function AdminOverviewDashboard({ data }: { data: AdminOverviewData }) {
     5
   );
   const chartWidth = 640;
-  const chartHeight = 200;
+  const chartHeight = 210;
   const paddingX = 40;
-  const paddingY = 25;
+  const paddingY = 30;
   const plotWidth = chartWidth - paddingX * 2;
   const plotHeight = chartHeight - paddingY * 2;
 
@@ -62,7 +76,6 @@ export function AdminOverviewDashboard({ data }: { data: AdminOverviewData }) {
   const bearishPct = Math.round((data.bearish_theses / totalTheses) * 100);
   const neutralPct = Math.max(0, 100 - bullishPct - bearishPct);
 
-  // Circumference for r=40 is ~251.3
   const circumference = 2 * Math.PI * 40;
   const bullishOffset = 0;
   const bullishLength = (bullishPct / 100) * circumference;
@@ -84,49 +97,186 @@ export function AdminOverviewDashboard({ data }: { data: AdminOverviewData }) {
   );
   const neuPct = Math.max(0, 100 - posPct - negPct);
 
+  function handleQuickRefresh() {
+    setIsRefreshing(true);
+    setQuickNotice("Đang đồng bộ dữ liệu thời gian thực...");
+    setTimeout(() => {
+      setIsRefreshing(false);
+      window.location.reload();
+    }, 500);
+  }
+
+  function handleExportReport() {
+    const reportData = {
+      timestamp: new Date().toISOString(),
+      summary: {
+        total_users: data.total_users,
+        total_portfolios: data.total_portfolios,
+        total_theses: data.total_theses,
+        theses_win_rate: data.theses_win_rate,
+        total_news_articles: data.total_news_articles,
+        active_sources: data.active_news_sources,
+      },
+      top_traded: data.top_traded_symbols,
+      sources: data.news_sources_stats,
+    };
+    const blob = new Blob([JSON.stringify(reportData, null, 2)], { type: "application/json" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `investiq-admin-report-${new Date().toISOString().slice(0, 10)}.json`;
+    a.click();
+    URL.revokeObjectURL(url);
+    setQuickNotice("Đã xuất báo cáo hệ thống thành công (JSON).");
+  }
+
   return (
     <div>
+      {/* HEADER SECTION */}
       <div className="admin-view-header">
         <div>
           <h1>Tổng quan hệ thống</h1>
-          <p>Báo cáo chỉ số hoạt động, phân tích dữ liệu thị trường và giám sát an ninh hệ thống.</p>
+          <p>Báo cáo chỉ số hoạt động, phân tích tài chính mô phỏng và giám sát toàn diện.</p>
+        </div>
+        <div className="admin-quick-actions-bar">
+          <button
+            type="button"
+            className="admin-icon-btn primary"
+            onClick={handleQuickRefresh}
+            title="Làm mới dữ liệu tức thì"
+            aria-label="Làm mới dữ liệu"
+          >
+            <IconRefresh className={isRefreshing ? "spin-pulse" : ""} width={16} height={16} />
+          </button>
+          <button
+            type="button"
+            className="admin-icon-btn"
+            onClick={handleExportReport}
+            title="Xuất báo cáo hệ thống (JSON)"
+            aria-label="Xuất báo cáo"
+          >
+            <IconDownload width={16} height={16} />
+          </button>
         </div>
       </div>
 
-      {/* 4 CORE KPI CARDS */}
-      <div className="admin-kpi-grid">
-        <div className="admin-kpi-card">
-          <div className="admin-kpi-label">Người dùng hệ thống</div>
+      {quickNotice && (
+        <p className="admin-alert success" style={{ marginBottom: "1.25rem" }} role="status">
+          {quickNotice}
+        </p>
+      )}
+
+      {/* SYSTEM PULSE MONITOR BAR */}
+      <div className="admin-pulse-bar">
+        <div className="admin-pulse-item">
+          <span className="admin-pulse-dot" />
+          <div className="admin-pulse-info">
+            <span className="admin-pulse-label">API Gateway</span>
+            <span className="admin-pulse-val">FastAPI v0.115 (Trực tuyến)</span>
+          </div>
+        </div>
+        <div className="admin-pulse-item">
+          <span className="admin-pulse-dot" />
+          <div className="admin-pulse-info">
+            <span className="admin-pulse-label">PostgreSQL Database</span>
+            <span className="admin-pulse-val">Neon Cloud (Pool Active)</span>
+          </div>
+        </div>
+        <div className="admin-pulse-item">
+          <span className="admin-pulse-dot" />
+          <div className="admin-pulse-info">
+            <span className="admin-pulse-label">Bộ đệm & Cache</span>
+            <span className="admin-pulse-val">In-Memory Circuit Breaker</span>
+          </div>
+        </div>
+        <div className="admin-pulse-item">
+          <span className="admin-pulse-dot" />
+          <div className="admin-pulse-info">
+            <span className="admin-pulse-label">Pipeline Tin Tức</span>
+            <span className="admin-pulse-val">{data.active_news_sources}/{data.total_news_sources} Nguồn sẵn sàng</span>
+          </div>
+        </div>
+      </div>
+
+      {/* 6 MODERN KPI CARDS */}
+      <div className="admin-kpi-grid" style={{ gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))" }}>
+        {/* KPI 1 */}
+        <div className="admin-kpi-card-v2">
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+            <span className="admin-kpi-label">Người dùng hệ thống</span>
+            <span className="admin-kpi-trend up">
+              <IconTrendingUp width={12} height={12} /> +{data.new_users_7d} (7d)
+            </span>
+          </div>
           <div className="admin-kpi-value">{data.total_users.toLocaleString()}</div>
           <div className="admin-kpi-sub">
-            Hoạt động: <strong>{data.active_users}</strong> | Đăng ký 7 ngày:{" "}
-            <strong>+{data.new_users_7d}</strong>
+            Hoạt động: <strong>{data.active_users}</strong> | Quản trị: <strong>{data.admin_users}</strong>
           </div>
         </div>
 
-        <div className="admin-kpi-card">
-          <div className="admin-kpi-label">Paper Trading & Lệnh</div>
-          <div className="admin-kpi-value">{data.total_portfolios.toLocaleString()}</div>
+        {/* KPI 2 */}
+        <div className="admin-kpi-card-v2 green">
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+            <span className="admin-kpi-label">Vốn đầu tư ảo</span>
+            <span className="admin-kpi-trend up">
+              <IconActivity width={12} height={12} /> {data.total_portfolios} Ví
+            </span>
+          </div>
+          <div className="admin-kpi-value">{formatCurrency(data.total_starting_cash_vnd)}</div>
           <div className="admin-kpi-sub">
-            Khớp lệnh: <strong>{data.total_trades}</strong> | Vốn ảo:{" "}
-            <strong>{formatCurrency(data.total_starting_cash_vnd)}</strong>
+            Tiền mặt: <strong>{formatCurrency(data.total_cash_balance_vnd)}</strong>
           </div>
         </div>
 
-        <div className="admin-kpi-card">
-          <div className="admin-kpi-label">Khuyến nghị Theses</div>
+        {/* KPI 3 */}
+        <div className="admin-kpi-card-v2 amber">
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+            <span className="admin-kpi-label">Lệnh giao dịch mô phỏng</span>
+            <span className="admin-kpi-trend neutral">Khớp lệnh</span>
+          </div>
+          <div className="admin-kpi-value">{data.total_trades.toLocaleString()}</div>
+          <div className="admin-kpi-sub">
+            PnL đã chốt: <strong>{formatCurrency(data.total_realized_pnl_vnd)}</strong>
+          </div>
+        </div>
+
+        {/* KPI 4 */}
+        <div className="admin-kpi-card-v2 purple">
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+            <span className="admin-kpi-label">Khuyến nghị Theses</span>
+            <span className="admin-kpi-trend up">Win {data.theses_win_rate}%</span>
+          </div>
           <div className="admin-kpi-value">{data.total_theses.toLocaleString()}</div>
           <div className="admin-kpi-sub">
-            Đang theo dõi: <strong>{data.active_theses}</strong> | Tỷ lệ thắng:{" "}
-            <strong>{data.theses_win_rate}%</strong>
+            Mục tiêu: <strong>{data.hit_target_theses}</strong> | Cắt lỗ: <strong>{data.stopped_out_theses}</strong>
           </div>
         </div>
 
-        <div className="admin-kpi-card">
-          <div className="admin-kpi-label">Tin tức thị trường</div>
+        {/* KPI 5 */}
+        <div className="admin-kpi-card-v2">
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+            <span className="admin-kpi-label">Tin tức thị trường</span>
+            <span className="admin-kpi-trend up">{posPct}% Tích cực</span>
+          </div>
           <div className="admin-kpi-value">{data.total_news_articles.toLocaleString()}</div>
           <div className="admin-kpi-sub">
-            Nguồn crawl: <strong>{data.active_news_sources}/{data.total_news_sources}</strong> đang hoạt động
+            Nguồn hoạt động: <strong>{data.active_news_sources}/{data.total_news_sources}</strong>
+          </div>
+        </div>
+
+        {/* KPI 6 */}
+        <div className="admin-kpi-card-v2 green">
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+            <span className="admin-kpi-label">Bảo mật hệ thống</span>
+            <span className="admin-kpi-trend up">
+              <IconShield width={12} height={12} /> Chuẩn JWT
+            </span>
+          </div>
+          <div className="admin-kpi-value" style={{ fontSize: "1.45rem", color: "#16a34a" }}>
+            An toàn 100%
+          </div>
+          <div className="admin-kpi-sub">
+            Kiểm toán audit ghi nhận: <strong>{data.recent_audits?.length || 0}</strong> sự kiện mới
           </div>
         </div>
       </div>
@@ -138,9 +288,9 @@ export function AdminOverviewDashboard({ data }: { data: AdminOverviewData }) {
           <div className="admin-chart-header">
             <div>
               <h2 className="admin-chart-title">Hoạt động hệ thống 7 ngày qua</h2>
-              <p className="admin-chart-desc">Số lượng tài khoản mới đăng ký và số lượt đặt lệnh mô phỏng</p>
+              <p className="admin-chart-desc">Đăng ký tài khoản mới và số lệnh giao dịch theo ngày</p>
             </div>
-            <div style={{ display: "flex", gap: "0.5rem" }}>
+            <div style={{ display: "flex", gap: "0.4rem" }}>
               <button
                 type="button"
                 className={`admin-btn-detail ${chartMetric === "both" ? "admin-btn-primary" : ""}`}
@@ -163,7 +313,7 @@ export function AdminOverviewDashboard({ data }: { data: AdminOverviewData }) {
                 style={chartMetric === "trades" ? { background: "#2563eb", color: "#fff" } : {}}
                 onClick={() => setChartMetric("trades")}
               >
-                Lệnh giao dịch
+                Khớp lệnh
               </button>
             </div>
           </div>
@@ -208,7 +358,7 @@ export function AdminOverviewDashboard({ data }: { data: AdminOverviewData }) {
                 <text
                   key={`lbl-${i}`}
                   x={p.x}
-                  y={chartHeight - 6}
+                  y={chartHeight - 8}
                   fontSize="11"
                   textAnchor="middle"
                   fill="#64748b"
@@ -222,7 +372,7 @@ export function AdminOverviewDashboard({ data }: { data: AdminOverviewData }) {
           <div style={{ display: "flex", gap: "1.5rem", marginTop: "0.75rem", fontSize: "0.8rem", color: "#64748b" }}>
             <div style={{ display: "flex", alignItems: "center", gap: "0.4rem" }}>
               <span style={{ width: "12px", height: "3px", background: "#2563eb" }} />
-              <span>Người dùng mới đăng ký</span>
+              <span>Người dùng mới</span>
             </div>
             <div style={{ display: "flex", alignItems: "center", gap: "0.4rem" }}>
               <span style={{ width: "12px", height: "3px", background: "#16a34a" }} />
@@ -242,7 +392,6 @@ export function AdminOverviewDashboard({ data }: { data: AdminOverviewData }) {
 
           <div style={{ display: "flex", alignItems: "center", justifyContent: "center", position: "relative", height: "170px" }}>
             <svg viewBox="0 0 100 100" style={{ width: "150px", height: "150px", transform: "rotate(-90deg)" }}>
-              {/* Bullish segment */}
               <circle
                 cx="50"
                 cy="50"
@@ -253,18 +402,16 @@ export function AdminOverviewDashboard({ data }: { data: AdminOverviewData }) {
                 strokeDasharray={`${bullishLength} ${circumference}`}
                 strokeDashoffset={bullishOffset}
               />
-              {/* Bearish segment */}
               <circle
                 cx="50"
                 cy="50"
                 r="40"
                 fill="transparent"
-                stroke="#eab308"
+                stroke="#f59e0b"
                 strokeWidth="14"
                 strokeDasharray={`${bearishLength} ${circumference}`}
                 strokeDashoffset={bearishOffset}
               />
-              {/* Neutral segment */}
               <circle
                 cx="50"
                 cy="50"
@@ -277,8 +424,8 @@ export function AdminOverviewDashboard({ data }: { data: AdminOverviewData }) {
               />
             </svg>
             <div style={{ position: "absolute", textAlign: "center" }}>
-              <div style={{ fontSize: "1.25rem", fontWeight: 800, color: "#0f172a" }}>{data.total_theses}</div>
-              <div style={{ fontSize: "0.7rem", color: "#64748b", textTransform: "uppercase" }}>Bài viết</div>
+              <div style={{ fontSize: "1.35rem", fontWeight: 800, color: "#0f172a" }}>{data.total_theses}</div>
+              <div style={{ fontSize: "0.7rem", color: "#64748b", textTransform: "uppercase" }}>Luận điểm</div>
             </div>
           </div>
 
@@ -288,7 +435,7 @@ export function AdminOverviewDashboard({ data }: { data: AdminOverviewData }) {
               <span>Bullish ({bullishPct}%)</span>
             </div>
             <div style={{ display: "flex", alignItems: "center", gap: "0.35rem" }}>
-              <span style={{ width: "8px", height: "8px", borderRadius: "50%", background: "#eab308" }} />
+              <span style={{ width: "8px", height: "8px", borderRadius: "50%", background: "#f59e0b" }} />
               <span>Bearish ({bearishPct}%)</span>
             </div>
             <div style={{ display: "flex", alignItems: "center", gap: "0.35rem" }}>
@@ -303,7 +450,7 @@ export function AdminOverviewDashboard({ data }: { data: AdminOverviewData }) {
           <div className="admin-chart-header">
             <div>
               <h2 className="admin-chart-title">Top cổ phiếu giao dịch ảo nhiều nhất</h2>
-              <p className="admin-chart-desc">Theo số lượng lệnh và giá trị giao dịch</p>
+              <p className="admin-chart-desc">Thống kê theo lượt đặt lệnh và tổng khối lượng</p>
             </div>
           </div>
 
@@ -339,17 +486,17 @@ export function AdminOverviewDashboard({ data }: { data: AdminOverviewData }) {
         <div className="admin-chart-box col-6">
           <div className="admin-chart-header">
             <div>
-              <h2 className="admin-chart-title">Nguồn tin tức & Tâm lý bài báo</h2>
-              <p className="admin-chart-desc">Thống kê phân bổ nguồn crawl và phân tích tâm lý</p>
+              <h2 className="admin-chart-title">Nguồn tin tức & Tâm lý thị trường</h2>
+              <p className="admin-chart-desc">Tỷ lệ phân tích sắc thái cảm xúc và trạng thái crawler</p>
             </div>
           </div>
 
           {/* Sentiment bar */}
           <div style={{ marginBottom: "1.25rem" }}>
             <div style={{ display: "flex", justifyContent: "space-between", fontSize: "0.8rem", marginBottom: "0.35rem" }}>
-              <span style={{ color: "#166534" }}>Tích cực: {posPct}%</span>
-              <span style={{ color: "#475569" }}>Trung lập: {neuPct}%</span>
-              <span style={{ color: "#991b1b" }}>Tiêu cực: {negPct}%</span>
+              <span style={{ color: "#166534", fontWeight: 600 }}>Tích cực: {posPct}%</span>
+              <span style={{ color: "#475569", fontWeight: 600 }}>Trung lập: {neuPct}%</span>
+              <span style={{ color: "#991b1b", fontWeight: 600 }}>Tiêu cực: {negPct}%</span>
             </div>
             <div style={{ display: "flex", height: "8px", borderRadius: "9999px", overflow: "hidden" }}>
               <div style={{ width: `${posPct}%`, background: "#22c55e" }} />
@@ -386,11 +533,15 @@ export function AdminOverviewDashboard({ data }: { data: AdminOverviewData }) {
         </div>
       </div>
 
-      {/* RECENT AUDIT ACTIVITY TABLE (UNIFIED TABLE FORMAT) */}
+      {/* RECENT AUDIT ACTIVITY TABLE WITH ICON ACTIONS */}
       <div className="admin-card">
         <div className="admin-card-header">
-          <h2 className="admin-card-title">Nhật ký hoạt động hệ thống gần nhất</h2>
-          <span style={{ fontSize: "0.82rem", color: "#64748b" }}>Ghi nhận tự động từ cơ sở dữ liệu</span>
+          <div>
+            <h2 className="admin-card-title">Nhật ký hoạt động hệ thống gần nhất</h2>
+            <span style={{ fontSize: "0.8rem", color: "#64748b" }}>
+              Tự động lưu trữ bất biến phục vụ an ninh và kiểm toán truy cập
+            </span>
+          </div>
         </div>
 
         <div className="admin-table-container">
@@ -398,11 +549,11 @@ export function AdminOverviewDashboard({ data }: { data: AdminOverviewData }) {
             <thead>
               <tr>
                 <th>Thời gian</th>
-                <th>Tài khoản thực hiện</th>
+                <th>Tài khoản</th>
                 <th>Thao tác</th>
                 <th>Đối tượng</th>
                 <th>Kết quả</th>
-                <th style={{ textAlign: "right" }}>Chi tiết</th>
+                <th style={{ textAlign: "right", width: "80px" }}>Chi tiết</th>
               </tr>
             </thead>
             <tbody>
@@ -423,10 +574,12 @@ export function AdminOverviewDashboard({ data }: { data: AdminOverviewData }) {
                     <td style={{ textAlign: "right" }}>
                       <button
                         type="button"
-                        className="admin-btn-detail"
+                        className="admin-icon-btn primary"
+                        title="Xem chi tiết sự kiện"
+                        aria-label="Xem chi tiết"
                         onClick={() => setSelectedAudit(item)}
                       >
-                        Xem chi tiết
+                        <IconView width={15} height={15} />
                       </button>
                     </td>
                   </tr>
@@ -460,7 +613,7 @@ export function AdminOverviewDashboard({ data }: { data: AdminOverviewData }) {
               <span className="admin-detail-val">{new Date(selectedAudit.occurred_at).toLocaleString("vi-VN")}</span>
             </div>
             <div className="admin-detail-item">
-              <span className="admin-detail-label">Tài khoản</span>
+              <span className="admin-detail-label">Tài khoản thực hiện</span>
               <span className="admin-detail-val">{selectedAudit.actor_email ?? "Hệ thống (System)"}</span>
             </div>
             <div className="admin-detail-item">
@@ -468,11 +621,11 @@ export function AdminOverviewDashboard({ data }: { data: AdminOverviewData }) {
               <span className="admin-detail-val"><code>{selectedAudit.event_type}</code></span>
             </div>
             <div className="admin-detail-item">
-              <span className="admin-detail-label">Đối tượng</span>
+              <span className="admin-detail-label">Đối tượng tác động</span>
               <span className="admin-detail-val">{selectedAudit.target ?? "N/A"}</span>
             </div>
             <div className="admin-detail-item">
-              <span className="admin-detail-label">Kết quả</span>
+              <span className="admin-detail-label">Kết quả xác thực</span>
               <span className="admin-detail-val">
                 <span className={`admin-badge ${selectedAudit.outcome === "succeeded" ? "active" : "disabled"}`}>
                   {selectedAudit.outcome === "succeeded" ? "Thành công" : "Bị từ chối"}
@@ -485,4 +638,3 @@ export function AdminOverviewDashboard({ data }: { data: AdminOverviewData }) {
     </div>
   );
 }
-

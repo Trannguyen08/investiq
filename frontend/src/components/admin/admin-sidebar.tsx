@@ -12,6 +12,7 @@ const navItems = [
   { href: "/admin/portfolios", label: "Paper Trading & Lệnh", count: null },
   { href: "/admin/data-pipeline", label: "Dữ liệu & Thu thập tin tức", count: null },
   { href: "/admin/logs", label: "Nhật ký & Giám sát", count: null },
+  { href: "/admin/system", label: "Cấu hình & Hệ thống", count: null },
 ];
 
 export function AdminSidebar({ userEmail }: { userEmail?: string }) {
@@ -66,4 +67,3 @@ export function AdminSidebar({ userEmail }: { userEmail?: string }) {
     </aside>
   );
 }
-

@@ -4,6 +4,7 @@ import { useState } from "react";
 import type { AdminThesisItem } from "@/lib/server/admin-ops-api";
 import { AdminDetailModal } from "@/components/admin/admin-detail-modal";
 import { changeThesisStatus, removeThesisAction } from "@/app/(admin)/admin/actions";
+import { IconView, IconTrash, IconCheck } from "@/components/admin/admin-icons";
 
 export function ThesesTable({ theses }: { theses: AdminThesisItem[] }) {
   const [selectedThesis, setSelectedThesis] = useState<AdminThesisItem | null>(null);
@@ -18,10 +19,12 @@ export function ThesesTable({ theses }: { theses: AdminThesisItem[] }) {
   return (
     <div className="admin-card">
       <div className="admin-card-header">
-        <h2 className="admin-card-title">Danh sách bài phân tích & khuyến nghị</h2>
-        <span style={{ fontSize: "0.82rem", color: "#64748b" }}>
-          Kiểm duyệt nội dung và trạng thái khuyến nghị đầu tư
-        </span>
+        <div>
+          <h2 className="admin-card-title">Danh sách bài phân tích & khuyến nghị</h2>
+          <span style={{ fontSize: "0.8rem", color: "#64748b" }}>
+            Kiểm duyệt nội dung, quản lý rủi ro và xác thực tỷ lệ thành công của khuyến nghị
+          </span>
+        </div>
       </div>
 
       <div className="admin-table-container">
@@ -36,7 +39,7 @@ export function ThesesTable({ theses }: { theses: AdminThesisItem[] }) {
               <th>Cắt lỗ</th>
               <th>Trạng thái</th>
               <th>Ngày đăng</th>
-              <th style={{ textAlign: "right" }}>Thao tác</th>
+              <th style={{ textAlign: "right", width: "80px" }}>Thao tác</th>
             </tr>
           </thead>
           <tbody>
@@ -91,13 +94,17 @@ export function ThesesTable({ theses }: { theses: AdminThesisItem[] }) {
                     }).format(new Date(item.created_at))}
                   </td>
                   <td style={{ textAlign: "right" }}>
-                    <button
-                      type="button"
-                      className="admin-btn-detail"
-                      onClick={() => setSelectedThesis(item)}
-                    >
-                      Xem chi tiết
-                    </button>
+                    <div style={{ display: "inline-flex", gap: "0.35rem" }}>
+                      <button
+                        type="button"
+                        className="admin-icon-btn primary"
+                        title="Xem chi tiết & Kiểm duyệt"
+                        aria-label="Xem chi tiết"
+                        onClick={() => setSelectedThesis(item)}
+                      >
+                        <IconView width={15} height={15} />
+                      </button>
+                    </div>
                   </td>
                 </tr>
               ))
@@ -132,8 +139,13 @@ export function ThesesTable({ theses }: { theses: AdminThesisItem[] }) {
               }}
             >
               <input type="hidden" name="thesis_id" value={selectedThesis.id} />
-              <button type="submit" className="admin-btn-danger">
-                Xóa bài phân tích
+              <button
+                type="submit"
+                className="admin-btn-danger"
+                style={{ display: "inline-flex", alignItems: "center", gap: "0.4rem" }}
+              >
+                <IconTrash width={14} height={14} />
+                <span>Xóa bài phân tích</span>
               </button>
             </form>
           }
@@ -234,7 +246,7 @@ export function ThesesTable({ theses }: { theses: AdminThesisItem[] }) {
             </div>
             <div className="admin-detail-item col-span-2" style={{ borderTop: "1px solid #f1f5f9", paddingTop: "1rem" }}>
               <span className="admin-detail-label">Cập nhật trạng thái kiểm duyệt</span>
-              <form action={changeThesisStatus} style={{ display: "flex", gap: "0.75rem", marginTop: "0.5rem", alignItems: "center" }}>
+              <form action={changeThesisStatus} style={{ display: "flex", gap: "0.6rem", marginTop: "0.5rem", alignItems: "center" }}>
                 <input type="hidden" name="thesis_id" value={selectedThesis.id} />
                 <select name="status" defaultValue={selectedThesis.status} className="admin-filter-select">
                   <option value="active">Đang theo dõi (Active)</option>
@@ -249,8 +261,9 @@ export function ThesesTable({ theses }: { theses: AdminThesisItem[] }) {
                   className="admin-filter-input"
                   style={{ flex: 1 }}
                 />
-                <button type="submit" className="admin-btn-primary">
-                  Cập nhật trạng thái
+                <button type="submit" className="admin-btn-primary" style={{ display: "inline-flex", alignItems: "center", gap: "0.35rem" }}>
+                  <IconCheck width={14} height={14} />
+                  <span>Cập nhật</span>
                 </button>
               </form>
             </div>
@@ -260,4 +273,3 @@ export function ThesesTable({ theses }: { theses: AdminThesisItem[] }) {
     </div>
   );
 }
-

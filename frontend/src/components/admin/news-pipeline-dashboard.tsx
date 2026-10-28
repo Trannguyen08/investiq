@@ -3,6 +3,7 @@
 import { useState } from "react";
 import type { AdminNewsSource, CrawlRun } from "@/lib/admin-news";
 import { AdminDetailModal } from "@/components/admin/admin-detail-modal";
+import { IconView, IconLock, IconUnlock, IconPlay } from "@/components/admin/admin-icons";
 
 type Action = (formData: FormData) => Promise<void>;
 
@@ -46,7 +47,7 @@ export function NewsPipelineDashboard({
         <div>
           <h1>Dữ liệu & Thu thập tin tức (News Pipeline)</h1>
           <p>
-            Quản trị 6 nguồn thu thập tin chứng khoán, kích hoạt crawl thủ công và quản lý vòng đời dữ liệu.
+            Quản trị {sources.length} nguồn thu thập tin chứng khoán, kích hoạt crawl thủ công và quản lý vòng đời dữ liệu.
           </p>
         </div>
         <div style={{ display: "flex", gap: "0.75rem" }}>
@@ -70,10 +71,12 @@ export function NewsPipelineDashboard({
       {/* SOURCES GRID */}
       <div className="admin-card" style={{ marginBottom: "2rem" }}>
         <div className="admin-card-header">
-          <h2 className="admin-card-title">Trạng thái các nguồn tin chứng khoán ({sources.length})</h2>
-          <span style={{ fontSize: "0.82rem", color: "#64748b" }}>
-            Tự động kích hoạt chu kỳ crawl mỗi 15 phút
-          </span>
+          <div>
+            <h2 className="admin-card-title">Trạng thái các nguồn tin chứng khoán ({sources.length})</h2>
+            <span style={{ fontSize: "0.8rem", color: "#64748b" }}>
+              Tự động kích hoạt chu kỳ crawl định kỳ mỗi 15 phút
+            </span>
+          </div>
         </div>
 
         <div style={{ padding: "1.5rem" }}>
@@ -115,8 +118,17 @@ export function NewsPipelineDashboard({
                           name="status"
                           value={source.status === "active" ? "paused" : "active"}
                         />
-                        <button className="admin-btn-detail" type="submit">
-                          {source.status === "active" ? "Tạm dừng" : "Kích hoạt"}
+                        <button
+                          className={`admin-icon-btn ${source.status === "active" ? "danger" : "success"}`}
+                          type="submit"
+                          title={source.status === "active" ? "Tạm dừng nguồn tin này" : "Kích hoạt nguồn tin này"}
+                          aria-label={source.status === "active" ? "Tạm dừng" : "Kích hoạt"}
+                        >
+                          {source.status === "active" ? (
+                            <IconLock width={15} height={15} />
+                          ) : (
+                            <IconUnlock width={15} height={15} />
+                          )}
                         </button>
                       </form>
                     )}
@@ -124,8 +136,13 @@ export function NewsPipelineDashboard({
                       <form action={startManualCrawl}>
                         <input type="hidden" name="slug" value={source.slug} />
                         <input type="hidden" name="limit" value="100" />
-                        <button className="admin-btn-primary" type="submit">
-                          Crawl 100 tin
+                        <button
+                          className="admin-icon-btn primary"
+                          type="submit"
+                          title="Kích hoạt quét 100 bài báo ngay bây giờ"
+                          aria-label="Crawl thủ công"
+                        >
+                          <IconPlay width={15} height={15} />
                         </button>
                       </form>
                     )}
@@ -140,10 +157,12 @@ export function NewsPipelineDashboard({
       {/* CRAWL RUNS TABLE (UNIFIED TABLE FORMAT) */}
       <div className="admin-card" style={{ marginBottom: "2rem" }}>
         <div className="admin-card-header">
-          <h2 className="admin-card-title">Lịch sử các đợt crawl gần nhất</h2>
-          <span style={{ fontSize: "0.82rem", color: "#64748b" }}>
-            Hiển thị tối đa 100 lần chạy crawl tự động và thủ công
-          </span>
+          <div>
+            <h2 className="admin-card-title">Lịch sử các đợt crawl gần nhất</h2>
+            <span style={{ fontSize: "0.8rem", color: "#64748b" }}>
+              Hiển thị tối đa 100 lần chạy crawl tự động và thủ công
+            </span>
+          </div>
         </div>
 
         <div className="admin-table-container">
@@ -158,7 +177,7 @@ export function NewsPipelineDashboard({
                 <th>Thành công</th>
                 <th>Bỏ qua</th>
                 <th>Lỗi</th>
-                <th style={{ textAlign: "right" }}>Thao tác</th>
+                <th style={{ textAlign: "right", width: "80px" }}>Thao tác</th>
               </tr>
             </thead>
             <tbody>
@@ -206,10 +225,12 @@ export function NewsPipelineDashboard({
                     <td style={{ textAlign: "right" }}>
                       <button
                         type="button"
-                        className="admin-btn-detail"
+                        className="admin-icon-btn primary"
+                        title="Xem chi tiết lượt crawl"
+                        aria-label="Xem chi tiết"
                         onClick={() => setSelectedRun(run)}
                       >
-                        Xem chi tiết
+                        <IconView width={15} height={15} />
                       </button>
                     </td>
                   </tr>
@@ -232,10 +253,12 @@ export function NewsPipelineDashboard({
       {/* RETENTION CLEANUP */}
       <div className="admin-card">
         <div className="admin-card-header">
-          <h2 className="admin-card-title">Vòng đời dữ liệu & Dọn dẹp tin quá hạn (Retention)</h2>
-          <span style={{ fontSize: "0.82rem", color: "#64748b" }}>
-            Luôn kiểm tra Dry-run trước khi xác nhận xóa dữ liệu
-          </span>
+          <div>
+            <h2 className="admin-card-title">Vòng đời dữ liệu & Dọn dẹp tin quá hạn (Retention)</h2>
+            <span style={{ fontSize: "0.8rem", color: "#64748b" }}>
+              Luôn kiểm tra Dry-run trước khi xác nhận xóa dữ liệu
+            </span>
+          </div>
         </div>
 
         <div style={{ padding: "1.5rem" }}>
@@ -250,16 +273,23 @@ export function NewsPipelineDashboard({
                   max="3650"
                   defaultValue="90"
                   className="admin-filter-input"
-                  style={{ width: "100%", marginTop: "0.25rem" }}
-                  required
+                  style={{ width: "100%", marginTop: "0.35rem" }}
                 />
               </label>
               <button className="admin-btn-secondary" type="submit">
-                Kiểm tra dry-run
+                Kiểm tra tin quá hạn (Dry-run)
               </button>
             </form>
 
-            <form action={deleteExpiredNews} style={{ display: "flex", flexDirection: "column", gap: "0.75rem" }}>
+            <form
+              action={deleteExpiredNews}
+              onSubmit={(e) => {
+                if (!window.confirm("CẢNH BÁO: Dữ liệu bài viết quá hạn sẽ bị xóa vĩnh viễn khỏi database. Xác nhận tiếp tục?")) {
+                  e.preventDefault();
+                }
+              }}
+              style={{ display: "flex", flexDirection: "column", gap: "0.75rem" }}
+            >
               <label style={{ fontSize: "0.84rem", fontWeight: 600, color: "#334155" }}>
                 Số ngày giữ lại:
                 <input
@@ -269,23 +299,11 @@ export function NewsPipelineDashboard({
                   max="3650"
                   defaultValue="90"
                   className="admin-filter-input"
-                  style={{ width: "100%", marginTop: "0.25rem" }}
-                  required
-                />
-              </label>
-              <label style={{ fontSize: "0.84rem", fontWeight: 600, color: "#dc2626" }}>
-                Nhập DELETE để xác nhận xóa vĩnh viễn:
-                <input
-                  name="confirmation"
-                  placeholder="DELETE"
-                  autoComplete="off"
-                  className="admin-filter-input"
-                  style={{ width: "100%", marginTop: "0.25rem" }}
-                  required
+                  style={{ width: "100%", marginTop: "0.35rem" }}
                 />
               </label>
               <button className="admin-btn-danger" type="submit">
-                Xóa tin quá hạn
+                Xóa vĩnh viễn tin quá hạn
               </button>
             </form>
           </div>
@@ -297,75 +315,61 @@ export function NewsPipelineDashboard({
         <AdminDetailModal
           isOpen={Boolean(selectedRun)}
           onClose={() => setSelectedRun(null)}
-          title={`Chi tiết đợt crawl: ${selectedRun.source_slug}`}
+          title={`Chi tiết lượt crawl: ${selectedRun.source_slug}`}
         >
           <div className="admin-detail-grid">
             <div className="admin-detail-item">
-              <span className="admin-detail-label">Mã đợt crawl (Run ID)</span>
-              <span className="admin-detail-val">
-                <code>{selectedRun.id}</code>
-              </span>
+              <span className="admin-detail-label">Mã lượt crawl</span>
+              <span className="admin-detail-val"><code>{selectedRun.id}</code></span>
             </div>
             <div className="admin-detail-item">
-              <span className="admin-detail-label">Nguồn tin tức</span>
-              <span className="admin-detail-val">
-                <strong>{selectedRun.source_slug}</strong>
-              </span>
+              <span className="admin-detail-label">Nguồn thu thập</span>
+              <span className="admin-detail-val"><strong>{selectedRun.source_slug}</strong></span>
             </div>
             <div className="admin-detail-item">
-              <span className="admin-detail-label">Cơ chế kích hoạt</span>
-              <span className="admin-detail-val">
-                {selectedRun.trigger === "manual" ? "Thủ công bởi Admin" : "Tự động (Celery/FastAPI loop)"}
-              </span>
+              <span className="admin-detail-label">Thời điểm bắt đầu</span>
+              <span className="admin-detail-val">{formatDate(selectedRun.started_at)}</span>
+            </div>
+            <div className="admin-detail-item">
+              <span className="admin-detail-label">Thời điểm kết thúc</span>
+              <span className="admin-detail-val">{formatDate(selectedRun.finished_at)}</span>
             </div>
             <div className="admin-detail-item">
               <span className="admin-detail-label">Trạng thái</span>
               <span className="admin-detail-val">
-                <span
-                  className={`admin-badge ${
-                    selectedRun.status === "succeeded"
-                      ? "active"
-                      : selectedRun.status === "running"
-                      ? "bullish"
-                      : "disabled"
-                  }`}
-                >
+                <span className={`admin-badge ${selectedRun.status === "succeeded" ? "active" : "disabled"}`}>
                   {selectedRun.status}
                 </span>
               </span>
             </div>
             <div className="admin-detail-item">
-              <span className="admin-detail-label">Thời gian bắt đầu</span>
-              <span className="admin-detail-val">{formatDate(selectedRun.started_at)}</span>
-            </div>
-            <div className="admin-detail-item">
-              <span className="admin-detail-label">Thời gian hoàn thành</span>
-              <span className="admin-detail-val">{formatDate(selectedRun.finished_at)}</span>
+              <span className="admin-detail-label">Hình thức kích hoạt</span>
+              <span className="admin-detail-val">{selectedRun.trigger}</span>
             </div>
             <div className="admin-detail-item">
               <span className="admin-detail-label">Số bài phát hiện</span>
-              <span className="admin-detail-val">{selectedRun.discovered_count} bài</span>
+              <span className="admin-detail-val">{selectedRun.discovered_count}</span>
             </div>
             <div className="admin-detail-item">
-              <span className="admin-detail-label">Số bài thu thập thành công</span>
+              <span className="admin-detail-label">Số bài thành công</span>
               <span className="admin-detail-val" style={{ color: "#16a34a", fontWeight: 700 }}>
-                {selectedRun.succeeded_count} bài
+                {selectedRun.succeeded_count}
               </span>
             </div>
             <div className="admin-detail-item">
-              <span className="admin-detail-label">Số bài bỏ qua (Trùng lặp/Quá cũ)</span>
-              <span className="admin-detail-val">{selectedRun.skipped_count} bài</span>
+              <span className="admin-detail-label">Số bài bỏ qua</span>
+              <span className="admin-detail-val">{selectedRun.skipped_count}</span>
             </div>
             <div className="admin-detail-item">
               <span className="admin-detail-label">Số bài gặp lỗi</span>
-              <span className="admin-detail-val" style={{ color: selectedRun.failed_count > 0 ? "#dc2626" : "#64748b" }}>
-                {selectedRun.failed_count} bài
+              <span className="admin-detail-val" style={{ color: selectedRun.failed_count > 0 ? "#dc2626" : "#64748b", fontWeight: 700 }}>
+                {selectedRun.failed_count}
               </span>
             </div>
             {selectedRun.error_code && (
               <div className="admin-detail-item col-span-2">
-                <span className="admin-detail-label">Mã lỗi ghi nhận</span>
-                <span className="admin-detail-val" style={{ color: "#dc2626", fontWeight: 700 }}>
+                <span className="admin-detail-label">Mã lỗi (Error Code)</span>
+                <span className="admin-detail-val" style={{ color: "#dc2626" }}>
                   <code>{selectedRun.error_code}</code>
                 </span>
               </div>
