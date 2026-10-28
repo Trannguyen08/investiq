@@ -138,10 +138,10 @@ class SqlAdminRepository:
                     coalesce(a.count, 0)::int AS article_count
                 FROM news_sources s
                 LEFT JOIN (
-                    SELECT source_slug, count(*) AS count
+                    SELECT source_id, count(*) AS count
                     FROM news_articles
-                    GROUP BY source_slug
-                ) a ON a.source_slug = s.slug
+                    GROUP BY source_id
+                ) a ON a.source_id = s.id
                 ORDER BY s.name;
                 """
             ).fetchall()
