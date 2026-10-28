@@ -1,5 +1,5 @@
-import { ScaffoldPage } from "@/components/ui/scaffold-page";
+import { redirect } from "next/navigation";
 
 export default function ModelsPage() {
-  return <ScaffoldPage area="Admin" title="ML models" description="Model registry controls will be implemented here." />;
+  redirect("/admin");
 }

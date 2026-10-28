@@ -1,5 +1,37 @@
 # Current Task
 
+## Comprehensive Enterprise Admin System Architecture & Security Hardening - 2026-10-28 (complete)
+
+- **User Request**: "chuyển nhánh feature/admin và xây dựng chức năng cho admin của hệ thống. Yêu cầu UI: có sidebar, màu sáng sủa (trắng xanh dương), không có icon trước text, các giao diện phải có sự hữu dụng. Yêu cầu chức năng: các tab danh mục cần thiết cho admin, cùng format css table, các bảng hiển thị cột cần thiết và nút xem chi tiết đồng nhất, dashboard đa dạng biểu đồ thống kê hiện đại. Yêu cầu coding: thiết kế jwt chặt chẽ (token phải chứa role admin mới được call api), nâng cao security, cache, phân trang, tối ưu truy vấn."
+- **Branch**: Created and switched to `feature/admin` from clean `origin/dev`.
+- **Backend Architecture & Security Hardening**:
+  1. *Strict JWT Role Verification*:
+     - In `backend/app/api/deps.py`, created `require_admin_user` dependency.
+     - Decodes JWT token and enforces `claims.get("role") == "admin"`. Rejects non-admin tokens with HTTP 403 Forbidden without executing downstream queries.
+     - Checks active database session in PostgreSQL and confirms user role is `admin`, protecting against revoked sessions.
+  2. *Single-Roundtrip SQL Aggregation*:
+     - In `backend/app/infrastructure/db/repositories/sql_admin_repository.py`, implemented `get_overview_stats` aggregating users, paper trading capital and volume, theses win-rate, crawler source health, and sentiment distribution in a single database roundtrip.
+     - Parameterized CRUD queries for Theses moderation, Paper Trading inspection with holdings and trades breakdown, and Audit Logs.
+  3. *Resilient Cache Layer*:
+     - In `backend/app/infrastructure/cache/admin_cache.py`, created `AdminCache` wrapping Redis with a thread-safe in-memory dictionary fallback and 60-second TTL.
+  4. *Admin Operations Router*:
+     - Created `backend/app/api/v1/admin_ops.py` exposing `/api/v1/admin/overview`, `/cache/invalidate`, `/theses`, `/portfolios`, and `/audit-logs`.
+- **Frontend Architecture & Unified Design System**:
+  1. *Color Scheme & Typography*: Light palette (white `#ffffff`, slate borders `#e2e8f0`, deep blue `#2563eb`).
+  2. *Zero Icons Before Text*: Sidebar navigation, tab links, action buttons, table column headers, and KPI cards have zero icons preceding label text.
+  3. *Unified CSS Table Engine*: 100% identical CSS across all tabular views (Users, Theses, Paper Trading, Crawl Runs, Audit Logs) via `.admin-table-unified` and `.admin-btn-detail`.
+  4. *Reusable Detail Modal*: Standardized `AdminDetailModal` with key-value grid and embedded tables for deep inspection across all tabs.
+  5. *Modern Dashboard Visualizations*:
+     - 4 core KPI cards.
+     - SVG Area Chart for 7-day user registrations and trade activity with interactive metric toggle.
+     - SVG Donut Chart for investment stance distribution (Bullish/Bearish/Neutral).
+     - Top traded tickers with volume progress bars.
+     - News pipeline health and sentiment distribution bar.
+     - Real-time audit log feed.
+- **Verification & Testing**:
+  - Backend: `ruff check backend` (0 errors), `ruff format --check backend` (117 files clean), `mypy` (0 errors), `pytest backend/tests/unit` (116/116 passed).
+  - Frontend: `npm run lint` (0 errors), `npm run typecheck` (0 errors), `npm test` (31/31 files, 125/125 passed).
+
 ## Codebase Audit, Dead Placeholder Removal & Clean Code Structure - 2026-10-27 (complete)
 
 - **User Request**: "đổi nhánh và thực hiện task sau: rà soát lại cấu trúc frontend và backend, check xem các file k có nội dung xóa bớt, clean code, cho các file nằm đúng folder"

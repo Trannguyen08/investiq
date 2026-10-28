@@ -44,11 +44,11 @@ describe("NewsPipelineDashboard", () => {
       />,
     );
 
-    expect(screen.getByRole("heading", { name: "Quản lý News pipeline" })).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "Dữ liệu & Thu thập tin tức (News Pipeline)" })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Tạm dừng" })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Crawl 100 tin" })).toBeInTheDocument();
     expect(screen.getByText("60")).toBeInTheDocument();
-    expect(screen.getByLabelText("Nhập DELETE để xác nhận")).toBeRequired();
+    expect(screen.getByLabelText(/Nhập DELETE để xác nhận/i)).toBeRequired();
   });
 
   it("shows an explicit empty crawl-run state", () => {
@@ -63,6 +63,6 @@ describe("NewsPipelineDashboard", () => {
       />,
     );
 
-    expect(screen.getByText("Chưa có lượt crawl nào.")).toBeInTheDocument();
+    expect(screen.getByText("Chưa có lượt crawl nào được ghi nhận.")).toBeInTheDocument();
   });
 });

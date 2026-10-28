@@ -15,6 +15,7 @@ from fastapi.responses import JSONResponse
 from redis.asyncio import Redis
 
 from app.api.v1.admin import router as news_admin_router
+from app.api.v1.admin_ops import router as admin_ops_router
 from app.api.v1.admin_users import router as admin_users_router
 from app.api.v1.auth import router as auth_router
 from app.api.v1.market_data import (
@@ -93,6 +94,7 @@ app.add_middleware(
 app.add_middleware(RequestLoggingMiddleware)
 app.include_router(news_router)
 app.include_router(news_admin_router)
+app.include_router(admin_ops_router)
 app.include_router(admin_users_router)
 app.include_router(auth_router)
 app.include_router(market_router)
@@ -110,7 +112,7 @@ def _request_id(request: Request) -> str:
 def _private_error_headers(request: Request) -> dict[str, str]:
     private_prefixes = (
         "/api/v1/auth",
-        "/api/v1/admin/users",
+        "/api/v1/admin",
         "/api/v1/watchlists",
         "/api/v1/paper-portfolio",
     )

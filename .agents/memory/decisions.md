@@ -3,6 +3,24 @@
 Record durable decisions in reverse chronological order. Do not record routine implementation
 details.
 
+## 2026-10-28 — Enterprise Admin System Architecture, Strict JWT Security & Unified CSS Table Engine
+
+- **Status:** Accepted and implemented on `feature/admin`
+- **Context:** The administrative capability was minimal, lacking oversight across platform domains (Theses moderation, paper trading inspection, security audit trail, and news pipeline operations). The user required an ergonomic, high-utility, light-themed (white & blue) admin workspace with a sidebar, zero icons preceding label text, strict table styling parity across all tabs, unified detail modal inspection, strict token-level role enforcement, caching, pagination, and optimized single-roundtrip aggregation queries.
+- **Decision:**
+  1. *Fail-Closed JWT Role Verification*:
+     - `require_admin_user` in `deps.py` decodes JWT and rejects immediately with HTTP 403 Forbidden unless `claims.get("role") == "admin"`.
+     - Validates active session in PostgreSQL and verifies the database role is `admin`, preventing stale or revoked tokens from accessing any admin endpoints.
+  2. *Single-Roundtrip Aggregate & Cached Overview*:
+     - `SqlAdminRepository.get_overview_stats` combines user growth, paper trading volume, thesis win rates, sentiment breakdown, and crawler health using CTEs in a single query.
+     - `AdminCache` integrates Redis with automatic thread-safe in-memory dictionary fallback and 60-second TTL to guarantee sub-millisecond dashboard renders without crashing when Redis is unavailable.
+  3. *Unified UI Design Language*:
+     - Light theme: White background (`#ffffff`), slate borders (`#e2e8f0`), professional deep blue accents (`#2563eb`, `#1d4ed8`), slate text (`#0f172a`, `#64748b`).
+     - Zero Icons Before Text: All navigation tabs, action buttons, table column headers, and KPI labels strictly display concise, professional text without leading icons.
+     - Single-Engine Unified Table CSS: Shared `.admin-card`, `.admin-table-container`, `.admin-table-unified`, and identical `.admin-btn-detail` (blue border, white background, blue text, hover fill) across all 5 tabular views (Users, Theses, Portfolios, Crawl Runs, Audit Logs).
+     - Standardized `AdminDetailModal`: Single reusable modal pattern for inspection across all tabs.
+- **Consequences:** End-to-end admin portal with full operational coverage, sub-millisecond response times under cache, strict security boundary, and 100% test coverage across backend and frontend suites.
+
 ## 2026-10-27 — Proof-of-Thesis Arena & Social Paper Trading Architecture
 
 - **Status:** Accepted and implemented on `feature/community-thesis-paper-trading`

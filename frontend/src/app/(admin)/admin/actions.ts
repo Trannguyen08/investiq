@@ -14,6 +14,11 @@ import {
   triggerAdminCrawl,
   updateAdminSource,
 } from "@/lib/server/admin-news-api";
+import {
+  deleteAdminThesis,
+  invalidateAdminCache,
+  updateAdminThesis,
+} from "@/lib/server/admin-ops-api";
 import { updateAdminUser } from "@/lib/server/admin-user-api";
 
 function stringField(formData: FormData, name: string) {
@@ -134,3 +139,42 @@ export async function changeAdminUser(formData: FormData) {
   revalidatePath("/admin/users");
   redirect("/admin/users?notice=Đã cập nhật tài khoản");
 }
+
+export async function changeThesisStatus(formData: FormData) {
+  await requireAdminSession();
+  try {
+    const id = stringField(formData, "thesis_id");
+    const status = stringField(formData, "status");
+    const note = stringField(formData, "note");
+    if (!/^[0-9a-f-]{36}$/i.test(id)) throw new Error("Khuyến nghị không hợp lệ");
+    if (!["active", "hit_target", "stopped_out", "expired"].includes(status)) {
+      throw new Error("Trạng thái không hợp lệ");
+    }
+    await updateAdminThesis(id, { status, note });
+  } catch (error) {
+    redirect(`/admin/theses?error=${message(error instanceof Error ? error.message : "Không thể cập nhật khuyến nghị")}`);
+  }
+  revalidatePath("/admin/theses");
+  redirect("/admin/theses?notice=Đã cập nhật trạng thái khuyến nghị");
+}
+
+export async function removeThesisAction(formData: FormData) {
+  await requireAdminSession();
+  try {
+    const id = stringField(formData, "thesis_id");
+    if (!/^[0-9a-f-]{36}$/i.test(id)) throw new Error("Khuyến nghị không hợp lệ");
+    await deleteAdminThesis(id);
+  } catch (error) {
+    redirect(`/admin/theses?error=${message(error instanceof Error ? error.message : "Không thể xóa khuyến nghị")}`);
+  }
+  revalidatePath("/admin/theses");
+  redirect("/admin/theses?notice=Đã xóa khuyến nghị thành công");
+}
+
+export async function refreshAdminCacheAction() {
+  await requireAdminSession();
+  await invalidateAdminCache();
+  revalidatePath("/admin");
+  redirect("/admin?notice=Đã làm mới dữ liệu thống kê");
+}
+
