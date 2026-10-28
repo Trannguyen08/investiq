@@ -67,62 +67,62 @@ export function AnalyticsDashboard({ data }: { data: AdminAnalyticsResponse }) {
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: "1.5rem" }}>
       {/* 4 KPI CARDS */}
-      <div className="admin-overview-grid">
-        <div className="admin-metric-card-v2" style={{ borderLeft: "4px solid #2563eb" }}>
-          <div className="metric-header-v2">
-            <span className="metric-label-v2">Vốn giải ngân thị trường</span>
-            <span className="metric-badge-v2 up">Cổ phiếu</span>
+      <div className="admin-kpi-grid" style={{ gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))", marginBottom: "0.25rem" }}>
+        <div className="admin-kpi-card-v2">
+          <div className="admin-kpi-header">
+            <span className="admin-kpi-label">Vốn giải ngân thị trường</span>
+            <span className="admin-kpi-trend up">Cổ phiếu</span>
           </div>
-          <div className="metric-value-v2">
+          <div className="admin-kpi-value">
             {(data.total_capital_deployed_vnd / 1_000_000_000).toFixed(1)} Tỷ VND
           </div>
-          <div className="metric-sub-v2">
+          <div className="admin-kpi-sub">
             Giá trị thực nắm giữ trong các danh mục ảo
           </div>
         </div>
 
-        <div className="admin-metric-card-v2" style={{ borderLeft: "4px solid #10b981" }}>
-          <div className="metric-header-v2">
-            <span className="metric-label-v2">Tỷ trọng Tiền mặt / Cổ</span>
-            <span className="metric-badge-v2 neutral">Phân bổ</span>
+        <div className="admin-kpi-card-v2 green">
+          <div className="admin-kpi-header">
+            <span className="admin-kpi-label">Tỷ trọng Tiền mặt / Cổ</span>
+            <span className="admin-kpi-trend neutral">Phân bổ</span>
           </div>
-          <div className="metric-value-v2">
+          <div className="admin-kpi-value">
             {data.asset_allocation.cash_share_percent}% / {data.asset_allocation.equity_share_percent}%
           </div>
-          <div className="metric-sub-v2">
-            Tiền mặt: {vndFormat.format(data.asset_allocation.total_cash_vnd)} ₫
+          <div className="admin-kpi-sub">
+            Tiền mặt: <strong>{vndFormat.format(data.asset_allocation.total_cash_vnd)} ₫</strong>
           </div>
         </div>
 
-        <div className="admin-metric-card-v2" style={{ borderLeft: "4px solid #f59e0b" }}>
-          <div className="metric-header-v2">
-            <span className="metric-label-v2">ROI bình quân Top Trader</span>
-            <span className="metric-badge-v2 up">
+        <div className="admin-kpi-card-v2 amber">
+          <div className="admin-kpi-header">
+            <span className="admin-kpi-label">ROI bình quân Top Trader</span>
+            <span className="admin-kpi-trend up">
               <IconTrendingUp width={12} height={12} />
               {data.average_portfolio_roi > 0 ? "+" : ""}
               {data.average_portfolio_roi}%
             </span>
           </div>
-          <div className="metric-value-v2">
+          <div className="admin-kpi-value">
             {data.average_portfolio_roi > 0 ? "+" : ""}
             {data.average_portfolio_roi}%
           </div>
-          <div className="metric-sub-v2">
+          <div className="admin-kpi-sub">
             Tính trên 10 tài khoản có hiệu suất cao nhất
           </div>
         </div>
 
-        <div className="admin-metric-card-v2" style={{ borderLeft: "4px solid #8b5cf6" }}>
-          <div className="metric-header-v2">
-            <span className="metric-label-v2">Xuất dữ liệu hệ thống</span>
-            <span className="metric-badge-v2 neutral">Định kỳ</span>
+        <div className="admin-kpi-card-v2 purple">
+          <div className="admin-kpi-header">
+            <span className="admin-kpi-label">Xuất dữ liệu hệ thống</span>
+            <span className="admin-kpi-trend neutral">Định kỳ</span>
           </div>
           <div style={{ display: "flex", gap: "0.5rem", marginTop: "0.5rem" }}>
             <button
               type="button"
               onClick={exportCsv}
-              className="admin-btn-action-primary"
-              style={{ fontSize: "0.8rem", padding: "0.35rem 0.7rem", flex: 1 }}
+              className="admin-btn-primary"
+              style={{ fontSize: "0.8rem", padding: "0.45rem 0.65rem", flex: 1, display: "inline-flex", alignItems: "center", justifyContent: "center", gap: "0.3rem" }}
             >
               <IconDownload width={13} height={13} />
               <span>Xuất CSV</span>
@@ -130,14 +130,14 @@ export function AnalyticsDashboard({ data }: { data: AdminAnalyticsResponse }) {
             <button
               type="button"
               onClick={exportJson}
-              className="admin-btn-action-secondary"
-              style={{ fontSize: "0.8rem", padding: "0.35rem 0.7rem", flex: 1 }}
+              className="admin-btn-secondary"
+              style={{ fontSize: "0.8rem", padding: "0.45rem 0.65rem", flex: 1, display: "inline-flex", alignItems: "center", justifyContent: "center", gap: "0.3rem" }}
             >
               <IconDownload width={13} height={13} />
               <span>Xuất JSON</span>
             </button>
           </div>
-          <div className="metric-sub-v2" style={{ marginTop: "0.4rem" }}>
+          <div className="admin-kpi-sub" style={{ marginTop: "0.4rem" }}>
             Cập nhật lúc: {data.generated_at.slice(11, 16)} UTC
           </div>
         </div>
@@ -155,8 +155,8 @@ export function AnalyticsDashboard({ data }: { data: AdminAnalyticsResponse }) {
           <button
             type="button"
             onClick={exportCsv}
-            className="admin-btn-action-secondary"
-            style={{ fontSize: "0.8rem" }}
+            className="admin-btn-secondary"
+            style={{ fontSize: "0.8rem", display: "inline-flex", alignItems: "center", gap: "0.35rem", padding: "0.35rem 0.75rem" }}
           >
             <IconDownload width={14} height={14} />
             <span>Tải CSV</span>
@@ -308,7 +308,7 @@ export function AnalyticsDashboard({ data }: { data: AdminAnalyticsResponse }) {
       </div>
 
       {/* 2 CHARTS: EXCHANGE LIQUIDITY & SECTOR THESES */}
-      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "1.5rem" }}>
+      <div className="admin-analytics-charts-grid">
         {/* EXCHANGE LIQUIDITY */}
         <div className="admin-card">
           <div className="admin-card-header">
