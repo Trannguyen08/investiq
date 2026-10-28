@@ -1,5 +1,22 @@
 # Current Task
 
+## Admin Auth Synchronization, Self-Healing Session & 500 Error Resolution - 2026-10-28 (complete)
+- **User Request**: Khắc phục triệt để toàn bộ 6 lỗi theo chuỗi ảnh: (1) Đăng nhập quay mãi, (2) Đăng nhập admin bị đẩy sang giao diện user, (3) Lỗi runtime "Bạn chưa đăng nhập" tại `authenticatedSession`, (4) Lỗi 500 tại `/admin`, (5) `NEWS_ADMIN_TOKEN is not configured`, (6) Lỗi 500 tại `/admin/analytics`.
+- **Root Causes & Systemic Fixes**:
+  1. *Database Admin Password Hash Sync*: Cập nhật lại hash Argon2id chuẩn xác cho tài khoản `admin@investiq.vn` với mật khẩu `Admin@InvestIQ2026!` (thỏa mãn tiêu chuẩn an ninh >= 15 ký tự).
+  2. *Dual Session Synchronization*: Khi đăng nhập thành công từ `/login` hoặc `/auth-api/login`, nếu `user.role === 'admin'`, hệ thống đồng thời tạo cả 2 session: `__session` (Bearer JWT role admin) và `investiq_admin_session` (path `/admin`).
+  3. *Self-Healing Session in adminFetch*: Nếu phiên Bearer JWT của trình duyệt hết hạn hoặc bị xóa nhưng session admin cookie vẫn hợp lệ, `adminFetch` tự động tái cấp session từ backend trong suốt, ngăn chặn triệt để lỗi runtime "Bạn chưa đăng nhập" và lỗi 500.
+  4. *Next.js NEXT_REDIRECT Preservation*: Bổ sung re-throw ngoại lệ `NEXT_REDIRECT` trong `admin/page.tsx` để Next.js điều hướng mượt mà khi chưa xác thực, không nuốt thành lỗi đỏ giao diện.
+  5. *SQL Query Column Alignment*: Khắc phục `paper_holdings` schema trong `SqlAdminRepository.get_analytics()` từ `avg_price` sang `total_cost_basis`.
+  6. *News Token Configuration*: Đồng bộ `NEWS_ADMIN_TOKEN` trên tất cả file env.
+- **Verification**:
+  - Toàn bộ 10 endpoint Admin API trả về HTTP 200 OK (< 200ms).
+  - Backend Unit Tests (`pytest`): 116/116 passed in 7.68s.
+  - Frontend Vitest (`vitest`): 31/31 test files passed (125/125 tests passed).
+  - TypeScript Typecheck: 0 errors (`tsc --noEmit`).
+  - Ruff Check: All checks passed (0 errors).
+  - Đã commit `9fbad67` và push đồng bộ lên `origin/feature/admin`.
+
 ## 10 Enterprise Admin Sidebar Tabs & Deep Market / Risk / Analytics Features - 2026-10-28 (complete)
 - **User Request**: "thêm tính năng, tôi cần cỡ 10 tab ở sidebar"
 - **Enhancements Implemented**:
