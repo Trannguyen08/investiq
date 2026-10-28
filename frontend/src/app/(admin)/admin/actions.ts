@@ -43,7 +43,17 @@ export async function loginAdmin(formData: FormData) {
     redirect("/admin-login?error=invalid");
   }
   await createAdminSession();
-  redirect("/admin/data-pipeline");
+  try {
+    const { backendJson, createBrowserSession } = await import("@/lib/server/user-auth");
+    const credentials = await backendJson<any>("/login", {
+      email: "admin@investiq.vn",
+      password: process.env.ADMIN_UI_PASSWORD || "Admin@InvestIQ2026!",
+    });
+    await createBrowserSession(credentials);
+  } catch {
+    // ignore
+  }
+  redirect("/admin");
 }
 
 export async function logoutAdmin() {

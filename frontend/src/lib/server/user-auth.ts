@@ -35,7 +35,12 @@ const CSRF_COOKIE = "investiq_csrf";
 let redisClient: RedisClientType | undefined;
 
 type MemoryStoreEntry = { value: string; expiresAt: number };
-const memoryStore = new Map<string, MemoryStoreEntry>();
+const globalForAuth = globalThis as unknown as {
+  __investiq_memory_store__?: Map<string, MemoryStoreEntry>;
+};
+const memoryStore =
+  globalForAuth.__investiq_memory_store__ ??
+  (globalForAuth.__investiq_memory_store__ = new Map<string, MemoryStoreEntry>());
 
 function required(name: string) {
   const value = process.env[name];

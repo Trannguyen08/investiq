@@ -1,5 +1,7 @@
 import "server-only";
 
+import { redirect } from "next/navigation";
+
 import { resolveApiBase } from "@/lib/api-base";
 import { authenticatedSession } from "@/lib/server/user-auth";
 
@@ -177,7 +179,12 @@ export type AdminAuditLogPage = {
 };
 
 async function adminFetch<T>(path: string, init?: RequestInit): Promise<T> {
-  const session = await authenticatedSession();
+  let session;
+  try {
+    session = await authenticatedSession();
+  } catch {
+    redirect("/login");
+  }
   const base = resolveApiBase();
   const response = await fetch(`${base}/v1/admin${path}`, {
     ...init,
