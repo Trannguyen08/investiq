@@ -1,5 +1,6 @@
 import { createHmac, timingSafeEqual } from "node:crypto";
 
+import { cache } from "react";
 import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
 
@@ -62,7 +63,7 @@ export async function clearAdminSession() {
   });
 }
 
-export async function hasAdminSession() {
+export const hasAdminSession = cache(async function hasAdminSession() {
   if (adminAuthConfigured()) {
     const value = (await cookies()).get(COOKIE_NAME)?.value;
     if (value) {
@@ -91,8 +92,8 @@ export async function hasAdminSession() {
   }
 
   return false;
-}
+});
 
-export async function requireAdminSession() {
+export const requireAdminSession = cache(async function requireAdminSession() {
   if (!(await hasAdminSession())) redirect("/admin-login");
-}
+});

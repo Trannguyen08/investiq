@@ -21,10 +21,11 @@ class RateLimitExceeded(ValueError):
 
 class AuthRateLimiter:
     def __init__(self, redis_url: str, key_secret: str) -> None:
-        self._client = Redis.from_url(redis_url, socket_connect_timeout=1, socket_timeout=1)
+        self._client = Redis.from_url(redis_url, socket_connect_timeout=0.2, socket_timeout=0.2)
         self._secret = key_secret.encode()
         self._local_lock = threading.Lock()
         self._local_buckets: dict[str, tuple[int, float]] = {}
+        self._redis_broken_until: float = 0.0
 
     def _check_local(self, key: str, limit: int, window_seconds: int) -> None:
         now = time.monotonic()
@@ -54,6 +55,13 @@ class AuthRateLimiter:
     def check(self, scope: str, identity: str, limit: int, window_seconds: int) -> None:
         digest = hmac.new(self._secret, identity.encode(), hashlib.sha256).hexdigest()
         key = f"auth-rate:{scope}:{digest}"
+        now = time.monotonic()
+
+        # Circuit breaker: if Redis was recently unreachable, fast-fail straight to local memory
+        if now < self._redis_broken_until:
+            self._check_local(key, limit, window_seconds)
+            return
+
         try:
             count, ttl = cast(
                 tuple[int, int],
@@ -69,7 +77,10 @@ class AuthRateLimiter:
                 ),
             )
         except RedisError:
-            logger.warning("Auth rate limiter Redis unavailable; using process-local limiter")
+            self._redis_broken_until = now + 30.0
+            logger.warning(
+                "Auth rate limiter Redis unavailable; entering 30s circuit breaker local mode"
+            )
             self._check_local(key, limit, window_seconds)
             return
 

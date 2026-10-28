@@ -25,22 +25,28 @@ class AdminCache:
     def __init__(self, client: Redis | None = None) -> None:
         self._client = client or Redis.from_url(
             settings.redis_url,
-            socket_connect_timeout=0.4,
-            socket_timeout=0.4,
+            socket_connect_timeout=0.15,
+            socket_timeout=0.15,
             decode_responses=True,
         )
         self._prefix = f"admin:v1:{settings.app_env}:"
+        self._redis_broken_until: float = 0.0
 
     def get(self, key: str) -> dict[str, Any] | None:
         full_key = f"{self._prefix}{key}"
-        try:
-            val = self._client.get(full_key)
-            if val is not None and isinstance(val, str):
-                decoded = json.loads(val)
-                if isinstance(decoded, dict):
-                    return decoded
-        except (RedisError, json.JSONDecodeError, Exception):
-            logger.debug("Redis lookup failed for key %s, trying memory fallback", key)
+        now = time.monotonic()
+
+        # If Redis is in broken/cooldown state, bypass directly to memory cache
+        if now >= self._redis_broken_until:
+            try:
+                val = self._client.get(full_key)
+                if val is not None and isinstance(val, str):
+                    decoded = json.loads(val)
+                    if isinstance(decoded, dict):
+                        return decoded
+            except (RedisError, json.JSONDecodeError, Exception):
+                self._redis_broken_until = now + 30.0
+                logger.debug("Redis lookup failed for key %s, entering 30s memory fallback", key)
 
         with self._lock:
             entry = self._memory_cache.get(full_key)
@@ -54,22 +60,28 @@ class AdminCache:
     def set(self, key: str, payload: dict[str, Any], ttl_seconds: int = 60) -> None:
         full_key = f"{self._prefix}{key}"
         serialized = json.dumps(payload, ensure_ascii=False, default=str)
-        try:
-            self._client.set(full_key, serialized, ex=ttl_seconds)
-        except (RedisError, Exception):
-            logger.debug("Redis set failed for key %s, writing to memory fallback", key)
+        now = time.monotonic()
+
+        if now >= self._redis_broken_until:
+            try:
+                self._client.set(full_key, serialized, ex=ttl_seconds)
+            except (RedisError, Exception):
+                self._redis_broken_until = now + 30.0
+                logger.debug("Redis set failed for key %s, entering 30s memory fallback", key)
 
         with self._lock:
             self._memory_cache[full_key] = (payload, time.time() + ttl_seconds)
 
     def invalidate(self, key_pattern: str = "*") -> None:
         pattern = f"{self._prefix}{key_pattern}"
-        try:
-            keys = self._client.keys(pattern)
-            if keys:
-                self._client.delete(*keys)
-        except RedisError:
-            pass
+        now = time.monotonic()
+        if now >= self._redis_broken_until:
+            try:
+                keys = self._client.keys(pattern)
+                if keys:
+                    self._client.delete(*keys)
+            except RedisError:
+                self._redis_broken_until = now + 30.0
 
         with self._lock:
             if key_pattern == "*":
