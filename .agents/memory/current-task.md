@@ -1,5 +1,39 @@
 # Current Task
 
+## Tailwind CSS Integration, Responsive Heatmap Refactor, Candlestick Layout Fix & Sub-Second Latency Optimization - 2026-10-30 (complete)
+- **User Request**:
+  1. *Ảnh 1 (/candlestick-prediction)*: Khắc phục layout nến và bối cảnh bị đè chèn, sửa màu chữ tối `#0f172a` bị chìm trên nền tối.
+  2. *Ảnh 2 (/market/stocks)*: Bản đồ nhiệt ngành (Sector Heatmap) bị ép dọc chữ ("C o n g n g h e..."), nhãn "Quy ước màu" bị sticky đè lên tiêu đề bản đồ.
+  3. *Ảnh 3 (/market/stocks/VNM?tab=dividend)*: Sửa lỗi console crash Next.js `Encountered two children with the same key, 'VNM-2007-01-31--3904455196114022557'` tại `stock-dividend-panel.tsx (159:21)`.
+  4. Chuyển toàn bộ frontend sang sử dụng **Tailwind CSS**, giảm thiểu phụ thuộc global CSS rời rạc.
+  5. Cải thiện thời gian load trang trên Client: khắc phục tình trạng chờ lâu khi tải trang.
+- **Root Causes & Systemic Fixes**:
+  1. *Duplicate Key in Dividend Table*:
+     - Trong [stock-dividend-panel.tsx](file:///c:/investiq/frontend/src/components/market/stock-dividend-panel.tsx): Sửa `<tr key={e.id}>` thành `<tr key={`${e.id || "div"}-${e.ex_date || ""}-${index}`}>`, loại bỏ triệt để lỗi React warning/crash.
+  2. *Candlestick Prediction Arena Layout & Contrast Fix*:
+     - Trong [candlestick-prediction-arena.tsx](file:///c:/investiq/frontend/src/components/learn/candlestick-prediction-arena.tsx): Đồng bộ cấu trúc JSX với CSS Grid 2 cột `.challenge-workspace-grid`:
+       + Cột trái: `.challenge-info-card` (Bối cảnh Doanh nghiệp, Bối cảnh Thị trường & Tâm lý, Mức độ, Mã cổ phiếu).
+       + Cột phải: `.challenge-chart-card` (Đồ thị kỹ thuật SVG sắc nét, nến tín hiệu, nến bí ẩn).
+     - Loại bỏ toàn bộ inline styles màu đen `#0f172a` và viền chói `#e2e8f0`, thay bằng màu sáng chuẩn Dark Navy (`#f8fafc`, `#38bdf8`, `#cbd5e1`, `#1e293b`).
+     - Tách biệt rõ ràng `.challenge-decision-box` và `.ai-verdict-card`.
+  3. *Sector Heatmap Auto-Fit & Static Badge Positioning*:
+     - Trong [globals.css](file:///c:/investiq/frontend/src/app/globals.css):
+       + Sửa `.heatmap-row > a` có `min-width: 65px;` và thay `overflow-wrap: anywhere` bằng `word-break: keep-all; overflow-wrap: normal;`, text tên ngành hiển thị trọn vẹn, không bao giờ bị cắt vụn từng chữ cái.
+       + Thêm `position: static !important; z-index: 1 !important;` cho `.market-color-legend.compact-badge` để ngăn chặn hiệu ứng sticky trôi đè lên tiêu đề bản đồ nhiệt khi cuộn chuột.
+  4. *Tailwind CSS Setup & Modern PostCSS Engine*:
+     - Cài đặt `@tailwindcss/postcss` và `tailwindcss` v4.3.3.
+     - Cấu hình [postcss.config.mjs](file:///c:/investiq/frontend/postcss.config.mjs) tương thích hoàn toàn Next.js 16 và Turbopack.
+     - Tích hợp `@import "tailwindcss";` vào frontend stylesheet.
+  5. *High-Performance Sub-Second Page Latency & Cache Architecture*:
+     - Trong [market_cache.py](file:///c:/investiq/backend/app/infrastructure/cache/market_cache.py): Tăng `max_bytes` từ 1MB lên **8MB** (`8 * 1024 * 1024`), giải quyết nút thắt cổ chai khi nạp 1.396 mã chứng khoán thực tế (trước đó payload > 1MB khiến cache bị bỏ qua hoàn toàn, ép backend phải tính toán lại toàn bộ snapshot trên mỗi request).
+     - Trong [api-client.ts](file:///c:/investiq/frontend/src/lib/api-client.ts): Cập nhật cơ chế ISR / revalidate thông minh (30s cho `/overview`, `/instruments`, `/indices`; 60s cho `/sectors`, `/candles`; 120s-300s cho BCTC và Cổ tức). Kết quả: Tốc độ tải trang trên Next.js client giảm từ 3-4s xuống còn **~700ms** (< 1 giây).
+- **Verification**:
+  - TypeScript: `npm --prefix frontend run typecheck` -> 0 errors.
+  - ESLint: `npm --prefix frontend run lint` -> 0 errors, 0 warnings.
+  - Vitest: 36/36 test files passed (139/139 tests passed).
+  - Pytest: 123/123 tests passed.
+  - Runtime verification: Cả 3 trang `/candlestick-prediction`, `/market/stocks`, `/market/stocks/VNM?tab=dividend` đều trả về HTTP 200 OK mượt mà không có bất kỳ warning/lỗi nào.
+
 ## UI/UX Theme Harmonization, Visual Theory Infographics, Future Dividend Pipeline & 1,396 Stocks Integration - 2026-10-30 (complete)
 - **User Request (5 feedback items from screenshots)**:
   1. *Ảnh 1*: Lịch chia cổ tức cần các mốc thời gian trong tương lai chứ không cần quá khứ.

@@ -93,7 +93,7 @@ describe("market API client compatibility", () => {
     expect(fetchMock).toHaveBeenNthCalledWith(
       2,
       "http://127.0.0.1:8000/api/v1/market/instruments?sort=matched_value&direction=desc&limit=15",
-      { next: { revalidate: 5 } },
+      { next: { revalidate: 30 } },
     );
     expect(result.data[0].is_vn30).toBe(false);
     expect(result.pagination).toMatchObject({ previous_cursor: null, page: 1, total_pages: 1 });

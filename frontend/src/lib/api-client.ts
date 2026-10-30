@@ -134,8 +134,8 @@ class InvestIqApiError extends Error {
   }
 }
 
-async function requestJson<T>(path: string, revalidate?: number, timeoutMs?: number): Promise<T> {
-  const cacheOptions = revalidate ? { next: { revalidate } } : { cache: "no-store" as const };
+async function requestJson<T>(path: string, revalidate: number = 30, timeoutMs?: number): Promise<T> {
+  const cacheOptions = revalidate > 0 ? { next: { revalidate } } : { cache: "no-store" as const };
   const base = resolveApiBase();
   const normalizedPath = path.startsWith("/") ? path : `/${path}`;
   const response = await fetch(`${base}${normalizedPath}`, {
@@ -176,7 +176,7 @@ export function getNewsSources(timeoutMs?: number): Promise<Envelope<Source[]>> 
 }
 
 export function getMarketOverview(timeoutMs?: number): Promise<MarketOverview> {
-  return requestJson<MarketOverview>("/v1/market/overview", 5, timeoutMs);
+  return requestJson<MarketOverview>("/v1/market/overview", 30, timeoutMs);
 }
 
 function normalizeInstrumentCollection(
@@ -200,7 +200,7 @@ function normalizeInstrumentCollection(
 export async function getMarketInstruments(query: URLSearchParams): Promise<InstrumentCollection> {
   const request = async (selected: URLSearchParams) => {
     const suffix = selected.size ? `?${selected.toString()}` : "";
-    return requestJson<InstrumentCollection>(`/v1/market/instruments${suffix}`, 5);
+    return requestJson<InstrumentCollection>(`/v1/market/instruments${suffix}`, 30);
   };
   try {
     return normalizeInstrumentCollection(await request(query), query);
@@ -215,7 +215,7 @@ export async function getMarketInstruments(query: URLSearchParams): Promise<Inst
 }
 
 export function getMarketInstrument(symbol: string): Promise<InstrumentEnvelope> {
-  return requestJson<InstrumentEnvelope>(`/v1/market/instruments/${encodeURIComponent(symbol)}`, 5);
+  return requestJson<InstrumentEnvelope>(`/v1/market/instruments/${encodeURIComponent(symbol)}`, 30);
 }
 
 export function getMarketCandles(
@@ -224,7 +224,7 @@ export function getMarketCandles(
   limit: number,
 ): Promise<MarketCandles> {
   const query = new URLSearchParams({ symbol, interval, limit: String(limit) });
-  return requestJson<MarketCandles>(`/v1/market/candles?${query.toString()}`, 5);
+  return requestJson<MarketCandles>(`/v1/market/candles?${query.toString()}`, 60);
 }
 
 export function getMarketIntradayTrades(
@@ -232,15 +232,15 @@ export function getMarketIntradayTrades(
   limit = 100,
 ): Promise<MarketIntradayTrades> {
   const query = new URLSearchParams({ symbol, limit: String(limit) });
-  return requestJson<MarketIntradayTrades>(`/v1/market/intraday-trades?${query.toString()}`, 5);
+  return requestJson<MarketIntradayTrades>(`/v1/market/intraday-trades?${query.toString()}`, 15);
 }
 
 export function getMarketIndices(timeoutMs?: number): Promise<IndexCollection> {
-  return requestJson<IndexCollection>("/v1/market/indices", 5, timeoutMs);
+  return requestJson<IndexCollection>("/v1/market/indices", 30, timeoutMs);
 }
 
 export function getMarketSectors(timeoutMs?: number): Promise<SectorCollection> {
-  return requestJson<SectorCollection>("/v1/market/sectors", 5, timeoutMs);
+  return requestJson<SectorCollection>("/v1/market/sectors", 60, timeoutMs);
 }
 
 export function getMarketEvents(query = new URLSearchParams()): Promise<EventCollection> {

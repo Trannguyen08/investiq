@@ -153,10 +153,10 @@ export function StockDividendPanel({ symbol, summary, events }: StockDividendPan
                 </tr>
               </thead>
               <tbody>
-                {filteredEvents.map((e) => {
+                {filteredEvents.map((e, index) => {
                   const isCash = e.type === "cash";
                   return (
-                    <tr key={e.id}>
+                    <tr key={`${e.id || "div"}-${e.ex_date || ""}-${index}`}>
                       <td className="dividend-date-cell">
                         <strong>{e.ex_date || e.event_date || "--"}</strong>
                       </td>

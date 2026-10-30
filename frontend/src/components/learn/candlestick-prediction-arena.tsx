@@ -404,50 +404,60 @@ export function CandlestickPredictionArena() {
           </div>
         </div>
 
-        {/* ACTIVE CHALLENGE CARD */}
-        <div className="candle-card-workspace">
-          {/* TOP INFO ROW */}
-          <div className="candle-challenge-meta">
-            <div style={{ display: "flex", alignItems: "center", gap: "0.6rem", flexWrap: "wrap" }}>
-              <span className={`candle-level-badge ${currentChallenge.level}`}>
-                {currentChallenge.level === "basic"
-                  ? "Cơ bản"
-                  : currentChallenge.level === "intermediate"
-                  ? "Trung cấp"
-                  : "Nâng cao & VSA"}
-              </span>
-              <strong style={{ fontSize: "1.15rem", color: "#0f172a" }}>
-                {currentChallenge.title}
-              </strong>
-              <span className="candle-ticker-pill">{currentChallenge.ticker}</span>
-              <span style={{ fontSize: "0.85rem", color: "#64748b" }}>
-                ({currentChallenge.timeframe})
-              </span>
+        {/* ACTIVE CHALLENGE WORKSPACE (2-COLUMN GRID) */}
+        <div className="challenge-workspace-grid">
+          {/* LEFT COLUMN: INFO & CONTEXT CARD */}
+          <div className="challenge-info-card">
+            <div className="challenge-meta-row">
+              <div style={{ display: "flex", alignItems: "center", gap: "0.5rem", flexWrap: "wrap" }}>
+                <span className={`candle-level-badge ${currentChallenge.level}`}>
+                  {currentChallenge.level === "basic"
+                    ? "Cơ bản"
+                    : currentChallenge.level === "intermediate"
+                    ? "Trung cấp"
+                    : "Nâng cao & VSA"}
+                </span>
+                <span className="challenge-ticker-pill">{currentChallenge.ticker}</span>
+                <span style={{ fontSize: "0.82rem", color: "#94a3b8" }}>
+                  ({currentChallenge.timeframe})
+                </span>
+              </div>
+              <span className="challenge-pattern-badge">Mô hình: {currentChallenge.pattern}</span>
             </div>
 
-            <span className="candle-pattern-name">Mô hình: {currentChallenge.pattern}</span>
+            <h3 className="challenge-title-text">{currentChallenge.title}</h3>
+
+            {/* BỐI CẢNH DOANH NGHIỆP */}
+            <div className="challenge-context-box">
+              <span style={{ display: "block", fontWeight: 700, color: "#38bdf8", marginBottom: "0.3rem", fontSize: "0.85rem" }}>
+                🏢 Bối cảnh Doanh nghiệp:
+              </span>
+              <p style={{ margin: 0, color: "#cbd5e1", lineHeight: 1.55 }}>
+                {currentChallenge.corporateContext}
+              </p>
+            </div>
+
+            {/* BỐI CẢNH THỊ TRƯỜNG & TÂM LÝ */}
+            <div className="challenge-context-box" style={{ borderLeftColor: "#a855f7" }}>
+              <span style={{ display: "block", fontWeight: 700, color: "#c084fc", marginBottom: "0.3rem", fontSize: "0.85rem" }}>
+                🌐 Bối cảnh Thị trường & Tâm lý:
+              </span>
+              <p style={{ margin: 0, color: "#cbd5e1", lineHeight: 1.55 }}>
+                {currentChallenge.marketSentiment}
+              </p>
+            </div>
           </div>
 
-          {/* CORPORATE & MARKET CONTEXT BOX */}
-          <div className="candle-context-banner">
-            <div className="candle-context-item">
-              <span className="context-label">🏢 Bối cảnh Doanh nghiệp:</span>
-              <p className="context-text">{currentChallenge.corporateContext}</p>
-            </div>
-            <div className="candle-context-item">
-              <span className="context-label">🌐 Bối cảnh Thị trường & Tâm lý:</span>
-              <p className="context-text">{currentChallenge.marketSentiment}</p>
-            </div>
-          </div>
-
-          {/* SVG CANDLESTICK CHART */}
-          <div className="candle-chart-container">
-            <div className="candle-chart-legend">
-              <span>Đồ thị kỹ thuật: {currentChallenge.ticker}</span>
+          {/* RIGHT COLUMN: TECHNICAL CANDLESTICK CHART */}
+          <div className="challenge-chart-card">
+            <div className="challenge-chart-legend">
+              <span style={{ fontWeight: 700, color: "#f8fafc" }}>
+                Đồ thị kỹ thuật: {currentChallenge.ticker} ({currentChallenge.timeframe})
+              </span>
               <div style={{ display: "flex", gap: "1rem" }}>
-                <span style={{ color: "#10b981" }}>■ Nến tăng</span>
-                <span style={{ color: "#ef4444" }}>■ Nến giảm</span>
-                {userChoice && <span style={{ color: "#f59e0b" }}>★ Nến kết quả</span>}
+                <span style={{ color: "#10b981", fontWeight: 600 }}>■ Nến tăng</span>
+                <span style={{ color: "#ef4444", fontWeight: 600 }}>■ Nến giảm</span>
+                {userChoice && <span style={{ color: "#f59e0b", fontWeight: 700 }}>★ Nến kết quả</span>}
               </div>
             </div>
 
@@ -621,96 +631,112 @@ export function CandlestickPredictionArena() {
               })()}
             </svg>
           </div>
+        </div>
 
-          {/* USER PREDICTION BUTTONS */}
-          <div className="candle-interaction-box">
-            <h3 className="candle-prompt-text">{currentChallenge.question}</h3>
+        {/* USER DECISION BOX */}
+        <div className="challenge-decision-box">
+          <h3 className="challenge-question-heading">{currentChallenge.question}</h3>
 
-            <div className="candle-options-grid">
-              {currentChallenge.options.map((opt) => {
-                let btnCls = "candle-option-btn";
-                if (userChoice) {
-                  if (opt.key === currentChallenge.correctOption) {
-                    btnCls += " correct-choice";
-                  } else if (opt.key === userChoice) {
-                    btnCls += " wrong-choice";
-                  } else {
-                    btnCls += " disabled";
-                  }
+          <div className="challenge-options-grid">
+            {currentChallenge.options.map((opt) => {
+              let btnCls = "challenge-option-btn";
+              if (userChoice) {
+                if (opt.key === currentChallenge.correctOption) {
+                  btnCls += " selected-bullish";
+                } else if (opt.key === userChoice) {
+                  btnCls += " selected-bearish";
+                } else {
+                  btnCls += " opacity-40";
                 }
+              }
 
-                return (
-                  <button
-                    key={opt.key}
-                    type="button"
-                    className={btnCls}
-                    disabled={userChoice !== null}
-                    onClick={() => handleSelectOption(opt.key)}
-                  >
-                    <span className="option-title">
-                      {opt.key === "bullish" ? "📈" : opt.key === "bearish" ? "📉" : "⚖️"}{" "}
-                      {opt.label}
+              return (
+                <button
+                  key={opt.key}
+                  type="button"
+                  className={btnCls}
+                  disabled={userChoice !== null}
+                  onClick={() => handleSelectOption(opt.key)}
+                >
+                  <span className="challenge-opt-label">
+                    {opt.key === "bullish" ? "📈" : opt.key === "bearish" ? "📉" : "⚖️"}{" "}
+                    {opt.label}
+                  </span>
+                  <span className="challenge-opt-desc">{opt.description}</span>
+                </button>
+              );
+            })}
+          </div>
+        </div>
+
+        {/* AI VERDICT & DEEP DIVE ANALYSIS */}
+        {userChoice && (
+          <div className={`ai-verdict-card ${userChoice === currentChallenge.correctOption ? "correct-border" : "wrong-border"}`}>
+            <div className="verdict-header-row">
+              <div style={{ display: "flex", alignItems: "center", gap: "0.75rem" }}>
+                <span style={{ fontSize: "1.75rem" }}>
+                  {userChoice === currentChallenge.correctOption ? "🎉" : "💡"}
+                </span>
+                <div>
+                  <div style={{ display: "flex", alignItems: "center", gap: "0.6rem" }}>
+                    <span className={`verdict-tag ${userChoice === currentChallenge.correctOption ? "correct" : "wrong"}`}>
+                      {userChoice === currentChallenge.correctOption ? "DỰ ĐOÁN CHÍNH XÁC (+100 ĐIỂM)" : "DỰ ĐOÁN CHƯA CHÍNH XÁC"}
                     </span>
-                    <span className="option-desc">{opt.description}</span>
-                  </button>
-                );
-              })}
+                    <strong style={{ fontSize: "1.1rem", color: "#f8fafc" }}>
+                      AI Price Action Engine Nhận Xét
+                    </strong>
+                  </div>
+                  <span style={{ fontSize: "0.82rem", color: "#94a3b8" }}>
+                    Giải mã quy luật Cung - Cầu và hành động giá nến thực chiến
+                  </span>
+                </div>
+              </div>
+
+              <div style={{ display: "flex", gap: "0.5rem" }}>
+                <button type="button" onClick={handleResetCurrent} className="candle-btn-outline">
+                  Làm lại bài này
+                </button>
+                <button type="button" onClick={handleNextChallenge} className="candle-btn-primary">
+                  Bài tiếp theo →
+                </button>
+              </div>
+            </div>
+
+            <div className="ai-details-grid">
+              <div className="ai-detail-block" style={{ padding: "1rem" }}>
+                <strong style={{ display: "block", color: "#38bdf8", marginBottom: "0.4rem", fontSize: "0.85rem" }}>
+                  🔍 Tại sao lại diễn biến như vậy:
+                </strong>
+                <p style={{ margin: 0, color: "#cbd5e1", fontSize: "0.85rem", lineHeight: 1.55 }}>
+                  {currentChallenge.aiAnalysis.why}
+                </p>
+              </div>
+
+              <div className="ai-detail-block" style={{ padding: "1rem" }}>
+                <strong style={{ display: "block", color: "#34d399", marginBottom: "0.4rem", fontSize: "0.85rem" }}>
+                  ⚖️ Động thái Cung - Cầu trên sổ lệnh:
+                </strong>
+                <p style={{ margin: 0, color: "#cbd5e1", fontSize: "0.85rem", lineHeight: 1.55 }}>
+                  {currentChallenge.aiAnalysis.supplyDemand}
+                </p>
+              </div>
+
+              <div className="ai-detail-block" style={{ padding: "1rem" }}>
+                <strong style={{ display: "block", color: "#c084fc", marginBottom: "0.4rem", fontSize: "0.85rem" }}>
+                  🏢 Tác động từ Bối cảnh Doanh nghiệp:
+                </strong>
+                <p style={{ margin: 0, color: "#cbd5e1", fontSize: "0.85rem", lineHeight: 1.55 }}>
+                  {currentChallenge.aiAnalysis.corporateImpact}
+                </p>
+              </div>
+            </div>
+
+            <div style={{ background: "rgba(56, 189, 248, 0.1)", border: "1px solid rgba(56, 189, 248, 0.25)", borderRadius: "8px", padding: "0.85rem 1.25rem", color: "#f8fafc", fontSize: "0.88rem", lineHeight: 1.6 }}>
+              <strong style={{ color: "#38bdf8" }}>💡 Bài học thực chiến rút ra: </strong>
+              {currentChallenge.aiAnalysis.lesson}
             </div>
           </div>
-
-          {/* AI FEEDBACK & DEEP DIVE ANALYSIS */}
-          {userChoice && (
-            <div className={`candle-ai-result-panel ${userChoice === currentChallenge.correctOption ? "success" : "failed"}`}>
-              <div className="ai-result-header">
-                <div style={{ display: "flex", alignItems: "center", gap: "0.6rem" }}>
-                  <span style={{ fontSize: "1.5rem" }}>
-                    {userChoice === currentChallenge.correctOption ? "🎉" : "💡"}
-                  </span>
-                  <div>
-                    <h4 style={{ margin: 0, fontSize: "1.1rem", fontWeight: 700 }}>
-                      {userChoice === currentChallenge.correctOption
-                        ? "Dự đoán CHÍNH XÁC (+100 Điểm)!"
-                        : "Dự đoán CHƯA CHÍNH XÁC!"}
-                    </h4>
-                    <span style={{ fontSize: "0.85rem", color: "#64748b" }}>
-                      AI Price Action Engine nhận xét chi tiết tình huống này
-                    </span>
-                  </div>
-                </div>
-
-                <div style={{ display: "flex", gap: "0.5rem" }}>
-                  <button type="button" onClick={handleResetCurrent} className="candle-btn-outline">
-                    Làm lại bài này
-                  </button>
-                  <button type="button" onClick={handleNextChallenge} className="candle-btn-primary">
-                    Thử thách bài tiếp theo →
-                  </button>
-                </div>
-              </div>
-
-              <div className="ai-result-body">
-                <div className="ai-point">
-                  <strong>🔍 Tại sao lại diễn biến như vậy:</strong>
-                  <p>{currentChallenge.aiAnalysis.why}</p>
-                </div>
-
-                <div className="ai-point">
-                  <strong>⚖️ Động thái Cung - Cầu trên sổ lệnh:</strong>
-                  <p>{currentChallenge.aiAnalysis.supplyDemand}</p>
-                </div>
-
-                <div className="ai-point">
-                  <strong>🏢 Tác động từ Bối cảnh Doanh nghiệp:</strong>
-                  <p>{currentChallenge.aiAnalysis.corporateImpact}</p>
-                </div>
-
-                <div className="ai-lesson-chip">
-                  <strong>💡 Bài học thực chiến rút ra:</strong> {currentChallenge.aiAnalysis.lesson}
-                </div>
-              </div>
-            </div>
-          )}
-        </div>
+        )}
       </section>
     </div>
   );

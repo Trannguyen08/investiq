@@ -18,7 +18,7 @@ logger = logging.getLogger("investiq.market.cache")
 
 
 class MarketReadCache:
-    max_bytes = 1024 * 1024
+    max_bytes = 8 * 1024 * 1024
 
     def __init__(self, client: Redis | None = None) -> None:
         self._client = client or Redis.from_url(
