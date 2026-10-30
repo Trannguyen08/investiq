@@ -15,6 +15,7 @@ import {
   priceTone,
 } from "@/components/market/formatters";
 import { mergeLiveInstrument } from "@/components/market/live-market";
+import { StockGoldBankComparator } from "@/components/market/stock-gold-bank-comparator";
 import { MARKET_OVERVIEW_INDEX_CHART_LIMITS, MarketCandlestickChart } from "@/components/market/market-candlestick-chart";
 import { useMarketStreamState } from "@/hooks/use-realtime-price";
 import { useVisibleFundamentals } from "@/hooks/use-visible-fundamentals";
@@ -107,6 +108,7 @@ function StockComparisonDialog({
   const router = useRouter();
   const dialogRef = useRef<HTMLDivElement>(null);
   const [symbols, setSymbols] = useState(initialSymbols);
+  const [comparisonMode, setComparisonMode] = useState<"peers" | "gold_bank">("peers");
   const [query, setQuery] = useState("");
   const [error, setError] = useState("");
   const normalizedQuery = query.trim().toUpperCase();
@@ -195,8 +197,54 @@ function StockComparisonDialog({
   return <div className="stock-comparison-modal" role="presentation">
     <button className="stock-comparison-backdrop" type="button" aria-label="Đóng cửa sổ so sánh" onClick={onClose} />
     <div ref={dialogRef} className="stock-comparison-dialog" role="dialog" aria-modal="true" aria-labelledby="comparison-dialog-title" aria-describedby="comparison-dialog-description">
-      <header className="stock-comparison-dialog-header"><div><p className="eyebrow">ĐỐI CHIẾU CÙNG MỘT KHUNG</p><h2 id="comparison-dialog-title">So sánh cổ phiếu</h2><p id="comparison-dialog-description">Chọn từ 2 đến 3 mã. Bạn có thể gỡ một mã rồi thêm mã khác ngay tại đây.</p></div><button type="button" className="dialog-close" aria-label="Đóng cửa sổ so sánh" onClick={onClose}>×</button></header>
-      <section className="comparison-picker" aria-label="Chọn mã để so sánh">
+      <header className="stock-comparison-dialog-header"><div><p className="eyebrow">ĐỐI CHIẾU CÙNG MỘT KHUNG</p><h2 id="comparison-dialog-title">So sánh cổ phiếu</h2><p id="comparison-dialog-description">Chọn từ 2 đến 3 mã hoặc đối chiếu tỷ suất sinh lời với Vàng SJC và Lãi suất ngân hàng qua từng năm.</p></div><button type="button" className="dialog-close" aria-label="Đóng cửa sổ so sánh" onClick={onClose}>×</button></header>
+      <div className="comparison-mode-switch" role="tablist" style={{ display: "flex", gap: "8px", margin: "12px 0 16px 0", borderBottom: "1px solid var(--line, #334155)", paddingBottom: "12px" }}>
+        <button
+          type="button"
+          role="tab"
+          aria-selected={comparisonMode === "peers"}
+          className={`comparison-mode-btn ${comparisonMode === "peers" ? "active" : ""}`}
+          style={{
+            padding: "8px 16px",
+            borderRadius: "6px",
+            border: "1px solid",
+            borderColor: comparisonMode === "peers" ? "var(--accent, #3b82f6)" : "var(--line, #334155)",
+            background: comparisonMode === "peers" ? "rgba(59, 130, 246, 0.15)" : "transparent",
+            color: comparisonMode === "peers" ? "#60a5fa" : "inherit",
+            fontWeight: comparisonMode === "peers" ? 600 : 400,
+            cursor: "pointer",
+          }}
+          onClick={() => setComparisonMode("peers")}
+        >
+          📊 So sánh giữa các mã cổ phiếu
+        </button>
+        <button
+          type="button"
+          role="tab"
+          aria-selected={comparisonMode === "gold_bank"}
+          className={`comparison-mode-btn ${comparisonMode === "gold_bank" ? "active" : ""}`}
+          style={{
+            padding: "8px 16px",
+            borderRadius: "6px",
+            border: "1px solid",
+            borderColor: comparisonMode === "gold_bank" ? "var(--accent, #3b82f6)" : "var(--line, #334155)",
+            background: comparisonMode === "gold_bank" ? "rgba(59, 130, 246, 0.15)" : "transparent",
+            color: comparisonMode === "gold_bank" ? "#60a5fa" : "inherit",
+            fontWeight: comparisonMode === "gold_bank" ? 600 : 400,
+            cursor: "pointer",
+          }}
+          onClick={() => setComparisonMode("gold_bank")}
+        >
+          ⚖️ So sánh với Vàng SJC & Ngân hàng theo Năm
+        </button>
+      </div>
+      {comparisonMode === "gold_bank" ? (
+        <div className="stock-comparison-gold-bank-wrapper" style={{ marginTop: "16px" }}>
+          <StockGoldBankComparator initialSymbol={symbols[0] || "HPG"} />
+        </div>
+      ) : (
+        <>
+          <section className="comparison-picker" aria-label="Chọn mã để so sánh">
         <div className="comparison-selected"><strong>Đã chọn {symbols.length}/3</strong><div>{symbols.map((symbol) => <span key={symbol}>{symbol}<button type="button" aria-label={`Gỡ ${symbol} khỏi so sánh`} onClick={() => removeSymbol(symbol)}>×</button></span>)}</div></div>
         <form onSubmit={submitSymbol}><label htmlFor="comparison-symbol">Tìm hoặc nhập mã cổ phiếu</label><div><input id="comparison-symbol" value={query} onChange={(event) => setQuery(event.target.value)} maxLength={24} autoComplete="off" placeholder="Ví dụ: FPT, VCB, HPG" /><button type="submit" disabled={!query.trim() || symbols.length >= 3}>Thêm mã</button></div></form>
         {candidates.length > 0 && <div className="comparison-suggestions" aria-label="Mã gợi ý">{candidates.map((item) => <button key={item.symbol} type="button" disabled={symbols.length >= 3} aria-label={`Thêm ${item.symbol} vào so sánh`} onClick={() => addSymbol(item.symbol)}><strong>{item.symbol}</strong><span>{item.name}</span></button>)}</div>}
@@ -220,6 +268,8 @@ function StockComparisonDialog({
           </article>;
         })}</div>}
       </section>
+        </>
+      )}
     </div>
   </div>;
 }

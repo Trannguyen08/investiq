@@ -11,6 +11,7 @@ import { useAuth } from "@/hooks/use-auth";
 export const userNavigationLinks = [
   ["/", "Tổng quan"],
   ["/market/stocks", "Thị trường"],
+  ["/candlestick-prediction", "Dự đoán nến"],
   ["/portfolio", "Danh mục"],
   ["/community", "Cộng đồng"],
   ["/learn", "Chứng khoán căn bản"],
@@ -147,7 +148,7 @@ export function UserHeader() {
       <header className="site-header"><div className="header-inner">
         <Link className="brand" href="/" aria-label="InvestIQ — trang tổng quan"><img src="/investiq-logo.svg" width="118" height="32" alt="InvestIQ" /></Link>
         <nav className="desktop-nav" aria-label="Điều hướng chính">{userNavigationLinks.map(([href, label]) => { const active = href === "/" ? pathname === "/" : href.startsWith("/market/") ? pathname.startsWith("/market") : pathname.startsWith(href); return <Link className={active ? "nav-link active" : "nav-link"} href={href} key={href} aria-current={active ? "page" : undefined}>{label}</Link>; })}</nav>
-        <form action="/market/stocks" className="header-search" role="search"><label className="sr-only" htmlFor="header-search">Tìm mã cổ phiếu hoặc công ty</label><svg aria-hidden="true" viewBox="0 0 24 24"><path d="m21 21-4.4-4.4m2.4-5.1A7.5 7.5 0 1 1 4 11.5a7.5 7.5 0 0 1 15 0Z" /></svg><input id="header-search" name="q" placeholder="Tìm mã cổ phiếu, công ty" /></form>
+        <div style={{ flex: 1 }} />
         <AccountMenu /><AdminPortalShortcut /><MobileMenu />
       </div></header>
       <Suspense fallback={null}><AuthMessage /></Suspense>

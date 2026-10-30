@@ -9719,3 +9719,751 @@ body:has(.learn-page) .mobile-menu summary span { background: #d9e8f5; }
 .financial-chart-stage.drawing-mode {
   cursor: crosshair;
 }
+
+
+/* =========================================================================
+   CANDLESTICK PREDICTION ARENA & INTERACTIVE LEARNING STYLES
+   ========================================================================= */
+
+.candle-arena-container {
+  max-width: 1200px;
+  margin: 0 auto;
+  padding: 2rem 1.25rem 4rem 1.25rem;
+}
+
+.candle-arena-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 2rem;
+  margin-bottom: 2rem;
+  padding-bottom: 1.5rem;
+  border-bottom: 1px solid #e2e8f0;
+  flex-wrap: wrap;
+}
+
+.candle-arena-eyebrow {
+  display: inline-block;
+  font-size: 0.75rem;
+  font-weight: 700;
+  color: #2563eb;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  margin-bottom: 0.35rem;
+}
+
+.candle-arena-title {
+  font-size: 1.85rem;
+  font-weight: 800;
+  color: #0f172a;
+  margin: 0 0 0.5rem 0;
+  letter-spacing: -0.02em;
+}
+
+.candle-arena-subtitle {
+  font-size: 0.95rem;
+  color: #475569;
+  max-width: 680px;
+  line-height: 1.6;
+  margin: 0;
+}
+
+.candle-stats-cluster {
+  display: flex;
+  gap: 0.75rem;
+}
+
+.candle-stat-box {
+  background: #ffffff;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  padding: 0.6rem 1rem;
+  display: flex;
+  flex-direction: column;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.04);
+}
+
+.candle-stat-label {
+  font-size: 0.72rem;
+  color: #64748b;
+  font-weight: 600;
+  text-transform: uppercase;
+}
+
+.candle-stat-val {
+  font-size: 1.25rem;
+  font-weight: 800;
+  margin-top: 0.2rem;
+}
+
+.candle-stat-val.text-blue { color: #2563eb; }
+.candle-stat-val.text-amber { color: #d97706; }
+.candle-stat-val.text-green { color: #16a34a; }
+
+/* Theory Accordion Panel */
+.candle-theory-panel {
+  background: #ffffff;
+  border: 1px solid #e2e8f0;
+  border-radius: 10px;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.03);
+  margin-bottom: 2rem;
+  overflow: hidden;
+}
+
+.candle-theory-header {
+  padding: 1rem 1.25rem;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  cursor: pointer;
+  background: #f8fafc;
+  user-select: none;
+  border-bottom: 1px solid transparent;
+}
+
+.candle-theory-header:hover {
+  background: #f1f5f9;
+}
+
+.candle-theory-toggle {
+  background: transparent;
+  border: none;
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: #2563eb;
+  cursor: pointer;
+}
+
+.candle-theory-body {
+  padding: 1.25rem;
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+  gap: 1.25rem;
+  border-top: 1px solid #e2e8f0;
+}
+
+.candle-theory-card {
+  background: #f8fafc;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  padding: 1rem;
+}
+
+.candle-theory-card.highlight {
+  background: #eff6ff;
+  border-color: #bfdbfe;
+}
+
+.candle-theory-card h3 {
+  font-size: 0.95rem;
+  font-weight: 700;
+  color: #1e293b;
+  margin: 0 0 0.5rem 0;
+}
+
+.candle-theory-card p {
+  font-size: 0.85rem;
+  color: #475569;
+  line-height: 1.5;
+  margin-bottom: 0.75rem;
+}
+
+.candle-theory-card ul {
+  margin: 0;
+  padding-left: 1.25rem;
+  font-size: 0.82rem;
+  color: #334155;
+  line-height: 1.6;
+}
+
+/* Challenge Workspace */
+.candle-challenge-controls {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 1rem;
+  margin-bottom: 1.25rem;
+  flex-wrap: wrap;
+}
+
+.candle-level-tabs {
+  display: flex;
+  gap: 0.35rem;
+  background: #f1f5f9;
+  padding: 0.25rem;
+  border-radius: 8px;
+}
+
+.candle-level-tabs button {
+  background: transparent;
+  border: none;
+  padding: 0.45rem 0.85rem;
+  border-radius: 6px;
+  font-size: 0.82rem;
+  font-weight: 600;
+  color: #475569;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.candle-level-tabs button.active {
+  background: #ffffff;
+  color: #2563eb;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08);
+}
+
+.candle-nav-stepper {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.candle-nav-stepper button {
+  background: #ffffff;
+  border: 1px solid #cbd5e1;
+  border-radius: 6px;
+  padding: 0.45rem 0.85rem;
+  font-size: 0.82rem;
+  font-weight: 600;
+  color: #1e293b;
+  cursor: pointer;
+}
+
+.candle-nav-stepper button:hover {
+  background: #f8fafc;
+  border-color: #94a3b8;
+}
+
+.candle-select-stepper {
+  padding: 0.45rem 0.75rem;
+  border-radius: 6px;
+  border: 1px solid #cbd5e1;
+  font-size: 0.82rem;
+  font-weight: 600;
+  color: #0f172a;
+  background: #ffffff;
+  max-width: 280px;
+}
+
+.candle-card-workspace {
+  background: #ffffff;
+  border: 1px solid #e2e8f0;
+  border-radius: 12px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.04);
+  padding: 1.5rem;
+}
+
+.candle-challenge-meta {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 1rem;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+}
+
+.candle-level-badge {
+  padding: 0.2rem 0.6rem;
+  border-radius: 9999px;
+  font-size: 0.75rem;
+  font-weight: 700;
+}
+
+.candle-level-badge.basic {
+  background: #dcfce7;
+  color: #166534;
+}
+
+.candle-level-badge.intermediate {
+  background: #e0e7ff;
+  color: #3730a3;
+}
+
+.candle-level-badge.advanced {
+  background: #fef3c7;
+  color: #92400e;
+}
+
+.candle-ticker-pill {
+  background: #0f172a;
+  color: #ffffff;
+  font-family: monospace;
+  font-weight: 700;
+  font-size: 0.85rem;
+  padding: 0.15rem 0.5rem;
+  border-radius: 4px;
+}
+
+.candle-pattern-name {
+  font-size: 0.9rem;
+  font-weight: 700;
+  color: #2563eb;
+}
+
+.candle-context-banner {
+  background: #f8fafc;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  padding: 1rem;
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 1.25rem;
+  margin-bottom: 1.5rem;
+}
+
+@media (max-width: 768px) {
+  .candle-context-banner {
+    grid-template-columns: 1fr;
+  }
+}
+
+.context-label {
+  font-size: 0.8rem;
+  font-weight: 700;
+  color: #334155;
+  display: block;
+  margin-bottom: 0.25rem;
+}
+
+.context-text {
+  font-size: 0.85rem;
+  color: #475569;
+  line-height: 1.55;
+  margin: 0;
+}
+
+/* SVG Chart Stage */
+.candle-chart-container {
+  background: #ffffff;
+  border: 1px solid #cbd5e1;
+  border-radius: 8px;
+  padding: 1rem;
+  margin-bottom: 1.5rem;
+}
+
+.candle-chart-legend {
+  display: flex;
+  justify-content: space-between;
+  font-size: 0.8rem;
+  font-weight: 600;
+  color: #64748b;
+  margin-bottom: 0.5rem;
+}
+
+.candle-svg-canvas {
+  width: 100%;
+  height: auto;
+  max-height: 280px;
+  display: block;
+}
+
+/* Prediction Options Grid */
+.candle-interaction-box {
+  margin-bottom: 1.5rem;
+}
+
+.candle-prompt-text {
+  font-size: 1.05rem;
+  font-weight: 700;
+  color: #0f172a;
+  margin: 0 0 1rem 0;
+}
+
+.candle-options-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+  gap: 1rem;
+}
+
+.candle-option-btn {
+  background: #ffffff;
+  border: 2px solid #e2e8f0;
+  border-radius: 10px;
+  padding: 1rem;
+  text-align: left;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  display: flex;
+  flex-direction: column;
+}
+
+.candle-option-btn:hover:not(:disabled) {
+  border-color: #2563eb;
+  background: #f8fafc;
+  transform: translateY(-2px);
+  box-shadow: 0 4px 10px rgba(37, 99, 235, 0.08);
+}
+
+.candle-option-btn .option-title {
+  font-size: 0.95rem;
+  font-weight: 700;
+  color: #0f172a;
+  margin-bottom: 0.35rem;
+}
+
+.candle-option-btn .option-desc {
+  font-size: 0.8rem;
+  color: #64748b;
+  line-height: 1.45;
+}
+
+.candle-option-btn.correct-choice {
+  border-color: #10b981;
+  background: #f0fdf4;
+}
+
+.candle-option-btn.wrong-choice {
+  border-color: #ef4444;
+  background: #fef2f2;
+}
+
+.candle-option-btn.disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+/* AI Feedback Panel */
+.candle-ai-result-panel {
+  border-radius: 10px;
+  padding: 1.25rem;
+  margin-top: 1.5rem;
+  animation: modalFadeIn 0.3s ease-out;
+}
+
+.candle-ai-result-panel.success {
+  background: #f0fdf4;
+  border: 1px solid #bbf7d0;
+}
+
+.candle-ai-result-panel.failed {
+  background: #fffbeb;
+  border: 1px solid #fde68a;
+}
+
+.ai-result-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding-bottom: 1rem;
+  border-bottom: 1px solid rgba(0, 0, 0, 0.08);
+  margin-bottom: 1rem;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+}
+
+.candle-btn-primary {
+  background: #2563eb;
+  color: #ffffff;
+  border: none;
+  padding: 0.5rem 1rem;
+  border-radius: 6px;
+  font-size: 0.85rem;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.candle-btn-primary:hover {
+  background: #1d4ed8;
+}
+
+.candle-btn-outline {
+  background: transparent;
+  color: #475569;
+  border: 1px solid #cbd5e1;
+  padding: 0.5rem 0.85rem;
+  border-radius: 6px;
+  font-size: 0.85rem;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.candle-btn-outline:hover {
+  background: #ffffff;
+}
+
+.ai-result-body {
+  display: flex;
+  flex-direction: column;
+  gap: 0.85rem;
+}
+
+.ai-point {
+  font-size: 0.88rem;
+  line-height: 1.55;
+  color: #1e293b;
+}
+
+.ai-point strong {
+  color: #0f172a;
+}
+
+.ai-point p {
+  margin: 0.2rem 0 0 0;
+  color: #334155;
+}
+
+.ai-lesson-chip {
+  background: rgba(37, 99, 235, 0.08);
+  border-left: 3px solid #2563eb;
+  padding: 0.75rem 1rem;
+  border-radius: 4px;
+  font-size: 0.88rem;
+  color: #1e3a8a;
+  line-height: 1.5;
+}
+
+@keyframes modalFadeIn {
+  from { opacity: 0; transform: translateY(6px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+
+/* =========================================================================
+   STOCK VS GOLD VS BANK INVESTMENT COMPARATOR STYLES
+   ========================================================================= */
+
+.invest-comparator-card {
+  background: #ffffff;
+  border: 1px solid #e2e8f0;
+  border-radius: 12px;
+  padding: 1.5rem;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.04);
+}
+
+.invest-comparator-card.compact-mode {
+  padding: 1rem;
+}
+
+.invest-comparator-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 1.5rem;
+  margin-bottom: 1.5rem;
+  flex-wrap: wrap;
+}
+
+.invest-badge {
+  display: inline-block;
+  background: #eff6ff;
+  color: #2563eb;
+  font-size: 0.72rem;
+  font-weight: 700;
+  padding: 0.2rem 0.5rem;
+  border-radius: 4px;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  margin-bottom: 0.35rem;
+}
+
+.invest-title {
+  font-size: 1.35rem;
+  font-weight: 800;
+  color: #0f172a;
+  margin: 0 0 0.35rem 0;
+}
+
+.invest-desc {
+  font-size: 0.85rem;
+  color: #64748b;
+  margin: 0;
+  max-width: 600px;
+  line-height: 1.5;
+}
+
+.invest-controls-cluster {
+  display: flex;
+  gap: 0.75rem;
+  flex-wrap: wrap;
+  align-items: flex-end;
+}
+
+.invest-control-box {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+}
+
+.invest-control-box label {
+  font-size: 0.75rem;
+  font-weight: 700;
+  color: #475569;
+}
+
+.invest-select {
+  padding: 0.45rem 0.75rem;
+  border-radius: 6px;
+  border: 1px solid #cbd5e1;
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: #0f172a;
+  background: #ffffff;
+  min-width: 120px;
+}
+
+.capital-pills-row {
+  display: flex;
+  gap: 0.35rem;
+}
+
+.capital-pill {
+  background: #f1f5f9;
+  border: 1px solid #e2e8f0;
+  border-radius: 6px;
+  padding: 0.4rem 0.65rem;
+  font-size: 0.78rem;
+  font-weight: 600;
+  color: #334155;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.capital-pill.active {
+  background: #2563eb;
+  color: #ffffff;
+  border-color: #2563eb;
+}
+
+/* 3 KPI CARDS */
+.invest-kpi-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+  gap: 1rem;
+  margin-bottom: 1.5rem;
+}
+
+.invest-kpi-card {
+  background: #f8fafc;
+  border: 1px solid #e2e8f0;
+  border-radius: 10px;
+  padding: 1.15rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+  position: relative;
+  overflow: hidden;
+}
+
+.invest-kpi-card::before {
+  content: "";
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 4px;
+}
+
+.invest-kpi-card.stock-border::before { background: #2563eb; }
+.invest-kpi-card.gold-border::before { background: #f59e0b; }
+.invest-kpi-card.bank-border::before { background: #10b981; }
+
+.invest-kpi-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-size: 0.8rem;
+  font-weight: 700;
+  color: #334155;
+}
+
+.kpi-roi-badge {
+  font-size: 0.75rem;
+  font-weight: 800;
+  padding: 0.15rem 0.45rem;
+  border-radius: 4px;
+}
+
+.kpi-roi-badge.up {
+  background: #dcfce7;
+  color: #166534;
+}
+
+.kpi-roi-badge.down {
+  background: #fee2e2;
+  color: #991b1b;
+}
+
+.invest-kpi-amount {
+  font-size: 1.5rem;
+  font-weight: 800;
+  color: #0f172a;
+}
+
+.invest-kpi-amount.text-gold { color: #d97706; }
+.invest-kpi-amount.text-green { color: #16a34a; }
+
+.invest-kpi-sub {
+  font-size: 0.78rem;
+  color: #64748b;
+  line-height: 1.4;
+}
+
+/* Chart Box */
+.invest-chart-box {
+  background: #ffffff;
+  border: 1px solid #e2e8f0;
+  border-radius: 10px;
+  padding: 1.25rem;
+  margin-bottom: 1.5rem;
+}
+
+.invest-chart-legend {
+  display: flex;
+  justify-content: space-between;
+  font-size: 0.82rem;
+  font-weight: 600;
+  color: #475569;
+  margin-bottom: 0.75rem;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+
+.invest-svg-canvas {
+  width: 100%;
+  height: auto;
+  max-height: 240px;
+  display: block;
+}
+
+/* Table Wrapper */
+.invest-table-wrapper {
+  margin-bottom: 1.5rem;
+}
+
+.invest-table-heading {
+  font-size: 1rem;
+  font-weight: 700;
+  color: #0f172a;
+  margin: 0 0 0.75rem 0;
+}
+
+/* Insight Box */
+.invest-insight-box {
+  background: #f8fafc;
+  border: 1px solid #e2e8f0;
+  border-left: 4px solid #f59e0b;
+  border-radius: 8px;
+  padding: 1rem 1.25rem;
+}
+
+.invest-insight-box h4 {
+  font-size: 0.95rem;
+  font-weight: 700;
+  color: #0f172a;
+  margin: 0 0 0.5rem 0;
+}
+
+.invest-insight-box p {
+  font-size: 0.85rem;
+  color: #334155;
+  line-height: 1.6;
+  margin: 0 0 0.75rem 0;
+}
+
+.invest-insight-box ul {
+  margin: 0;
+  padding-left: 1.25rem;
+  font-size: 0.82rem;
+  color: #475569;
+  line-height: 1.6;
+}

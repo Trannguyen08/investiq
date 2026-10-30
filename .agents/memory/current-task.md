@@ -1,5 +1,41 @@
 # Current Task
 
+## Candlestick Prediction Arena (50 Real Challenges + AI Review) & Multi-Asset Timeline Comparator (Stock vs SJC Gold vs Bank) - 2026-10-30 (complete)
+- **User Request**:
+  1. Commit code và push nhánh `feature/admin` lên remote (Đã hoàn thành).
+  2. Checkout sang nhánh mới trước khi code (`feature/candlestick-prediction-and-comparisons`).
+  3. Bỏ thanh tìm kiếm trên header giao diện người dùng.
+  4. Thêm tính năng "Dự đoán nến" trên header:
+     - Giới thiệu nguyên tắc nến Nhật, động lực tăng/giảm giá, các yếu tố quyết định độ dài ngắn của thân nến và bóng nến.
+     - 50 bài tập dự đoán nến từ cơ bản đến nâng cao: đoạn nến SVG sắc nét, thông tin bối cảnh doanh nghiệp và thị trường, 3 lựa chọn (Tăng mạnh, Giảm sâu, Đi ngang), AI Price Action Engine nhận xét chi tiết, cơ chế cung cầu và bài học thực chiến.
+  5. Điều chỉnh tính năng So sánh Cổ phiếu với Ngân hàng:
+     - Cho phép chọn năm bắt đầu đầu tư (lấy giá cổ phiếu tại năm đó).
+     - Xem số tiền lũy kế qua các năm tiếp theo tới hiện tại.
+     - Thêm so sánh với Mua Vàng (Vàng miếng SJC 9999).
+     - Tích hợp tính năng đối chiếu đa tài sản này vào mục "So sánh cổ phiếu" (`StockComparisonDialog`) trên bảng giá thị trường.
+- **Implementation Details**:
+  1. *Header & Route Cleanup*:
+     - `frontend/src/components/layout/user-header.tsx`: Gỡ bỏ form tìm kiếm, thêm tab "Dự đoán nến" dẫn tới `/candlestick-prediction`.
+     - `frontend/src/app/(user)/candlestick-prediction/page.tsx`: Route App Router chuyên dụng cho Đấu trường Dự đoán Nến.
+  2. *Candlestick Theory & 50 Real Market Challenges*:
+     - `frontend/src/content/candlestick-challenges.ts`: Cấu trúc dữ liệu và tài liệu lý thuyết nền tảng nến Nhật, nguyên lý cung cầu (Order Book pressure), biên độ dao động, xác nhận khối lượng (Volume spread analysis) và lực từ chối giá của bóng nến.
+     - `frontend/src/content/candlestick-challenges-data.ts`: Bộ 50 kịch bản thực tế gồm Cơ bản (Hammer, Shooting Star, Marubozu, Doji, Spinning Top, Inverted Hammer), Trung cấp (Engulfing, Piercing, Dark Cloud Cover, Morning/Evening Star, Tweezers, Three Soldiers/Crows), Nâng cao (VSA Volume Climax, No Supply Bar, UTAD, Spring Wyckoff, bẫy giá Fakey, phản ứng BCTC bùng nổ/thất vọng).
+     - `frontend/src/components/learn/candlestick-prediction-arena.tsx`: Giao diện tương tác, bộ lọc cấp độ, dropdown chọn bài, biểu đồ nến SVG trực quan vẽ nến quá khứ + nến tín hiệu nổi bật + nến kết quả mở ra khi trả lời, AI nhận xét và giải thích bài học.
+  3. *Multi-Asset Investment Comparator (Stock vs SJC Gold vs Bank Savings)*:
+     - `frontend/src/components/market/stock-gold-bank-comparator.tsx`:
+       - Dữ liệu lịch sử 2016-2026: Vàng SJC (36.3tr -> 91tr), Lãi suất tiết kiệm 12T (5.2% - 7.4%/năm tích lũy lãi kép), Cổ phiếu lớn (HPG, FPT, VCB, VNM, MWG, SSI, DGC, TCB, MBB, VIC).
+       - Tùy chọn năm bắt đầu đầu tư (2016-2024), chọn mức vốn ban đầu (50M, 100M, 200M, 500M).
+       - 3 Thẻ KPI tổng kết tài sản hiện tại, ROI % và lãi ròng.
+       - Biểu đồ đa đường SVG hiển thị đường cong tăng trưởng của 3 kênh qua từng năm.
+       - Bảng dữ liệu chi tiết số tiền ở các năm tiếp theo qua từng mốc năm kèm kênh dẫn đầu.
+     - `frontend/src/components/market/dca-simulator-modal.tsx`: Tích hợp bộ so sánh vào modal tích sản trên trang chi tiết mã cổ phiếu.
+     - `frontend/src/components/market/market-stocks-beginner.tsx`: Tích hợp tab chuyển đổi "⚖️ So sánh với Vàng SJC & Ngân hàng theo Năm" ngay trong hộp thoại `StockComparisonDialog`.
+- **Verification**:
+  - TypeScript Typecheck: 0 errors (`tsc --noEmit --incremental false`).
+  - ESLint: 0 errors (`eslint .`).
+  - Vitest: 4/4 test files passed (19/19 tests) gồm `user-header.test.ts`, `candlestick-prediction-arena.test.tsx`, `stock-gold-bank-comparator.test.tsx`, `market-stocks-beginner.test.tsx`.
+  - Backend pytest: 123/123 passed (`pytest tests/unit`).
+
 ## 4 Free Client Enhancements & Admin Corporate Actions / Market Data Pipeline - 2026-10-30 (complete)
 - **User Request**:
   1. Hủy tính năng AI Assistant.

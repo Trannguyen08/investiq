@@ -797,7 +797,7 @@ export function MarketCandlestickChart({
         <svg
           viewBox={`0 0 ${width} ${totalSvgHeight}`}
           role="img"
-          aria-label={`${label}, ${values.length} nến giá`}
+          aria-label={`${label}, ${values.length} nến giá xanh đỏ`}
         >
           <defs>
             <linearGradient id={`bb-grad-${chartId}`} x1="0" y1="0" x2="0" y2="1">
