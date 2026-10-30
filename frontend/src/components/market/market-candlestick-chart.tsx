@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useId, useRef, useState } from "react";
+import { useEffect, useId, useMemo, useRef, useState } from "react";
 
 import { formatCompact, formatDecimal } from "@/components/market/formatters";
 import type { MarketCandle } from "@/types/market";
@@ -386,6 +386,7 @@ export function MarketCandlestickChart({
   maximumCandles,
   minimumCandles,
   range,
+  compact = false,
 }: {
   candles: MarketCandle[];
   label: string;
@@ -393,6 +394,7 @@ export function MarketCandlestickChart({
   maximumCandles?: number;
   minimumCandles?: number;
   range?: ChartRange;
+  compact?: boolean;
 }) {
   const chartId = useId();
   const allValues = numericCandles(candles);
@@ -441,6 +443,22 @@ export function MarketCandlestickChart({
   const maximumStart = Math.max(0, allValues.length - visibleCount);
   const windowStart = Math.max(0, Math.min(requestedStart, maximumStart));
   const values = allValues.slice(windowStart, windowStart + visibleCount);
+
+  // Technical Indicators (memoized for performance, before early return)
+  const ma5 = useMemo(() => movingAverage(values, 5), [values]);
+  const ma20 = useMemo(() => movingAverage(values, 20), [values]);
+  const bb = useMemo(
+    () => (!compact && showBB ? calculateBollingerBands(values, 20, 2) : { upper: [], middle: [], lower: [] }),
+    [compact, showBB, values],
+  );
+  const rsiValues = useMemo(
+    () => (!compact && showRSI ? calculateRSI(values, 14) : []),
+    [compact, showRSI, values],
+  );
+  const macdData = useMemo(
+    () => (!compact && showMACD ? calculateMACD(values, 12, 26, 9) : { macd: [], signal: [], histogram: [] }),
+    [compact, showMACD, values],
+  );
 
   const zoomTo = (nextCount: number, anchorRatio = 0.5) => {
     if (!zoomEnabled) return;
@@ -503,22 +521,25 @@ export function MarketCandlestickChart({
 
   // Layout Heights and Offsets
   const width = 1080;
-  const mainPriceHeight = 330;
-  const priceTop = 35;
+  const mainPriceHeight = compact ? 230 : 330;
+  const priceTop = compact ? 18 : 35;
   const priceBottom = priceTop + mainPriceHeight;
-  const volumeTop = priceBottom + 25;
-  const volumeBottom = volumeTop + 75;
+  const volumeTop = priceBottom + (compact ? 14 : 25);
+  const volumeBottom = volumeTop + (compact ? 55 : 75);
 
-  const rsiHeight = showRSI ? 85 : 0;
+  const effectiveShowRSI = !compact && showRSI;
+  const effectiveShowMACD = !compact && showMACD;
+
+  const rsiHeight = effectiveShowRSI ? 85 : 0;
   const rsiTop = volumeBottom + 30;
-  const rsiBottom = rsiTop + (showRSI ? 65 : 0);
+  const rsiBottom = rsiTop + (effectiveShowRSI ? 65 : 0);
 
-  const macdHeight = showMACD ? 90 : 0;
-  const macdTop = (showRSI ? rsiBottom + 30 : volumeBottom + 30);
-  const macdBottom = macdTop + (showMACD ? 70 : 0);
+  const macdHeight = effectiveShowMACD ? 90 : 0;
+  const macdTop = (effectiveShowRSI ? rsiBottom + 30 : volumeBottom + 30);
+  const macdBottom = macdTop + (effectiveShowMACD ? 70 : 0);
 
-  const axisY = (showMACD ? macdBottom : showRSI ? rsiBottom : volumeBottom) + 26;
-  const totalSvgHeight = axisY + 20;
+  const axisY = (effectiveShowMACD ? macdBottom : effectiveShowRSI ? rsiBottom : volumeBottom) + (compact ? 20 : 26);
+  const totalSvgHeight = axisY + (compact ? 16 : 20);
 
   const left = 18;
   const right = 94;
@@ -538,13 +559,6 @@ export function MarketCandlestickChart({
   const x = (index: number) => left + slot * index + slot / 2;
   const priceY = (value: number) => priceTop + ((maximum - value) / priceRange) * (priceBottom - priceTop);
   const volumeY = (value: number) => volumeBottom - (value / maxVolume) * (volumeBottom - volumeTop);
-
-  // Technical Indicators
-  const ma5 = movingAverage(values, 5);
-  const ma20 = movingAverage(values, 20);
-  const bb = calculateBollingerBands(values, 20, 2);
-  const rsiValues = calculateRSI(values, 14);
-  const macdData = calculateMACD(values, 12, 26, 9);
 
   // RSI scale
   const rsiY = (val: number) => rsiBottom - (val / 100) * (rsiBottom - rsiTop);
@@ -657,68 +671,70 @@ export function MarketCandlestickChart({
   };
 
   return (
-    <div className="financial-candlestick-chart">
-      {/* Top Technical Analysis Controls Toolbar */}
-      <div className="technical-indicators-toolbar">
-        <div className="indicator-group" role="group" aria-label="Chỉ báo phân tích kỹ thuật">
-          <span className="toolbar-label">Chỉ báo:</span>
-          <button
-            type="button"
-            className={`indicator-btn ${showBB ? "active" : ""}`}
-            onClick={() => setShowBB(!showBB)}
-          >
-            <span className="indicator-color-dot dot-bb" />
-            Bollinger Bands (20, 2)
-          </button>
-          <button
-            type="button"
-            className={`indicator-btn ${showRSI ? "active" : ""}`}
-            onClick={() => setShowRSI(!showRSI)}
-          >
-            <span className="indicator-color-dot dot-rsi" />
-            RSI (14)
-          </button>
-          <button
-            type="button"
-            className={`indicator-btn ${showMACD ? "active" : ""}`}
-            onClick={() => setShowMACD(!showMACD)}
-          >
-            <span className="indicator-color-dot dot-macd" />
-            MACD (12, 26, 9)
-          </button>
-        </div>
-
-        <div className="trendline-group" role="group" aria-label="Công cụ vẽ biểu đồ">
-          <button
-            type="button"
-            className={`trendline-btn ${isDrawingTrendline ? "active-drawing" : ""}`}
-            onClick={() => {
-              setIsDrawingTrendline(!isDrawingTrendline);
-              setDrawingStart(null);
-              setDrawingHover(null);
-            }}
-          >
-            ✏️ {isDrawingTrendline ? (drawingStart ? "Bấm điểm kết thúc" : "Bấm điểm bắt đầu...") : "Vẽ Trendline"}
-          </button>
-          {trendlines.length > 0 && (
+    <div className={`financial-candlestick-chart ${compact ? "compact-chart" : ""}`}>
+      {/* Top Technical Analysis Controls Toolbar (hidden in compact mode) */}
+      {!compact && (
+        <div className="technical-indicators-toolbar">
+          <div className="indicator-group" role="group" aria-label="Chỉ báo phân tích kỹ thuật">
+            <span className="toolbar-label">Chỉ báo:</span>
             <button
               type="button"
-              className="trendline-clear-btn"
+              className={`indicator-btn ${showBB ? "active" : ""}`}
+              onClick={() => setShowBB(!showBB)}
+            >
+              <span className="indicator-color-dot dot-bb" />
+              Bollinger Bands (20, 2)
+            </button>
+            <button
+              type="button"
+              className={`indicator-btn ${showRSI ? "active" : ""}`}
+              onClick={() => setShowRSI(!showRSI)}
+            >
+              <span className="indicator-color-dot dot-rsi" />
+              RSI (14)
+            </button>
+            <button
+              type="button"
+              className={`indicator-btn ${showMACD ? "active" : ""}`}
+              onClick={() => setShowMACD(!showMACD)}
+            >
+              <span className="indicator-color-dot dot-macd" />
+              MACD (12, 26, 9)
+            </button>
+          </div>
+
+          <div className="trendline-group" role="group" aria-label="Công cụ vẽ biểu đồ">
+            <button
+              type="button"
+              className={`trendline-btn ${isDrawingTrendline ? "active-drawing" : ""}`}
               onClick={() => {
-                setTrendlines([]);
+                setIsDrawingTrendline(!isDrawingTrendline);
                 setDrawingStart(null);
                 setDrawingHover(null);
               }}
-              title="Xóa tất cả các đường trendline đã vẽ"
             >
-              🗑️ Xóa đường vẽ ({trendlines.length})
+              ✏️ {isDrawingTrendline ? (drawingStart ? "Bấm điểm kết thúc" : "Bấm điểm bắt đầu...") : "Vẽ Trendline"}
             </button>
-          )}
+            {trendlines.length > 0 && (
+              <button
+                type="button"
+                className="trendline-clear-btn"
+                onClick={() => {
+                  setTrendlines([]);
+                  setDrawingStart(null);
+                  setDrawingHover(null);
+                }}
+                title="Xóa tất cả các đường trendline đã vẽ"
+              >
+                🗑️ Xóa đường vẽ ({trendlines.length})
+              </button>
+            )}
+          </div>
         </div>
-      </div>
+      )}
 
       {/* Quote Bar */}
-      <div className="financial-chart-quote" aria-live="polite">
+      <div className={`financial-chart-quote ${compact ? "compact-quote" : ""}`} aria-live="polite">
         <span>
           {selected
             ? candleTime(selected.source.timestamp, intraday)
@@ -732,12 +748,12 @@ export function MarketCandlestickChart({
         <span>C <strong>{formatDecimal(displayed.source.close)}</strong></span>
         <span>Vol <strong>{formatCompact(displayed.source.volume)}</strong></span>
 
-        {showRSI && rsiValues.at(-1) !== null && (
+        {!compact && showRSI && rsiValues.at(-1) !== null && (
           <span className="quote-indicator-pill rsi-pill">
             RSI(14): <strong>{rsiValues.at(-1)?.toFixed(1)}</strong>
           </span>
         )}
-        {showMACD && macdData.macd.at(-1) !== null && (
+        {!compact && showMACD && macdData.macd.at(-1) !== null && (
           <span className="quote-indicator-pill macd-pill">
             MACD: <strong>{macdData.macd.at(-1)?.toFixed(2)}</strong> · Sig:{" "}
             <strong>{macdData.signal.at(-1)?.toFixed(2)}</strong>

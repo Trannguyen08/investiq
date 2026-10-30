@@ -3,7 +3,7 @@ import { resolveApiBase } from "@/lib/api-base";
 
 const SYMBOL_PATTERN = /^[A-Z0-9._-]{1,24}$/;
 const MAX_SYMBOLS = 15;
-const MAX_CONCURRENCY = 3;
+const MAX_CONCURRENCY = 15;
 
 type InstrumentEnvelope = {
   data?: {

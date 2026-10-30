@@ -1,3 +1,4 @@
+import pytest
 from datetime import UTC, datetime, timedelta
 from uuid import UUID
 
@@ -253,7 +254,8 @@ def test_news_collection_applies_recent_window_to_repository() -> None:
     assert datetime.now(UTC) - captured[0].published_after < timedelta(hours=25)
 
 
-def test_news_admin_fails_closed_when_token_is_not_configured() -> None:
+def test_news_admin_fails_closed_when_token_is_not_configured(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr("app.api.deps.settings.news_admin_token", None)
     with TestClient(app) as client:
         response = client.get("/api/v1/admin/news/sources")
 

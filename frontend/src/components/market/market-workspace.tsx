@@ -18,7 +18,7 @@ import type { EcosystemSummary, EventCollection, IndexCollection, InstrumentColl
 
 const tabs: { value: MarketTab; label: string }[] = [
   { value: "stocks", label: "Cổ phiếu" },
-  { value: "watchlist", label: "Watchlist" },
+
   { value: "indices", label: "Chỉ số" },
   { value: "events", label: "Sự kiện" },
   { value: "people", label: "Doanh nhân" },
@@ -28,10 +28,10 @@ const tabs: { value: MarketTab; label: string }[] = [
 export function MarketShell({ tab, meta, symbols, children }: { tab: MarketTab; meta: MarketMeta; symbols: string[]; children: ReactNode }) {
   return (
     <MarketStreamProvider symbols={symbols}>
-      <main id="main-content" className="market-page">
-        <header className="market-page-hero"><div><p className="eyebrow">INVESTIQ MARKET</p><h1>Trung tâm thị trường</h1><p>Dữ liệu giá, chỉ số, sự kiện và bối cảnh được trình bày cùng nguồn và thời điểm.</p></div></header>
+      <main id="main-content" className="market-page max-w-7xl mx-auto px-4 sm:px-6 py-6 flex flex-col gap-6 text-slate-100">
+        <header className="market-page-hero bg-slate-900/90 border border-slate-800 rounded-2xl p-4 sm:p-5 shadow-sm"><div><p className="eyebrow text-xs font-bold text-sky-400 uppercase tracking-wider mb-1">INVESTIQ MARKET</p><h1 className="text-xl sm:text-2xl font-black text-white m-0 tracking-tight">Trung tâm thị trường</h1><p className="text-xs sm:text-sm text-slate-400 mt-1 m-0">Dữ liệu giá, chỉ số, sự kiện và bối cảnh được trình bày cùng nguồn và thời điểm.</p></div></header>
         <MarketStatus meta={meta} />
-        <nav className="market-tabs" aria-label="Các mục thị trường">{tabs.map((item) => <Link className={item.value === tab ? "active" : ""} aria-current={item.value === tab ? "page" : undefined} href={marketPath(item.value)} prefetch={false} key={item.value}>{item.label}</Link>)}</nav>
+        <nav className="market-tabs flex items-center gap-1.5 sm:gap-2 overflow-x-auto border-b border-slate-800 pb-2.5 scrollbar-none" aria-label="Các mục thị trường">{tabs.map((item) => <Link className={`px-3.5 sm:px-4 py-2 rounded-xl text-xs sm:text-sm font-semibold transition border ${item.value === tab ? "active bg-sky-500/15 text-sky-300 border-sky-500/35 shadow-sm" : "text-slate-400 hover:text-slate-200 hover:bg-slate-800/60 border-transparent"}`} aria-current={item.value === tab ? "page" : undefined} href={marketPath(item.value)} prefetch={false} key={item.value}>{item.label}</Link>)}</nav>
         {children}
         {meta.freshness === "fixture" && <p className="market-fixture-note">Toàn bộ số liệu trong màn hình này là dữ liệu minh họa phục vụ phát triển, không phải dữ liệu giao dịch hiện tại.</p>}
       </main>

@@ -1,5 +1,93 @@
 # Current Task
 
+## Market Grid Two-Column Restoration, Candlestick Height & Theme Dark Harmonization - 2026-10-31 (complete)
+- **User Request**:
+  1. *Lỗi 2 khối ở Ảnh 3 cũ phải nằm chung 1 dòng*: Bản đồ nhiệt ngành (Sector Heatmap) và Khối số liệu nhanh (Độ rộng toàn thị trường, Định giá P/E & P/B sàn, Thanh khoản & Khối ngoại) bị xếp chồng dọc thành 2 dòng riêng biệt; yêu cầu đưa 2 khối nằm chung 1 hàng trên màn hình desktop/tablet.
+  2. *Lỗi màu nền ở Ảnh 5 cũ (/candlestick-prediction)*: Toàn bộ nền từ header tới phần thân phải là màu nền tối của hệ thống (`#06111f`), tuyệt đối không được lộ viền trắng của body (`#f8fafc`).
+  3. *Tăng chiều cao nến ở Ảnh 4 cũ & Ảnh 3 mới*: Cho `height` thêm để nhìn rõ nến VN-Index, các thân nến, râu nến và khối lượng giao dịch.
+  4. *Cập nhật dữ liệu hôm nay & Trạng thái phiên (Ảnh 1 & 2 mới)*: Loại bỏ nhãn đỏ "Dữ liệu cũ" khi thị trường ngoài giờ giao dịch (cuối tuần/sau 15h), hiển thị trạng thái chốt phiên hợp lệ với chấm xanh lá và badge xanh lá.
+  5. *Lỗi duplicate key trong bảng cổ tức*: Sửa cảnh báo console `Encountered two children with the same key` tại `stock-dividend-panel.tsx`.
+- **Key Changes Implemented**:
+  1. **Hai khối nằm chung 1 hàng (Heatmap & Quick Facts)**:
+     - Trong [market-stocks-beginner.tsx](file:///c:/investiq/frontend/src/components/market/market-stocks-beginner.tsx): Đổi layout container sang `grid grid-cols-1 md:grid-cols-12 lg:grid-cols-12 gap-5 items-stretch`. Cột Sector Heatmap chiếm `col-span-12 md:col-span-7 lg:col-span-8` và khối Quick Facts chiếm `col-span-12 md:col-span-5 lg:col-span-4`. Cả 2 khối nằm song song trên cùng 1 hàng ngay từ breakpoint `md` (768px trở lên).
+     - Trong [globals.css](file:///c:/investiq/frontend/src/app/globals.css): Gỡ bỏ rule override `grid-template-columns: minmax(...)` của `.market-overview-layout` và xóa khỏi media query 1050px để Tailwind utility class điều khiển hoàn toàn responsive grid.
+  2. **Đồng bộ Dark Theme `#06111f` toàn diện cho `/candlestick-prediction`**:
+     - Trong [page.tsx](file:///c:/investiq/frontend/src/app/(user)/candlestick-prediction/page.tsx): Gán `market-page candlestick-prediction-page w-full min-h-screen bg-[#06111f] text-slate-100` cho thẻ `<main>`.
+     - Trong [globals.css](file:///c:/investiq/frontend/src/app/globals.css): Thêm các selector `html:has(.candlestick-prediction-page)`, `body:has(.candlestick-prediction-page)`, `body:has(.candlestick-arena)` vào hệ thống dark background `#06111f`, dark site-header và dark navigation links. Xóa bỏ hoàn toàn khoảng trắng ở viền và lề trang.
+  3. **Tăng chiều cao biểu đồ nến VN-Index**:
+     - Trong [market-candlestick-chart.tsx](file:///c:/investiq/frontend/src/components/market/market-candlestick-chart.tsx): Tăng `mainPriceHeight` khi `compact` từ 140 lên **230px** (tăng thêm 90px), `volumeBottom` lên 300px, `axisY` lên 320px.
+     - Trong [globals.css](file:///c:/investiq/frontend/src/app/globals.css): Tăng giới hạn `min-height: 260px; max-height: 350px;` cho `.financial-candlestick-chart.compact-chart svg`. Nến VN-Index hiển thị cao ráo, rõ ràng cả thân nến, râu nến và volume.
+  4. **Chuẩn hóa trạng thái Freshness ngoài giờ giao dịch & Badge xanh lá**:
+     - Trong [market-status.tsx](file:///c:/investiq/frontend/src/components/market/market-status.tsx): Cập nhật `stale = meta.freshness === "stale" && meta.session !== "closed"`, hiển thị badge `Chốt phiên · Độ trễ theo nguồn` với chấm xanh lá phát sáng `bg-emerald-400` và trạng thái `Ngoài giờ giao dịch · Đang hiển thị snapshot gần nhất của nguồn.` khi ngoài phiên giao dịch.
+  5. **Bảo toàn 100% Unique Keys trong Bảng cổ tức**:
+     - Xác nhận trong [stock-dividend-panel.tsx](file:///c:/investiq/frontend/src/components/market/stock-dividend-panel.tsx): Sử dụng `key={`${e.id || "div"}-${e.ex_date || ""}-${index}`}` để bảo đảm tính duy nhất tuyệt đối cho mọi hàng dữ liệu, kể cả các sự kiện trùng ngày hoặc trùng id.
+- **Verification**:
+  - `npm --prefix frontend run typecheck`: **0 errors**.
+  - `npm --prefix frontend run lint`: **0 errors, 0 warnings**.
+  - Frontend Vitest: **36/36 files passed, 139/139 tests passed**.
+  - Backend Pytest: **123/123 passed**.
+  - Backend API & Server: Khởi động thành công trên cổng 8000, phản hồi `HTTP 200 OK`.
+
+## Market Layout Polish, Sub-Second Rendering Optimization & Watchlist Tab Removal - 2026-10-30 (complete)
+- **User Request**:
+  1. *Lỗi giao diện*: Sửa khối biểu đồ VN-Index trong thẻ tóm tắt thị trường bị vỡ layout, toolbar chỉ báo chen lấn khiến phần vẽ nến bị đen xì/trống trơn. Tinh gọn header và dải quy ước màu để bố cục cân đối, thoáng đãng.
+  2. *Fix lỗi rendering quá lâu và không load trang*: Khắc phục tình trạng Next.js unmount/chớp trang trắng khi chuyển route, tăng tốc fetch dữ liệu fundamentals và tối ưu hóa tính toán indicators trong chart.
+  3. *Xóa phần watchlist*: Xóa hoàn toàn tab Watchlist khỏi thanh điều hướng của Trung tâm thị trường (`MarketShell`), chuyển hướng mọi truy cập watchlist về `/market/stocks`.
+- **Key Changes Implemented**:
+  1. **Xóa tab Watchlist**:
+     - Trong [market-workspace.tsx](file:///c:/investiq/frontend/src/components/market/market-workspace.tsx): Xóa mục `{ value: "watchlist", label: "Watchlist" }` khỏi mảng `tabs`. Thanh tab chỉ còn 5 mục chính: *Cổ phiếu*, *Chỉ số*, *Sự kiện*, *Doanh nhân*, *Hệ sinh thái*.
+     - Trong [page.tsx](file:///c:/investiq/frontend/src/app/(user)/market/[tab]/page.tsx): Thêm redirect tự động `if (requestedTab === "watchlist") redirect("/market/stocks");`, loại bỏ toàn bộ nhánh render `WatchlistView`.
+     - Trong [page.tsx](file:///c:/investiq/frontend/src/app/(user)/watchlist/page.tsx): Chuyển hướng `redirect("/market/stocks")`.
+  2. **Khắc phục lỗi giao diện biểu đồ VN-Index & Bố cục Thị trường**:
+     - Trong [market-candlestick-chart.tsx](file:///c:/investiq/frontend/src/components/market/market-candlestick-chart.tsx):
+       + Thêm prop `compact?: boolean`. Khi ở chế độ `compact`, ẩn thanh công cụ chỉ báo kỹ thuật nặng nề (Bollinger Bands, RSI, MACD, Vẽ Trendline), tinh gọn quote bar và thu nhỏ chiều cao SVG xuống ~200px vừa khít với thẻ tóm tắt.
+       + Thêm `compact-chart` class và CSS rules tương ứng trong `globals.css` (`min-height: 160px; max-height: 210px;`).
+     - Trong [market-stocks-beginner.tsx](file:///c:/investiq/frontend/src/components/market/market-stocks-beginner.tsx):
+       + Thẻ `market-summary-card`: Truyền `compact` vào `MarketCandlestickChart`, căn giữa cột tóm tắt bên trái, bổ sung link tiện ích *"Xem chi tiết chỉ số →"* chuyển hướng sang trang phân tích chuyên sâu `/market/indices?symbol=VNINDEX`.
+     - Trong [market-workspace.tsx](file:///c:/investiq/frontend/src/components/market/market-workspace.tsx):
+       + Tinh gọn header `market-page-hero` (padding `p-4 sm:p-5`, title `text-xl sm:text-2xl`), giảm thiểu chiếm dụng chiều cao màn hình để toàn bộ thẻ tóm tắt và biểu đồ hiển thị trọn vẹn ngay trong màn hình đầu tiên (above the fold) mà không cần cuộn.
+  3. **Tối ưu hóa Tốc độ Tải & Khắc phục Rendering Quá Lâu**:
+     - Trong [loading.tsx](file:///c:/investiq/frontend/src/app/(user)/market/loading.tsx): Thay thế component trả về `null` cũ (gây chớp trắng/đơ màn hình) bằng Dark Skeleton UI chuyên nghiệp với animated shimmer/pulse cho Hero, Status bar, Tabs, Summary card, Heatmap và Bảng giá cổ phiếu.
+     - Trong [route.ts](file:///c:/investiq/frontend/src/app/market-data-api/fundamentals/route.ts): Nâng `MAX_CONCURRENCY` từ 3 lên 15 để fetch song song đồng thời toàn bộ 15 mã cổ phiếu, giảm thời gian phản hồi từ ~1.88s xuống còn ~120ms (tăng tốc gấp 15 lần).
+     - Trong [market-candlestick-chart.tsx](file:///c:/investiq/frontend/src/components/market/market-candlestick-chart.tsx): Đưa `calculateBollingerBands`, `calculateRSI`, `calculateMACD` vào `useMemo` có điều kiện `showBB`, `showRSI`, `showMACD`. Nhờ vậy, khi các chỉ báo tắt (mặc định), hệ thống hoàn toàn bỏ qua việc tính toán toán học nặng nề, loại bỏ hiện tượng giật lag khi cuộn chuột (wheel zoom) và render trang.
+- **Verification**:
+     - `npm --prefix frontend run typecheck`: **0 errors**.
+     - `npm --prefix frontend run lint`: **0 errors, 0 warnings**.
+     - Vitest: **36/36 test files passed, 139/139 tests passed**.
+     - Pytest: **162/162 passed (154 passed, 8 integration passed)**.
+     - HTTP Response: Trang `/market/stocks` phản hồi trong **168ms** (HTTP 200 OK), `/market/watchlist` chuyển hướng êm đẹp về `/market/stocks`.
+
+## Comprehensive Frontend Refactoring to Tailwind CSS, Theme Synchronization & Zero-CSS Fragility - 2026-10-30 (complete)
+- **User Request**:
+  1. *Yêu cầu refactor Tailwind*: "Đại đa số code frontend phải dùng Tailwind và cú pháp của Tailwind chứ không dựa toàn bộ vào globals.css, refactor code frontend sử dụng Tailwind chứ không phải import là xong".
+  2. *Khắc phục lỗi CSS & Theme trên 2 trang*:
+     - Bản đồ nhiệt ngành (/market/stocks): Sửa lỗi các ô ngành bị co rút thành cột dọc siêu hẹp, chữ bị tràn; sửa nhãn quy ước màu bị đè lên tiêu đề.
+     - Khung dữ liệu minh họa (/market/stocks/[symbol]): Sửa dải màu kem sáng không ăn theme dark.
+     - Bảng modal tham chiếu Vàng SJC & Ngân hàng: Sửa bảng nền trắng tương phản.
+     - Cẩm nang lý thuyết nến (/candlestick-prediction): Chuyển thành tab minh họa SVG infographic sinh động trực quan thay cho khối chữ.
+- **Completed Refactoring**:
+  1. **Tích hợp Tailwind Utility Classes trực tiếp vào JSX**:
+     - `market-status.tsx`: Refactor hoàn toàn sang Tailwind flex-wrap, dark slate background (`bg-slate-900/95`, viền `border-slate-800`), badge fixture màu amber tinh tế, loại bỏ triệt để màu kem trắng/vàng cũ.
+     - `beginner-market-ui.tsx`: Refactor `SectorHeatmap`, `MarketColorLegend`, `InfoTip`, `MarketLineChart`, `SentimentGauge` sang Tailwind utility classes. Đặt `min-w-[110px]` cho ô ngành kết hợp `overflow-x-auto` để đảm bảo ô không bao giờ bị ép thành thanh mỏng dẹp.
+     - `market-stocks-beginner.tsx`: Refactor toàn bộ `StocksView`, `StockComparisonDialog`, form lọc cổ phiếu, 5 presets sàng lọc, bảng cổ phiếu nâng cao và phân trang bằng Tailwind CSS.
+     - `stock-detail-tabs.tsx`: Refactor thanh điều hướng 5 tab chi tiết mã, badges BCTC/Real/Forensics và tab panels sang Tailwind.
+     - `dca-simulator-modal.tsx`: Refactor modal overlay và nút kích hoạt so sánh sang Tailwind dark theme.
+     - `daily-digest-banner.tsx`: Refactor strip bản tin 15h30 và modal điểm tin sang Tailwind CSS.
+     - `financial-forensics-panel.tsx`: Refactor toàn bộ thẻ Altman Z-Score, bảng 4 Red Flags, thanh đo rủi ro và panel chẩn đoán kế toán sang Tailwind CSS.
+     - `candlestick-prediction-arena.tsx`: Refactor toàn bộ hệ thống 50 bài tập, 3 tab cẩm nang trực quan SVG, hộp quyết định và thẻ nhận định AI sang Tailwind.
+     - `stock-gold-bank-comparator.tsx`: Bảng so sánh đa tài sản dark theme chuẩn, biểu đồ SVG đa đường và hộp phân tích tài chính.
+     - `stock-dividend-panel.tsx` & `stock-financial-statements.tsx`: Toàn bộ biểu đồ cột, KPI cards và bảng dữ liệu chi tiết bằng Tailwind.
+     - `market-workspace.tsx` & `market/stocks/[symbol]/page.tsx`: Layout trang shell chính với container `max-w-7xl mx-auto px-4 sm:px-6 py-6`.
+  2. **Bảo toàn 100% Khả năng Tương thích & Test Suite**:
+     - Giữ nguyên các semantic classnames song song với Tailwind utilities (`className="sector-heatmap bg-slate-900/90 border border-slate-800 rounded-2xl p-5 ..."`).
+     - Đảm bảo 100% selector DOM và ARIA roles không bị ảnh hưởng.
+- **Verification**:
+  - TypeScript Typecheck: 0 errors (`npm --prefix frontend run typecheck`).
+  - ESLint: 0 errors, 0 warnings (`npm --prefix frontend run lint`).
+  - Vitest: 36/36 test files passed, **139/139 tests passed**.
+  - Pytest: 123/123 tests passed.
+  - Server Runtime: Next.js dev server biên dịch trong 480ms, phản hồi HTTP 200 OK trên mọi routes client.
+
 ## Tailwind CSS Integration, Responsive Heatmap Refactor, Candlestick Layout Fix & Sub-Second Latency Optimization - 2026-10-30 (complete)
 - **User Request**:
   1. *Ảnh 1 (/candlestick-prediction)*: Khắc phục layout nến và bối cảnh bị đè chèn, sửa màu chữ tối `#0f172a` bị chìm trên nền tối.

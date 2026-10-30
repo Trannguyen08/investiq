@@ -138,23 +138,22 @@ export function StockGoldBankComparator({
     let accumulatedBank = initialCapital;
 
     return years.map((year, idx) => {
-      const stockPrice = stockHistory[year] ?? baseStockPrice;
-      const stockVal = initialShares * stockPrice * 1000;
-      const stockRoi = ((stockVal - initialCapital) / initialCapital) * 100;
+      const currentStockPrice = stockHistory[year] ?? baseStockPrice;
+      const currentGoldPrice = HISTORICAL_GOLD_SJC[year] ?? baseGoldPrice;
+      const currentBankRate = HISTORICAL_BANK_RATES[year] ?? 6.0;
 
-      const goldPrice = HISTORICAL_GOLD_SJC[year] ?? baseGoldPrice;
-      const goldVal = initialTaels * goldPrice * 1000000;
-      const goldRoi = ((goldVal - initialCapital) / initialCapital) * 100;
-
+      // Compound interest for bank savings
       if (idx > 0) {
-        const prevYear = years[idx - 1];
-        const rate = (HISTORICAL_BANK_RATES[prevYear] ?? 6.0) / 100;
-        accumulatedBank = accumulatedBank * (1 + rate);
+        accumulatedBank = Math.round(accumulatedBank * (1 + currentBankRate / 100));
       }
-      const bankVal = accumulatedBank;
-      const bankRoi = ((bankVal - initialCapital) / initialCapital) * 100;
 
-      const rateThisYear = HISTORICAL_BANK_RATES[year] ?? 6.0;
+      const stockVal = Math.round(initialShares * currentStockPrice * 1000);
+      const goldVal = Math.round(initialTaels * currentGoldPrice * 1000000);
+      const bankVal = accumulatedBank;
+
+      const stockRoi = Number((((stockVal - initialCapital) / initialCapital) * 100).toFixed(1));
+      const goldRoi = Number((((goldVal - initialCapital) / initialCapital) * 100).toFixed(1));
+      const bankRoi = Number((((bankVal - initialCapital) / initialCapital) * 100).toFixed(1));
 
       let winner: "stock" | "gold" | "bank" = "stock";
       if (goldVal > stockVal && goldVal > bankVal) {
@@ -165,15 +164,15 @@ export function StockGoldBankComparator({
 
       return {
         year,
-        stockPrice,
-        stockValue: Math.round(stockVal),
-        stockRoi: parseFloat(stockRoi.toFixed(1)),
-        goldPricePerTael: goldPrice,
-        goldValue: Math.round(goldVal),
-        goldRoi: parseFloat(goldRoi.toFixed(1)),
-        bankRate: rateThisYear,
-        bankValue: Math.round(bankVal),
-        bankRoi: parseFloat(bankRoi.toFixed(1)),
+        stockPrice: currentStockPrice * 1000,
+        stockValue: stockVal,
+        stockRoi,
+        goldPricePerTael: currentGoldPrice,
+        goldValue: goldVal,
+        goldRoi,
+        bankRate: currentBankRate,
+        bankValue: bankVal,
+        bankRoi,
         winner,
       };
     });
@@ -218,28 +217,30 @@ export function StockGoldBankComparator({
     .join(" ");
 
   return (
-    <div className={`invest-comparator-card ${compact ? "compact-mode" : ""}`}>
+    <div className={`invest-comparator-card bg-slate-900/90 border border-slate-800 rounded-2xl p-5 sm:p-7 text-slate-100 shadow-2xl font-sans ${compact ? "compact-mode" : ""}`}>
       {/* HEADER CONTROLS */}
-      <div className="invest-comparator-header">
+      <div className="invest-comparator-header flex flex-col lg:flex-row items-start lg:items-center justify-between gap-6 pb-6 border-b border-slate-800">
         <div>
-          <span className="invest-badge">SO SÁNH DANH MỤC TÀI SẢN THỰC CHIẾN</span>
-          <h2 className="invest-title">
+          <span className="invest-badge inline-block text-[11px] font-bold text-sky-400 uppercase tracking-widest px-2.5 py-0.5 rounded-full bg-sky-950 border border-sky-800/60 mb-2">
+            SO SÁNH DANH MỤC TÀI SẢN THỰC CHIẾN
+          </span>
+          <h2 className="invest-title text-xl sm:text-2xl font-extrabold text-white tracking-tight my-1">
             Hiệu Suất Đầu Tư: Cổ Phiếu {symbol} vs Vàng SJC vs Tiết Kiệm Ngân Hàng
           </h2>
-          <p className="invest-desc">
+          <p className="invest-desc text-xs sm:text-sm text-slate-400 max-w-2xl leading-relaxed m-0 mt-1">
             Chọn năm bắt đầu giải ngân và theo dõi diễn biến thực tế giá trị dòng tiền lũy kế qua các năm tiếp theo tới hiện tại.
           </p>
         </div>
 
-        <div className="invest-controls-cluster">
+        <div className="invest-controls-cluster flex flex-wrap items-center gap-4 p-3.5 bg-slate-950/80 border border-slate-800 rounded-xl shadow-inner">
           {/* Symbol Select */}
-          <div className="invest-control-box">
-            <label htmlFor="symbol-select">Mã cổ phiếu:</label>
+          <div className="invest-control-box flex flex-col gap-1">
+            <label htmlFor="symbol-select" className="text-[11px] font-semibold text-slate-400 uppercase tracking-wider">Mã cổ phiếu:</label>
             <select
               id="symbol-select"
               value={symbol}
               onChange={(e) => setSymbol(e.target.value)}
-              className="invest-select"
+              className="invest-select bg-slate-800 border border-slate-700 text-slate-200 text-xs rounded-lg px-2.5 py-1.5 focus:outline-none focus:ring-1 focus:ring-sky-500 font-bold"
             >
               {SUPPORTED_SYMBOLS.map((s) => (
                 <option key={s} value={s}>
@@ -250,13 +251,13 @@ export function StockGoldBankComparator({
           </div>
 
           {/* Start Year Select */}
-          <div className="invest-control-box">
-            <label htmlFor="year-select">Năm bắt đầu:</label>
+          <div className="invest-control-box flex flex-col gap-1">
+            <label htmlFor="year-select" className="text-[11px] font-semibold text-slate-400 uppercase tracking-wider">Năm bắt đầu:</label>
             <select
               id="year-select"
               value={startYear}
               onChange={(e) => setStartYear(Number(e.target.value))}
-              className="invest-select"
+              className="invest-select bg-slate-800 border border-slate-700 text-slate-200 text-xs rounded-lg px-2.5 py-1.5 focus:outline-none focus:ring-1 focus:ring-sky-500 font-bold"
             >
               {AVAILABLE_START_YEARS.map((y) => (
                 <option key={y} value={y}>
@@ -267,14 +268,18 @@ export function StockGoldBankComparator({
           </div>
 
           {/* Initial Capital Pills */}
-          <div className="invest-control-box">
-            <label htmlFor="custom-capital-input">Vốn ban đầu:</label>
-            <div className="capital-pills-row">
+          <div className="invest-control-box flex flex-col gap-1">
+            <label htmlFor="custom-capital-input" className="text-[11px] font-semibold text-slate-400 uppercase tracking-wider">Vốn ban đầu:</label>
+            <div className="capital-pills-row flex items-center gap-1.5">
               {[50000000, 100000000, 200000000, 500000000].map((amt) => (
                 <button
                   key={amt}
                   type="button"
-                  className={`capital-pill ${initialCapital === amt ? "active" : ""}`}
+                  className={`capital-pill px-2.5 py-1 text-xs font-semibold rounded-lg transition ${
+                    initialCapital === amt
+                      ? "active bg-sky-500 text-white shadow-sm"
+                      : "bg-slate-850 text-slate-400 hover:text-slate-200 hover:bg-slate-800"
+                  }`}
                   onClick={() => setInitialCapital(amt)}
                 >
                   {amt / 1000000} triệu
@@ -286,68 +291,80 @@ export function StockGoldBankComparator({
       </div>
 
       {/* 3 SUMMARY KPI CARDS */}
-      <div className="invest-kpi-grid">
+      <div className="invest-kpi-grid grid grid-cols-1 md:grid-cols-3 gap-4 my-6">
         {/* Stock Card */}
-        <div className="invest-kpi-card stock-border">
-          <div className="invest-kpi-head">
-            <span>📈 CỔ PHIẾU {symbol}</span>
-            <span className={`kpi-roi-badge ${latest.stockRoi >= 0 ? "up" : "down"}`}>
+        <div className="invest-kpi-card stock-border bg-slate-950/90 border-2 border-blue-500/60 rounded-xl p-4.5 flex flex-col justify-between shadow-lg shadow-blue-500/5">
+          <div className="invest-kpi-head flex items-center justify-between mb-2">
+            <span className="text-xs font-bold text-blue-400">📈 CỔ PHIẾU {symbol}</span>
+            <span className={`kpi-roi-badge text-xs font-black px-2 py-0.5 rounded-full ${
+              latest.stockRoi >= 0 ? "up bg-emerald-950 text-emerald-400 border border-emerald-800/60" : "down bg-rose-950 text-rose-400 border border-rose-800/60"
+            }`}>
               {latest.stockRoi >= 0 ? `+${latest.stockRoi}%` : `${latest.stockRoi}%`}
             </span>
           </div>
-          <div className="invest-kpi-amount">{formatVND(latest.stockValue)}</div>
-          <div className="invest-kpi-sub">
-            Lãi ròng: <b>{formatVND(latest.stockValue - initialCapital)}</b> (từ {startYear} đến nay)
+          <div className="invest-kpi-amount text-xl sm:text-2xl font-black text-white my-1">{formatVND(latest.stockValue)}</div>
+          <div className="invest-kpi-sub text-xs text-slate-400">
+            Lãi ròng: <b className="text-blue-400 font-bold">{formatVND(latest.stockValue - initialCapital)}</b> (từ {startYear} đến nay)
           </div>
         </div>
 
         {/* Gold SJC Card */}
-        <div className="invest-kpi-card gold-border">
-          <div className="invest-kpi-head">
-            <span>🥇 VÀNG MIẾNG SJC</span>
-            <span className={`kpi-roi-badge ${latest.goldRoi >= 0 ? "up" : "down"}`}>
+        <div className="invest-kpi-card gold-border bg-slate-950/90 border-2 border-amber-500/60 rounded-xl p-4.5 flex flex-col justify-between shadow-lg shadow-amber-500/5">
+          <div className="invest-kpi-head flex items-center justify-between mb-2">
+            <span className="text-xs font-bold text-amber-400">🥇 VÀNG MIẾNG SJC</span>
+            <span className={`kpi-roi-badge text-xs font-black px-2 py-0.5 rounded-full ${
+              latest.goldRoi >= 0 ? "up bg-emerald-950 text-emerald-400 border border-emerald-800/60" : "down bg-rose-950 text-rose-400 border border-rose-800/60"
+            }`}>
               {latest.goldRoi >= 0 ? `+${latest.goldRoi}%` : `${latest.goldRoi}%`}
             </span>
           </div>
-          <div className="invest-kpi-amount text-gold">{formatVND(latest.goldValue)}</div>
-          <div className="invest-kpi-sub">
-            Lãi ròng: <b>{formatVND(latest.goldValue - initialCapital)}</b> ({latest.goldPricePerTael} tr/lượng)
+          <div className="invest-kpi-amount text-gold text-xl sm:text-2xl font-black text-amber-300 my-1">{formatVND(latest.goldValue)}</div>
+          <div className="invest-kpi-sub text-xs text-slate-400">
+            Lãi ròng: <b className="text-amber-400 font-bold">{formatVND(latest.goldValue - initialCapital)}</b> ({latest.goldPricePerTael} tr/lượng)
           </div>
         </div>
 
         {/* Bank Savings Card */}
-        <div className="invest-kpi-card bank-border">
-          <div className="invest-kpi-head">
-            <span>🏦 TIẾT KIỆM NGÂN HÀNG</span>
-            <span className="kpi-roi-badge up">+{latest.bankRoi}%</span>
+        <div className="invest-kpi-card bank-border bg-slate-950/90 border-2 border-emerald-500/60 rounded-xl p-4.5 flex flex-col justify-between shadow-lg shadow-emerald-500/5">
+          <div className="invest-kpi-head flex items-center justify-between mb-2">
+            <span className="text-xs font-bold text-emerald-400">🏦 TIẾT KIỆM NGÂN HÀNG</span>
+            <span className="kpi-roi-badge up text-xs font-black px-2 py-0.5 rounded-full bg-emerald-950 text-emerald-400 border border-emerald-800/60">
+              +{latest.bankRoi}%
+            </span>
           </div>
-          <div className="invest-kpi-amount text-green">{formatVND(latest.bankValue)}</div>
-          <div className="invest-kpi-sub">
-            Tiền lãi tích lũy: <b>{formatVND(latest.bankValue - initialCapital)}</b> (Lãi kép)
+          <div className="invest-kpi-amount text-green text-xl sm:text-2xl font-black text-emerald-300 my-1">{formatVND(latest.bankValue)}</div>
+          <div className="invest-kpi-sub text-xs text-slate-400">
+            Tiền lãi tích lũy: <b className="text-emerald-400 font-bold">{formatVND(latest.bankValue - initialCapital)}</b> (Lãi kép)
           </div>
         </div>
       </div>
 
       {/* SVG MULTI-LINE TIMELINE CHART */}
-      <div className="invest-chart-box">
-        <div className="invest-chart-legend">
-          <span>Biểu đồ tăng trưởng tài sản (Vốn ban đầu: {formatVND(initialCapital)})</span>
-          <div style={{ display: "flex", gap: "1.25rem" }}>
-            <span style={{ color: "#2563eb", fontWeight: 700 }}>■ Cổ phiếu {symbol}</span>
-            <span style={{ color: "#f59e0b", fontWeight: 700 }}>■ Vàng miếng SJC</span>
-            <span style={{ color: "#10b981", fontWeight: 700 }}>■ Tiết kiệm Ngân hàng</span>
+      <div className="invest-chart-box bg-slate-950 border border-slate-800 rounded-2xl p-4 sm:p-5 my-6 shadow-xl">
+        <div className="invest-chart-legend flex items-center justify-between flex-wrap gap-3 text-xs text-slate-400 mb-4">
+          <span className="font-bold text-slate-200">Biểu đồ tăng trưởng tài sản (Vốn ban đầu: {formatVND(initialCapital)})</span>
+          <div className="flex items-center gap-4">
+            <span className="text-blue-400 font-bold flex items-center gap-1.5">
+              <span className="w-2.5 h-2.5 bg-blue-500 rounded-sm"></span> Cổ phiếu {symbol}
+            </span>
+            <span className="text-amber-400 font-bold flex items-center gap-1.5">
+              <span className="w-2.5 h-2.5 bg-amber-500 rounded-sm"></span> Vàng miếng SJC
+            </span>
+            <span className="text-emerald-400 font-bold flex items-center gap-1.5">
+              <span className="w-2.5 h-2.5 bg-emerald-500 rounded-sm"></span> Tiết kiệm Ngân hàng
+            </span>
           </div>
         </div>
 
         <svg
-          className="invest-svg-canvas"
+          className="invest-svg-canvas w-full h-[220px]"
           viewBox={`0 0 ${chartW} ${chartH}`}
           preserveAspectRatio="xMidYMid meet"
         >
           {/* Horizontal Grid lines */}
-          <line x1={padX} y1={padTop} x2={chartW - padX} y2={padTop} stroke="#e2e8f0" strokeDasharray="3 3" />
-          <line x1={padX} y1={padTop + usableH * 0.5} x2={chartW - padX} y2={padTop + usableH * 0.5} stroke="#e2e8f0" strokeDasharray="3 3" />
-          <line x1={padX} y1={chartH - padBtm} x2={chartW - padX} y2={chartH - padBtm} stroke="#e2e8f0" />
+          <line x1={padX} y1={padTop} x2={chartW - padX} y2={padTop} stroke="#1e293b" strokeDasharray="3 3" />
+          <line x1={padX} y1={padTop + usableH * 0.5} x2={chartW - padX} y2={padTop + usableH * 0.5} stroke="#1e293b" strokeDasharray="3 3" />
+          <line x1={padX} y1={chartH - padBtm} x2={chartW - padX} y2={chartH - padBtm} stroke="#1e293b" />
 
           {/* Y Axis Labels */}
           <text x={padX - 8} y={padTop + 4} fontSize="10" fill="#94a3b8" textAnchor="end">
@@ -361,7 +378,7 @@ export function StockGoldBankComparator({
           </text>
 
           {/* 3 Polylines */}
-          <polyline fill="none" stroke="#2563eb" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" points={stockPoints} />
+          <polyline fill="none" stroke="#3b82f6" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" points={stockPoints} />
           <polyline fill="none" stroke="#f59e0b" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" points={goldPoints} />
           <polyline fill="none" stroke="#10b981" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" points={bankPoints} />
 
@@ -370,14 +387,14 @@ export function StockGoldBankComparator({
             const x = getX(idx, comparisonTimeline.length);
             return (
               <g key={p.year}>
-                <line x1={x} y1={chartH - padBtm} x2={x} y2={chartH - padBtm + 4} stroke="#94a3b8" />
-                <text x={x} y={chartH - padBtm + 16} fontSize="10" fill="#64748b" textAnchor="middle" fontWeight="600">
+                <line x1={x} y1={chartH - padBtm} x2={x} y2={chartH - padBtm + 4} stroke="#475569" />
+                <text x={x} y={chartH - padBtm + 16} fontSize="10" fill="#94a3b8" textAnchor="middle" fontWeight="600">
                   {p.year}
                 </text>
                 {/* Dots on latest year */}
                 {idx === comparisonTimeline.length - 1 && (
                   <g>
-                    <circle cx={x} cy={getY(p.stockValue)} r={4} fill="#2563eb" />
+                    <circle cx={x} cy={getY(p.stockValue)} r={4} fill="#3b82f6" />
                     <circle cx={x} cy={getY(p.goldValue)} r={4} fill="#f59e0b" />
                     <circle cx={x} cy={getY(p.bankValue)} r={4} fill="#10b981" />
                   </g>
@@ -389,25 +406,25 @@ export function StockGoldBankComparator({
       </div>
 
       {/* YEAR-BY-YEAR DATA TABLE */}
-      <div className="invest-table-wrapper">
-        <h3 className="invest-table-heading">
+      <div className="invest-table-wrapper my-6">
+        <h3 className="invest-table-heading text-base sm:text-lg font-bold text-white mb-3">
           Bảng Chi Tiết Số Tiền Lũy Kế Qua Từng Năm Tiếp Theo ({startYear} → Hiện tại)
         </h3>
-        <div className="invest-table-container">
-          <table className="invest-table-unified">
+        <div className="invest-table-container overflow-x-auto rounded-xl border border-slate-800">
+          <table className="invest-table-unified w-full text-left border-collapse text-xs sm:text-sm">
             <thead>
-              <tr>
-                <th>Mốc Năm</th>
-                <th>Giá CP {symbol}</th>
-                <th style={{ textAlign: "right" }}>Tài sản CP (VND)</th>
-                <th>Giá Vàng SJC</th>
-                <th style={{ textAlign: "right" }}>Tài sản Vàng (VND)</th>
-                <th>Lãi suất NH</th>
-                <th style={{ textAlign: "right" }}>Tiền gửi NH (VND)</th>
-                <th style={{ textAlign: "center" }}>Kênh dẫn đầu</th>
+              <tr className="bg-slate-950/80 border-b border-slate-800 text-slate-400 text-xs uppercase tracking-wider">
+                <th className="py-3 px-4 font-bold">Mốc Năm</th>
+                <th className="py-3 px-4 font-bold">Giá CP {symbol}</th>
+                <th className="py-3 px-4 font-bold text-right">Tài sản CP (VND)</th>
+                <th className="py-3 px-4 font-bold">Giá Vàng SJC</th>
+                <th className="py-3 px-4 font-bold text-right">Tài sản Vàng (VND)</th>
+                <th className="py-3 px-4 font-bold">Lãi suất NH</th>
+                <th className="py-3 px-4 font-bold text-right">Tiền gửi NH (VND)</th>
+                <th className="py-3 px-4 font-bold text-center">Kênh dẫn đầu</th>
               </tr>
             </thead>
-            <tbody>
+            <tbody className="divide-y divide-slate-800/50">
               {comparisonTimeline.map((pt) => {
                 const winnerLabel =
                   pt.winner === "stock"
@@ -417,39 +434,41 @@ export function StockGoldBankComparator({
                     : "Tiết kiệm NH";
                 const winnerTagCls =
                   pt.winner === "stock"
-                    ? "blue"
+                    ? "bg-blue-950 text-blue-400 border border-blue-800/60"
                     : pt.winner === "gold"
-                    ? "amber"
-                    : "green";
+                    ? "bg-amber-950 text-amber-400 border border-amber-800/60"
+                    : "bg-emerald-950 text-emerald-400 border border-emerald-800/60";
 
                 return (
-                  <tr key={pt.year}>
-                    <td>
-                      <strong>Năm {pt.year}</strong>
+                  <tr key={pt.year} className="hover:bg-slate-800/40 transition">
+                    <td className="py-3 px-4 font-bold text-white whitespace-nowrap">
+                      Năm {pt.year}
                     </td>
-                    <td>{pt.stockPrice.toLocaleString("vi-VN")} đ</td>
-                    <td style={{ textAlign: "right", fontWeight: 700, color: "#2563eb" }}>
+                    <td className="py-3 px-4 text-slate-300 whitespace-nowrap">{pt.stockPrice.toLocaleString("vi-VN")} đ</td>
+                    <td className="py-3 px-4 text-right font-bold text-blue-400 whitespace-nowrap">
                       {formatVND(pt.stockValue)}
-                      <span style={{ fontSize: "0.75rem", display: "block", color: pt.stockRoi >= 0 ? "#16a34a" : "#dc2626" }}>
+                      <span className={`text-[11px] block font-semibold ${pt.stockRoi >= 0 ? "text-emerald-400" : "text-rose-400"}`}>
                         ({pt.stockRoi >= 0 ? `+${pt.stockRoi}%` : `${pt.stockRoi}%`})
                       </span>
                     </td>
-                    <td>{pt.goldPricePerTael} tr/lượng</td>
-                    <td style={{ textAlign: "right", fontWeight: 700, color: "#d97706" }}>
+                    <td className="py-3 px-4 text-slate-300 whitespace-nowrap">{pt.goldPricePerTael} tr/lượng</td>
+                    <td className="py-3 px-4 text-right font-bold text-amber-400 whitespace-nowrap">
                       {formatVND(pt.goldValue)}
-                      <span style={{ fontSize: "0.75rem", display: "block", color: pt.goldRoi >= 0 ? "#16a34a" : "#dc2626" }}>
+                      <span className="text-[11px] block font-semibold text-emerald-400">
                         (+{pt.goldRoi}%)
                       </span>
                     </td>
-                    <td>{pt.bankRate}%/năm</td>
-                    <td style={{ textAlign: "right", fontWeight: 700, color: "#16a34a" }}>
+                    <td className="py-3 px-4 text-slate-300 whitespace-nowrap">{pt.bankRate}%/năm</td>
+                    <td className="py-3 px-4 text-right font-bold text-emerald-400 whitespace-nowrap">
                       {formatVND(pt.bankValue)}
-                      <span style={{ fontSize: "0.75rem", display: "block", color: "#16a34a" }}>
+                      <span className="text-[11px] block font-semibold text-emerald-400">
                         (+{pt.bankRoi}%)
                       </span>
                     </td>
-                    <td style={{ textAlign: "center" }}>
-                      <span className={`admin-tag ${winnerTagCls}`}>{winnerLabel}</span>
+                    <td className="py-3 px-4 text-center whitespace-nowrap">
+                      <span className={`admin-tag inline-block text-[11px] font-bold px-2.5 py-0.5 rounded-full ${winnerTagCls}`}>
+                        {winnerLabel}
+                      </span>
                     </td>
                   </tr>
                 );
@@ -460,16 +479,18 @@ export function StockGoldBankComparator({
       </div>
 
       {/* FINANCIAL ADVISOR TAKEAWAY */}
-      <div className="invest-insight-box">
-        <h4>💡 Nhận Định Tài Chính & Góc Nhìn Đầu Tư</h4>
-        <p>
-          Trong chu kỳ từ <b>{startYear}</b> đến <b>2026</b>, kênh <b>
+      <div className="invest-insight-box bg-slate-950/80 border border-slate-800 rounded-xl p-5 text-xs sm:text-sm leading-relaxed text-slate-300 shadow-inner">
+        <h4 className="text-sm sm:text-base font-bold text-white m-0 mb-2 flex items-center gap-2">
+          <span>💡</span> Nhận Định Tài Chính &amp; Góc Nhìn Đầu Tư
+        </h4>
+        <p className="m-0 mb-3">
+          Trong chu kỳ từ <b className="text-white">{startYear}</b> đến <b className="text-white">2026</b>, kênh <b className="text-sky-400">
             {latest.winner === "stock"
               ? `Cổ phiếu ${symbol}`
               : latest.winner === "gold"
               ? "Vàng miếng SJC"
               : "Tiết kiệm ngân hàng"}
-          </b> đang giữ vị trí quán quân về tổng giá trị sinh lời với mức ROI đạt <b>
+          </b> đang giữ vị trí quán quân về tổng giá trị sinh lời với mức ROI đạt <b className="text-emerald-400">
             +{latest.winner === "stock"
               ? latest.stockRoi
               : latest.winner === "gold"
@@ -477,13 +498,12 @@ export function StockGoldBankComparator({
               : latest.bankRoi}%
           </b>.
         </p>
-        <ul>
-          <li><b>Cổ phiếu ({symbol}):</b> Có tiềm năng sinh lời vượt trội nhờ tăng trưởng doanh nghiệp và chia cổ tức, nhưng biến động giá mạnh theo chu kỳ thị trường.</li>
-          <li><b>Vàng SJC:</b> Là tài sản phòng thủ chống lạm phát và mất giá tiền tệ hoàn hảo trong thời kỳ bất ổn vĩ mô.</li>
-          <li><b>Gửi tiết kiệm:</b> Bảo toàn vốn 100% với lãi kép đều đặn, phù hợp làm khoản dự phòng thanh khoản ngắn hạn.</li>
+        <ul className="space-y-1.5 m-0 pl-4 list-disc text-slate-400 text-xs sm:text-sm">
+          <li><b className="text-slate-200">Cổ phiếu ({symbol}):</b> Có tiềm năng sinh lời vượt trội nhờ tăng trưởng doanh nghiệp và chia cổ tức, nhưng biến động giá mạnh theo chu kỳ thị trường.</li>
+          <li><b className="text-slate-200">Vàng SJC:</b> Là tài sản phòng thủ chống lạm phát và mất giá tiền tệ hoàn hảo trong thời kỳ bất ổn vĩ mô.</li>
+          <li><b className="text-slate-200">Gửi tiết kiệm:</b> Bảo toàn vốn 100% với lãi kép đều đặn, phù hợp làm khoản dự phòng thanh khoản ngắn hạn.</li>
         </ul>
       </div>
     </div>
   );
 }
-

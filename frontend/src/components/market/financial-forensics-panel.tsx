@@ -13,13 +13,13 @@ export function FinancialForensicsPanel({ data, symbol }: Props) {
 
   if (!data) {
     return (
-      <div className="forensics-container empty-state">
-        <div className="forensics-empty-box">
-          <span className="forensics-empty-icon" aria-hidden="true">
+      <div className="forensics-container empty-state w-full py-12 flex items-center justify-center">
+        <div className="forensics-empty-box bg-slate-900/80 border border-slate-800 rounded-2xl p-8 max-w-lg text-center flex flex-col items-center gap-3 shadow-sm">
+          <span className="forensics-empty-icon text-3xl" aria-hidden="true">
             🔍
           </span>
-          <h3>Đang cập nhật chỉ số rủi ro cho {symbol}</h3>
-          <p>
+          <h3 className="text-base font-bold text-slate-100 m-0">Đang cập nhật chỉ số rủi ro cho {symbol}</h3>
+          <p className="text-xs text-slate-400 m-0 leading-relaxed">
             Hệ thống phân tích định lượng BCTC và mô hình Altman Z-Score đang thu thập dữ liệu
             cho mã này.
           </p>
@@ -37,13 +37,13 @@ export function FinancialForensicsPanel({ data, symbol }: Props) {
   const severityTone = (sev: ForensicRedFlag["severity"]) => {
     switch (sev) {
       case "high":
-        return "badge-danger";
+        return "badge-danger bg-rose-950/70 border-rose-500/40 text-rose-300";
       case "medium":
-        return "badge-warning";
+        return "badge-warning bg-amber-950/70 border-amber-500/40 text-amber-300";
       case "low":
-        return "badge-caution";
+        return "badge-caution bg-sky-950/70 border-sky-500/40 text-sky-300";
       default:
-        return "badge-clean";
+        return "badge-clean bg-emerald-950/70 border-emerald-500/40 text-emerald-300";
     }
   };
 
@@ -118,31 +118,35 @@ export function FinancialForensicsPanel({ data, symbol }: Props) {
   const mediumFlagsCount = red_flags.filter((f) => f.severity === "medium").length;
 
   return (
-    <div className="forensics-container" aria-labelledby="forensics-title">
+    <div className="forensics-container w-full flex flex-col gap-6" aria-labelledby="forensics-title">
       {/* Header bar */}
-      <div className="forensics-header">
-        <div className="forensics-title-group">
-          <div className="forensics-badge-row">
-            <span className="forensics-badge">ĐỘC QUYỀN INVESTIQ</span>
-            <span className="forensics-badge sub">QUANTITATIVE FORENSICS</span>
+      <div className="forensics-header bg-slate-900/90 border border-slate-800 rounded-2xl p-5 flex flex-wrap items-center justify-between gap-5 shadow-sm">
+        <div className="forensics-title-group flex-1 min-w-[280px]">
+          <div className="forensics-badge-row flex items-center gap-2 mb-2">
+            <span className="forensics-badge inline-block text-[10px] font-extrabold px-2 py-0.5 rounded-full bg-emerald-500/15 text-emerald-400 border border-emerald-500/30 uppercase tracking-wider">
+              ĐỘC QUYỀN INVESTIQ
+            </span>
+            <span className="forensics-badge sub inline-block text-[10px] font-extrabold px-2 py-0.5 rounded-full bg-sky-500/15 text-sky-400 border border-sky-500/30 uppercase tracking-wider">
+              QUANTITATIVE FORENSICS
+            </span>
           </div>
-          <h2 id="forensics-title" className="forensics-heading">
+          <h2 id="forensics-title" className="forensics-heading text-xl sm:text-2xl font-bold text-slate-100 m-0">
             Tầm soát rủi ro BCTC &amp; Mô hình Altman Z-Score: {symbol}
           </h2>
-          <p className="forensics-subheading">
+          <p className="forensics-subheading text-xs sm:text-sm text-slate-400 mt-1 m-0 leading-relaxed">
             Phát hiện dấu hiệu làm đẹp báo cáo tài chính, mất cân đối dòng tiền và áp lực đòn bẩy
             trước khi giá phản ánh.
           </p>
         </div>
 
-        <div className="forensics-health-card">
-          <div className="forensics-health-circle">
-            <span className="health-score-value">{health_score}</span>
-            <span className="health-score-max">/100</span>
+        <div className="forensics-health-card flex items-center gap-3.5 bg-slate-950/70 border border-slate-800 rounded-xl p-3.5 px-4 shadow-inner">
+          <div className="forensics-health-circle relative w-14 h-14 rounded-full bg-slate-900 border-2 border-emerald-500 flex flex-col items-center justify-center shadow-[0_0_12px_rgba(16,185,129,0.3)]">
+            <span className="health-score-value text-base font-extrabold text-emerald-400 leading-none">{health_score}</span>
+            <span className="health-score-max text-[9px] font-semibold text-slate-500">/100</span>
           </div>
-          <div className="forensics-health-text">
-            <strong>Điểm sức khỏe BCTC</strong>
-            <span>
+          <div className="forensics-health-text flex flex-col">
+            <strong className="text-xs font-bold text-slate-200">Điểm sức khỏe BCTC</strong>
+            <span className="text-xs font-medium text-emerald-400 mt-0.5">
               {health_score >= 80
                 ? "Tài chính rất vững vàng"
                 : health_score >= 60
@@ -154,22 +158,22 @@ export function FinancialForensicsPanel({ data, symbol }: Props) {
       </div>
 
       {/* Primary 2-Column: Altman Z-Score + Risk Summary */}
-      <div className="forensics-grid-overview">
+      <div className="forensics-grid-overview grid md:grid-cols-2 gap-5">
         {/* Altman Z-Score Box */}
-        <div className={`forensics-card z-score-card zone-${z_zone}`}>
-          <div className="card-top">
-            <span className="card-eyebrow">MÔ HÌNH DỰ BÁO TÀI CHÍNH</span>
-            <h3 className="card-title">Chỉ số phá sản Altman Z-Score</h3>
+        <div className={`forensics-card z-score-card zone-${z_zone} bg-slate-900/90 border border-slate-800 rounded-2xl p-5 flex flex-col gap-4 shadow-sm`}>
+          <div className="card-top border-b border-slate-800 pb-3">
+            <span className="card-eyebrow text-xs font-bold text-sky-400 uppercase tracking-wider block mb-1">MÔ HÌNH DỰ BÁO TÀI CHÍNH</span>
+            <h3 className="card-title text-base sm:text-lg font-bold text-slate-100 m-0">Chỉ số phá sản Altman Z-Score</h3>
           </div>
 
           {is_finance ? (
-            <div className="z-finance-notice">
-              <span className="notice-icon" aria-hidden="true">
+            <div className="z-finance-notice flex items-start gap-3 p-4 rounded-xl bg-slate-950/60 border border-slate-800 text-xs">
+              <span className="notice-icon text-lg" aria-hidden="true">
                 ℹ️
               </span>
               <div>
-                <strong>Đặc thù ngành Tài chính / Ngân hàng</strong>
-                <p>
+                <strong className="text-slate-200 block mb-1">Đặc thù ngành Tài chính / Ngân hàng</strong>
+                <p className="text-slate-400 m-0 leading-relaxed">
                   Mô hình Altman Z-Score nguyên bản được thiết kế cho doanh nghiệp sản xuất và thương
                   mại. Nhóm ngân hàng/chứng khoán hoạt động với đòn bẩy tiền gửi đặc thù, vui lòng
                   tham khảo 4 chỉ báo định lượng bên dưới.
@@ -178,29 +182,42 @@ export function FinancialForensicsPanel({ data, symbol }: Props) {
             </div>
           ) : (
             <>
-              <div className="z-score-display">
-                <span className="z-value">{z_score}</span>
-                <span className={`z-badge zone-${z_zone}`}>{z_label}</span>
+              <div className="z-score-display flex items-baseline gap-3">
+                <span className="z-value text-3xl font-extrabold text-white font-mono">{z_score}</span>
+                <span className={`z-badge zone-${z_zone} text-xs font-bold px-2.5 py-1 rounded-full border ${
+                  z_zone === "safe"
+                    ? "bg-emerald-500/15 text-emerald-400 border-emerald-500/30"
+                    : z_zone === "grey"
+                      ? "bg-amber-500/15 text-amber-400 border-amber-500/30"
+                      : "bg-rose-500/15 text-rose-400 border-rose-500/30"
+                }`}>
+                  {z_label}
+                </span>
               </div>
 
               {/* Gauge meter */}
-              <div className="z-gauge-wrapper">
-                <div className="z-gauge-track">
-                  <div className="z-gauge-fill" style={{ width: `${zGaugePercent}%` }} />
+              <div className="z-gauge-wrapper flex flex-col gap-2">
+                <div className="z-gauge-track relative h-3 bg-slate-800 rounded-full overflow-hidden">
                   <div
-                    className="z-gauge-marker"
+                    className={`z-gauge-fill h-full rounded-full transition-all duration-500 ${
+                      z_zone === "safe" ? "bg-emerald-400" : z_zone === "grey" ? "bg-amber-400" : "bg-rose-500"
+                    }`}
+                    style={{ width: `${zGaugePercent}%` }}
+                  />
+                  <div
+                    className="z-gauge-marker absolute top-0 bottom-0 w-1 bg-white shadow-md"
                     style={{ left: `${zGaugePercent}%` }}
                     aria-label={`Mức Z-Score: ${z_score}`}
                   />
                 </div>
-                <div className="z-gauge-labels">
-                  <span className="zone-text text-danger">Nguy cơ cao (&lt; 1.81)</span>
-                  <span className="zone-text text-warning">Vùng xám (1.81 - 2.99)</span>
-                  <span className="zone-text text-success">Vùng an toàn (&gt; 2.99)</span>
+                <div className="z-gauge-labels flex items-center justify-between text-[11px] font-medium text-slate-500">
+                  <span className="zone-text text-danger text-rose-400">Nguy cơ cao (&lt; 1.81)</span>
+                  <span className="zone-text text-warning text-amber-400">Vùng xám (1.81 - 2.99)</span>
+                  <span className="zone-text text-success text-emerald-400">Vùng an toàn (&gt; 2.99)</span>
                 </div>
               </div>
 
-              <p className="z-score-explanation">
+              <p className="z-score-explanation text-xs text-slate-400 m-0 leading-relaxed bg-slate-950/50 p-3 rounded-xl border border-slate-850">
                 {z_zone === "safe"
                   ? "Chỉ số Altman Z-Score nằm trong vùng An toàn. Doanh nghiệp có xác suất rủi ro kiệt quệ tài chính trong 24 tháng tới ở mức rất thấp."
                   : z_zone === "grey"
@@ -211,37 +228,37 @@ export function FinancialForensicsPanel({ data, symbol }: Props) {
           )}
         </div>
 
-        {/* Risk Summary & AI Recommendation Box */}
-        <div className="forensics-card summary-card">
-          <div className="card-top">
-            <span className="card-eyebrow">TỔNG HỢP &amp; KHUYẾN NGHỊ RỦI RO</span>
-            <h3 className="card-title">Kết luận cho Nhà Đầu Tư (F0)</h3>
+        {/* Risk Summary & Recommendation Box */}
+        <div className="forensics-card summary-card bg-slate-900/90 border border-slate-800 rounded-2xl p-5 flex flex-col gap-4 shadow-sm">
+          <div className="card-top border-b border-slate-800 pb-3">
+            <span className="card-eyebrow text-xs font-bold text-sky-400 uppercase tracking-wider block mb-1">TỔNG HỢP &amp; KHUYẾN NGHỊ RỦI RO</span>
+            <h3 className="card-title text-base sm:text-lg font-bold text-slate-100 m-0">Kết luận cho Nhà Đầu Tư (F0)</h3>
           </div>
 
-          <div className="summary-status-strip">
-            <div className="status-pill">
-              <span className="status-dot dot-red" />
+          <div className="summary-status-strip flex flex-wrap gap-2 text-xs font-semibold">
+            <div className="status-pill flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-rose-950/60 border border-rose-800/60 text-rose-300">
+              <span className="status-dot dot-red w-2 h-2 rounded-full bg-rose-500" />
               <span>{highFlagsCount} Cảnh báo đỏ</span>
             </div>
-            <div className="status-pill">
-              <span className="status-dot dot-yellow" />
+            <div className="status-pill flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-amber-950/60 border border-amber-800/60 text-amber-300">
+              <span className="status-dot dot-yellow w-2 h-2 rounded-full bg-amber-400" />
               <span>{mediumFlagsCount} Lưu ý</span>
             </div>
-            <div className="status-pill">
-              <span className="status-dot dot-green" />
+            <div className="status-pill flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-emerald-950/60 border border-emerald-800/60 text-emerald-300">
+              <span className="status-dot dot-green w-2 h-2 rounded-full bg-emerald-400" />
               <span>{red_flags.length - highFlagsCount - mediumFlagsCount} Đạt chuẩn</span>
             </div>
           </div>
 
-          <div className="summary-body">
-            <p className="summary-text">{risk_summary}</p>
-            <div className="recommendation-callout">
-              <span className="callout-icon" aria-hidden="true">
+          <div className="summary-body flex flex-col gap-3">
+            <p className="summary-text text-xs sm:text-sm text-slate-300 m-0 leading-relaxed">{risk_summary}</p>
+            <div className="recommendation-callout flex items-start gap-3 bg-sky-950/40 border border-sky-900/50 rounded-xl p-3.5 text-xs">
+              <span className="callout-icon text-lg" aria-hidden="true">
                 💡
               </span>
               <div>
-                <strong>Khuyến nghị hành động:</strong>
-                <p>{recommendation}</p>
+                <strong className="text-sky-300 block mb-1">Khuyến nghị hành động:</strong>
+                <p className="text-slate-300 m-0 leading-relaxed">{recommendation}</p>
               </div>
             </div>
           </div>
@@ -249,16 +266,16 @@ export function FinancialForensicsPanel({ data, symbol }: Props) {
       </div>
 
       {/* 4 Quantitative Forensic Red Flags */}
-      <div className="forensics-flags-section">
-        <div className="flags-section-header">
+      <div className="forensics-flags-section bg-slate-900/90 border border-slate-800 rounded-2xl p-5 shadow-sm">
+        <div className="flags-section-header flex items-center justify-between border-b border-slate-800 pb-3 mb-4">
           <div>
-            <span className="card-eyebrow">BỘ 4 CHỈ SỐ TẦM SOÁT ĐỊNH LƯỢNG</span>
-            <h3 className="flags-section-title">Chi tiết 4 Bài Test Rủi Ro Gian Lận &amp; BCTC</h3>
+            <span className="card-eyebrow text-xs font-bold text-sky-400 uppercase tracking-wider block mb-1">BỘ 4 CHỈ SỐ TẦM SOÁT ĐỊNH LƯỢNG</span>
+            <h3 className="flags-section-title text-base sm:text-lg font-bold text-slate-100 m-0">Chi tiết 4 Bài Test Rủi Ro Gian Lận &amp; BCTC</h3>
           </div>
-          <span className="flags-count-tag">4 Chỉ số cốt lõi</span>
+          <span className="flags-count-tag text-xs font-bold px-2.5 py-1 rounded-full bg-slate-800 text-slate-300 border border-slate-700">4 Chỉ số cốt lõi</span>
         </div>
 
-        <div className="forensics-flags-grid">
+        <div className="forensics-flags-grid grid md:grid-cols-2 gap-4">
           {red_flags.map((flag) => {
             const isSelected = selectedFlag?.flag_id === flag.flag_id;
             const detail = getForensicDetail(flag.flag_id, flag.severity, symbol);
@@ -266,7 +283,9 @@ export function FinancialForensicsPanel({ data, symbol }: Props) {
             return (
               <article
                 key={flag.flag_id}
-                className={`forensic-flag-card ${severityTone(flag.severity)} ${isSelected ? "active" : ""}`}
+                className={`forensic-flag-card border rounded-xl p-4 flex flex-col gap-3 transition cursor-pointer ${severityTone(flag.severity)} ${
+                  isSelected ? "active ring-2 ring-sky-500/50" : "hover:border-slate-700"
+                }`}
                 onClick={() => setSelectedFlag(isSelected ? null : flag)}
                 role="button"
                 tabIndex={0}
@@ -277,64 +296,64 @@ export function FinancialForensicsPanel({ data, symbol }: Props) {
                   }
                 }}
               >
-                <div className="flag-top">
-                  <span className={`flag-severity-badge ${severityTone(flag.severity)}`}>
+                <div className="flag-top flex items-center justify-between">
+                  <span className={`flag-severity-badge text-[11px] font-bold px-2 py-0.5 rounded-full border ${severityTone(flag.severity)}`}>
                     {severityLabel(flag.severity)}
                   </span>
-                  <span className="flag-indicator-val">{flag.indicator_value}</span>
+                  <span className="flag-indicator-val font-mono font-bold text-white text-xs">{flag.indicator_value}</span>
                 </div>
 
-                <h4 className="flag-title">{flag.title}</h4>
-                <p className="flag-desc">{flag.description}</p>
+                <h4 className="flag-title text-sm sm:text-base font-bold text-white m-0">{flag.title}</h4>
+                <p className="flag-desc text-xs text-slate-400 m-0 leading-relaxed">{flag.description}</p>
 
-                <div className="flag-metrics-table">
-                  <div className="metric-row">
-                    <span className="metric-label">Giá trị quan sát:</span>
-                    <strong className="metric-val">{flag.indicator_value}</strong>
+                <div className="flag-metrics-table bg-slate-950/60 p-2.5 rounded-lg border border-slate-850 flex flex-col gap-1.5 text-xs">
+                  <div className="metric-row flex justify-between">
+                    <span className="metric-label text-slate-400">Giá trị quan sát:</span>
+                    <strong className="metric-val text-white">{flag.indicator_value}</strong>
                   </div>
-                  <div className="metric-row">
-                    <span className="metric-label">Ngưỡng chuẩn:</span>
-                    <strong className="metric-val text-muted">{flag.threshold}</strong>
+                  <div className="metric-row flex justify-between">
+                    <span className="metric-label text-slate-400">Ngưỡng chuẩn:</span>
+                    <strong className="metric-val text-muted text-slate-500">{flag.threshold}</strong>
                   </div>
                 </div>
 
-                <div className="flag-implication">
-                  <div className="implication-header">
+                <div className="flag-implication bg-slate-950/40 p-2.5 rounded-lg border border-slate-850 text-xs">
+                  <div className="implication-header flex items-center gap-1.5 mb-1">
                     <span className="implication-icon">⚠️</span>
-                    <strong className="implication-label">Hệ quả tiềm ẩn:</strong>
+                    <strong className="implication-label text-slate-300">Hệ quả tiềm ẩn:</strong>
                   </div>
-                  <p className="implication-body">{flag.implication}</p>
+                  <p className="implication-body text-slate-400 m-0 leading-relaxed">{flag.implication}</p>
                 </div>
 
-                <div className="flag-footer-cta">
-                  <span>{isSelected ? "Thu gọn ▲" : "Chi tiết phân tích ▼"}</span>
+                <div className="flag-footer-cta text-right">
+                  <span className="text-xs font-semibold text-sky-400 hover:text-sky-300 transition">{isSelected ? "Thu gọn ▲" : "Chi tiết phân tích ▼"}</span>
                 </div>
 
                 {isSelected && (
-                  <div className="flag-expanded-panel" onClick={(e) => e.stopPropagation()}>
+                  <div className="flag-expanded-panel mt-3 pt-3 border-t border-slate-800 flex flex-col gap-3 text-xs" onClick={(e) => e.stopPropagation()}>
                     <div className="expanded-header">
-                      <span className="expanded-kicker">CHẨN ĐOÁN KẾ TOÁN CHUYÊN SÂU</span>
-                      <h5 className="expanded-title">{detail.methodology}</h5>
+                      <span className="expanded-kicker text-[10px] font-bold text-sky-400 uppercase tracking-wider block mb-0.5">CHẨN ĐOÁN KẾ TOÁN CHUYÊN SÂU</span>
+                      <h5 className="expanded-title text-sm font-bold text-white m-0">{detail.methodology}</h5>
                     </div>
 
-                    <div className="expanded-block formula-block">
-                      <span className="block-label">📐 CÔNG THỨC ĐỊNH LƯỢNG:</span>
-                      <code className="block-code">{detail.formula}</code>
+                    <div className="expanded-block formula-block bg-slate-950/80 p-2.5 rounded-lg border border-slate-800">
+                      <span className="block-label text-slate-400 font-semibold block mb-1">📐 CÔNG THỨC ĐỊNH LƯỢNG:</span>
+                      <code className="block-code font-mono text-sky-300 text-xs">{detail.formula}</code>
                     </div>
 
-                    <div className="expanded-block deepdive-block">
-                      <span className="block-label">🔍 PHÂN TÍCH RỦI RO &amp; Ý NGHĨA KẾ TOÁN:</span>
-                      <p className="block-text">{detail.deepDive}</p>
+                    <div className="expanded-block deepdive-block bg-slate-950/80 p-2.5 rounded-lg border border-slate-800">
+                      <span className="block-label text-slate-400 font-semibold block mb-1">🔍 PHÂN TÍCH RỦI RO &amp; Ý NGHĨA KẾ TOÁN:</span>
+                      <p className="block-text text-slate-300 m-0 leading-relaxed">{detail.deepDive}</p>
                     </div>
 
-                    <div className="expanded-block warning-block">
-                      <span className="block-label">🚨 DẤU HIỆU CẢNH BÁO CẦN LƯU TÂM:</span>
-                      <p className="block-text text-amber">{detail.warningSign}</p>
+                    <div className="expanded-block warning-block bg-slate-950/80 p-2.5 rounded-lg border border-slate-800">
+                      <span className="block-label text-slate-400 font-semibold block mb-1">🚨 DẤU HIỆU CẢNH BÁO CẦN LƯU TÂM:</span>
+                      <p className="block-text text-amber text-amber-300 m-0 leading-relaxed">{detail.warningSign}</p>
                     </div>
 
-                    <div className="expanded-block checklist-block">
-                      <span className="block-label">📋 HƯỚNG DẪN SOI TRÊN BCTC QUÝ:</span>
-                      <ul className="block-checklist">
+                    <div className="expanded-block checklist-block bg-slate-950/80 p-2.5 rounded-lg border border-slate-800">
+                      <span className="block-label text-slate-400 font-semibold block mb-1">📋 HƯỚNG DẪN SOI TRÊN BCTC QUÝ:</span>
+                      <ul className="block-checklist m-0 pl-4 list-disc text-slate-300 space-y-1">
                         {detail.auditChecklist.map((c, i) => (
                           <li key={i}>{c}</li>
                         ))}
@@ -349,13 +368,13 @@ export function FinancialForensicsPanel({ data, symbol }: Props) {
       </div>
 
       {/* Educational Notice for Beginners */}
-      <aside className="forensics-education-footer">
-        <div className="edu-icon" aria-hidden="true">
+      <aside className="forensics-education-footer bg-slate-900/90 border border-slate-800 rounded-2xl p-5 flex items-start gap-4 text-xs shadow-sm">
+        <div className="edu-icon text-2xl" aria-hidden="true">
           📖
         </div>
         <div className="edu-content">
-          <strong>Tại sao nhà đầu tư cần đọc BCTC Forensic trước khi mua?</strong>
-          <p>
+          <strong className="text-sm font-bold text-slate-200 block mb-1">Tại sao nhà đầu tư cần đọc BCTC Forensic trước khi mua?</strong>
+          <p className="text-slate-400 m-0 leading-relaxed">
             Rất nhiều cổ phiếu tăng giá mạnh trên sàn nhưng dòng tiền kinh doanh (CFO) lại âm liên
             tục, các khoản phải thu chiếm phần lớn tài sản. Khi chu kỳ tín dụng thắt chặt, doanh
             nghiệp sẽ mất thanh khoản đột ngột. Mô hình Forensics của InvestIQ giúp bạn nhìn xuyên

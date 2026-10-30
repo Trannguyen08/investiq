@@ -1,5 +1,7 @@
 import type { CandlestickChallenge } from "./candlestick-challenges";
 
+export type { CandlestickChallenge };
+
 export const CANDLESTICK_CHALLENGES: CandlestickChallenge[] = [
   // ==================== CƠ BẢN (1 - 15) ====================
   {

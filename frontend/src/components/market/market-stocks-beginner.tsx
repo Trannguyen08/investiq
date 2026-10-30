@@ -61,13 +61,6 @@ function hrefWith(filters: Record<string, string>, changes: Record<string, strin
   return `/market/stocks?${query.toString()}`;
 }
 
-function companyActivity(item: MarketInstrument) {
-  if (!item.sector || item.sector === "Chưa phân loại") return "Chưa có mô tả ngành";
-  return `Hoạt động trong ngành ${item.sector.toLocaleLowerCase("vi-VN")}`;
-}
-
-
-
 function situationFor(item: MarketInstrument) {
   const change = Number(item.change_percent);
   const volumeRatio = Number(item.volume_vs_20d);
@@ -194,84 +187,180 @@ function StockComparisonDialog({
   const loadedBySymbol = new Map(comparison.map((item) => [item.instrument.symbol, item]));
   const optionBySymbol = new Map(options.map((item) => [item.symbol, item]));
 
-  return <div className="stock-comparison-modal" role="presentation">
-    <button className="stock-comparison-backdrop" type="button" aria-label="Đóng cửa sổ so sánh" onClick={onClose} />
-    <div ref={dialogRef} className="stock-comparison-dialog" role="dialog" aria-modal="true" aria-labelledby="comparison-dialog-title" aria-describedby="comparison-dialog-description">
-      <header className="stock-comparison-dialog-header"><div><p className="eyebrow">ĐỐI CHIẾU CÙNG MỘT KHUNG</p><h2 id="comparison-dialog-title">So sánh cổ phiếu</h2><p id="comparison-dialog-description">Chọn từ 2 đến 3 mã hoặc đối chiếu tỷ suất sinh lời với Vàng SJC và Lãi suất ngân hàng qua từng năm.</p></div><button type="button" className="dialog-close" aria-label="Đóng cửa sổ so sánh" onClick={onClose}>×</button></header>
-      <div className="comparison-mode-switch" role="tablist" style={{ display: "flex", gap: "8px", margin: "12px 0 16px 0", borderBottom: "1px solid var(--line, #334155)", paddingBottom: "12px" }}>
-        <button
-          type="button"
-          role="tab"
-          aria-selected={comparisonMode === "peers"}
-          className={`comparison-mode-btn ${comparisonMode === "peers" ? "active" : ""}`}
-          style={{
-            padding: "8px 16px",
-            borderRadius: "6px",
-            border: "1px solid",
-            borderColor: comparisonMode === "peers" ? "var(--accent, #3b82f6)" : "var(--line, #334155)",
-            background: comparisonMode === "peers" ? "rgba(59, 130, 246, 0.15)" : "transparent",
-            color: comparisonMode === "peers" ? "#60a5fa" : "inherit",
-            fontWeight: comparisonMode === "peers" ? 600 : 400,
-            cursor: "pointer",
-          }}
-          onClick={() => setComparisonMode("peers")}
-        >
-          📊 So sánh giữa các mã cổ phiếu
-        </button>
-        <button
-          type="button"
-          role="tab"
-          aria-selected={comparisonMode === "gold_bank"}
-          className={`comparison-mode-btn ${comparisonMode === "gold_bank" ? "active" : ""}`}
-          style={{
-            padding: "8px 16px",
-            borderRadius: "6px",
-            border: "1px solid",
-            borderColor: comparisonMode === "gold_bank" ? "var(--accent, #3b82f6)" : "var(--line, #334155)",
-            background: comparisonMode === "gold_bank" ? "rgba(59, 130, 246, 0.15)" : "transparent",
-            color: comparisonMode === "gold_bank" ? "#60a5fa" : "inherit",
-            fontWeight: comparisonMode === "gold_bank" ? 600 : 400,
-            cursor: "pointer",
-          }}
-          onClick={() => setComparisonMode("gold_bank")}
-        >
-          ⚖️ So sánh với Vàng SJC & Ngân hàng theo Năm
-        </button>
-      </div>
-      {comparisonMode === "gold_bank" ? (
-        <div className="stock-comparison-gold-bank-wrapper" style={{ marginTop: "16px" }}>
-          <StockGoldBankComparator initialSymbol={symbols[0] || "HPG"} />
+  return (
+    <div className="stock-comparison-modal fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-5 bg-slate-950/80 backdrop-blur-md" role="presentation">
+      <button className="stock-comparison-backdrop absolute inset-0 cursor-pointer w-full h-full border-none bg-transparent" type="button" aria-label="Đóng cửa sổ so sánh" onClick={onClose} />
+      <div ref={dialogRef} className="stock-comparison-dialog relative z-10 w-full max-w-6xl max-h-[92vh] overflow-y-auto bg-slate-900 border border-slate-800 rounded-2xl p-5 sm:p-6 shadow-2xl text-slate-100 flex flex-col gap-4" role="dialog" aria-modal="true" aria-labelledby="comparison-dialog-title" aria-describedby="comparison-dialog-description">
+        <header className="stock-comparison-dialog-header flex items-start justify-between gap-4 border-b border-slate-800 pb-4">
+          <div>
+            <p className="eyebrow text-xs font-bold text-sky-400 uppercase tracking-wider mb-1">ĐỐI CHIẾU CÙNG MỘT KHUNG</p>
+            <h2 id="comparison-dialog-title" className="text-xl sm:text-2xl font-bold text-slate-100 m-0">So sánh cổ phiếu</h2>
+            <p id="comparison-dialog-description" className="text-xs sm:text-sm text-slate-400 mt-1 m-0">Chọn từ 2 đến 3 mã hoặc đối chiếu tỷ suất sinh lời với Vàng SJC và Lãi suất ngân hàng qua từng năm.</p>
+          </div>
+          <button type="button" className="dialog-close w-8 h-8 rounded-lg flex items-center justify-center text-slate-400 hover:text-white hover:bg-slate-800 transition text-lg shrink-0 cursor-pointer" aria-label="Đóng cửa sổ so sánh" onClick={onClose}>×</button>
+        </header>
+
+        <div className="comparison-mode-switch flex flex-wrap gap-2 pb-3 border-b border-slate-800" role="tablist">
+          <button
+            type="button"
+            role="tab"
+            aria-selected={comparisonMode === "peers"}
+            className={`comparison-mode-btn px-4 py-2 rounded-xl text-xs sm:text-sm font-semibold transition border cursor-pointer ${
+              comparisonMode === "peers"
+                ? "active bg-sky-500/15 text-sky-400 border-sky-500/40 shadow-sm"
+                : "bg-slate-850 text-slate-400 border-slate-800 hover:text-slate-200 hover:bg-slate-800"
+            }`}
+            onClick={() => setComparisonMode("peers")}
+          >
+            📊 So sánh giữa các mã cổ phiếu
+          </button>
+          <button
+            type="button"
+            role="tab"
+            aria-selected={comparisonMode === "gold_bank"}
+            className={`comparison-mode-btn px-4 py-2 rounded-xl text-xs sm:text-sm font-semibold transition border cursor-pointer ${
+              comparisonMode === "gold_bank"
+                ? "active bg-sky-500/15 text-sky-400 border-sky-500/40 shadow-sm"
+                : "bg-slate-850 text-slate-400 border-slate-800 hover:text-slate-200 hover:bg-slate-800"
+            }`}
+            onClick={() => setComparisonMode("gold_bank")}
+          >
+            ⚖️ So sánh với Vàng SJC &amp; Ngân hàng theo Năm
+          </button>
         </div>
-      ) : (
-        <>
-          <section className="comparison-picker" aria-label="Chọn mã để so sánh">
-        <div className="comparison-selected"><strong>Đã chọn {symbols.length}/3</strong><div>{symbols.map((symbol) => <span key={symbol}>{symbol}<button type="button" aria-label={`Gỡ ${symbol} khỏi so sánh`} onClick={() => removeSymbol(symbol)}>×</button></span>)}</div></div>
-        <form onSubmit={submitSymbol}><label htmlFor="comparison-symbol">Tìm hoặc nhập mã cổ phiếu</label><div><input id="comparison-symbol" value={query} onChange={(event) => setQuery(event.target.value)} maxLength={24} autoComplete="off" placeholder="Ví dụ: FPT, VCB, HPG" /><button type="submit" disabled={!query.trim() || symbols.length >= 3}>Thêm mã</button></div></form>
-        {candidates.length > 0 && <div className="comparison-suggestions" aria-label="Mã gợi ý">{candidates.map((item) => <button key={item.symbol} type="button" disabled={symbols.length >= 3} aria-label={`Thêm ${item.symbol} vào so sánh`} onClick={() => addSymbol(item.symbol)}><strong>{item.symbol}</strong><span>{item.name}</span></button>)}</div>}
-        {error && <p className="comparison-error" role="alert">{error}</p>}
-        <button type="button" className="comparison-load" disabled={symbols.length < 2} onClick={loadComparison}>Tải dữ liệu so sánh</button>
-      </section>
-      <section className="comparison-results" aria-live="polite">
-        {symbols.length < 2 && <div className="comparison-empty"><h3>Chọn thêm mã để so sánh</h3><p>Kết quả sẽ đặt biểu đồ, định giá và trạng thái từng mã cạnh nhau.</p></div>}
-        {symbols.length >= 2 && <div className="comparison-board">{symbols.map((symbol) => {
-          const loaded = loadedBySymbol.get(symbol);
-          const item = loaded?.instrument ?? optionBySymbol.get(symbol);
-          if (!item) return <article className="comparison-card comparison-missing" key={symbol}><header><h3>{symbol}</h3><button type="button" aria-label={`Gỡ ${symbol} khỏi so sánh`} onClick={() => removeSymbol(symbol)}>×</button></header><p>Chưa tìm thấy dữ liệu cho mã này. Hãy kiểm tra mã hoặc gỡ để chọn mã khác.</p></article>;
-          const situation = situationFor(item);
-          return <article className="comparison-card" key={symbol}>
-            <header><div><Link href={`/market/stocks/${symbol}?from=${encodeURIComponent(`${hrefWith(filters, { compare: null, selected: null })}#stock-table`)}`} prefetch={false}>{symbol}</Link><p>{item.name}</p></div><button type="button" aria-label={`Gỡ ${symbol} khỏi so sánh`} onClick={() => removeSymbol(symbol)}>×</button></header>
-            <div className="comparison-price"><strong>{formatChange(item.price)}</strong><span className={changeTone(item.change_percent)}>{formatPercent(item.change_percent)}</span></div>
-            <section><h4>Biểu đồ tổng quát</h4>{loaded ? <MarketLineChart candles={loaded.candles} label={`Đường giá 90 phiên của ${symbol}`} /> : <p className="comparison-loading-note">Bấm “Tải dữ liệu so sánh” để lấy biểu đồ 90 phiên.</p>}</section>
-            <section className="comparison-metrics-section"><h4>Các chỉ số</h4><dl className="comparison-metrics"><div className="comparison-metric"><dt>Khối lượng</dt><dd>{formatCompact(item.volume)}</dd></div><div className="comparison-metric"><dt>GTGD</dt><dd>{formatMoney(item.matched_value)}</dd></div><div className="comparison-metric"><dt>Vốn hóa</dt><dd>{formatMoney(item.market_cap)}</dd></div><div className="comparison-metric"><dt>P/E</dt><dd>{metricValue(item.pe, " lần")}</dd></div><div className="comparison-metric"><dt>P/B</dt><dd>{metricValue(item.pb, " lần")}</dd></div><div className="comparison-metric"><dt>EPS</dt><dd>{metricValue(item.eps, " đ")}</dd></div><div className="comparison-metric"><dt>ROE</dt><dd>{metricValue(item.roe_percent, "%")}</dd></div></dl></section>
-            <section className="comparison-situation"><h4>Tình hình mã cổ phiếu</h4><strong>{situation.movement}</strong><p>{situation.liquidity}</p><small>Quan sát từ snapshot hiện tại, không phải khuyến nghị đầu tư.</small></section>
-            <section className="comparison-ai"><h4>Xu hướng phát triển (AI)</h4><strong>Chưa có đánh giá AI đã kiểm định</strong><p>Mô-đun dự báo chưa hoạt động với dữ liệu đủ tin cậy. Hệ thống không suy diễn xu hướng dài hạn từ một phiên giao dịch.</p></section>
-          </article>;
-        })}</div>}
-      </section>
-        </>
-      )}
+
+        {comparisonMode === "gold_bank" ? (
+          <div className="stock-comparison-gold-bank-wrapper mt-2">
+            <StockGoldBankComparator initialSymbol={symbols[0] || "HPG"} />
+          </div>
+        ) : (
+          <>
+            <section className="comparison-picker grid md:grid-cols-2 gap-4 bg-slate-950/60 p-4 rounded-xl border border-slate-800" aria-label="Chọn mã để so sánh">
+              <div className="comparison-selected flex flex-col gap-2">
+                <strong className="text-xs font-semibold text-slate-300">Đã chọn {symbols.length}/3</strong>
+                <div className="flex flex-wrap gap-2">
+                  {symbols.map((symbol) => (
+                    <span key={symbol} className="inline-flex items-center gap-1.5 px-3 py-1 rounded-lg bg-sky-950/80 text-sky-300 border border-sky-800 text-xs font-bold">
+                      {symbol}
+                      <button type="button" className="text-slate-400 hover:text-rose-400 cursor-pointer text-sm font-bold ml-1" aria-label={`Gỡ ${symbol} khỏi so sánh`} onClick={() => removeSymbol(symbol)}>×</button>
+                    </span>
+                  ))}
+                  {!symbols.length && <span className="text-xs text-slate-500 italic">Chưa chọn mã nào</span>}
+                </div>
+              </div>
+              <form onSubmit={submitSymbol} className="flex flex-col gap-2">
+                <label htmlFor="comparison-symbol" className="text-xs font-semibold text-slate-300">Tìm hoặc nhập mã cổ phiếu</label>
+                <div className="flex gap-2">
+                  <input
+                    id="comparison-symbol"
+                    value={query}
+                    onChange={(event) => setQuery(event.target.value)}
+                    maxLength={24}
+                    autoComplete="off"
+                    placeholder="Ví dụ: FPT, VCB, HPG"
+                    className="flex-1 bg-slate-900 border border-slate-700 rounded-lg px-3 py-1.5 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-sky-500"
+                  />
+                  <button type="submit" disabled={!query.trim() || symbols.length >= 3} className="px-3.5 py-1.5 rounded-lg bg-sky-600 hover:bg-sky-500 disabled:opacity-50 disabled:cursor-not-allowed text-xs font-semibold text-white transition cursor-pointer">
+                    Thêm mã
+                  </button>
+                </div>
+              </form>
+              {candidates.length > 0 && (
+                <div className="comparison-suggestions md:col-span-2 flex flex-wrap gap-2 pt-2 border-t border-slate-850" aria-label="Mã gợi ý">
+                  <span className="text-xs text-slate-400 self-center mr-1">Gợi ý:</span>
+                  {candidates.map((item) => (
+                    <button key={item.symbol} type="button" disabled={symbols.length >= 3} aria-label={`Thêm ${item.symbol} vào so sánh`} onClick={() => addSymbol(item.symbol)} className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md bg-slate-800 hover:bg-slate-700 disabled:opacity-50 text-xs text-slate-200 border border-slate-700 transition cursor-pointer">
+                      <strong className="text-sky-400 font-bold">{item.symbol}</strong>
+                      <span className="text-[11px] text-slate-400 max-w-[120px] truncate">{item.name}</span>
+                    </button>
+                  ))}
+                </div>
+              )}
+              {error && <p className="comparison-error md:col-span-2 text-xs text-rose-400 m-0" role="alert">{error}</p>}
+              <div className="md:col-span-2 flex justify-end pt-2">
+                <button type="button" className="comparison-load px-5 py-2 rounded-xl bg-sky-600 hover:bg-sky-500 disabled:opacity-50 disabled:cursor-not-allowed text-xs sm:text-sm font-bold text-white transition cursor-pointer shadow-sm" disabled={symbols.length < 2} onClick={loadComparison}>
+                  Tải dữ liệu so sánh
+                </button>
+              </div>
+            </section>
+
+            <section className="comparison-results my-3" aria-live="polite">
+              {symbols.length < 2 && (
+                <div className="comparison-empty py-12 text-center text-slate-400">
+                  <h3 className="text-base font-bold text-slate-300 mb-1">Chọn thêm mã để so sánh</h3>
+                  <p className="text-xs text-slate-500 m-0">Kết quả sẽ đặt biểu đồ, định giá và trạng thái từng mã cạnh nhau.</p>
+                </div>
+              )}
+              {symbols.length >= 2 && (
+                <div className="comparison-board grid md:grid-cols-2 lg:grid-cols-3 gap-4">
+                  {symbols.map((symbol) => {
+                    const loaded = loadedBySymbol.get(symbol);
+                    const item = loaded?.instrument ?? optionBySymbol.get(symbol);
+                    if (!item) {
+                      return (
+                        <article className="comparison-card comparison-missing bg-slate-950/80 border border-slate-800 rounded-xl p-4 flex flex-col gap-3" key={symbol}>
+                          <header className="flex items-center justify-between">
+                            <h3 className="text-base font-bold text-white m-0">{symbol}</h3>
+                            <button type="button" className="text-slate-400 hover:text-rose-400 text-lg cursor-pointer" aria-label={`Gỡ ${symbol} khỏi so sánh`} onClick={() => removeSymbol(symbol)}>×</button>
+                          </header>
+                          <p className="text-xs text-slate-400 m-0">Chưa tìm thấy dữ liệu cho mã này. Hãy kiểm tra mã hoặc gỡ để chọn mã khác.</p>
+                        </article>
+                      );
+                    }
+                    const situation = situationFor(item);
+                    return (
+                      <article className="comparison-card bg-slate-950/80 border border-slate-800 rounded-xl p-4 flex flex-col gap-3.5 shadow-sm" key={symbol}>
+                        <header className="flex items-start justify-between border-b border-slate-850 pb-2.5">
+                          <div>
+                            <Link href={`/market/stocks/${symbol}?from=${encodeURIComponent(`${hrefWith(filters, { compare: null, selected: null })}#stock-table`)}`} prefetch={false} className="text-lg font-bold text-sky-400 hover:underline">
+                              {symbol}
+                            </Link>
+                            <p className="text-xs text-slate-400 m-0 truncate max-w-[200px]">{item.name}</p>
+                          </div>
+                          <button type="button" className="text-slate-400 hover:text-rose-400 text-lg cursor-pointer" aria-label={`Gỡ ${symbol} khỏi so sánh`} onClick={() => removeSymbol(symbol)}>×</button>
+                        </header>
+                        <div className="comparison-price flex items-baseline gap-2.5">
+                          <strong className="text-xl font-bold text-white">{formatChange(item.price)}</strong>
+                          <span className={`text-sm font-semibold ${changeTone(item.change_percent)}`}>{formatPercent(item.change_percent)}</span>
+                        </div>
+                        <section>
+                          <h4 className="text-xs font-semibold text-slate-400 mb-1.5 uppercase tracking-wider">Biểu đồ tổng quát</h4>
+                          {loaded ? <MarketLineChart candles={loaded.candles} label={`Đường giá 90 phiên của ${symbol}`} /> : <p className="comparison-loading-note text-xs text-slate-500 m-0">Bấm “Tải dữ liệu so sánh” để lấy biểu đồ 90 phiên.</p>}
+                        </section>
+                        <section className="comparison-metrics-section">
+                          <h4 className="text-xs font-semibold text-slate-400 mb-2 uppercase tracking-wider">Các chỉ số</h4>
+                          <dl className="comparison-metrics grid grid-cols-2 gap-2 text-xs m-0">
+                            <div className="comparison-metric bg-slate-900/60 p-2 rounded-lg border border-slate-850"><dt className="text-slate-400">Khối lượng</dt><dd className="font-bold text-white m-0">{formatCompact(item.volume)}</dd></div>
+                            <div className="comparison-metric bg-slate-900/60 p-2 rounded-lg border border-slate-850"><dt className="text-slate-400">GTGD</dt><dd className="font-bold text-white m-0">{formatMoney(item.matched_value)}</dd></div>
+                            <div className="comparison-metric bg-slate-900/60 p-2 rounded-lg border border-slate-850"><dt className="text-slate-400">Vốn hóa</dt><dd className="font-bold text-white m-0">{formatMoney(item.market_cap)}</dd></div>
+                            <div className="comparison-metric bg-slate-900/60 p-2 rounded-lg border border-slate-850"><dt className="text-slate-400">P/E</dt><dd className="font-bold text-white m-0">{metricValue(item.pe, " lần")}</dd></div>
+                            <div className="comparison-metric bg-slate-900/60 p-2 rounded-lg border border-slate-850"><dt className="text-slate-400">P/B</dt><dd className="font-bold text-white m-0">{metricValue(item.pb, " lần")}</dd></div>
+                            <div className="comparison-metric bg-slate-900/60 p-2 rounded-lg border border-slate-850"><dt className="text-slate-400">EPS</dt><dd className="font-bold text-white m-0">{metricValue(item.eps, " đ")}</dd></div>
+                            <div className="comparison-metric bg-slate-900/60 p-2 rounded-lg border border-slate-850"><dt className="text-slate-400">ROE</dt><dd className="font-bold text-white m-0">{metricValue(item.roe_percent, "%")}</dd></div>
+                          </dl>
+                        </section>
+                        <section className="comparison-situation bg-slate-900/40 p-3 rounded-lg border border-slate-850 text-xs">
+                          <h4 className="text-[11px] font-semibold text-slate-400 mb-1 uppercase tracking-wider">Tình hình mã cổ phiếu</h4>
+                          <strong className="text-slate-200 block mb-1">{situation.movement}</strong>
+                          <p className="text-slate-400 m-0 mb-1">{situation.liquidity}</p>
+                          <small className="text-[10px] text-slate-500 block">Quan sát từ snapshot hiện tại, không phải khuyến nghị đầu tư.</small>
+                        </section>
+                        <section className="comparison-ai bg-sky-950/30 p-3 rounded-lg border border-sky-900/40 text-xs">
+                          <h4 className="text-[11px] font-semibold text-sky-400 mb-1 uppercase tracking-wider">Xu hướng phát triển (AI)</h4>
+                          <strong className="text-slate-200 block mb-1">Chưa có đánh giá AI đã kiểm định</strong>
+                          <p className="text-slate-400 m-0">Mô-đun dự báo chưa hoạt động với dữ liệu đủ tin cậy. Hệ thống không suy diễn xu hướng dài hạn từ một phiên giao dịch.</p>
+                        </section>
+                      </article>
+                    );
+                  })}
+                </div>
+              )}
+            </section>
+          </>
+        )}
+      </div>
     </div>
-  </div>;
+  );
 }
 
 export function StocksView({
@@ -315,79 +404,322 @@ export function StocksView({
       ? `${Math.round(declines / total * 100)}% mã toàn thị trường đang giảm; thị trường nghiêng về thận trọng.`
     : `${Math.round(advances / total * 100)}% mã toàn thị trường đang tăng; sắc xanh đang chiếm ưu thế.`;
 
-  return <section className="market-tab-panel beginner-market-page">
-    <div className="market-color-legend compact-badge" aria-label="Quy ước màu">
-      <strong>Quy ước màu:</strong>
-      <span><i className="legend-up" /> Xanh: tăng</span>
-      <span><i className="legend-down" /> Đỏ: giảm</span>
-      <span><i className="legend-reference" /> Vàng: TC</span>
-      <span><i className="legend-ceiling" /> Tím: trần</span>
-      <span><i className="legend-floor" /> Xanh dương: sàn</span>
-    </div>
-    <section className="market-summary-card">
-      <div><p className="eyebrow">TÓM TẮT TRONG MỘT CÂU</p><h2>{summaryText}</h2><p>Phạm vi: toàn bộ {marketCount} cổ phiếu trong snapshot của nguồn.</p></div>
-      <div><div className="beginner-card-title"><strong>VN-Index</strong><span className={changeTone(index?.change_percent ?? "0")}>{formatPercent(index?.change_percent ?? "0")}</span></div><MarketCandlestickChart candles={index?.candles ?? []} label="Biểu đồ nến VN-Index" range="month" minimumCandles={MARKET_OVERVIEW_INDEX_CHART_LIMITS.minimum} maximumCandles={MARKET_OVERVIEW_INDEX_CHART_LIMITS.maximum} /></div>
-    </section>
+  return (
+    <section className="market-tab-panel beginner-market-page w-full flex flex-col gap-6">
+      {/* Legend Badge */}
+      <div className="market-color-legend compact-badge relative z-10 flex flex-wrap items-center gap-2 sm:gap-3 px-3.5 py-1.5 rounded-full bg-slate-900/90 border border-slate-800 text-slate-300 text-xs w-fit shadow-sm" aria-label="Quy ước màu">
+        <strong className="text-slate-200 font-semibold mr-1">Quy ước màu:</strong>
+        <span className="inline-flex items-center gap-1.5"><i className="legend-up w-2.5 h-2.5 rounded-full bg-emerald-400 inline-block shadow-[0_0_8px_rgba(52,211,153,0.5)]" /> Xanh: tăng</span>
+        <span className="inline-flex items-center gap-1.5"><i className="legend-down w-2.5 h-2.5 rounded-full bg-rose-500 inline-block shadow-[0_0_8px_rgba(244,63,94,0.5)]" /> Đỏ: giảm</span>
+        <span className="inline-flex items-center gap-1.5"><i className="legend-reference w-2.5 h-2.5 rounded-full bg-amber-400 inline-block shadow-[0_0_8px_rgba(251,191,36,0.5)]" /> Vàng: TC</span>
+        <span className="inline-flex items-center gap-1.5"><i className="legend-ceiling w-2.5 h-2.5 rounded-full bg-purple-400 inline-block shadow-[0_0_8px_rgba(192,132,252,0.5)]" /> Tím: trần</span>
+        <span className="inline-flex items-center gap-1.5"><i className="legend-floor w-2.5 h-2.5 rounded-full bg-cyan-400 inline-block shadow-[0_0_8px_rgba(34,211,238,0.5)]" /> Xanh dương: sàn</span>
+      </div>
 
-    <div className="market-overview-layout">
-      <SectorHeatmap sectors={sectors.data} headingId="market-heatmap-title" />
-      <aside className="market-quick-facts">
-        <article>
-          <div className="beginner-card-title"><h3>Độ rộng toàn thị trường</h3><InfoTip term="Độ rộng">Đếm số mã tăng, giảm và đứng giá trong toàn bộ snapshot của nguồn.</InfoTip></div>
-          <div className="beginner-breadth"><span className="advance" style={{ width: `${advances / total * 100}%` }} /><span className="unchanged" style={{ width: `${unchanged / total * 100}%` }} /><span className="decline" style={{ width: `${declines / total * 100}%` }} /></div>
-          <p><b className="positive">{advances} tăng</b> · {unchanged} đứng · <b className="negative">{declines} giảm</b></p>
-        </article>
-        <article>
-          <div className="beginner-card-title"><h3>Định giá P/E &amp; P/B sàn</h3><InfoTip term="Định giá sàn">Định giá P/E và P/B trung bình của các doanh nghiệp niêm yết trong snapshot.</InfoTip></div>
-          <strong>P/E {peAvg} · P/B {pbAvg}</strong>
-          <p>Mức định giá trung bình trong snapshot của nguồn.</p>
-        </article>
-        <article>
-          <div className="beginner-card-title"><h3>Thanh khoản &amp; Khối ngoại</h3><InfoTip term="Dòng tiền">Tổng giá trị của {marketCount} mã trong snapshot của nguồn.</InfoTip></div>
-          <strong>{formatMoney(String(liquidity))}</strong>
-          <p>Khối ngoại: <strong className={changeTone(String(foreign))}>{foreign >= 0 ? "Mua ròng" : "Bán ròng"} {formatMoney(String(Math.abs(foreign)))}</strong></p>
-        </article>
-      </aside>
-    </div>
-
-    <section className="sector-flow" aria-labelledby="sector-flow-title"><div className="beginner-card-title"><h2 id="sector-flow-title">Sức mạnh giao dịch theo ngành</h2><InfoTip term="Sức mạnh giao dịch">Chỉ báo tương đối = giá trị giao dịch × % biến động. Đây không phải số tiền vào/ra ròng thực tế.</InfoTip></div><div>{sectorFlows.slice(0, 10).map((sector) => { const strength = Number(sector.matched_value) * Number(sector.change_percent) / 100; const maximum = Math.max(...sectorFlows.map((item) => Math.abs(Number(item.matched_value) * Number(item.change_percent) / 100)), 1); const percent = Math.abs(strength) / maximum * 50; return <article key={sector.name}><span>{sector.name}</span><div><i className={strength >= 0 ? "inflow" : "outflow"} style={{ width: `${percent}%`, [strength >= 0 ? "left" : "right"]: "50%" }} /></div><strong className={changeTone(String(strength))}>{strength >= 0 ? "+" : "−"}{formatMoney(String(Math.abs(strength)))}</strong></article>; })}</div></section>
-
-    <section id="stock-table" className="simple-stock-section" aria-labelledby="stock-table-title"><div className="market-tab-heading"><div><h2 id="stock-table-title">Bảng cổ phiếu nâng cao</h2><p>{collection.pagination.total_items} mã · 15 mã mỗi trang · VN30 ưu tiên đầu danh sách.</p>{filters.sector && <div className="active-market-filter"><span>Ngành: {filters.sector}</span><Link href={`${hrefWith(filters, { sector: null, cursor: null })}#stock-table`} prefetch={false}>Bỏ lọc</Link></div>}</div><div className="stock-table-heading-actions"><span className="table-preset">VN30 trước</span><button ref={comparisonButtonRef} type="button" className="open-comparison-button" onClick={() => setComparisonOpen(true)}>So sánh cổ phiếu{comparisonSymbols.length ? ` (${comparisonSymbols.length})` : ""}</button></div></div>
-        <div className="screening-presets" aria-label="Bộ lọc nhanh">{screeningPresets.filter((preset) => hasVolumeBaseline || !preset.values.min_volume_ratio).map((preset) => <Link key={preset.label} href={hrefWith(filters, { ...preset.values, cursor: null })} prefetch={false}><b>{preset.metric}</b><strong>{preset.label}</strong><span>{preset.description}</span></Link>)}</div>
-        <form className="stock-filter" action="/market/stocks">
-          {filters.sector && <input type="hidden" name="sector" value={filters.sector} />}
-          <label>Tìm mã hoặc công ty<input name="q" defaultValue={filters.q} placeholder="Ví dụ: FPT, Hòa Phát" /></label>
-          <label>Sàn<select name="exchange" defaultValue={filters.exchange}><option value="">Tất cả sàn</option><option value="HOSE">HOSE</option><option value="HNX">HNX</option><option value="UPCOM">UPCoM</option></select></label>
-          <label>Sắp xếp<select name="sort" defaultValue={hasVolumeBaseline ? filters.sort : filters.sort === "volume_vs_20d" ? "vn30" : filters.sort}><option value="vn30">VN30 trước</option><option value="symbol">Mã</option><option value="change_percent">% hôm nay</option><option value="matched_value">Thanh khoản</option><option value="market_cap">Vốn hóa</option>{hasVolumeBaseline && <option value="volume_vs_20d">Khối lượng so với TB20</option>}</select></label>
-          <label>Thứ tự<select name="direction" defaultValue={filters.direction}><option value="desc">Giảm dần</option><option value="asc">Tăng dần</option></select></label>
-          <button type="button" className="advanced-filter-trigger" aria-expanded={advancedFilterOpen} aria-controls="advanced-stock-filter-panel" onClick={() => setAdvancedFilterOpen((current) => !current)}>Lọc nâng cao{activeAdvancedFilterCount ? <span>{activeAdvancedFilterCount}</span> : null}</button>
-          <div className="stock-filter-actions"><button type="submit">Áp dụng</button><Link href="/market/stocks" prefetch={false}>Đặt lại</Link></div>
-          {advancedFilterOpen && <section id="advanced-stock-filter-panel" className="advanced-stock-filter" aria-label="Bộ lọc nâng cao">
-            <div>
-              <label>% tăng tối thiểu<input type="number" step="0.1" min="-100" max="100" name="min_change" defaultValue={filters.min_change} placeholder="Ví dụ: 1" /></label>
-              <label>% tăng tối đa<input type="number" step="0.1" min="-100" max="100" name="max_change" defaultValue={filters.max_change} placeholder="Ví dụ: 5" /></label>
-              <label>GTGD tối thiểu (tỷ đồng)<input type="number" step="1" min="0" name="min_matched_value_billion" defaultValue={filters.min_matched_value_billion} placeholder="Ví dụ: 100" /></label>
-              <label>Vốn hóa tối thiểu (tỷ đồng)<input type="number" step="1" min="0" name="min_market_cap_billion" defaultValue={filters.min_market_cap_billion} placeholder="Ví dụ: 10000" /></label>
-              {hasVolumeBaseline ? <label>Khối lượng / TB20 tối thiểu<input type="number" step="0.1" min="0" max="1000" name="min_volume_ratio" defaultValue={filters.min_volume_ratio} placeholder="Ví dụ: 1.5" /></label> : <p className="filter-unavailable">Nguồn hiện tại chưa cung cấp khối lượng trung bình 20 phiên cho toàn thị trường.</p>}
-              <label className="checkbox-filter"><input type="checkbox" name="vn30" value="true" defaultChecked={filters.vn30 === "true"} /> Chỉ mã VN30</label>
+      {/* Summary Card */}
+      <section className="market-summary-card bg-slate-900/90 border border-slate-800 rounded-2xl p-5 grid md:grid-cols-2 gap-5 shadow-sm">
+        <div>
+          <p className="eyebrow text-xs font-bold text-sky-400 uppercase tracking-wider mb-1">TÓM TẮT TRONG MỘT CÂU</p>
+          <h2 className="text-lg sm:text-xl font-bold text-slate-100 m-0 mb-2 leading-snug">{summaryText}</h2>
+          <p className="text-xs sm:text-sm text-slate-400 m-0">Phạm vi: toàn bộ {marketCount} cổ phiếu trong snapshot của nguồn.</p>
+        </div>
+        <div>
+          <div className="beginner-card-title flex items-center justify-between mb-2">
+            <div className="flex items-baseline gap-2">
+              <strong className="text-sm font-bold text-slate-200">VN-Index</strong>
             </div>
-          </section>}
+            <Link
+              href="/market/indices?symbol=VNINDEX"
+              className="text-xs text-sky-400 hover:text-sky-300 font-medium inline-flex items-center gap-1 transition"
+            >
+              Xem chi tiết chỉ số →
+            </Link>
+            <span className={`text-sm font-bold ${changeTone(index?.change_percent ?? "0")}`}>{formatPercent(index?.change_percent ?? "0")}</span>
+          </div>
+          <MarketCandlestickChart compact candles={index?.candles ?? []} label="Biểu đồ nến VN-Index" range="month" minimumCandles={MARKET_OVERVIEW_INDEX_CHART_LIMITS.minimum} maximumCandles={MARKET_OVERVIEW_INDEX_CHART_LIMITS.maximum} />
+        </div>
+      </section>
+
+      {/* Heatmap & Quick Facts */}
+      <div className="market-overview-layout grid grid-cols-1 md:grid-cols-12 lg:grid-cols-12 gap-5 items-stretch">
+        <div className="col-span-12 md:col-span-7 lg:col-span-8 flex flex-col">
+          <SectorHeatmap sectors={sectors.data} headingId="market-heatmap-title" />
+        </div>
+        <aside className="market-quick-facts col-span-12 md:col-span-5 lg:col-span-4 bg-slate-900/90 border border-slate-800 rounded-2xl p-5 flex flex-col gap-5 shadow-sm">
+          <article className="border-b border-slate-800 pb-4">
+            <div className="beginner-card-title flex items-center justify-between mb-2">
+              <h3 className="text-sm font-bold text-slate-200 m-0">Độ rộng toàn thị trường</h3>
+              <InfoTip term="Độ rộng">Đếm số mã tăng, giảm và đứng giá trong toàn bộ snapshot của nguồn.</InfoTip>
+            </div>
+            <div className="beginner-breadth flex h-2 rounded-full overflow-hidden bg-slate-800 mb-2">
+              <span className="advance bg-emerald-400" style={{ width: `${advances / total * 100}%` }} />
+              <span className="unchanged bg-amber-400" style={{ width: `${unchanged / total * 100}%` }} />
+              <span className="decline bg-rose-500" style={{ width: `${declines / total * 100}%` }} />
+            </div>
+            <p className="text-xs text-slate-400 m-0">
+              <b className="positive text-emerald-400 font-bold">{advances} tăng</b> · {unchanged} đứng · <b className="negative text-rose-400 font-bold">{declines} giảm</b>
+            </p>
+          </article>
+          <article className="border-b border-slate-800 pb-4">
+            <div className="beginner-card-title flex items-center justify-between mb-2">
+              <h3 className="text-sm font-bold text-slate-200 m-0">Định giá P/E &amp; P/B sàn</h3>
+              <InfoTip term="Định giá sàn">Định giá P/E và P/B trung bình của các doanh nghiệp niêm yết trong snapshot.</InfoTip>
+            </div>
+            <strong className="text-base font-bold text-white block mb-1">P/E {peAvg} · P/B {pbAvg}</strong>
+            <p className="text-xs text-slate-400 m-0">Mức định giá trung bình trong snapshot của nguồn.</p>
+          </article>
+          <article>
+            <div className="beginner-card-title flex items-center justify-between mb-2">
+              <h3 className="text-sm font-bold text-slate-200 m-0">Thanh khoản &amp; Khối ngoại</h3>
+              <InfoTip term="Dòng tiền">Tổng giá trị của {marketCount} mã trong snapshot của nguồn.</InfoTip>
+            </div>
+            <strong className="text-base font-bold text-white block mb-1">{formatMoney(String(liquidity))}</strong>
+            <p className="text-xs text-slate-400 m-0">Khối ngoại: <strong className={changeTone(String(foreign))}>{foreign >= 0 ? "Mua ròng" : "Bán ròng"} {formatMoney(String(Math.abs(foreign)))}</strong></p>
+          </article>
+        </aside>
+      </div>
+
+      {/* Sector Flow */}
+      <section className="sector-flow bg-slate-900/90 border border-slate-800 rounded-2xl p-5 shadow-sm" aria-labelledby="sector-flow-title">
+        <div className="beginner-card-title flex items-center justify-between mb-3">
+          <h2 id="sector-flow-title" className="text-lg font-bold text-slate-100 m-0">Sức mạnh giao dịch theo ngành</h2>
+          <InfoTip term="Sức mạnh giao dịch">Chỉ báo tương đối = giá trị giao dịch × % biến động. Đây không phải số tiền vào/ra ròng thực tế.</InfoTip>
+        </div>
+        <div className="flex flex-col gap-2">
+          {sectorFlows.slice(0, 10).map((sector) => {
+            const strength = Number(sector.matched_value) * Number(sector.change_percent) / 100;
+            const maximum = Math.max(...sectorFlows.map((item) => Math.abs(Number(item.matched_value) * Number(item.change_percent) / 100)), 1);
+            const percent = Math.abs(strength) / maximum * 50;
+            return (
+              <article key={sector.name} className="flex items-center gap-3 text-xs py-1">
+                <span className="w-32 truncate text-slate-300 font-medium">{sector.name}</span>
+                <div className="relative flex-1 h-2 bg-slate-800 rounded-full overflow-hidden">
+                  <i
+                    className={`${strength >= 0 ? "inflow bg-emerald-400" : "outflow bg-rose-500"} absolute top-0 bottom-0 rounded-full`}
+                    style={{ width: `${percent}%`, [strength >= 0 ? "left" : "right"]: "50%" }}
+                  />
+                </div>
+                <strong className={`w-20 text-right font-bold ${changeTone(String(strength))}`}>
+                  {strength >= 0 ? "+" : "−"}{formatMoney(String(Math.abs(strength)))}
+                </strong>
+              </article>
+            );
+          })}
+        </div>
+      </section>
+
+      {/* Stock Table Section */}
+      <section id="stock-table" className="simple-stock-section bg-slate-900/90 border border-slate-800 rounded-2xl p-5 shadow-sm" aria-labelledby="stock-table-title">
+        <div className="market-tab-heading flex flex-wrap items-center justify-between gap-4 border-b border-slate-800 pb-4 mb-4">
+          <div>
+            <h2 id="stock-table-title" className="text-lg sm:text-xl font-bold text-slate-100 m-0">Bảng cổ phiếu nâng cao</h2>
+            <p className="text-xs text-slate-400 mt-1 m-0">{collection.pagination.total_items} mã · 15 mã mỗi trang · VN30 ưu tiên đầu danh sách.</p>
+            {filters.sector && (
+              <div className="active-market-filter mt-2 inline-flex items-center gap-2 px-2.5 py-1 rounded-lg bg-sky-950/80 border border-sky-800 text-xs text-sky-300">
+                <span>Ngành: {filters.sector}</span>
+                <Link href={`${hrefWith(filters, { sector: null, cursor: null })}#stock-table`} prefetch={false} className="text-rose-400 hover:text-rose-300 font-bold">Bỏ lọc</Link>
+              </div>
+            )}
+          </div>
+          <div className="stock-table-heading-actions flex items-center gap-3">
+            <span className="table-preset text-xs font-semibold px-2.5 py-1 rounded-md bg-slate-800 text-slate-300 border border-slate-700">VN30 trước</span>
+            <button
+              ref={comparisonButtonRef}
+              type="button"
+              className="open-comparison-button px-4 py-2 rounded-xl text-xs sm:text-sm font-semibold bg-sky-600 hover:bg-sky-500 text-white transition shadow-sm cursor-pointer"
+              onClick={() => setComparisonOpen(true)}
+            >
+              So sánh cổ phiếu{comparisonSymbols.length ? ` (${comparisonSymbols.length})` : ""}
+            </button>
+          </div>
+        </div>
+
+        {/* Screening Presets */}
+        <div className="screening-presets grid grid-cols-2 sm:grid-cols-3 md:grid-cols-5 gap-2.5 mb-4" aria-label="Bộ lọc nhanh">
+          {screeningPresets.filter((preset) => hasVolumeBaseline || !preset.values.min_volume_ratio).map((preset) => (
+            <Link
+              key={preset.label}
+              href={hrefWith(filters, { ...preset.values, cursor: null })}
+              prefetch={false}
+              className="flex flex-col p-3 rounded-xl bg-slate-950/70 border border-slate-800 hover:border-slate-700 hover:bg-slate-800/60 transition group no-underline"
+            >
+              <b className="text-[11px] font-bold text-sky-400 mb-1">{preset.metric}</b>
+              <strong className="text-xs sm:text-sm font-bold text-slate-200 group-hover:text-white">{preset.label}</strong>
+              <span className="text-[11px] text-slate-500 mt-1 line-clamp-2 leading-tight">{preset.description}</span>
+            </Link>
+          ))}
+        </div>
+
+        {/* Filter Form */}
+        <form className="stock-filter bg-slate-950/70 border border-slate-800 rounded-xl p-4 mb-4 flex flex-wrap gap-3 items-end text-xs" action="/market/stocks">
+          {filters.sector && <input type="hidden" name="sector" value={filters.sector} />}
+          <label className="flex flex-col gap-1 text-slate-400 font-medium min-w-[160px] flex-1">
+            Tìm mã hoặc công ty
+            <input name="q" defaultValue={filters.q} placeholder="Ví dụ: FPT, Hòa Phát" className="bg-slate-900 border border-slate-700 rounded-lg px-3 py-1.5 text-white placeholder-slate-500 text-xs focus:outline-none focus:border-sky-500" />
+          </label>
+          <label className="flex flex-col gap-1 text-slate-400 font-medium min-w-[110px]">
+            Sàn
+            <select name="exchange" defaultValue={filters.exchange} className="bg-slate-900 border border-slate-700 rounded-lg px-2.5 py-1.5 text-white text-xs focus:outline-none focus:border-sky-500">
+              <option value="">Tất cả sàn</option>
+              <option value="HOSE">HOSE</option>
+              <option value="HNX">HNX</option>
+              <option value="UPCOM">UPCoM</option>
+            </select>
+          </label>
+          <label className="flex flex-col gap-1 text-slate-400 font-medium min-w-[130px]">
+            Sắp xếp
+            <select name="sort" defaultValue={hasVolumeBaseline ? filters.sort : filters.sort === "volume_vs_20d" ? "vn30" : filters.sort} className="bg-slate-900 border border-slate-700 rounded-lg px-2.5 py-1.5 text-white text-xs focus:outline-none focus:border-sky-500">
+              <option value="vn30">VN30 trước</option>
+              <option value="symbol">Mã</option>
+              <option value="change_percent">% hôm nay</option>
+              <option value="matched_value">Thanh khoản</option>
+              <option value="market_cap">Vốn hóa</option>
+              {hasVolumeBaseline && <option value="volume_vs_20d">Khối lượng so với TB20</option>}
+            </select>
+          </label>
+          <label className="flex flex-col gap-1 text-slate-400 font-medium min-w-[100px]">
+            Thứ tự
+            <select name="direction" defaultValue={filters.direction} className="bg-slate-900 border border-slate-700 rounded-lg px-2.5 py-1.5 text-white text-xs focus:outline-none focus:border-sky-500">
+              <option value="desc">Giảm dần</option>
+              <option value="asc">Tăng dần</option>
+            </select>
+          </label>
+          <button
+            type="button"
+            className="advanced-filter-trigger px-3 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs font-semibold border border-slate-700 transition cursor-pointer flex items-center gap-1.5"
+            aria-expanded={advancedFilterOpen}
+            aria-controls="advanced-stock-filter-panel"
+            onClick={() => setAdvancedFilterOpen((current) => !current)}
+          >
+            Lọc nâng cao{activeAdvancedFilterCount ? <span className="bg-sky-500 text-white rounded-full px-1.5 py-0.2 text-[10px] font-bold">{activeAdvancedFilterCount}</span> : null}
+          </button>
+          <div className="stock-filter-actions flex items-center gap-2">
+            <button type="submit" className="px-4 py-1.5 rounded-lg bg-sky-600 hover:bg-sky-500 text-white font-bold transition cursor-pointer">Áp dụng</button>
+            <Link href="/market/stocks" prefetch={false} className="px-3 py-1.5 rounded-lg text-slate-400 hover:text-white transition">Đặt lại</Link>
+          </div>
+          {advancedFilterOpen && (
+            <section id="advanced-stock-filter-panel" className="advanced-stock-filter w-full pt-3 mt-1 border-t border-slate-800" aria-label="Bộ lọc nâng cao">
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+                <label className="flex flex-col gap-1 text-slate-400">% tăng tối thiểu<input type="number" step="0.1" min="-100" max="100" name="min_change" defaultValue={filters.min_change} placeholder="Ví dụ: 1" className="bg-slate-900 border border-slate-700 rounded-lg px-2.5 py-1 text-white text-xs" /></label>
+                <label className="flex flex-col gap-1 text-slate-400">% tăng tối đa<input type="number" step="0.1" min="-100" max="100" name="max_change" defaultValue={filters.max_change} placeholder="Ví dụ: 5" className="bg-slate-900 border border-slate-700 rounded-lg px-2.5 py-1 text-white text-xs" /></label>
+                <label className="flex flex-col gap-1 text-slate-400">GTGD tối thiểu (tỷ)<input type="number" step="1" min="0" name="min_matched_value_billion" defaultValue={filters.min_matched_value_billion} placeholder="Ví dụ: 100" className="bg-slate-900 border border-slate-700 rounded-lg px-2.5 py-1 text-white text-xs" /></label>
+                <label className="flex flex-col gap-1 text-slate-400">Vốn hóa tối thiểu (tỷ)<input type="number" step="1" min="0" name="min_market_cap_billion" defaultValue={filters.min_market_cap_billion} placeholder="Ví dụ: 10000" className="bg-slate-900 border border-slate-700 rounded-lg px-2.5 py-1 text-white text-xs" /></label>
+                {hasVolumeBaseline ? (
+                  <label className="flex flex-col gap-1 text-slate-400">KL / TB20 tối thiểu<input type="number" step="0.1" min="0" max="1000" name="min_volume_ratio" defaultValue={filters.min_volume_ratio} placeholder="Ví dụ: 1.5" className="bg-slate-900 border border-slate-700 rounded-lg px-2.5 py-1 text-white text-xs" /></label>
+                ) : (
+                  <p className="filter-unavailable text-slate-500 text-xs italic col-span-2 self-center">Nguồn hiện tại chưa cung cấp khối lượng trung bình 20 phiên cho toàn thị trường.</p>
+                )}
+                <label className="checkbox-filter flex items-center gap-2 text-slate-300 cursor-pointer self-center mt-2">
+                  <input type="checkbox" name="vn30" value="true" defaultChecked={filters.vn30 === "true"} className="rounded border-slate-700" />
+                  Chỉ mã VN30
+                </label>
+              </div>
+            </section>
+          )}
         </form>
-        <div className="market-table-wrap simple-stock-table-wrap"><table aria-labelledby="stock-table-title" className="market-table simple-stock-table advanced"><thead><tr><th>Mã &amp; công ty</th><th>Giá</th><th>% hôm nay</th><th>Mở · Cao · Thấp</th><th>Khối lượng</th><th>GTGD</th><th>Khối ngoại</th><th>Vốn hóa</th><th>P/E / P/B</th></tr></thead><tbody>{rows.map((item) => { const stockDetailHref = `/market/stocks/${item.symbol}?from=${encodeURIComponent(`${hrefWith(filters, { selected: null })}#stock-table`)}`; const fundamentals = fundamentalsBySymbol[item.symbol]; const ratiosLoading = (item.pe === null || item.pb === null) && fundamentals === undefined; return <tr className={item.is_vn30 ? "vn30-row" : undefined} key={item.symbol} tabIndex={0} onClick={() => router.push(stockDetailHref)} onKeyDown={(event) => { if (event.key === "Enter") router.push(stockDetailHref); }}><td className="stock-identity"><div><Link href={stockDetailHref} onClick={(event) => event.stopPropagation()}>{item.symbol}</Link>{item.is_vn30 && <span className="vn30-badge">VN30</span>}</div><span>{item.name}</span><small>{item.exchange} · {item.sector}</small></td><td data-label="Giá"><strong className={priceTone(item.price, item.reference_price, item.ceiling_price, item.floor_price)}>{formatChange(item.price)}</strong><small className="price-reference">TC {formatChange(item.reference_price)}</small></td><td data-label="% hôm nay" className={changeTone(item.change_percent)}><strong>{formatPercent(item.change_percent)}</strong><small>{formatChange(item.change)}</small></td><td data-label="Mở · Cao · Thấp"><span className={priceTone(item.open_price, item.reference_price, item.ceiling_price, item.floor_price)}>{formatChange(item.open_price)}</span> · <span className={priceTone(item.high_price, item.reference_price, item.ceiling_price, item.floor_price)}>{formatChange(item.high_price)}</span> · <span className={priceTone(item.low_price, item.reference_price, item.ceiling_price, item.floor_price)}>{formatChange(item.low_price)}</span></td><td data-label="Khối lượng">{formatCompact(item.volume)}</td><td data-label="GTGD">{formatMoney(item.matched_value)}</td><td data-label="Khối ngoại" className={changeTone(item.foreign_net_value)}>{formatMoney(item.foreign_net_value)}</td><td data-label="Vốn hóa">{formatMoney(item.market_cap)}</td><td data-label="P/E / P/B" className="fundamental-ratios">{formatRatioPair(fundamentals?.pe ?? item.pe, fundamentals?.pb ?? item.pb, ratiosLoading)}</td></tr>; })}</tbody></table></div>
-        {!rows.length && <div className="market-empty"><h3>Không tìm thấy cổ phiếu</h3><p>Thử bỏ bớt bộ lọc hoặc tìm bằng mã khác.</p></div>}
-        {!!rows.length && <nav className="market-pagination" aria-label="Phân trang cổ phiếu">{collection.pagination.previous_cursor ? <Link href={`${hrefWith(filters, { cursor: collection.pagination.previous_cursor, selected: null })}#stock-table`}>← Trang trước</Link> : <span />}<strong>Trang {collection.pagination.page} / {Math.max(1, collection.pagination.total_pages)}</strong>{collection.pagination.next_cursor ? <Link href={`${hrefWith(filters, { cursor: collection.pagination.next_cursor, selected: null })}#stock-table`}>Trang sau →</Link> : <span />}</nav>}
+
+        {/* Table Wrap */}
+        <div className="market-table-wrap simple-stock-table-wrap overflow-x-auto rounded-xl border border-slate-800">
+          <table aria-labelledby="stock-table-title" className="market-table simple-stock-table advanced w-full text-left border-collapse text-xs sm:text-sm">
+            <thead>
+              <tr className="bg-slate-950/80 border-b border-slate-800 text-slate-400 uppercase tracking-wider text-[11px]">
+                <th className="py-3 px-3 font-semibold">Mã &amp; công ty</th>
+                <th className="py-3 px-3 font-semibold">Giá</th>
+                <th className="py-3 px-3 font-semibold">% hôm nay</th>
+                <th className="py-3 px-3 font-semibold">Mở · Cao · Thấp</th>
+                <th className="py-3 px-3 font-semibold">Khối lượng</th>
+                <th className="py-3 px-3 font-semibold">GTGD</th>
+                <th className="py-3 px-3 font-semibold">Khối ngoại</th>
+                <th className="py-3 px-3 font-semibold">Vốn hóa</th>
+                <th className="py-3 px-3 font-semibold">P/E / P/B</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-slate-800/60">
+              {rows.map((item) => {
+                const stockDetailHref = `/market/stocks/${item.symbol}?from=${encodeURIComponent(`${hrefWith(filters, { selected: null })}#stock-table`)}`;
+                const fundamentals = fundamentalsBySymbol[item.symbol];
+                const ratiosLoading = (item.pe === null || item.pb === null) && fundamentals === undefined;
+                return (
+                  <tr
+                    className={`hover:bg-slate-800/40 cursor-pointer transition ${item.is_vn30 ? "vn30-row bg-slate-900/30" : ""}`}
+                    key={item.symbol}
+                    tabIndex={0}
+                    onClick={() => router.push(stockDetailHref)}
+                    onKeyDown={(event) => {
+                      if (event.key === "Enter") router.push(stockDetailHref);
+                    }}
+                  >
+                    <td className="stock-identity py-2.5 px-3">
+                      <div className="flex items-center gap-1.5">
+                        <Link href={stockDetailHref} onClick={(event) => event.stopPropagation()} className="font-extrabold text-white text-sm hover:text-sky-400 no-underline">
+                          {item.symbol}
+                        </Link>
+                        {item.is_vn30 && <span className="vn30-badge text-[10px] font-extrabold px-1.5 py-0.2 rounded bg-amber-500/15 text-amber-400 border border-amber-500/30">VN30</span>}
+                      </div>
+                      <span className="text-slate-300 block truncate max-w-[150px] sm:max-w-[200px] text-xs">{item.name}</span>
+                      <small className="text-slate-500 text-[10px] block">{item.exchange} · {item.sector}</small>
+                    </td>
+                    <td data-label="Giá" className="py-2.5 px-3 whitespace-nowrap">
+                      <strong className={`font-bold block ${priceTone(item.price, item.reference_price, item.ceiling_price, item.floor_price)}`}>
+                        {formatChange(item.price)}
+                      </strong>
+                      <small className="price-reference text-slate-500 text-[10px] block">TC {formatChange(item.reference_price)}</small>
+                    </td>
+                    <td data-label="% hôm nay" className={`py-2.5 px-3 whitespace-nowrap ${changeTone(item.change_percent)}`}>
+                      <strong className="font-bold block">{formatPercent(item.change_percent)}</strong>
+                      <small className="text-[10px] opacity-80 block">{formatChange(item.change)}</small>
+                    </td>
+                    <td data-label="Mở · Cao · Thấp" className="py-2.5 px-3 whitespace-nowrap text-slate-400">
+                      <span className={priceTone(item.open_price, item.reference_price, item.ceiling_price, item.floor_price)}>{formatChange(item.open_price)}</span> · <span className={priceTone(item.high_price, item.reference_price, item.ceiling_price, item.floor_price)}>{formatChange(item.high_price)}</span> · <span className={priceTone(item.low_price, item.reference_price, item.ceiling_price, item.floor_price)}>{formatChange(item.low_price)}</span>
+                    </td>
+                    <td data-label="Khối lượng" className="py-2.5 px-3 whitespace-nowrap font-medium text-slate-200">{formatCompact(item.volume)}</td>
+                    <td data-label="GTGD" className="py-2.5 px-3 whitespace-nowrap font-medium text-slate-200">{formatMoney(item.matched_value)}</td>
+                    <td data-label="Khối ngoại" className={`py-2.5 px-3 whitespace-nowrap font-medium ${changeTone(item.foreign_net_value)}`}>{formatMoney(item.foreign_net_value)}</td>
+                    <td data-label="Vốn hóa" className="py-2.5 px-3 whitespace-nowrap font-medium text-slate-200">{formatMoney(item.market_cap)}</td>
+                    <td data-label="P/E / P/B" className="fundamental-ratios py-2.5 px-3 whitespace-nowrap text-slate-300 font-medium">
+                      {formatRatioPair(fundamentals?.pe ?? item.pe, fundamentals?.pb ?? item.pb, ratiosLoading)}
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
+
+        {!rows.length && (
+          <div className="market-empty py-12 text-center text-slate-400">
+            <h3 className="text-base font-bold text-slate-300 mb-1">Không tìm thấy cổ phiếu</h3>
+            <p className="text-xs text-slate-500 m-0">Thử bỏ bớt bộ lọc hoặc tìm bằng mã khác.</p>
+          </div>
+        )}
+
+        {!!rows.length && (
+          <nav className="market-pagination flex items-center justify-between mt-4 pt-3 border-t border-slate-800 text-xs text-slate-400" aria-label="Phân trang cổ phiếu">
+            {collection.pagination.previous_cursor ? (
+              <Link href={`${hrefWith(filters, { cursor: collection.pagination.previous_cursor, selected: null })}#stock-table`} className="hover:text-white transition">← Trang trước</Link>
+            ) : <span />}
+            <strong className="text-slate-200 font-semibold">Trang {collection.pagination.page} / {Math.max(1, collection.pagination.total_pages)}</strong>
+            {collection.pagination.next_cursor ? (
+              <Link href={`${hrefWith(filters, { cursor: collection.pagination.next_cursor, selected: null })}#stock-table`} className="hover:text-white transition">Trang sau →</Link>
+            ) : <span />}
+          </nav>
+        )}
+      </section>
+
+      <StockComparisonDialog
+        open={comparisonOpen}
+        onClose={() => setComparisonOpen(false)}
+        openerRef={comparisonButtonRef}
+        filters={filters}
+        initialSymbols={comparisonSymbols}
+        comparison={comparison}
+        options={comparisonOptions}
+      />
+
+      <footer className="beginner-disclaimer text-xs text-slate-500 leading-relaxed border-t border-slate-800/60 pt-4 flex flex-col gap-1">
+        <strong className="text-slate-400">Thông tin tham khảo, không phải khuyến nghị đầu tư.</strong>
+        <span>Nguồn: {collection.meta.provider_name} · trạng thái độ trễ: {collection.meta.delay_class}. “Vì sao” chỉ nêu nguyên nhân khi có tin đã kiểm chứng.</span>
+      </footer>
     </section>
-
-    <StockComparisonDialog
-      open={comparisonOpen}
-      onClose={() => setComparisonOpen(false)}
-      openerRef={comparisonButtonRef}
-      filters={filters}
-      initialSymbols={comparisonSymbols}
-      comparison={comparison}
-      options={comparisonOptions}
-    />
-
-    <footer className="beginner-disclaimer"><strong>Thông tin tham khảo, không phải khuyến nghị đầu tư.</strong><span>Nguồn: {collection.meta.provider_name} · trạng thái độ trễ: {collection.meta.delay_class}. “Vì sao” chỉ nêu nguyên nhân khi có tin đã kiểm chứng.</span></footer>
-  </section>;
+  );
 }
