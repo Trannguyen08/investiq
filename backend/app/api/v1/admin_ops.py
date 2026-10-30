@@ -2,7 +2,8 @@
 
 from __future__ import annotations
 
-from typing import Annotated
+from datetime import UTC, datetime
+from typing import Annotated, Any
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
@@ -14,15 +15,24 @@ from app.api.deps import (
 )
 from app.infrastructure.cache.admin_cache import get_admin_cache
 from app.infrastructure.db.repositories.sql_admin_repository import SqlAdminRepository
+from app.infrastructure.external.crawlers.dividend_crawler import (
+    _CORE_SYMBOLS,
+    get_dividend_crawler,
+)
+from app.infrastructure.external.crawlers.financial_statements_crawler import (
+    get_financial_statements_crawler,
+)
 from app.schemas.admin_ops import (
     AdminAlertPage,
     AdminAlertUpdate,
     AdminAnalyticsResponse,
     AdminAuditLogItem,
     AdminAuditLogPage,
+    AdminCrawlerStatusItem,
     AdminInstrumentStatusUpdate,
     AdminMarketInstrumentItem,
     AdminMarketInstrumentPage,
+    AdminMarketPipelineStatus,
     AdminOverviewResponse,
     AdminPortfolioDetail,
     AdminPortfolioPage,
@@ -317,3 +327,95 @@ def get_admin_analytics(
 ) -> AdminAnalyticsResponse:
     del actor_id
     return repository.get_analytics()
+
+
+# Market Data & Corporate Actions Pipeline Management
+@router.get("/market-data-pipeline", response_model=AdminMarketPipelineStatus)
+def get_market_data_pipeline_status(
+    actor_id: Annotated[str, Depends(require_admin_user)],
+) -> AdminMarketPipelineStatus:
+    del actor_id
+    div_crawler = get_dividend_crawler()
+    fs_crawler = get_financial_statements_crawler()
+
+    last_div_sync = None
+    cached_events: list[dict[str, Any]] = []
+    with div_crawler._lock:
+        if div_crawler._calendar_cache:
+            ts, events = div_crawler._calendar_cache
+            last_div_sync = datetime.fromtimestamp(ts, tz=UTC).isoformat()
+            cached_events = events[:6]
+        div_cached_symbols = len(div_crawler._symbol_cache)
+
+    with fs_crawler._lock:
+        fs_cached_entries = len(fs_crawler._cache)
+
+    crawlers = [
+        AdminCrawlerStatusItem(
+            id="dividend-crawler",
+            name="Crawler Lịch Cổ Tức & Quyền Doanh Nghiệp",
+            source="CafeF Ajax (LichSuKien.ashx) / Vnstock VCI Fallback",
+            status="active",
+            cache_entries=div_cached_symbols,
+            cache_ttl_seconds=3600,
+            last_synced_at=last_div_sync,
+            detail=f"Theo dõi {len(_CORE_SYMBOLS)} mã cổ phiếu trụ cột VN30 và Bluechips.",
+        ),
+        AdminCrawlerStatusItem(
+            id="financial-statements-crawler",
+            name="Crawler Báo Cáo Tài Chính Trực Quan (KQKD, CĐKT, LCTT)",
+            source="CafeF Data (FinanceReport.ashx)",
+            status="active",
+            cache_entries=fs_cached_entries,
+            cache_ttl_seconds=7200,
+            last_synced_at=None,
+            detail="Tự động bóc tách doanh thu, lợi nhuận, biên lãi, tổng nợ, vốn CSH.",
+        ),
+    ]
+
+    return AdminMarketPipelineStatus(
+        status="healthy",
+        as_of=datetime.now(UTC).isoformat(),
+        crawlers=crawlers,
+        recent_events_sample=cached_events,
+    )
+
+
+@router.post("/market-data-pipeline/sync-dividends")
+def sync_market_dividends(
+    actor_id: Annotated[str, Depends(require_admin_user)],
+) -> dict[str, Any]:
+    del actor_id
+    div_crawler = get_dividend_crawler()
+    with div_crawler._lock:
+        div_crawler._calendar_cache = None
+        div_crawler._symbol_cache.clear()
+
+    # Re-crawl live calendar
+    refreshed_events = div_crawler.get_market_calendar(limit=40)
+    return {
+        "status": "success",
+        "message": f"Đã đồng bộ {len(refreshed_events)} sự kiện cổ tức từ CafeF/Vnstock.",
+        "synced_count": len(refreshed_events),
+        "synced_at": datetime.now(UTC).isoformat(),
+    }
+
+
+@router.post("/market-data-pipeline/clear-cache")
+def clear_market_data_cache(
+    actor_id: Annotated[str, Depends(require_admin_user)],
+) -> dict[str, str]:
+    del actor_id
+    div_crawler = get_dividend_crawler()
+    with div_crawler._lock:
+        div_crawler._calendar_cache = None
+        div_crawler._symbol_cache.clear()
+
+    fs_crawler = get_financial_statements_crawler()
+    with fs_crawler._lock:
+        fs_crawler._cache.clear()
+
+    return {
+        "status": "success",
+        "message": "Đã xóa sạch bộ đệm của Crawler Cổ tức và Báo cáo tài chính.",
+    }

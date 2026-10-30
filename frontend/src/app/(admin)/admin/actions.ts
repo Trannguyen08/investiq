@@ -15,8 +15,10 @@ import {
   updateAdminSource,
 } from "@/lib/server/admin-news-api";
 import {
+  clearAdminMarketDataCache,
   deleteAdminThesis,
   invalidateAdminCache,
+  syncAdminDividends,
   updateAdminAlert,
   updateAdminMarketInstrument,
   updateAdminThesis,
@@ -232,4 +234,33 @@ export async function changeAlertStatusAction(formData: FormData) {
   }
   revalidatePath("/admin/alerts");
   redirect("/admin/alerts?notice=Đã cập nhật trạng thái cảnh báo");
+}
+
+
+export async function syncMarketDividendsAction() {
+  await requireAdminSession();
+  try {
+    const result = await syncAdminDividends();
+    revalidatePath("/admin/data-pipeline");
+    redirect(`/admin/data-pipeline?notice=${message(result.message || "Đã đồng bộ lịch cổ tức thị trường")}`);
+  } catch (error) {
+    if (error instanceof Error && (error.message === "NEXT_REDIRECT" || ("digest" in error && String((error as { digest?: string }).digest).startsWith("NEXT_REDIRECT")))) {
+      throw error;
+    }
+    redirect(`/admin/data-pipeline?error=${message(error instanceof Error ? error.message : "Đồng bộ cổ tức thất bại")}`);
+  }
+}
+
+export async function clearMarketDataCacheAction() {
+  await requireAdminSession();
+  try {
+    const result = await clearAdminMarketDataCache();
+    revalidatePath("/admin/data-pipeline");
+    redirect(`/admin/data-pipeline?notice=${message(result.message || "Đã xóa bộ nhớ đệm dữ liệu thị trường")}`);
+  } catch (error) {
+    if (error instanceof Error && (error.message === "NEXT_REDIRECT" || ("digest" in error && String((error as { digest?: string }).digest).startsWith("NEXT_REDIRECT")))) {
+      throw error;
+    }
+    redirect(`/admin/data-pipeline?error=${message(error instanceof Error ? error.message : "Không thể xóa bộ nhớ đệm")}`);
+  }
 }

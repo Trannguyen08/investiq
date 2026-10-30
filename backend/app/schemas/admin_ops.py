@@ -328,3 +328,23 @@ class AdminAnalyticsResponse(BaseModel):
     sector_theses: list[SectorThesisItem]
     total_capital_deployed_vnd: float
     average_portfolio_roi: float
+
+
+class AdminCrawlerStatusItem(BaseModel):
+    model_config = ConfigDict(extra="ignore")
+    id: str
+    name: str
+    source: str
+    status: str
+    cache_entries: int
+    cache_ttl_seconds: int
+    last_synced_at: str | None = None
+    detail: str
+
+
+class AdminMarketPipelineStatus(BaseModel):
+    model_config = ConfigDict(extra="ignore")
+    status: str
+    as_of: str
+    crawlers: list[AdminCrawlerStatusItem]
+    recent_events_sample: list[dict[str, Any]]

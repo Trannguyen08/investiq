@@ -491,3 +491,51 @@ export function updateAdminAlert(
 export function getAdminAnalytics() {
   return adminFetch<AdminAnalyticsResponse>("/analytics");
 }
+
+
+// Market Data Pipeline & Corporate Actions Crawlers
+export type AdminCrawlerStatusItem = {
+  id: string;
+  name: string;
+  source: string;
+  status: string;
+  cache_entries: number;
+  cache_ttl_seconds: number;
+  last_synced_at: string | null;
+  detail: string;
+};
+
+export type AdminMarketPipelineStatus = {
+  status: string;
+  as_of: string;
+  crawlers: AdminCrawlerStatusItem[];
+  recent_events_sample: Array<{
+    id?: string;
+    symbol?: string;
+    event_date?: string;
+    ex_date?: string;
+    type?: string;
+    ratio?: string;
+    cash_value?: number | null;
+    title?: string;
+    source?: string;
+  }>;
+};
+
+export function getAdminMarketDataPipeline() {
+  return adminFetch<AdminMarketPipelineStatus>("/market-data-pipeline");
+}
+
+export function syncAdminDividends() {
+  return adminFetch<{ status: string; message: string; synced_count: number; synced_at: string }>(
+    "/market-data-pipeline/sync-dividends",
+    { method: "POST" }
+  );
+}
+
+export function clearAdminMarketDataCache() {
+  return adminFetch<{ status: string; message: string }>(
+    "/market-data-pipeline/clear-cache",
+    { method: "POST" }
+  );
+}

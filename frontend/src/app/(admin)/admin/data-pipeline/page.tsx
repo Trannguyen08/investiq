@@ -5,7 +5,9 @@ import {
   startManualCrawl,
 } from "@/app/(admin)/admin/actions";
 import { NewsPipelineDashboard } from "@/components/admin/news-pipeline-dashboard";
+import { MarketDataPipelinePanel } from "@/components/admin/market-data-pipeline-panel";
 import { getAdminCrawlRuns, getAdminNewsSources } from "@/lib/server/admin-news-api";
+import { getAdminMarketDataPipeline } from "@/lib/server/admin-ops-api";
 
 type SearchParams = Promise<{ notice?: string; error?: string }>;
 
@@ -26,20 +28,29 @@ export default async function DataPipelinePage({ searchParams }: { searchParams:
     );
   }
   return (
-    <NewsPipelineDashboard
-      sources={result.sources}
-      runs={result.runs}
-      notice={params.notice}
-      error={params.error}
-      changeSourceStatus={changeSourceStatus}
-      startManualCrawl={startManualCrawl}
-      previewRetention={previewRetention}
-      deleteExpiredNews={deleteExpiredNews}
-    />
+    <div>
+      <NewsPipelineDashboard
+        sources={result.sources}
+        runs={result.runs}
+        notice={params.notice}
+        error={params.error}
+        changeSourceStatus={changeSourceStatus}
+        startManualCrawl={startManualCrawl}
+        previewRetention={previewRetention}
+        deleteExpiredNews={deleteExpiredNews}
+      />
+      {result.marketPipeline && (
+        <MarketDataPipelinePanel pipeline={result.marketPipeline} />
+      )}
+    </div>
   );
 }
 
 async function loadPipeline() {
-  const [sources, runs] = await Promise.all([getAdminNewsSources(), getAdminCrawlRuns()]);
-  return { sources, runs };
+  const [sources, runs, marketPipeline] = await Promise.all([
+    getAdminNewsSources(),
+    getAdminCrawlRuns(),
+    getAdminMarketDataPipeline().catch(() => null),
+  ]);
+  return { sources, runs, marketPipeline };
 }
