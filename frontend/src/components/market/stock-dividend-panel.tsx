@@ -190,3 +190,4 @@ export function StockDividendPanel({ symbol, summary, events }: StockDividendPan
     </div>
   );
 }
+

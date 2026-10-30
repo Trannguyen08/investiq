@@ -1,5 +1,38 @@
 # Current Task
 
+## 4 Free Client Enhancements & Admin Corporate Actions / Market Data Pipeline - 2026-10-30 (complete)
+- **User Request**:
+  1. Hủy tính năng AI Assistant.
+  2. Triển khai 4 tính năng client (hoàn toàn FREE):
+     - Tab cổ tức trong trang chi tiết mã cổ phiếu (`/market/stocks/[symbol]`).
+     - Lịch chia cổ tức trong trang chủ (`/`) - dữ liệu real crawl từ web (CafeF / Vnstock fallback).
+     - Báo cáo tài chính trực quan (đa kỳ theo quý/năm, so sánh doanh thu, lợi nhuận, bảng cân đối, dòng tiền).
+     - Phân tích kỹ thuật (RSI 14, MACD 12-26-9, Bollinger Bands 20-2, công cụ vẽ trendline).
+  3. Tạo nhánh riêng `feature/client-enhancements`.
+  4. Checkout sang nhánh `feature/admin`, pull code từ nhánh vừa làm và thêm chức năng quản lý cho Admin.
+  5. Trả lời toàn bộ bằng tiếng Việt.
+- **Implementation Details**:
+  1. *Backend Data Crawlers & Schemas*:
+     - `dividend_crawler.py`: Thu thập lịch sử và lịch sự kiện cổ tức thực tế từ CafeF AJAX endpoint (`LichSuKien.ashx`) và Vnstock VCI. Tự động bóc tách tỷ lệ, tiền mặt (VND), cổ phiếu, thưởng, ngày GDKHQ, cache RLock in-memory TTL 1h.
+     - `financial_statements_crawler.py`: Thu thập BCTC chi tiết 3 báo cáo (KQKD, CĐKT, LCTT) từ CafeF `FinanceReport.ashx` theo Quý hoặc Năm. Tính toán sẵn series trực quan hóa (Doanh thu tỷ VND, LNST, biên lãi gộp, biên lãi ròng, cơ cấu tài sản - nợ - vốn CSH).
+     - REST API Endpoints: `GET /api/v1/market/dividends/calendar`, `GET /api/v1/market/instruments/{symbol}/dividends`, `GET /api/v1/market/instruments/{symbol}/financial-statements`.
+  2. *Frontend Client Features*:
+     - `DividendCalendarWidget`: Hiển thị lịch cổ tức toàn thị trường ngay tại trang chủ (`/`), hỗ trợ lọc Tiền mặt / Cổ phiếu / Thưởng và tìm kiếm mã.
+     - `StockDividendPanel`: Tab "Cổ tức" trong trang chi tiết mã cổ phiếu với 4 KPI cards, biểu đồ cột tiền mặt qua các năm và bảng lịch sử chi tiết.
+     - `StockFinancialStatements`: Viewer BCTC trực quan, chuyển đổi Quý/Năm, 4 tab nghiệp vụ (Tổng quan & Biểu đồ, KQKD, CĐKT, LCTT) kèm biểu đồ cột chồng / đường xu hướng tăng trưởng.
+     - `MarketCandlestickChart`: Nâng cấp biểu đồ kỹ thuật với chỉ báo RSI(14), MACD(12,26,9), Bollinger Bands(20,2) và công cụ vẽ Trendline tương tác 2 điểm.
+  3. *Admin Corporate Actions & Market Data Pipeline (`feature/admin`)*:
+     - Merge `feature/client-enhancements` vào `feature/admin`.
+     - Backend Admin Endpoints: `GET /api/v1/admin/market-data-pipeline`, `POST /api/v1/admin/market-data-pipeline/sync-dividends`, `POST /api/v1/admin/market-data-pipeline/clear-cache`.
+     - Frontend Admin View: Bổ sung `MarketDataPipelinePanel` vào `/admin/data-pipeline`, hiển thị thẻ trạng thái hoạt động của Crawler Cổ tức & BCTC, số mã đã nạp, thời gian quét gần nhất, bảng mẫu sự kiện mới nhất, và 2 nút hành động "Đồng bộ Lịch Cổ tức Ngay" / "Xóa Bộ đệm Cache".
+- **Verification**:
+  - Backend pytest: 123/123 tests passed (`pytest tests/unit`).
+  - Backend ruff: `ruff check` và `ruff format` 100% clean (120 files).
+  - Frontend TypeScript: `tsc --noEmit` 0 errors.
+  - Frontend Vitest: 7/7 admin test files passed (19/19 tests), `api-client.test.ts` 8/8 passed.
+  - Đã commit sạch trên cả 2 nhánh `feature/client-enhancements` (`fcb4987`) và `feature/admin` (`0f2818a`).
+
+
 ## Analytics Dashboard KPI Grid CSS Alignment & Styling Fix - 2026-10-28 (complete)
 - **User Request**: "k ăn css" (Hình ảnh đính kèm: 4 thẻ KPI đầu trang Báo cáo & Thống kê /admin/analytics bị dính chữ, thiếu CSS grid layout).
 - **Root Cause**: Trong component `analytics-dashboard.tsx`, các thẻ KPI sử dụng bộ class chưa được định nghĩa trong `globals.css` (`admin-overview-grid`, `admin-metric-card-v2`, `metric-header-v2`, `metric-label-v2`, `metric-value-v2`, `metric-sub-v2`, `admin-btn-action-primary`).

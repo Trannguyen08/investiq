@@ -148,3 +148,4 @@ export function DividendCalendarWidget({ initialEvents = [] }: DividendCalendarW
     </section>
   );
 }
+
