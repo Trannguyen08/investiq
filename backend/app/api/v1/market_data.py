@@ -42,10 +42,12 @@ from app.schemas.market import (
     DailyDigestEnvelope,
     DCASimulatorEnvelope,
     DCASimulatorRequest,
+    DividendCalendarEnvelope,
     EcosystemDetailEnvelope,
     EcosystemsResponse,
     EventsResponse,
     FinancialForensicsEnvelope,
+    FinancialStatementsEnvelope,
     IndexEnvelope,
     IndicesResponse,
     InstrumentEnvelope,
@@ -56,6 +58,7 @@ from app.schemas.market import (
     PersonEnvelope,
     SectorsResponse,
     StockGrowthEnvelope,
+    SymbolDividendsEnvelope,
     WatchlistResponse,
     WatchlistsResponse,
 )
@@ -273,6 +276,93 @@ def stock_growth(symbol: str, response: Response) -> dict[str, object]:
     return value
 
 
+@router.get("/dividends/calendar", response_model=DividendCalendarEnvelope)
+def market_dividend_calendar(
+    response: Response,
+    limit: Annotated[int, Query(ge=1, le=100)] = 30,
+) -> dict[str, object]:
+    _public_headers(response)
+    from app.infrastructure.external.crawlers.dividend_crawler import get_dividend_crawler
+
+    crawler = get_dividend_crawler()
+    events = crawler.get_market_calendar(limit=limit)
+    return {
+        "data": {
+            "total": len(events),
+            "events": events,
+        },
+        "meta": _service().meta(),
+    }
+
+
+@router.get("/instruments/{symbol}/dividends", response_model=SymbolDividendsEnvelope)
+def instrument_dividends(symbol: str, response: Response) -> dict[str, object]:
+    _public_headers(response)
+    normalized = symbol.upper()
+    from app.infrastructure.external.crawlers.dividend_crawler import get_dividend_crawler
+
+    crawler = get_dividend_crawler()
+    events = crawler.get_symbol_dividends(normalized)
+
+    # Calculate summary metrics
+    current_inst = _service().instrument(normalized)
+    price_val = None
+    if current_inst and isinstance(current_inst.get("data"), dict):
+        try:
+            price_val = float(current_inst["data"].get("price") or 0)
+        except Exception:
+            price_val = None
+
+    latest_event = events[0] if events else None
+    cash_events = [e for e in events if e.get("type") == "cash" and e.get("cash_value")]
+    total_cash_recent = sum(float(e["cash_value"]) for e in cash_events[:2]) if cash_events else 0
+    yield_pct = None
+    if price_val and total_cash_recent:
+        denom = price_val * 1000 if price_val < 1000 else price_val
+        yield_pct = round((total_cash_recent / denom) * 100, 2)
+
+    summary = {
+        "symbol": normalized,
+        "dividend_yield_percent": yield_pct,
+        "frequency": "Hàng năm" if len(events) >= 1 else "Không thường niên",
+        "latest_event_date": latest_event.get("event_date") if latest_event else None,
+        "latest_payout_ratio": latest_event.get("ratio") if latest_event else None,
+        "primary_type": latest_event.get("type") if latest_event else "cash",
+        "total_events": len(events),
+    }
+    return {
+        "data": {
+            "symbol": normalized,
+            "summary": summary,
+            "events": events,
+        },
+        "meta": _service().meta(),
+    }
+
+
+@router.get(
+    "/instruments/{symbol}/financial-statements", response_model=FinancialStatementsEnvelope
+)
+def instrument_financial_statements(
+    symbol: str,
+    response: Response,
+    period: Annotated[Literal["quarter", "year"], Query()] = "quarter",
+    limit: Annotated[int, Query(ge=1, le=12)] = 8,
+) -> dict[str, object]:
+    _public_headers(response)
+    normalized = symbol.upper()
+    from app.infrastructure.external.crawlers.financial_statements_crawler import (
+        get_financial_statements_crawler,
+    )
+
+    crawler = get_financial_statements_crawler()
+    statements = crawler.get_financial_statements(normalized, period_type=period, limit=limit)
+    return {
+        "data": statements,
+        "meta": _service().meta(),
+    }
+
+
 @router.get("/indices", response_model=IndicesResponse)
 def indices(response: Response) -> dict[str, object]:
     _public_headers(response)
@@ -422,7 +512,8 @@ def create_watchlist(
 
 
 @watchlist_router.delete(
-    "/{watchlist_id}", status_code=status.HTTP_204_NO_CONTENT,
+    "/{watchlist_id}",
+    status_code=status.HTTP_204_NO_CONTENT,
     response_model=None,
 )
 def delete_watchlist(
@@ -436,7 +527,8 @@ def delete_watchlist(
 
 
 @watchlist_router.post(
-    "/{watchlist_id}/items", status_code=status.HTTP_204_NO_CONTENT,
+    "/{watchlist_id}/items",
+    status_code=status.HTTP_204_NO_CONTENT,
     response_model=None,
 )
 def add_watchlist_item(
@@ -467,7 +559,8 @@ def add_watchlist_item(
 
 
 @watchlist_router.delete(
-    "/{watchlist_id}/items/{symbol}", status_code=status.HTTP_204_NO_CONTENT,
+    "/{watchlist_id}/items/{symbol}",
+    status_code=status.HTTP_204_NO_CONTENT,
     response_model=None,
 )
 def remove_watchlist_item(

@@ -514,3 +514,82 @@ class DailyDigestData(StrictModel):
 class DailyDigestEnvelope(StrictModel):
     data: DailyDigestData
     meta: MarketMeta
+
+
+class DividendItem(StrictModel):
+    id: str
+    symbol: str
+    event_date: str
+    ex_date: str | None = None
+    record_date: str | None = None
+    payout_date: str | None = None
+    type: str
+    ratio: str | None = None
+    cash_value: float | None = None
+    title: str
+    source: str = "CafeF / Market Disclosures"
+
+
+class DividendSummary(StrictModel):
+    symbol: str
+    dividend_yield_percent: float | None = None
+    frequency: str = "Hàng năm"
+    latest_event_date: str | None = None
+    latest_payout_ratio: str | None = None
+    primary_type: str = "cash"
+    total_events: int = 0
+
+
+class SymbolDividendsData(StrictModel):
+    symbol: str
+    summary: DividendSummary
+    events: list[DividendItem]
+
+
+class SymbolDividendsEnvelope(StrictModel):
+    data: SymbolDividendsData
+    meta: MarketMeta
+
+
+class DividendCalendarData(StrictModel):
+    total: int
+    events: list[DividendItem]
+
+
+class DividendCalendarEnvelope(StrictModel):
+    data: DividendCalendarData
+    meta: MarketMeta
+
+
+class FinancialChartItem(StrictModel):
+    period: str
+    revenue_billion: float | None = None
+    gross_profit_billion: float | None = None
+    net_profit_billion: float | None = None
+    gross_margin_percent: float | None = None
+    net_margin_percent: float | None = None
+    total_assets_billion: float | None = None
+    total_debt_billion: float | None = None
+    equity_billion: float | None = None
+
+
+class FinancialMetricItem(StrictModel):
+    code: str
+    name: str
+    values: list[float | None]
+
+
+class FinancialStatementsData(StrictModel):
+    symbol: str
+    period_type: str
+    periods: list[str]
+    charts: list[FinancialChartItem]
+    income_statement: list[FinancialMetricItem]
+    balance_sheet: list[FinancialMetricItem]
+    cash_flow: list[FinancialMetricItem]
+    source: str
+
+
+class FinancialStatementsEnvelope(StrictModel):
+    data: FinancialStatementsData
+    meta: MarketMeta

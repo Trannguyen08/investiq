@@ -328,4 +328,3 @@ class AdminAnalyticsResponse(BaseModel):
     sector_theses: list[SectorThesisItem]
     total_capital_deployed_vnd: float
     average_portfolio_roi: float
-

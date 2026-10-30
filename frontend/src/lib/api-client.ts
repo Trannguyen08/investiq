@@ -15,6 +15,9 @@ import type {
   PeopleCollection,
   SectorCollection,
   StockGrowthEnvelope,
+  DividendCalendarEnvelope,
+  FinancialStatementsEnvelope,
+  SymbolDividendsEnvelope,
 } from "@/types/market";
 import type {
   AnalystReputationItem,
@@ -318,4 +321,25 @@ export function simulateDCA(payload: {
 
 export function getMarketDailyDigest(): Promise<DailyDigestEnvelope> {
   return requestJson<DailyDigestEnvelope>("/v1/market/daily-digest", 60);
+}
+
+
+export function getMarketDividendCalendar(limit = 30): Promise<DividendCalendarEnvelope> {
+  return requestJson<DividendCalendarEnvelope>(`/v1/market/dividends/calendar?limit=${limit}`, 60);
+}
+
+export function getInstrumentDividends(symbol: string): Promise<SymbolDividendsEnvelope> {
+  return requestJson<SymbolDividendsEnvelope>(`/v1/market/instruments/${encodeURIComponent(symbol)}/dividends`, 60);
+}
+
+export function getInstrumentFinancialStatements(
+  symbol: string,
+  period: "quarter" | "year" = "quarter",
+  limit = 8,
+): Promise<FinancialStatementsEnvelope> {
+  const query = new URLSearchParams({ period, limit: String(limit) });
+  return requestJson<FinancialStatementsEnvelope>(
+    `/v1/market/instruments/${encodeURIComponent(symbol)}/financial-statements?${query.toString()}`,
+    120,
+  );
 }

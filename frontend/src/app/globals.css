@@ -8788,3 +8788,934 @@ body:has(.learn-page) .mobile-menu summary span { background: #d9e8f5; }
   gap: 1.5rem;
 }
 
+
+
+/* ==========================================================================
+   ENHANCEMENT: MARKET DIVIDEND CALENDAR & STOCK DIVIDENDS
+   ========================================================================== */
+.dividend-calendar-section {
+  margin: 2.5rem 0;
+  padding: 1.5rem;
+  background: var(--bg-card, #0f172a);
+  border: 1px solid var(--border-subtle, #1e293b);
+  border-radius: 12px;
+}
+
+.dividend-filter-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  margin-top: 1rem;
+  margin-bottom: 1.25rem;
+}
+
+.dividend-type-pills,
+.dividend-filter-pills {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  background: rgba(15, 23, 42, 0.6);
+  padding: 0.25rem;
+  border-radius: 8px;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.dividend-pill-btn {
+  background: transparent;
+  color: #94a3b8;
+  border: none;
+  padding: 0.45rem 0.85rem;
+  border-radius: 6px;
+  font-size: 0.85rem;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.dividend-pill-btn:hover {
+  color: #ffffff;
+  background: rgba(255, 255, 255, 0.05);
+}
+
+.dividend-pill-btn.active {
+  background: #0284c7;
+  color: #ffffff;
+  font-weight: 600;
+  box-shadow: 0 2px 4px rgba(2, 132, 199, 0.3);
+}
+
+.dividend-search-box {
+  position: relative;
+  min-width: 240px;
+}
+
+.dividend-search-input {
+  width: 100%;
+  padding: 0.5rem 0.85rem;
+  background: #090e17;
+  border: 1px solid #334155;
+  border-radius: 6px;
+  color: #f8fafc;
+  font-size: 0.875rem;
+  transition: border-color 0.2s;
+}
+
+.dividend-search-input:focus {
+  outline: none;
+  border-color: #38bdf8;
+  box-shadow: 0 0 0 2px rgba(56, 189, 248, 0.2);
+}
+
+.dividend-cards-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+  gap: 1rem;
+}
+
+.dividend-event-card {
+  display: flex;
+  gap: 1rem;
+  padding: 1rem;
+  background: rgba(15, 23, 42, 0.7);
+  border: 1px solid rgba(255, 255, 255, 0.07);
+  border-radius: 8px;
+  transition: transform 0.15s, border-color 0.15s;
+}
+
+.dividend-event-card:hover {
+  transform: translateY(-2px);
+  border-color: rgba(56, 189, 248, 0.3);
+}
+
+.dividend-card-date {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  min-width: 60px;
+  height: 64px;
+  background: #090e17;
+  border: 1px solid #1e293b;
+  border-radius: 6px;
+  text-align: center;
+}
+
+.dividend-date-day {
+  font-size: 1.25rem;
+  font-weight: 700;
+  color: #f8fafc;
+  line-height: 1;
+}
+
+.dividend-date-month {
+  font-size: 0.7rem;
+  color: #94a3b8;
+  margin-top: 2px;
+}
+
+.dividend-date-tag {
+  font-size: 0.6rem;
+  color: #38bdf8;
+  text-transform: uppercase;
+  font-weight: 600;
+  letter-spacing: 0.5px;
+}
+
+.dividend-card-content {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+}
+
+.dividend-card-header {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.dividend-symbol-badge {
+  font-weight: 700;
+  font-size: 0.95rem;
+  color: #38bdf8;
+  text-decoration: none;
+}
+
+.dividend-symbol-badge:hover {
+  text-decoration: underline;
+}
+
+.dividend-type-badge {
+  display: inline-block;
+  padding: 0.15rem 0.5rem;
+  font-size: 0.7rem;
+  font-weight: 600;
+  border-radius: 4px;
+  text-transform: uppercase;
+}
+
+.dividend-type-badge.badge-cash {
+  background: rgba(34, 197, 94, 0.15);
+  color: #4ade80;
+  border: 1px solid rgba(34, 197, 94, 0.3);
+}
+
+.dividend-type-badge.badge-stock {
+  background: rgba(56, 189, 248, 0.15);
+  color: #38bdf8;
+  border: 1px solid rgba(56, 189, 248, 0.3);
+}
+
+.dividend-ratio-badge {
+  margin-left: auto;
+  font-size: 0.75rem;
+  color: #cbd5e1;
+}
+
+.dividend-ratio-badge strong {
+  color: #facc15;
+}
+
+.dividend-card-title {
+  font-size: 0.85rem;
+  font-weight: 500;
+  color: #e2e8f0;
+  margin: 0;
+  line-height: 1.35;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+.dividend-card-footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-top: auto;
+  padding-top: 0.35rem;
+  border-top: 1px dashed rgba(255, 255, 255, 0.06);
+  font-size: 0.75rem;
+}
+
+.dividend-cash-highlight {
+  color: #4ade80;
+}
+
+.dividend-source-text {
+  color: #64748b;
+}
+
+.dividend-detail-link {
+  color: #38bdf8;
+  text-decoration: none;
+  font-weight: 500;
+}
+
+.dividend-detail-link:hover {
+  text-decoration: underline;
+}
+
+/* Stock Dividend Panel */
+.stock-dividend-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 1.5rem;
+}
+
+.dividend-kpi-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: 1rem;
+}
+
+.dividend-kpi-card {
+  padding: 1.15rem;
+  background: var(--bg-card, #0f172a);
+  border: 1px solid var(--border-subtle, #1e293b);
+  border-radius: 8px;
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+}
+
+.dividend-kpi-label {
+  font-size: 0.8rem;
+  color: #94a3b8;
+  font-weight: 500;
+}
+
+.dividend-kpi-value {
+  font-size: 1.5rem;
+  font-weight: 700;
+  color: #f8fafc;
+}
+
+.dividend-kpi-value.text-accent {
+  color: #38bdf8;
+}
+
+.dividend-kpi-hint {
+  font-size: 0.725rem;
+  color: #64748b;
+}
+
+/* Dividend Annual Chart */
+.dividend-chart-card,
+.dividend-history-card {
+  padding: 1.25rem;
+  background: var(--bg-card, #0f172a);
+  border: 1px solid var(--border-subtle, #1e293b);
+  border-radius: 8px;
+}
+
+.dividend-chart-header h3,
+.dividend-table-header-row h3 {
+  font-size: 1.1rem;
+  font-weight: 600;
+  color: #f8fafc;
+  margin: 0 0 0.25rem 0;
+}
+
+.dividend-chart-header p,
+.dividend-table-header-row p {
+  font-size: 0.825rem;
+  color: #94a3b8;
+  margin: 0;
+}
+
+.dividend-bar-chart-container {
+  margin-top: 1.25rem;
+  padding: 1rem 0 0.5rem 0;
+  border-top: 1px solid rgba(255, 255, 255, 0.06);
+}
+
+.dividend-bars-row {
+  display: flex;
+  align-items: flex-end;
+  justify-content: flex-start;
+  gap: 1.5rem;
+  height: 140px;
+  overflow-x: auto;
+  padding-bottom: 0.5rem;
+}
+
+.dividend-bar-col {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  min-width: 54px;
+  height: 100%;
+}
+
+.dividend-bar-value {
+  font-size: 0.7rem;
+  color: #4ade80;
+  font-weight: 600;
+  margin-bottom: 4px;
+}
+
+.dividend-bar-track {
+  flex: 1;
+  width: 24px;
+  background: rgba(255, 255, 255, 0.04);
+  border-radius: 4px 4px 0 0;
+  display: flex;
+  align-items: flex-end;
+}
+
+.dividend-bar-fill {
+  width: 100%;
+  background: linear-gradient(180deg, #38bdf8 0%, #0284c7 100%);
+  border-radius: 4px 4px 0 0;
+  transition: height 0.4s ease;
+}
+
+.dividend-bar-label {
+  font-size: 0.75rem;
+  color: #94a3b8;
+  margin-top: 6px;
+  font-weight: 500;
+}
+
+.dividend-table-header-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  margin-bottom: 1rem;
+}
+
+.dividend-table-wrapper {
+  overflow-x: auto;
+}
+
+.dividend-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.85rem;
+}
+
+.dividend-table th {
+  text-align: left;
+  padding: 0.65rem 0.85rem;
+  color: #94a3b8;
+  font-weight: 600;
+  border-bottom: 1px solid #1e293b;
+}
+
+.dividend-table td {
+  padding: 0.75rem 0.85rem;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+  color: #cbd5e1;
+}
+
+.dividend-date-cell strong {
+  color: #f8fafc;
+}
+
+.dividend-ratio-cell strong {
+  color: #facc15;
+}
+
+.dividend-sub-val {
+  display: block;
+  font-size: 0.7rem;
+  color: #94a3b8;
+}
+
+.dividend-title-cell {
+  max-width: 320px;
+  line-height: 1.35;
+}
+
+/* ==========================================================================
+   ENHANCEMENT: FINANCIAL STATEMENTS VISUAL VIEWER
+   ========================================================================== */
+.stock-growth-tab-wrapper {
+  display: flex;
+  flex-direction: column;
+  gap: 2rem;
+}
+
+.stock-growth-divider {
+  display: flex;
+  align-items: center;
+  text-align: center;
+  margin: 1rem 0;
+}
+
+.stock-growth-divider::before,
+.stock-growth-divider::after {
+  content: "";
+  flex: 1;
+  border-bottom: 1px solid #1e293b;
+}
+
+.stock-growth-divider .divider-label {
+  padding: 0 1rem;
+  color: #64748b;
+  font-size: 0.8rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.financial-statements-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 1.5rem;
+}
+
+.fs-controls-bar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  padding: 0.75rem 1rem;
+  background: var(--bg-card, #0f172a);
+  border: 1px solid var(--border-subtle, #1e293b);
+  border-radius: 8px;
+}
+
+.fs-period-switcher {
+  display: flex;
+  gap: 0.5rem;
+}
+
+.fs-period-btn {
+  background: transparent;
+  color: #94a3b8;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  padding: 0.4rem 0.85rem;
+  border-radius: 6px;
+  font-size: 0.825rem;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.fs-period-btn:hover {
+  color: #ffffff;
+  border-color: rgba(255, 255, 255, 0.2);
+}
+
+.fs-period-btn.active {
+  background: #0284c7;
+  color: #ffffff;
+  border-color: #0284c7;
+  font-weight: 600;
+}
+
+.fs-statement-tabs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem;
+}
+
+.fs-tab-btn {
+  background: transparent;
+  color: #94a3b8;
+  border: none;
+  padding: 0.4rem 0.75rem;
+  border-radius: 6px;
+  font-size: 0.825rem;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.15s;
+}
+
+.fs-tab-btn:hover {
+  color: #ffffff;
+  background: rgba(255, 255, 255, 0.05);
+}
+
+.fs-tab-btn.active {
+  background: rgba(56, 189, 248, 0.15);
+  color: #38bdf8;
+  font-weight: 600;
+}
+
+.fs-overview-section {
+  display: flex;
+  flex-direction: column;
+  gap: 1.5rem;
+}
+
+.fs-chart-card {
+  padding: 1.25rem;
+  background: var(--bg-card, #0f172a);
+  border: 1px solid var(--border-subtle, #1e293b);
+  border-radius: 8px;
+}
+
+.fs-chart-title-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  margin-bottom: 1.25rem;
+}
+
+.fs-chart-title-row h3 {
+  font-size: 1.1rem;
+  font-weight: 600;
+  color: #f8fafc;
+  margin: 0 0 0.25rem 0;
+}
+
+.fs-chart-title-row p {
+  font-size: 0.8rem;
+  color: #94a3b8;
+  margin: 0;
+}
+
+.fs-chart-legend {
+  display: flex;
+  gap: 1rem;
+}
+
+.legend-item {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  font-size: 0.8rem;
+  color: #cbd5e1;
+}
+
+.legend-item::before {
+  content: "";
+  display: inline-block;
+  width: 10px;
+  height: 10px;
+  border-radius: 2px;
+}
+
+.legend-rev::before { background: #38bdf8; }
+.legend-profit::before { background: #4ade80; }
+.legend-gross-m::before { background: #facc15; }
+.legend-net-m::before { background: #c084fc; }
+
+.fs-visual-chart-wrap {
+  padding: 1rem 0;
+}
+
+.fs-bar-columns-grid {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-around;
+  gap: 1rem;
+  height: 180px;
+  border-bottom: 1px solid #1e293b;
+  padding-bottom: 0.5rem;
+}
+
+.fs-period-column {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  flex: 1;
+  height: 100%;
+}
+
+.fs-bar-pair {
+  flex: 1;
+  display: flex;
+  align-items: flex-end;
+  gap: 6px;
+  width: 100%;
+  max-width: 60px;
+}
+
+.fs-bar-single {
+  flex: 1;
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-end;
+  align-items: center;
+}
+
+.fs-bar-val {
+  font-size: 0.65rem;
+  color: #cbd5e1;
+  margin-bottom: 2px;
+  white-space: nowrap;
+}
+
+.fs-bar-body {
+  width: 100%;
+  border-radius: 3px 3px 0 0;
+  transition: height 0.3s;
+}
+
+.bar-revenue .fs-bar-body {
+  background: linear-gradient(180deg, #38bdf8 0%, #0284c7 100%);
+}
+
+.bar-profit .fs-bar-body {
+  background: linear-gradient(180deg, #4ade80 0%, #16a34a 100%);
+}
+
+.fs-col-period {
+  font-size: 0.75rem;
+  color: #94a3b8;
+  margin-top: 8px;
+  font-weight: 500;
+}
+
+.fs-margin-tiles-row {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(130px, 1fr));
+  gap: 0.85rem;
+}
+
+.fs-margin-tile {
+  padding: 0.85rem;
+  background: #090e17;
+  border: 1px solid #1e293b;
+  border-radius: 6px;
+}
+
+.fs-margin-period {
+  display: block;
+  font-size: 0.85rem;
+  color: #f8fafc;
+  margin-bottom: 0.5rem;
+}
+
+.fs-margin-stat {
+  display: flex;
+  justify-content: space-between;
+  font-size: 0.75rem;
+  color: #94a3b8;
+  margin-top: 0.25rem;
+}
+
+.fs-margin-stat .val-gross { color: #facc15; }
+.fs-margin-stat .val-net { color: #c084fc; }
+
+.fs-structure-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: 1rem;
+}
+
+.fs-structure-card {
+  padding: 0.85rem;
+  background: #090e17;
+  border: 1px solid #1e293b;
+  border-radius: 6px;
+}
+
+.fs-struct-period {
+  font-size: 0.8rem;
+  font-weight: 600;
+  color: #f8fafc;
+  margin-bottom: 0.5rem;
+  display: block;
+}
+
+.fs-struct-stacked-bar {
+  display: flex;
+  height: 12px;
+  background: #1e293b;
+  border-radius: 6px;
+  overflow: hidden;
+  margin-bottom: 0.5rem;
+}
+
+.bar-part-eq { background: #38bdf8; }
+.bar-part-debt { background: #f43f5e; }
+
+.fs-struct-legend-row {
+  display: flex;
+  justify-content: space-between;
+  font-size: 0.7rem;
+}
+
+.fs-struct-legend-row .text-eq { color: #38bdf8; }
+.fs-struct-legend-row .text-debt { color: #f43f5e; }
+
+/* Financial Data Tables */
+.fs-table-section {
+  padding: 1.25rem;
+  background: var(--bg-card, #0f172a);
+  border: 1px solid var(--border-subtle, #1e293b);
+  border-radius: 8px;
+}
+
+.fs-table-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  margin-bottom: 1rem;
+}
+
+.fs-metric-search-input {
+  max-width: 340px;
+  width: 100%;
+  padding: 0.45rem 0.85rem;
+  background: #090e17;
+  border: 1px solid #334155;
+  border-radius: 6px;
+  color: #f8fafc;
+  font-size: 0.85rem;
+}
+
+.fs-table-unit-note {
+  font-size: 0.75rem;
+  color: #94a3b8;
+}
+
+.fs-table-wrapper {
+  overflow-x: auto;
+}
+
+.fs-data-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.85rem;
+}
+
+.fs-data-table th {
+  padding: 0.65rem 0.85rem;
+  text-align: right;
+  color: #94a3b8;
+  border-bottom: 1px solid #1e293b;
+  font-weight: 600;
+}
+
+.fs-data-table th.fs-th-metric { text-align: left; }
+
+.fs-data-table td {
+  padding: 0.65rem 0.85rem;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.04);
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+  color: #cbd5e1;
+}
+
+.fs-data-table td.fs-td-metric {
+  text-align: left;
+}
+
+.fs-td-metric strong {
+  display: block;
+  color: #f8fafc;
+  font-weight: 500;
+}
+
+.fs-metric-code {
+  font-size: 0.7rem;
+  color: #64748b;
+}
+
+.growth-tag {
+  display: inline-block;
+  padding: 0.15rem 0.45rem;
+  font-size: 0.75rem;
+  font-weight: 600;
+  border-radius: 4px;
+}
+
+.growth-tag.positive {
+  background: rgba(34, 197, 94, 0.15);
+  color: #4ade80;
+}
+
+.growth-tag.negative {
+  background: rgba(244, 63, 94, 0.15);
+  color: #f43f5e;
+}
+
+.growth-tag.neutral {
+  color: #64748b;
+}
+
+/* ==========================================================================
+   ENHANCEMENT: TECHNICAL ANALYSIS INDICATORS & TRENDLINE
+   ========================================================================== */
+.technical-indicators-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  padding: 0.5rem 0.85rem;
+  background: #090e17;
+  border: 1px solid #1e293b;
+  border-radius: 6px;
+  margin-bottom: 0.5rem;
+}
+
+.indicator-group,
+.trendline-group {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+}
+
+.toolbar-label {
+  font-size: 0.75rem;
+  color: #64748b;
+  font-weight: 600;
+  text-transform: uppercase;
+}
+
+.indicator-btn,
+.trendline-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  background: rgba(15, 23, 42, 0.7);
+  color: #94a3b8;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  padding: 0.35rem 0.65rem;
+  border-radius: 4px;
+  font-size: 0.785rem;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.15s;
+}
+
+.indicator-btn:hover,
+.trendline-btn:hover {
+  color: #ffffff;
+  border-color: rgba(255, 255, 255, 0.25);
+}
+
+.indicator-btn.active {
+  background: rgba(56, 189, 248, 0.15);
+  color: #38bdf8;
+  border-color: #38bdf8;
+  font-weight: 600;
+}
+
+.trendline-btn.active-drawing {
+  background: #f59e0b;
+  color: #090e17;
+  border-color: #f59e0b;
+  font-weight: 700;
+  animation: pulseDrawing 1.5s infinite;
+}
+
+@keyframes pulseDrawing {
+  0% { box-shadow: 0 0 0 0 rgba(245, 158, 11, 0.6); }
+  70% { box-shadow: 0 0 0 6px rgba(245, 158, 11, 0); }
+  100% { box-shadow: 0 0 0 0 rgba(245, 158, 11, 0); }
+}
+
+.trendline-clear-btn {
+  background: transparent;
+  color: #f43f5e;
+  border: 1px solid rgba(244, 63, 94, 0.3);
+  padding: 0.35rem 0.65rem;
+  border-radius: 4px;
+  font-size: 0.785rem;
+  cursor: pointer;
+}
+
+.trendline-clear-btn:hover {
+  background: rgba(244, 63, 94, 0.15);
+}
+
+.indicator-color-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+}
+
+.dot-bb { background: #38bdf8; }
+.dot-rsi { background: #a855f7; }
+.dot-macd { background: #06b6d4; }
+
+.quote-indicator-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+  padding: 0.15rem 0.5rem;
+  border-radius: 4px;
+  font-size: 0.75rem;
+}
+
+.quote-indicator-pill.rsi-pill {
+  background: rgba(168, 85, 247, 0.15);
+  color: #c084fc;
+}
+
+.quote-indicator-pill.macd-pill {
+  background: rgba(6, 182, 212, 0.15);
+  color: #38bdf8;
+}
+
+.financial-chart-stage.drawing-mode {
+  cursor: crosshair;
+}

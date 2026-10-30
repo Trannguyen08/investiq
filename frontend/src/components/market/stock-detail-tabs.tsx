@@ -3,7 +3,7 @@
 import { useSearchParams } from "next/navigation";
 import { useState, type ReactNode } from "react";
 
-export type StockTabId = "chart" | "growth" | "news" | "forensics";
+export type StockTabId = "chart" | "growth" | "dividend" | "forensics" | "news";
 
 type StockDetailTabsProps = {
   symbol: string;
@@ -11,12 +11,19 @@ type StockDetailTabsProps = {
   newsCount?: number;
   chartContent: ReactNode;
   growthContent: ReactNode;
+  dividendContent?: ReactNode;
   newsContent: ReactNode;
   forensicsContent?: ReactNode;
 };
 
 function resolveTab(tabParam: string | null | undefined): StockTabId {
-  if (tabParam === "growth" || tabParam === "news" || tabParam === "chart" || tabParam === "forensics") {
+  if (
+    tabParam === "growth" ||
+    tabParam === "dividend" ||
+    tabParam === "news" ||
+    tabParam === "chart" ||
+    tabParam === "forensics"
+  ) {
     return tabParam;
   }
   return "chart";
@@ -28,6 +35,7 @@ export function StockDetailTabs({
   newsCount = 0,
   chartContent,
   growthContent,
+  dividendContent,
   newsContent,
   forensicsContent,
 }: StockDetailTabsProps) {
@@ -58,8 +66,13 @@ export function StockDetailTabs({
     },
     {
       id: "growth",
-      label: "Tăng trưởng & Tài chính",
-      badge: "Mới",
+      label: "Báo cáo tài chính & Tăng trưởng",
+      badge: "BCTC",
+    },
+    {
+      id: "dividend",
+      label: "Lịch sử Cổ tức",
+      badge: "Real",
     },
     {
       id: "forensics",
@@ -128,6 +141,15 @@ export function StockDetailTabs({
           className={`tab-panel ${activeTab === "growth" ? "visible" : "hidden"}`}
         >
           {growthContent}
+        </div>
+
+        <div
+          id="panel-dividend"
+          role="tabpanel"
+          aria-labelledby="tab-dividend"
+          className={`tab-panel ${activeTab === "dividend" ? "visible" : "hidden"}`}
+        >
+          {dividendContent}
         </div>
 
         <div

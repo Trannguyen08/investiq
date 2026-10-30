@@ -317,4 +317,3 @@ def get_admin_analytics(
 ) -> AdminAnalyticsResponse:
     del actor_id
     return repository.get_analytics()
-

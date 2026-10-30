@@ -16,8 +16,12 @@ import { StockRelatedNews } from "@/components/market/stock-related-news";
 import { FinancialForensicsPanel } from "@/components/market/financial-forensics-panel";
 import { DCASimulatorButton } from "@/components/market/dca-simulator-modal";
 import { StockTradeActions } from "@/components/portfolio/stock-trade-actions";
+import { StockDividendPanel } from "@/components/market/stock-dividend-panel";
+import { StockFinancialStatements } from "@/components/market/stock-financial-statements";
 import { MarketStreamProvider } from "@/hooks/use-realtime-price";
 import {
+  getInstrumentDividends,
+  getInstrumentFinancialStatements,
   getMarketCandles,
   getMarketForensics,
   getMarketGrowth,
@@ -70,15 +74,29 @@ export default async function StockDetailPage({
   const intradayPromise = getMarketIntradayTrades(symbol, 100).catch(() => null);
   const growthPromise = getMarketGrowth(symbol).catch(() => null);
   const forensicsPromise = getMarketForensics(symbol).catch(() => null);
+  const dividendsPromise = getInstrumentDividends(symbol).catch(() => null);
+  const fsQuarterPromise = getInstrumentFinancialStatements(symbol, "quarter", 6).catch(() => null);
+  const fsYearPromise = getInstrumentFinancialStatements(symbol, "year", 4).catch(() => null);
 
-  const [instrumentResult, candles, intraday, growthEnvelope, forensicsEnvelope] =
-    await Promise.all([
-      instrumentPromise,
-      candlesPromise,
-      intradayPromise,
-      growthPromise,
-      forensicsPromise,
-    ]);
+  const [
+    instrumentResult,
+    candles,
+    intraday,
+    growthEnvelope,
+    forensicsEnvelope,
+    dividendsEnvelope,
+    fsQuarterEnvelope,
+    fsYearEnvelope,
+  ] = await Promise.all([
+    instrumentPromise,
+    candlesPromise,
+    intradayPromise,
+    growthPromise,
+    forensicsPromise,
+    dividendsPromise,
+    fsQuarterPromise,
+    fsYearPromise,
+  ]);
 
   if (instrumentResult.status === "rejected") notFound();
   const envelope: InstrumentEnvelope = instrumentResult.value;
@@ -86,7 +104,7 @@ export default async function StockDetailPage({
 
   const relatedNews = await getRelatedStockNews(item.exchange, item.symbol, 6, 1200).catch(() => null);
 
-  // Guaranteed multi-tier fallback for 100% stock coverage
+  // Fallback for growth overview
   const capBillions = item.market_cap ? (parseFloat(item.market_cap) / 1e9).toFixed(0) : "1,000";
   const fallbackGrowth: StockGrowthData = {
     symbol: item.symbol,
@@ -122,6 +140,18 @@ export default async function StockDetailPage({
   const newsArticles = relatedNews?.data ?? null;
   const newsCount = Array.isArray(newsArticles) ? newsArticles.length : 0;
 
+  // Real dividends data
+  const dividendSummary = dividendsEnvelope?.data?.summary ?? {
+    symbol,
+    dividend_yield_percent: null,
+    frequency: "Hàng năm",
+    latest_event_date: null,
+    latest_payout_ratio: null,
+    primary_type: "cash",
+    total_events: 0,
+  };
+  const dividendEvents = dividendsEnvelope?.data?.events ?? [];
+
   const chartSection = (
     <>
       <div className="stock-detail-market-layout">
@@ -143,7 +173,27 @@ export default async function StockDetailPage({
     </>
   );
 
-  const growthSection = <StockGrowthPanel growth={growthData} />;
+  const growthSection = (
+    <div className="stock-growth-tab-wrapper">
+      <StockFinancialStatements
+        symbol={symbol}
+        initialQuarterData={fsQuarterEnvelope?.data}
+        initialYearData={fsYearEnvelope?.data}
+      />
+      <div className="stock-growth-divider">
+        <span className="divider-label">Chỉ số tăng trưởng &amp; Hiệu quả hoạt động</span>
+      </div>
+      <StockGrowthPanel growth={growthData} />
+    </div>
+  );
+
+  const dividendSection = (
+    <StockDividendPanel
+      symbol={symbol}
+      summary={dividendSummary}
+      events={dividendEvents}
+    />
+  );
 
   const newsSection = (
     <StockRelatedNews
@@ -181,13 +231,14 @@ export default async function StockDetailPage({
         </header>
         <MarketStatus meta={envelope.meta} />
 
-        {/* 4 Main Tabs: Biểu đồ & Sổ lệnh | Tăng trưởng & Tài chính | Rủi ro BCTC (Forensics) | Tin tức */}
+        {/* 5 Main Tabs: Biểu đồ & Sổ lệnh | BCTC & Tăng trưởng | Lịch sử Cổ tức | Rủi ro BCTC | Tin tức */}
         <StockDetailTabs
           symbol={symbol}
           initialTab={initialTab}
           newsCount={newsCount}
           chartContent={chartSection}
           growthContent={growthSection}
+          dividendContent={dividendSection}
           forensicsContent={<FinancialForensicsPanel data={forensicsEnvelope?.data} symbol={symbol} />}
           newsContent={newsSection}
         />
