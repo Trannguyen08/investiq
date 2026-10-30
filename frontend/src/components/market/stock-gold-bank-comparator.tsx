@@ -18,17 +18,17 @@ export type YearlyAssetComparisonPoint = {
 
 // Historical gold SJC prices (Trieu VND / tael at beginning of year)
 export const HISTORICAL_GOLD_SJC: Record<number, number> = {
-  2016: 36.3,
-  2017: 36.6,
-  2018: 36.5,
-  2019: 42.5,
-  2020: 56.0,
-  2021: 61.2,
-  2022: 67.0,
-  2023: 74.5,
-  2024: 85.0,
-  2025: 88.5,
-  2026: 91.0,
+  2016: 35.2, // ~35.2 tr/lượng
+  2017: 36.5, // ~36.5 tr/lượng
+  2018: 36.8, // ~36.8 tr/lượng
+  2019: 36.7, // Đầu năm 2019 ~36.7 tr/lượng
+  2020: 43.8, // Đầu năm 2020 ~43.8 tr/lượng (đỉnh Covid 56 tr)
+  2021: 56.5, // ~56.5 tr/lượng
+  2022: 61.5, // Đầu năm 2022 ~61.5 tr/lượng
+  2023: 67.2, // Đầu năm 2023 ~67.2 tr/lượng
+  2024: 75.5, // Đầu năm 2024 ~75.5 tr/lượng (đỉnh tháng 5 đạt 92.4 tr)
+  2025: 85.5, // ~85.5 tr/lượng
+  2026: 89.5, // ~89.5 tr/lượng
 };
 
 // Historical 12M bank savings rates (% / year)
@@ -393,8 +393,8 @@ export function StockGoldBankComparator({
         <h3 className="invest-table-heading">
           Bảng Chi Tiết Số Tiền Lũy Kế Qua Từng Năm Tiếp Theo ({startYear} → Hiện tại)
         </h3>
-        <div className="admin-table-container">
-          <table className="admin-table-unified">
+        <div className="invest-table-container">
+          <table className="invest-table-unified">
             <thead>
               <tr>
                 <th>Mốc Năm</th>

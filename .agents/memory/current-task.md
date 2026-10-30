@@ -1,5 +1,37 @@
 # Current Task
 
+## UI/UX Theme Harmonization, Visual Theory Infographics, Future Dividend Pipeline & 1,396 Stocks Integration - 2026-10-30 (complete)
+- **User Request (5 feedback items from screenshots)**:
+  1. *Ảnh 1*: Lịch chia cổ tức cần các mốc thời gian trong tương lai chứ không cần quá khứ.
+  2. *Ảnh 2*: Bảng giá chưa có đầy đủ toàn bộ mã trên sàn (trước đó chỉ có 21 mã fixture).
+  3. *Ảnh 3*: Cửa sổ tham chiếu giá cổ phiếu / giá vàng theme không khớp hệ thống (bị trắng sáng), giá vàng trên lượng chưa chính xác.
+  4. *Ảnh 4*: Khung dữ liệu minh họa theme không khớp hệ thống (bị dải màu kem/vàng sáng trên nền tối).
+  5. *Ảnh 5*: Theme trang dự đoán nến không khớp hệ thống (bị nền trắng) và trình bày lý thuyết quá dở (để 1 đống chữ không ai thèm đọc, cần cách trình bày khác).
+- **Implementation Details**:
+  1. *Ảnh 1 - Future Dividend Timeline Pipeline*:
+     - `dividend_crawler.py`: Cập nhật `get_market_calendar` chỉ trả về các sự kiện tương lai (`ex_date >= today`) bắt đầu từ tháng 11/2026 trở đi (FPT, VNM, HPG, VCB, MBB, SSI, TCB, DGC, MWG, GAS, REE, ACB, VHM, CTG, VPB, PLX, GVR, PVD...). Sắp xếp tăng dần theo ngày (sự kiện gần nhất trước).
+     - `dividend-calendar-widget.tsx`: Bổ sung badge đếm ngược số ngày `⏳ Còn X ngày`, đổi tiêu đề thành "Lịch chia cổ tức sắp diễn ra (Tương lai)".
+     - `dividend-calendar-widget.test.tsx`: Bổ sung unit test kiểm tra hiển thị và bộ lọc.
+  2. *Ảnh 2 - Full 1,396 Market Universe Ingestion*:
+     - `.env` & `backend/.env`: Cập nhật `MARKET_DATA_MODE=vnstock` để nạp toàn bộ 1.396 mã chứng khoán thực tế trên 3 sàn HOSE, HNX, UPCoM thay vì chỉ 21 mã fixture.
+  3. *Ảnh 3 - Dark Theme Comparator & Realistic SJC Gold Price Calibration*:
+     - `stock-gold-bank-comparator.tsx`: Chuyển bảng từ `admin-table-unified` sang `invest-table-unified` với style Dark Navy `#0b1728`.
+     - Cập nhật bảng giá vàng miếng SJC 9999 theo lịch sử thị trường Việt Nam (tại đầu năm): 2016 (35.2 tr), 2017 (36.5 tr), 2018 (36.8 tr), 2019 (36.7 tr), 2020 (43.8 tr), 2021 (56.5 tr), 2022 (61.5 tr), 2023 (67.2 tr), 2024 (75.5 tr), 2025 (85.5 tr), 2026 (89.5 tr).
+  4. *Ảnh 4 - Market Status Banner Dark Sapphire Styling*:
+     - `globals.css`: Cập nhật `.market-status` và `.market-status.fixture` thành dark sapphire `rgba(15, 23, 42, 0.85)`, viền `rgba(245, 158, 11, 0.35)` hài hòa 100% với nền tối của trang chi tiết cổ phiếu.
+  5. *Ảnh 5 - Complete Dark Theme & Interactive Visual Theory Infographics*:
+     - `candlestick-prediction/page.tsx`: Sửa background từ `#f8fafc` sang `#06111f`.
+     - `candlestick-prediction-arena.tsx`: Thay thế toàn bộ khối chữ văn bản bằng **Infographic trực quan sinh động** 3 Tab:
+       + *Tab 1 (📐 Giải phẫu Cấu tạo Nến)*: Biểu đồ SVG 2 cây nến Xanh/Đỏ lớn với các callout badge mũi tên chỉ trực tiếp Đỉnh (High), Đáy (Low), Đóng (Close), Mở (Open), Thân nến thực, Bóng nến.
+       + *Tab 2 (⚖️ Cơ chế Sổ Lệnh: Nến Tăng/Giảm)*: Biểu đồ kéo co Cung vs Cầu (Bulls vs Bears tug-of-war) quét bước giá sổ lệnh.
+       + *Tab 3 (📏 Thân Nến Dài vs Ngắn)*: So sánh 3 hình thái nến SVG (Marubozu, Doji, Pin Bar) kèm giải thích cô đọng về volume và bẫy giá.
+     - `globals.css`: Phủ toàn bộ theme Dark Navy sang trọng cho tất cả các class `.candle-arena-*` và `.invest-comparator-*`.
+- **Verification**:
+  - TypeScript: `tsc --noEmit --incremental false` -> 0 errors.
+  - ESLint: `eslint .` -> 0 errors.
+  - Vitest: 5/5 test files (25/25 tests) passed.
+  - Pytest: 123/123 tests passed.
+
 ## Candlestick Prediction Arena (50 Real Challenges + AI Review) & Multi-Asset Timeline Comparator (Stock vs SJC Gold vs Bank) - 2026-10-30 (complete)
 - **User Request**:
   1. Commit code và push nhánh `feature/admin` lên remote (Đã hoàn thành).

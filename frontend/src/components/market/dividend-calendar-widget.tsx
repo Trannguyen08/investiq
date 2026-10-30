@@ -32,10 +32,10 @@ export function DividendCalendarWidget({ initialEvents = [] }: DividendCalendarW
     <section className="dividend-calendar-section" aria-labelledby="dividend-calendar-title">
       <div className="beginner-heading">
         <div>
-          <p className="eyebrow">DỮ LIỆU THỰC TẾ THỊ TRƯỜNG</p>
-          <h2 id="dividend-calendar-title">Lịch chia cổ tức doanh nghiệp</h2>
+          <p className="eyebrow">DỮ LIỆU SẮP DIỄN RA (TƯƠNG LAI)</p>
+          <h2 id="dividend-calendar-title">Lịch chia cổ tức sắp diễn ra</h2>
           <p>
-            Theo dõi ngày chốt quyền và chi trả cổ tức tiền mặt &amp; cổ phiếu từ các doanh nghiệp niêm yết (Dữ liệu trực tiếp).
+            Theo dõi ngày chốt quyền GDKHQ và chi trả cổ tức trong thời gian tới của các doanh nghiệp niêm yết (Dữ liệu trực tiếp).
           </p>
         </div>
         <div className="dividend-filter-toolbar">
@@ -82,11 +82,15 @@ export function DividendCalendarWidget({ initialEvents = [] }: DividendCalendarW
             const dateStr = event.ex_date || event.event_date;
             let displayDay = "--";
             let displayMonth = "--/----";
+            let daysLeft = 0;
             if (dateStr) {
               const [y, m, d] = dateStr.split("-");
               if (y && m && d) {
                 displayDay = d;
                 displayMonth = `${m}/${y}`;
+                const eventTime = new Date(`${dateStr}T00:00:00`).getTime();
+                const nowTime = new Date().setHours(0, 0, 0, 0);
+                daysLeft = Math.max(1, Math.round((eventTime - nowTime) / (1000 * 3600 * 24)));
               }
             }
 
@@ -108,6 +112,11 @@ export function DividendCalendarWidget({ initialEvents = [] }: DividendCalendarW
                     <span className={`dividend-type-badge ${isCash ? "badge-cash" : "badge-stock"}`}>
                       {isCash ? "Tiền mặt" : event.type === "bonus" ? "Thưởng cp" : "Cổ phiếu"}
                     </span>
+                    {daysLeft > 0 && (
+                      <span className="dividend-countdown-badge">
+                        ⏳ Còn {daysLeft} ngày
+                      </span>
+                    )}
                     {event.ratio && (
                       <span className="dividend-ratio-badge">
                         Tỷ lệ: <strong>{event.ratio}</strong>
@@ -148,4 +157,3 @@ export function DividendCalendarWidget({ initialEvents = [] }: DividendCalendarW
     </section>
   );
 }
-

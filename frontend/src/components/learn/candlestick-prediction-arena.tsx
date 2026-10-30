@@ -16,6 +16,7 @@ export function CandlestickPredictionArena() {
   const [streak, setStreak] = useState<number>(0);
   const [completedIds, setCompletedIds] = useState<number[]>([]);
   const [showTheory, setShowTheory] = useState<boolean>(true);
+  const [activeTheoryTab, setActiveTheoryTab] = useState<"anatomy" | "orderbook" | "length">("anatomy");
 
   // Filter challenges by level
   const filteredChallenges = useMemo(() => {
@@ -149,36 +150,196 @@ export function CandlestickPredictionArena() {
         </div>
 
         {showTheory && (
-          <div className="candle-theory-body">
-            <div className="candle-theory-card">
-              <h3>{CANDLESTICK_THEORY.anatomy.title}</h3>
-              <p>{CANDLESTICK_THEORY.anatomy.content}</p>
-              <ul>
-                {CANDLESTICK_THEORY.anatomy.rules.map((r, i) => (
-                  <li key={i}>{r}</li>
-                ))}
-              </ul>
+          <div className="candle-theory-visual-wrapper">
+            {/* Visual Tabs */}
+            <div className="candle-theory-tabs-nav" role="tablist">
+              <button
+                type="button"
+                role="tab"
+                aria-selected={activeTheoryTab === "anatomy"}
+                className={`theory-nav-btn ${activeTheoryTab === "anatomy" ? "active" : ""}`}
+                onClick={() => setActiveTheoryTab("anatomy")}
+              >
+                📐 1. Giải Phẫu Cấu Tạo Nến
+              </button>
+              <button
+                type="button"
+                role="tab"
+                aria-selected={activeTheoryTab === "orderbook"}
+                className={`theory-nav-btn ${activeTheoryTab === "orderbook" ? "active" : ""}`}
+                onClick={() => setActiveTheoryTab("orderbook")}
+              >
+                ⚖️ 2. Cơ Chế Sổ Lệnh: Nến Tăng/Giảm
+              </button>
+              <button
+                type="button"
+                role="tab"
+                aria-selected={activeTheoryTab === "length"}
+                className={`theory-nav-btn ${activeTheoryTab === "length" ? "active" : ""}`}
+                onClick={() => setActiveTheoryTab("length")}
+              >
+                📏 3. Thân Nến Dài vs Ngắn Do Đâu?
+              </button>
             </div>
 
-            <div className="candle-theory-card">
-              <h3>{CANDLESTICK_THEORY.movement.title}</h3>
-              <p>{CANDLESTICK_THEORY.movement.content}</p>
-              <ul>
-                {CANDLESTICK_THEORY.movement.rules.map((r, i) => (
-                  <li key={i}>{r}</li>
-                ))}
-              </ul>
-            </div>
+            {/* TAB 1: ANATOMY INFOGRAPHIC */}
+            {activeTheoryTab === "anatomy" && (
+              <div className="theory-tab-content">
+                <div className="theory-infographic-grid">
+                  <div className="theory-svg-box">
+                    <svg viewBox="0 0 520 280" className="theory-svg-canvas">
+                      <line x1="20" y1="50" x2="500" y2="50" stroke="#1e293b" strokeDasharray="3 3" />
+                      <line x1="20" y1="110" x2="500" y2="110" stroke="#1e293b" strokeDasharray="3 3" />
+                      <line x1="20" y1="170" x2="500" y2="170" stroke="#1e293b" strokeDasharray="3 3" />
+                      <line x1="20" y1="230" x2="500" y2="230" stroke="#1e293b" strokeDasharray="3 3" />
 
-            <div className="candle-theory-card highlight">
-              <h3>{CANDLESTICK_THEORY.bodyLength.title}</h3>
-              <p>{CANDLESTICK_THEORY.bodyLength.content}</p>
-              <ul>
-                {CANDLESTICK_THEORY.bodyLength.rules.map((r, i) => (
-                  <li key={i}>{r}</li>
-                ))}
-              </ul>
-            </div>
+                      {/* BULLISH CANDLE (LEFT) */}
+                      <g transform="translate(100, 0)">
+                        <line x1="40" y1="35" x2="40" y2="80" stroke="#10b981" strokeWidth="3" />
+                        <rect x="15" y="80" width="50" height="110" rx="3" fill="#10b981" />
+                        <line x1="40" y1="190" x2="40" y2="245" stroke="#10b981" strokeWidth="3" />
+                        
+                        <circle cx="40" cy="35" r="4" fill="#38bdf8" />
+                        <text x="-5" y="39" fill="#38bdf8" fontSize="12" fontWeight="700" textAnchor="end">Đỉnh (High)</text>
+                        
+                        <text x="-5" y="85" fill="#34d399" fontSize="12" fontWeight="700" textAnchor="end">Đóng (Close)</text>
+                        
+                        <text x="40" y="140" fill="#ffffff" fontSize="12" fontWeight="800" textAnchor="middle">NẾN XANH</text>
+                        
+                        <text x="-5" y="195" fill="#34d399" fontSize="12" fontWeight="700" textAnchor="end">Mở (Open)</text>
+                        
+                        <circle cx="40" cy="245" r="4" fill="#38bdf8" />
+                        <text x="-5" y="249" fill="#38bdf8" fontSize="12" fontWeight="700" textAnchor="end">Đáy (Low)</text>
+                      </g>
+
+                      {/* BEARISH CANDLE (RIGHT) */}
+                      <g transform="translate(340, 0)">
+                        <line x1="40" y1="35" x2="40" y2="80" stroke="#ef4444" strokeWidth="3" />
+                        <rect x="15" y="80" width="50" height="110" rx="3" fill="#ef4444" />
+                        <line x1="40" y1="190" x2="40" y2="245" stroke="#ef4444" strokeWidth="3" />
+                        
+                        <circle cx="40" cy="35" r="4" fill="#38bdf8" />
+                        <text x="85" y="39" fill="#38bdf8" fontSize="12" fontWeight="700">Đỉnh (High)</text>
+                        
+                        <text x="85" y="85" fill="#f87171" fontSize="12" fontWeight="700">Mở (Open)</text>
+                        
+                        <text x="40" y="140" fill="#ffffff" fontSize="12" fontWeight="800" textAnchor="middle">NẾN ĐỎ</text>
+                        
+                        <text x="85" y="195" fill="#f87171" fontSize="12" fontWeight="700">Đóng (Close)</text>
+                        
+                        <circle cx="40" cy="245" r="4" fill="#38bdf8" />
+                        <text x="85" y="249" fill="#38bdf8" fontSize="12" fontWeight="700">Đáy (Low)</text>
+                      </g>
+                    </svg>
+                  </div>
+
+                  <div className="theory-cards-column">
+                    <div className="theory-visual-pill green-pill">
+                      <strong>🟢 Nến Xanh: Giá Đóng &gt; Giá Mở (Bulls thắng thế)</strong>
+                      <p>Phe Mua càn quét qua mọi mức giá bán trong phiên, đóng cửa tại vùng giá cao.</p>
+                    </div>
+                    <div className="theory-visual-pill red-pill">
+                      <strong>🔴 Nến Đỏ: Giá Đóng &lt; Giá Mở (Bears áp đảo)</strong>
+                      <p>Phe Bán xả hàng quyết liệt đè bẹp lực đỡ, đẩy giá tụt dốc về cuối phiên.</p>
+                    </div>
+                    <div className="theory-visual-pill cyan-pill">
+                      <strong>⚡ Bóng Nến (Râu): Vùng giá bị một bên từ chối (Rejection)</strong>
+                      <p>Râu dưới = phe mua rút chân bắt đáy; Râu trên = phe bán chặn đứng nỗ lực vượt đỉnh.</p>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* TAB 2: ORDER BOOK SUPPLY & DEMAND INFOGRAPHIC */}
+            {activeTheoryTab === "orderbook" && (
+              <div className="theory-tab-content">
+                <div className="theory-infographic-grid">
+                  <div className="theory-svg-box">
+                    <svg viewBox="0 0 520 280" className="theory-svg-canvas">
+                      <g transform="translate(30, 35)">
+                        <rect x="0" y="0" width="210" height="200" rx="8" fill="rgba(16, 185, 129, 0.12)" stroke="#10b981" strokeWidth="1.5" />
+                        <text x="105" y="32" fill="#10b981" fontSize="14" fontWeight="800" textAnchor="middle">🟢 LỰC CẦU (PHE MUA)</text>
+                        <text x="105" y="65" fill="#f8fafc" fontSize="11" fontWeight="600" textAnchor="middle">Lệnh Mua Chủ Động (Market Buy)</text>
+                        <line x1="105" y1="85" x2="105" y2="135" stroke="#10b981" strokeWidth="4" />
+                        <polygon points="105,75 95,90 115,90" fill="#10b981" />
+                        <text x="105" y="160" fill="#94a3b8" fontSize="11" textAnchor="middle">Nuốt cạn lệnh bán chờ (Ask)</text>
+                        <text x="105" y="185" fill="#34d399" fontSize="12" fontWeight="800" textAnchor="middle">➔ ĐẨY NẾN TĂNG XANH</text>
+                      </g>
+
+                      <g transform="translate(280, 35)">
+                        <rect x="0" y="0" width="210" height="200" rx="8" fill="rgba(239, 68, 68, 0.12)" stroke="#ef4444" strokeWidth="1.5" />
+                        <text x="105" y="32" fill="#ef4444" fontSize="14" fontWeight="800" textAnchor="middle">🔴 LỰC CUNG (PHE BÁN)</text>
+                        <text x="105" y="65" fill="#f8fafc" fontSize="11" fontWeight="600" textAnchor="middle">Lệnh Bán Chủ Động (Market Sell)</text>
+                        <line x1="105" y1="85" x2="105" y2="135" stroke="#ef4444" strokeWidth="4" />
+                        <polygon points="105,145 95,130 115,130" fill="#ef4444" />
+                        <text x="105" y="160" fill="#94a3b8" fontSize="11" textAnchor="middle">Đập gãy lệnh mua kê (Bid)</text>
+                        <text x="105" y="185" fill="#f87171" fontSize="12" fontWeight="800" textAnchor="middle">➔ DÌM NẾN RƠI ĐỎ</text>
+                      </g>
+                    </svg>
+                  </div>
+
+                  <div className="theory-cards-column">
+                    <div className="theory-visual-pill green-pill">
+                      <strong>🚀 Cầu &gt; Cung: Bên Mua chấp nhận mua đuổi</strong>
+                      <p>Khối lượng bán chờ không đủ đáp ứng, giá phải nhảy vọt lên nấc giá cao hơn để khớp.</p>
+                    </div>
+                    <div className="theory-visual-pill red-pill">
+                      <strong>📉 Cung &gt; Cầu: Bên Bán chấp nhận hạ giá thoát hàng</strong>
+                      <p>Lệnh bán xả trực tiếp vào các tầng kê mua bên dưới, khiến giá trượt dốc không phanh.</p>
+                    </div>
+                    <div className="theory-visual-pill amber-pill">
+                      <strong>⚖️ Cung ≈ Cầu: Cân bằng giằng co</strong>
+                      <p>Hai bên triệt tiêu lực đẩy của nhau, tạo thân nến nhỏ li ti (Doji) tích lũy.</p>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* TAB 3: BODY LENGTH & VOLUME MATRIX */}
+            {activeTheoryTab === "length" && (
+              <div className="theory-tab-content">
+                <div className="theory-length-cards-grid">
+                  <div className="length-card">
+                    <div className="length-card-chart">
+                      <svg viewBox="0 0 100 150" width="70" height="120">
+                        <rect x="25" y="10" width="50" height="130" rx="3" fill="#10b981" />
+                      </svg>
+                    </div>
+                    <h4>1. Thân Nến Dài (Marubozu)</h4>
+                    <span className="length-tag blue">Mất cân bằng cực độ</span>
+                    <p>Một phe độc chiếm trận địa. Sổ lệnh mỏng + Volume lớn xác nhận dòng tiền cá mập (Smart Money) vào cuộc.</p>
+                  </div>
+
+                  <div className="length-card">
+                    <div className="length-card-chart">
+                      <svg viewBox="0 0 100 150" width="70" height="120">
+                        <line x1="50" y1="15" x2="50" y2="65" stroke="#94a3b8" strokeWidth="2" />
+                        <rect x="30" y="65" width="40" height="18" rx="2" fill="#38bdf8" />
+                        <line x1="50" y1="83" x2="50" y2="135" stroke="#94a3b8" strokeWidth="2" />
+                      </svg>
+                    </div>
+                    <h4>2. Thân Nến Ngắn (Doji / Con quay)</h4>
+                    <span className="length-tag gray">Cung - Cầu giằng co</span>
+                    <p>Hai phe ghìm chân nhau bất phân thắng bại. Thị trường lưỡng lự hoặc tích lũy nén biên độ trước khi bùng nổ.</p>
+                  </div>
+
+                  <div className="length-card">
+                    <div className="length-card-chart">
+                      <svg viewBox="0 0 100 150" width="70" height="120">
+                        <line x1="50" y1="15" x2="50" y2="30" stroke="#10b981" strokeWidth="2" />
+                        <rect x="25" y="30" width="50" height="32" rx="3" fill="#10b981" />
+                        <line x1="50" y1="62" x2="50" y2="140" stroke="#10b981" strokeWidth="3" />
+                      </svg>
+                    </div>
+                    <h4>3. Râu Nến Dài (Pin Bar / Hammer)</h4>
+                    <span className="length-tag amber">Từ chối giá cực mạnh</span>
+                    <p>Một bên dìm/kéo giá rất xa nhưng bị phe đối lập phản công quyết liệt. Tín hiệu đảo chiều xu hướng tin cậy nhất.</p>
+                  </div>
+                </div>
+              </div>
+            )}
           </div>
         )}
       </section>

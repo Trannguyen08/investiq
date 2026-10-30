@@ -9,9 +9,8 @@ export const metadata: Metadata = {
 
 export default function CandlestickPredictionPage() {
   return (
-    <main id="main-content" style={{ minHeight: "85vh", background: "#f8fafc" }}>
+    <main id="main-content" style={{ minHeight: "85vh", background: "#06111f" }}>
       <CandlestickPredictionArena />
     </main>
   );
 }
-
