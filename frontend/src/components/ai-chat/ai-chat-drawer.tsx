@@ -21,7 +21,7 @@ const DEFAULT_WELCOME: AiMessage = {
     { label: "Kiểm tra rủi ro BCTC NVL", action_type: "SEND_PROMPT", prompt: "Kiểm tra rủi ro BCTC NVL" },
     { label: "Nhịp đập thị trường hôm nay", action_type: "SEND_PROMPT", prompt: "Thị trường hôm nay thế nào?" },
   ],
-  created_at: new Date().toISOString(),
+  created_at: "2026-11-01T12:00:00.000Z",
 };
 
 export function AiChatDrawer() {
@@ -143,10 +143,10 @@ export function AiChatDrawer() {
       {/* Chat Popover Window */}
       {isOpen && (
         <div
-          className={`fixed z-50 bg-slate-950/95 border border-slate-800 rounded-3xl shadow-2xl flex flex-col overflow-hidden backdrop-blur-xl animate-in fade-in duration-200 ${
+          className={`fixed z-50 bg-slate-950/95 border border-slate-800 rounded-3xl shadow-2xl flex flex-col overflow-hidden backdrop-blur-xl transition-all duration-300 ${
             isMaximized
-              ? "inset-3 sm:inset-8 w-auto h-auto max-h-none"
-              : "bottom-20 right-4 sm:right-6 w-[calc(100vw-2rem)] sm:w-[480px] h-[620px] max-h-[82vh]"
+              ? "bottom-4 right-4 sm:right-6 w-[calc(100vw-2rem)] sm:w-[50vw] sm:min-w-[520px] sm:max-w-[760px] h-[86vh]"
+              : "bottom-20 right-4 sm:right-6 w-[calc(100vw-2rem)] sm:w-[450px] h-[610px] max-h-[82vh]"
           }`}
         >
           {/* Header */}
@@ -165,24 +165,39 @@ export function AiChatDrawer() {
             </div>
 
             <div className="flex items-center gap-1.5">
-              {/* Maximize / Restore Toggle */}
-              <button
-                type="button"
-                onClick={() => setIsMaximized(!isMaximized)}
-                title={isMaximized ? "Thu nhỏ cửa sổ" : "Phóng to toàn màn hình"}
-                className="px-2 py-1 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800 transition text-xs font-semibold"
-              >
-                {isMaximized ? "Thu nhỏ" : "Phóng to"}
-              </button>
-
               {/* Full Page Link */}
               <Link
                 href={`/ai-assistant${conversationId ? `?conv=${conversationId}` : ""}`}
-                title="Mở không gian làm việc chuyên biệt"
-                className="px-2 py-1 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800 transition text-xs font-semibold"
+                title="Mở toàn trang AI"
+                className="px-2 py-1 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800 transition text-xs font-semibold mr-0.5"
               >
                 Trang AI
               </Link>
+
+              {/* Maximize / Restore Icon Button */}
+              <button
+                type="button"
+                onClick={() => setIsMaximized(!isMaximized)}
+                title={isMaximized ? "Thu nhỏ (Nửa màn hình -> Thu nhỏ)" : "Phóng to nửa màn hình"}
+                aria-label={isMaximized ? "Thu nhỏ" : "Phóng to nửa màn hình"}
+                className="w-7 h-7 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800 flex items-center justify-center transition"
+              >
+                {isMaximized ? (
+                  <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    <polyline points="4 14 10 14 10 20" />
+                    <polyline points="20 10 14 10 14 4" />
+                    <line x1="14" y1="10" x2="21" y2="3" />
+                    <line x1="3" y1="21" x2="10" y2="14" />
+                  </svg>
+                ) : (
+                  <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    <polyline points="15 3 21 3 21 9" />
+                    <polyline points="9 21 3 21 3 15" />
+                    <line x1="21" y1="3" x2="14" y2="10" />
+                    <line x1="3" y1="21" x2="10" y2="14" />
+                  </svg>
+                )}
+              </button>
 
               {/* Close Button */}
               <button
@@ -199,7 +214,12 @@ export function AiChatDrawer() {
           {/* Messages Scroll Area */}
           <div className="flex-1 overflow-y-auto p-4 space-y-4">
             {messages.map((msg) => (
-              <AiChatBubble key={msg.id} message={msg} onSendPrompt={(p) => handleSend(p)} />
+              <AiChatBubble
+                key={msg.id}
+                message={msg}
+                onSendPrompt={(p) => handleSend(p)}
+                onActionTriggered={() => setIsOpen(false)}
+              />
             ))}
 
             {isLoading && (

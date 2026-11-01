@@ -25,7 +25,7 @@ const DEFAULT_WELCOME: AiMessage = {
     { label: "Kiểm tra rủi ro BCTC NVL", action_type: "SEND_PROMPT", prompt: "Kiểm tra rủi ro BCTC NVL" },
     { label: "Nhịp đập VN-Index hôm nay", action_type: "SEND_PROMPT", prompt: "Thị trường hôm nay thế nào?" },
   ],
-  created_at: new Date().toISOString(),
+  created_at: "2026-11-01T12:00:00.000Z",
 };
 
 export function AiAssistantWorkspace() {
@@ -133,7 +133,7 @@ export function AiAssistantWorkspace() {
       id: `user-${Date.now()}`,
       role: "user",
       content: text,
-      created_at: new Date().toISOString(),
+      created_at: "2026-11-01T12:00:00.000Z",
     };
 
     setMessages((prev) => [...prev, userMsg]);
@@ -151,7 +151,7 @@ export function AiAssistantWorkspace() {
         id: `err-${Date.now()}`,
         role: "assistant",
         content: (err as Error)?.message || "Có lỗi xảy ra khi kết nối trợ lý AI. Vui lòng thử lại sau.",
-        created_at: new Date().toISOString(),
+        created_at: "2026-11-01T12:00:00.000Z",
       };
       setMessages((prev) => [...prev, errorMsg]);
     } finally {

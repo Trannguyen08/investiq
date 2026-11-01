@@ -277,10 +277,10 @@ class AiFinancialService:
 
             text_parts.append(f"Báo cáo phân tích chuyên sâu: {sym} - {name}")
             text_parts.append(
-                f"Thị giá: {price:,.0f} đ ({change_p:+.2f}%) | Sàn: {exchange} | Ngành: {sector}\n"
-                f"Định giá: P/E hiện tại {pe:.1f}x, P/B {pb:.1f}x, ROE {roe:.1f}%.\n"
-                f"Tín hiệu kỹ thuật: RSI (14) đang ở mức {rsi:.1f}, thị giá {'nằm trên' if price >= ma20 else 'áp sát'} MA20 ({ma20:,.0f} đ). "
-                f"Vùng hỗ trợ quanh {key_support:,.0f} đ, kháng cự gần tại {key_resistance:,.0f} đ."
+                f"- Thị giá: {price:,.0f} đ ({change_p:+.2f}%) | Sàn {exchange} | Ngành {sector}\n"
+                f"- Định giá: P/E hiện tại {pe:.1f}x | P/B {pb:.1f}x | ROE {roe:.1f}%\n"
+                f"- Kỹ thuật: RSI (14) đang ở mức {rsi:.1f} | Giá {'nằm trên' if price >= ma20 else 'áp sát'} MA20 ({ma20:,.0f} đ)\n"
+                f"- Vùng giá trọng yếu: Hỗ trợ quanh {key_support:,.0f} đ | Kháng cự gần {key_resistance:,.0f} đ"
             )
 
             points = [

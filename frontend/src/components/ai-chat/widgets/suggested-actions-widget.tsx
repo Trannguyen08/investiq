@@ -6,9 +6,11 @@ import type { SuggestedAction } from "@/types/ai-chat";
 export function SuggestedActionsWidget({
   actions,
   onSendPrompt,
+  onActionTriggered,
 }: {
   actions: SuggestedAction[];
   onSendPrompt?: (prompt: string) => void;
+  onActionTriggered?: () => void;
 }) {
   if (!actions || actions.length === 0) return null;
 
@@ -23,7 +25,8 @@ export function SuggestedActionsWidget({
             <Link
               key={idx}
               href={act.url}
-              className="inline-flex items-center px-3 py-1.5 rounded-xl bg-slate-900 border border-slate-700/80 hover:border-sky-500 hover:bg-slate-800 text-xs font-semibold text-sky-300 hover:text-white transition shadow-sm"
+              onClick={() => onActionTriggered?.()}
+              className="inline-flex items-center px-3 py-1.5 rounded-xl bg-slate-900 border border-slate-700/80 hover:border-sky-500 hover:bg-slate-800 text-xs font-semibold text-sky-300 hover:text-white transition shadow-sm active:scale-95"
             >
               <span>{act.label}</span>
             </Link>
@@ -36,7 +39,7 @@ export function SuggestedActionsWidget({
               key={idx}
               type="button"
               onClick={() => onSendPrompt?.(act.prompt!)}
-              className="inline-flex items-center px-3 py-1.5 rounded-xl bg-slate-900 border border-teal-800/80 hover:border-teal-400 hover:bg-teal-950/40 text-xs font-semibold text-teal-300 hover:text-white transition shadow-sm"
+              className="inline-flex items-center px-3 py-1.5 rounded-xl bg-slate-900 border border-teal-800/80 hover:border-teal-400 hover:bg-teal-950/40 text-xs font-semibold text-teal-300 hover:text-white transition shadow-sm active:scale-95"
             >
               <span>{act.label}</span>
             </button>
@@ -48,7 +51,8 @@ export function SuggestedActionsWidget({
             <Link
               key={idx}
               href={`/market/stocks/${act.symbol || "HPG"}`}
-              className="inline-flex items-center px-3 py-1.5 rounded-xl bg-emerald-950/60 border border-emerald-700/80 hover:border-emerald-400 hover:bg-emerald-900/60 text-xs font-semibold text-emerald-300 hover:text-white transition shadow-sm"
+              onClick={() => onActionTriggered?.()}
+              className="inline-flex items-center px-3 py-1.5 rounded-xl bg-emerald-950/60 border border-emerald-700/80 hover:border-emerald-400 hover:bg-emerald-900/60 text-xs font-semibold text-emerald-300 hover:text-white transition shadow-sm active:scale-95"
             >
               <span>{act.label}</span>
             </Link>
@@ -60,7 +64,8 @@ export function SuggestedActionsWidget({
             <Link
               key={idx}
               href={`/market/stocks/${act.symbol || "HPG"}?modal=${act.modal_type || "comparator"}`}
-              className="inline-flex items-center px-3 py-1.5 rounded-xl bg-slate-900 border border-amber-800/80 hover:border-amber-400 hover:bg-amber-950/40 text-xs font-semibold text-amber-300 hover:text-white transition shadow-sm"
+              onClick={() => onActionTriggered?.()}
+              className="inline-flex items-center px-3 py-1.5 rounded-xl bg-slate-900 border border-amber-800/80 hover:border-amber-400 hover:bg-amber-950/40 text-xs font-semibold text-amber-300 hover:text-white transition shadow-sm active:scale-95"
             >
               <span>{act.label}</span>
             </Link>
