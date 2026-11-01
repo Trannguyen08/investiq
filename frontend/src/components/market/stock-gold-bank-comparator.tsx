@@ -115,6 +115,45 @@ export function StockGoldBankComparator({
   const [symbol, setSymbol] = useState<string>(initialSymbol.toUpperCase());
   const [startYear, setStartYear] = useState<number>(2018);
   const [initialCapital, setInitialCapital] = useState<number>(100000000); // 100M VND
+  const [capitalInput, setCapitalInput] = useState<string>("100.000.000");
+  const [capitalError, setCapitalError] = useState<string | null>(null);
+
+  const formatNumberWithDots = (val: string | number) => {
+    const digits = String(val).replace(/\D/g, "");
+    if (!digits) return "";
+    return digits.replace(/\B(?=(\d{3})+(?!\d))/g, ".");
+  };
+
+  const handleCapitalChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const raw = e.target.value;
+    const digitsOnly = raw.replace(/\D/g, "");
+
+    if (!digitsOnly) {
+      setCapitalInput("");
+      setCapitalError("Vui lòng nhập vốn từ 10.000.000 đ đến 5.000.000.000 đ");
+      return;
+    }
+
+    // Tự động phân cách dấu chấm mỗi 3 chữ số hàng nghìn
+    const formatted = digitsOnly.replace(/\B(?=(\d{3})+(?!\d))/g, ".");
+    setCapitalInput(formatted);
+
+    const numVal = parseInt(digitsOnly, 10);
+    if (numVal < 10000000) {
+      setCapitalError("Vốn tối thiểu 10.000.000 đ (10 triệu)");
+    } else if (numVal > 5000000000) {
+      setCapitalError("Vốn tối đa 5.000.000.000 đ (5 tỷ)");
+    } else {
+      setCapitalError(null);
+      setInitialCapital(numVal);
+    }
+  };
+
+  const handleSelectQuickCapital = (amt: number) => {
+    setInitialCapital(amt);
+    setCapitalInput(formatNumberWithDots(amt));
+    setCapitalError(null);
+  };
 
   // Compute year-by-year comparison timeline
   const comparisonTimeline: YearlyAssetComparisonPoint[] = useMemo(() => {
@@ -267,24 +306,55 @@ export function StockGoldBankComparator({
             </select>
           </div>
 
-          {/* Initial Capital Pills */}
-          <div className="invest-control-box flex flex-col gap-1">
-            <label htmlFor="custom-capital-input" className="text-[11px] font-semibold text-slate-400 uppercase tracking-wider">Vốn ban đầu:</label>
-            <div className="capital-pills-row flex items-center gap-1.5">
-              {[50000000, 100000000, 200000000, 500000000].map((amt) => (
-                <button
-                  key={amt}
-                  type="button"
-                  className={`capital-pill px-2.5 py-1 text-xs font-semibold rounded-lg transition ${
-                    initialCapital === amt
-                      ? "active bg-sky-500 text-white shadow-sm"
-                      : "bg-slate-850 text-slate-400 hover:text-slate-200 hover:bg-slate-800"
-                  }`}
-                  onClick={() => setInitialCapital(amt)}
-                >
-                  {amt / 1000000} triệu
-                </button>
-              ))}
+          {/* Initial Capital Input & Quick Select */}
+          <div className="invest-control-box flex flex-col gap-1.5 min-w-[280px]">
+            <div className="flex items-center justify-between gap-2">
+              <label htmlFor="custom-capital-input" className="text-[11px] font-semibold text-slate-400 uppercase tracking-wider">
+                Vốn ban đầu:
+              </label>
+              {capitalError && (
+                <span className="text-[10px] font-bold text-amber-400">
+                  {capitalError}
+                </span>
+              )}
+            </div>
+
+            <div className="flex items-center gap-2">
+              <div className="relative flex-1">
+                <input
+                  id="custom-capital-input"
+                  type="text"
+                  inputMode="numeric"
+                  value={capitalInput}
+                  onChange={handleCapitalChange}
+                  placeholder="100.000.000"
+                  className={`w-full bg-slate-800 border ${
+                    capitalError ? "border-amber-500/70 focus:ring-amber-500" : "border-slate-700 focus:ring-sky-500"
+                  } text-white font-mono font-bold text-xs rounded-lg pl-2.5 pr-6 py-1.5 focus:outline-none focus:ring-1 transition`}
+                />
+                <span className="absolute right-2 top-1/2 -translate-y-1/2 text-xs font-bold text-slate-400 pointer-events-none">
+                  đ
+                </span>
+              </div>
+
+              {/* Quick capital pills */}
+              <div className="capital-pills-row flex items-center gap-1 shrink-0">
+                {[50000000, 100000000, 200000000, 500000000].map((amt) => (
+                  <button
+                    key={amt}
+                    type="button"
+                    aria-label={`${amt / 1000000} triệu`}
+                    className={`capital-pill px-2 py-1 text-[11px] font-semibold rounded-lg transition ${
+                      initialCapital === amt
+                        ? "active bg-sky-500 text-white shadow-sm"
+                        : "bg-slate-850 text-slate-400 hover:text-slate-200 hover:bg-slate-800"
+                    }`}
+                    onClick={() => handleSelectQuickCapital(amt)}
+                  >
+                    {amt / 1000000} triệu
+                  </button>
+                ))}
+              </div>
             </div>
           </div>
         </div>
@@ -293,10 +363,10 @@ export function StockGoldBankComparator({
       {/* 3 SUMMARY KPI CARDS */}
       <div className="invest-kpi-grid grid grid-cols-1 md:grid-cols-3 gap-4 my-6">
         {/* Stock Card */}
-        <div className="invest-kpi-card stock-border bg-slate-950/90 border-2 border-blue-500/60 rounded-xl p-4.5 flex flex-col justify-between shadow-lg shadow-blue-500/5">
-          <div className="invest-kpi-head flex items-center justify-between mb-2">
-            <span className="text-xs font-bold text-blue-400">📈 CỔ PHIẾU {symbol}</span>
-            <span className={`kpi-roi-badge text-xs font-black px-2 py-0.5 rounded-full ${
+        <div className="invest-kpi-card stock-border bg-slate-950/90 border-2 border-blue-500/60 rounded-xl p-4 flex flex-col justify-between shadow-lg shadow-blue-500/5">
+          <div className="invest-kpi-head flex items-center justify-between mb-2 gap-1.5">
+            <span className="text-xs font-bold text-blue-400 truncate">📈 CỔ PHIẾU {symbol}</span>
+            <span className={`kpi-roi-badge text-xs font-black px-2 py-0.5 rounded-full shrink-0 ${
               latest.stockRoi >= 0 ? "up bg-emerald-950 text-emerald-400 border border-emerald-800/60" : "down bg-rose-950 text-rose-400 border border-rose-800/60"
             }`}>
               {latest.stockRoi >= 0 ? `+${latest.stockRoi}%` : `${latest.stockRoi}%`}
@@ -309,10 +379,10 @@ export function StockGoldBankComparator({
         </div>
 
         {/* Gold SJC Card */}
-        <div className="invest-kpi-card gold-border bg-slate-950/90 border-2 border-amber-500/60 rounded-xl p-4.5 flex flex-col justify-between shadow-lg shadow-amber-500/5">
-          <div className="invest-kpi-head flex items-center justify-between mb-2">
-            <span className="text-xs font-bold text-amber-400">🥇 VÀNG MIẾNG SJC</span>
-            <span className={`kpi-roi-badge text-xs font-black px-2 py-0.5 rounded-full ${
+        <div className="invest-kpi-card gold-border bg-slate-950/90 border-2 border-amber-500/60 rounded-xl p-4 flex flex-col justify-between shadow-lg shadow-amber-500/5">
+          <div className="invest-kpi-head flex items-center justify-between mb-2 gap-1.5">
+            <span className="text-xs font-bold text-amber-400 truncate">🥇 VÀNG MIẾNG SJC</span>
+            <span className={`kpi-roi-badge text-xs font-black px-2 py-0.5 rounded-full shrink-0 ${
               latest.goldRoi >= 0 ? "up bg-emerald-950 text-emerald-400 border border-emerald-800/60" : "down bg-rose-950 text-rose-400 border border-rose-800/60"
             }`}>
               {latest.goldRoi >= 0 ? `+${latest.goldRoi}%` : `${latest.goldRoi}%`}
@@ -325,10 +395,10 @@ export function StockGoldBankComparator({
         </div>
 
         {/* Bank Savings Card */}
-        <div className="invest-kpi-card bank-border bg-slate-950/90 border-2 border-emerald-500/60 rounded-xl p-4.5 flex flex-col justify-between shadow-lg shadow-emerald-500/5">
-          <div className="invest-kpi-head flex items-center justify-between mb-2">
-            <span className="text-xs font-bold text-emerald-400">🏦 TIẾT KIỆM NGÂN HÀNG</span>
-            <span className="kpi-roi-badge up text-xs font-black px-2 py-0.5 rounded-full bg-emerald-950 text-emerald-400 border border-emerald-800/60">
+        <div className="invest-kpi-card bank-border bg-slate-950/90 border-2 border-emerald-500/60 rounded-xl p-4 flex flex-col justify-between shadow-lg shadow-emerald-500/5">
+          <div className="invest-kpi-head flex items-center justify-between mb-2 gap-1.5">
+            <span className="text-xs font-bold text-emerald-400 truncate">🏦 TIẾT KIỆM NGÂN HÀNG</span>
+            <span className="kpi-roi-badge up text-xs font-black px-2 py-0.5 rounded-full bg-emerald-950 text-emerald-400 border border-emerald-800/60 shrink-0">
               +{latest.bankRoi}%
             </span>
           </div>

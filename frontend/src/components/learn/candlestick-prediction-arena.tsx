@@ -15,7 +15,9 @@ export function CandlestickPredictionArena() {
   const [streak, setStreak] = useState<number>(0);
   const [completedIds, setCompletedIds] = useState<number[]>([]);
   const [showTheory, setShowTheory] = useState<boolean>(true);
-  const [activeTheoryTab, setActiveTheoryTab] = useState<"anatomy" | "orderbook" | "length">("anatomy");
+  const [activeTheoryTab, setActiveTheoryTab] = useState<
+    "anatomy" | "orderbook" | "length" | "single_patterns" | "multi_patterns" | "vsa_rules"
+  >("anatomy");
 
   // Filter challenges according to tab
   const filteredChallenges = useMemo(() => {
@@ -118,7 +120,7 @@ export function CandlestickPredictionArena() {
             <strong className="candle-stat-val text-blue text-xl font-black text-sky-400 mt-0.5">{score.toLocaleString("vi-VN")}</strong>
           </div>
           <div className="candle-stat-box flex-1 md:flex-none bg-slate-900/90 border border-slate-800 rounded-xl px-4 py-2.5 flex flex-col shadow-lg backdrop-blur-sm">
-            <span className="candle-stat-label text-[11px] font-semibold text-slate-400 uppercase tracking-wider">Chuỗi đúng 🔥</span>
+            <span className="candle-stat-label text-[11px] font-semibold text-slate-400 uppercase tracking-wider">Chuỗi đúng</span>
             <strong className="candle-stat-val text-amber text-xl font-black text-amber-400 mt-0.5">{streak}</strong>
           </div>
           <div className="candle-stat-box flex-1 md:flex-none bg-slate-900/90 border border-slate-800 rounded-xl px-4 py-2.5 flex flex-col shadow-lg backdrop-blur-sm">
@@ -139,7 +141,6 @@ export function CandlestickPredictionArena() {
           tabIndex={0}
         >
           <div className="flex items-center gap-3">
-            <span className="text-xl">📖</span>
             <h2 className="text-base sm:text-lg font-bold text-slate-100 m-0">
               Cẩm Nang Cốt Lõi: Nguyên Tắc Nến &amp; Điều Gì Làm Thân Nến Dài Hay Ngắn?
             </h2>
@@ -164,7 +165,7 @@ export function CandlestickPredictionArena() {
                 }`}
                 onClick={() => setActiveTheoryTab("anatomy")}
               >
-                📐 1. Giải Phẫu Cấu Tạo Nến
+                1. Giải Phẫu Cấu Tạo Nến
               </button>
               <button
                 type="button"
@@ -177,7 +178,7 @@ export function CandlestickPredictionArena() {
                 }`}
                 onClick={() => setActiveTheoryTab("orderbook")}
               >
-                ⚖️ 2. Cơ Chế Sổ Lệnh: Nến Tăng/Giảm
+                2. Cơ Chế Sổ Lệnh: Nến Tăng/Giảm
               </button>
               <button
                 type="button"
@@ -190,7 +191,46 @@ export function CandlestickPredictionArena() {
                 }`}
                 onClick={() => setActiveTheoryTab("length")}
               >
-                📏 3. Thân Nến Dài vs Ngắn Do Đâu?
+                3. Thân Nến Dài vs Ngắn Do Đâu?
+              </button>
+              <button
+                type="button"
+                role="tab"
+                aria-selected={activeTheoryTab === "single_patterns"}
+                className={`theory-nav-btn px-4 py-2 text-xs sm:text-sm font-semibold rounded-lg transition ${
+                  activeTheoryTab === "single_patterns"
+                    ? "active bg-sky-500 text-white shadow-md shadow-sky-500/20"
+                    : "text-slate-400 hover:text-slate-200 hover:bg-slate-800/70"
+                }`}
+                onClick={() => setActiveTheoryTab("single_patterns")}
+              >
+                4. Mẫu Hình Nến Đơn Đảo Chiều
+              </button>
+              <button
+                type="button"
+                role="tab"
+                aria-selected={activeTheoryTab === "multi_patterns"}
+                className={`theory-nav-btn px-4 py-2 text-xs sm:text-sm font-semibold rounded-lg transition ${
+                  activeTheoryTab === "multi_patterns"
+                    ? "active bg-sky-500 text-white shadow-md shadow-sky-500/20"
+                    : "text-slate-400 hover:text-slate-200 hover:bg-slate-800/70"
+                }`}
+                onClick={() => setActiveTheoryTab("multi_patterns")}
+              >
+                5. Cụm Mô Hình Đa Nến
+              </button>
+              <button
+                type="button"
+                role="tab"
+                aria-selected={activeTheoryTab === "vsa_rules"}
+                className={`theory-nav-btn px-4 py-2 text-xs sm:text-sm font-semibold rounded-lg transition ${
+                  activeTheoryTab === "vsa_rules"
+                    ? "active bg-sky-500 text-white shadow-md shadow-sky-500/20"
+                    : "text-slate-400 hover:text-slate-200 hover:bg-slate-800/70"
+                }`}
+                onClick={() => setActiveTheoryTab("vsa_rules")}
+              >
+                6. Nến + Volume & Hỗ Trợ/Kháng Cự (VSA)
               </button>
             </div>
 
@@ -247,15 +287,15 @@ export function CandlestickPredictionArena() {
 
                   <div className="theory-cards-column lg:col-span-5 flex flex-col gap-3">
                     <div className="theory-visual-pill green-pill bg-emerald-950/40 border border-emerald-800/60 rounded-xl p-3.5 shadow-sm">
-                      <strong className="block text-emerald-400 text-sm font-bold mb-1">🟢 Nến Xanh: Giá Đóng &gt; Giá Mở (Bulls thắng thế)</strong>
+                      <strong className="block text-emerald-400 text-sm font-bold mb-1">Nến Xanh: Giá Đóng &gt; Giá Mở (Bulls thắng thế)</strong>
                       <p className="text-xs text-slate-300 leading-relaxed m-0">Phe Mua càn quét qua mọi mức giá bán trong phiên, đóng cửa tại vùng giá cao.</p>
                     </div>
                     <div className="theory-visual-pill red-pill bg-rose-950/40 border border-rose-800/60 rounded-xl p-3.5 shadow-sm">
-                      <strong className="block text-rose-400 text-sm font-bold mb-1">🔴 Nến Đỏ: Giá Đóng &lt; Giá Mở (Bears áp đảo)</strong>
+                      <strong className="block text-rose-400 text-sm font-bold mb-1">Nến Đỏ: Giá Đóng &lt; Giá Mở (Bears áp đảo)</strong>
                       <p className="text-xs text-slate-300 leading-relaxed m-0">Phe Bán xả hàng quyết liệt đè bẹp lực đỡ, đẩy giá tụt dốc về cuối phiên.</p>
                     </div>
                     <div className="theory-visual-pill cyan-pill bg-sky-950/40 border border-sky-800/60 rounded-xl p-3.5 shadow-sm">
-                      <strong className="block text-sky-400 text-sm font-bold mb-1">⚡ Bóng Nến (Râu): Vùng giá bị một bên từ chối (Rejection)</strong>
+                      <strong className="block text-sky-400 text-sm font-bold mb-1">Bóng Nến (Râu): Vùng giá bị một bên từ chối (Rejection)</strong>
                       <p className="text-xs text-slate-300 leading-relaxed m-0">Râu dưới = phe mua rút chân bắt đáy; Râu trên = phe bán chặn đứng nỗ lực vượt đỉnh.</p>
                     </div>
                   </div>
@@ -271,7 +311,7 @@ export function CandlestickPredictionArena() {
                     <svg viewBox="0 0 520 280" className="theory-svg-canvas w-full max-w-[500px] h-auto">
                       <g transform="translate(30, 35)">
                         <rect x="0" y="0" width="210" height="200" rx="8" fill="rgba(16, 185, 129, 0.12)" stroke="#10b981" strokeWidth="1.5" />
-                        <text x="105" y="32" fill="#10b981" fontSize="14" fontWeight="800" textAnchor="middle">🟢 LỰC CẦU (PHE MUA)</text>
+                        <text x="105" y="32" fill="#10b981" fontSize="14" fontWeight="800" textAnchor="middle">LỰC CẦU (PHE MUA)</text>
                         <text x="105" y="65" fill="#f8fafc" fontSize="11" fontWeight="600" textAnchor="middle">Lệnh Mua Chủ Động (Market Buy)</text>
                         <line x1="105" y1="85" x2="105" y2="135" stroke="#10b981" strokeWidth="4" />
                         <polygon points="105,75 95,90 115,90" fill="#10b981" />
@@ -281,7 +321,7 @@ export function CandlestickPredictionArena() {
 
                       <g transform="translate(280, 35)">
                         <rect x="0" y="0" width="210" height="200" rx="8" fill="rgba(239, 68, 68, 0.12)" stroke="#ef4444" strokeWidth="1.5" />
-                        <text x="105" y="32" fill="#ef4444" fontSize="14" fontWeight="800" textAnchor="middle">🔴 LỰC CUNG (PHE BÁN)</text>
+                        <text x="105" y="32" fill="#ef4444" fontSize="14" fontWeight="800" textAnchor="middle">LỰC CUNG (PHE BÁN)</text>
                         <text x="105" y="65" fill="#f8fafc" fontSize="11" fontWeight="600" textAnchor="middle">Lệnh Bán Chủ Động (Market Sell)</text>
                         <line x1="105" y1="85" x2="105" y2="135" stroke="#ef4444" strokeWidth="4" />
                         <polygon points="105,145 95,130 115,130" fill="#ef4444" />
@@ -293,15 +333,15 @@ export function CandlestickPredictionArena() {
 
                   <div className="theory-cards-column lg:col-span-5 flex flex-col gap-3">
                     <div className="theory-visual-pill green-pill bg-emerald-950/40 border border-emerald-800/60 rounded-xl p-3.5 shadow-sm">
-                      <strong className="block text-emerald-400 text-sm font-bold mb-1">🚀 Cầu &gt; Cung: Bên Mua chấp nhận mua đuổi</strong>
+                      <strong className="block text-emerald-400 text-sm font-bold mb-1">Cầu &gt; Cung: Bên Mua chấp nhận mua đuổi</strong>
                       <p className="text-xs text-slate-300 leading-relaxed m-0">Khối lượng bán chờ không đủ đáp ứng, giá phải nhảy vọt lên nấc giá cao hơn để khớp.</p>
                     </div>
                     <div className="theory-visual-pill red-pill bg-rose-950/40 border border-rose-800/60 rounded-xl p-3.5 shadow-sm">
-                      <strong className="block text-rose-400 text-sm font-bold mb-1">📉 Cung &gt; Cầu: Bên Bán chấp nhận hạ giá thoát hàng</strong>
+                      <strong className="block text-rose-400 text-sm font-bold mb-1">Cung &gt; Cầu: Bên Bán chấp nhận hạ giá thoát hàng</strong>
                       <p className="text-xs text-slate-300 leading-relaxed m-0">Lệnh bán xả trực tiếp vào các tầng kê mua bên dưới, khiến giá trượt dốc không phanh.</p>
                     </div>
                     <div className="theory-visual-pill amber-pill bg-amber-950/40 border border-amber-800/60 rounded-xl p-3.5 shadow-sm">
-                      <strong className="block text-amber-400 text-sm font-bold mb-1">⚖️ Cung ≈ Cầu: Cân bằng giằng co</strong>
+                      <strong className="block text-amber-400 text-sm font-bold mb-1">Cung ≈ Cầu: Cân bằng giằng co</strong>
                       <p className="text-xs text-slate-300 leading-relaxed m-0">Hai bên triệt tiêu lực đẩy của nhau, tạo thân nến nhỏ li ti (Doji) tích lũy.</p>
                     </div>
                   </div>
@@ -348,6 +388,196 @@ export function CandlestickPredictionArena() {
                     <h4 className="text-sm font-bold text-slate-100 my-1">3. Râu Nến Dài (Pin Bar / Hammer)</h4>
                     <span className="length-tag amber text-[11px] font-semibold text-amber-400 bg-amber-950/80 px-2 py-0.5 rounded border border-amber-800/60 mb-2">Từ chối giá cực mạnh</span>
                     <p className="text-xs text-slate-400 leading-relaxed m-0">Một bên dìm/kéo giá rất xa nhưng bị phe đối lập phản công quyết liệt. Tín hiệu đảo chiều xu hướng tin cậy nhất.</p>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* TAB 4: MẪU HÌNH NẾN ĐƠN ĐẢO CHIỀU */}
+            {activeTheoryTab === "single_patterns" && (
+              <div className="theory-tab-content">
+                <div className="theory-single-patterns-grid grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+                  {/* Pattern 1: Hammer & Inverted Hammer */}
+                  <div className="pattern-box bg-slate-950/80 border border-slate-800 rounded-xl p-4 flex flex-col items-center text-center shadow-md">
+                    <div className="pattern-svg-wrapper py-2">
+                      <svg viewBox="0 0 100 140" width="70" height="110">
+                        <line x1="50" y1="15" x2="50" y2="25" stroke="#10b981" strokeWidth="2" />
+                        <rect x="25" y="25" width="50" height="30" rx="3" fill="#10b981" />
+                        <line x1="50" y1="55" x2="50" y2="135" stroke="#10b981" strokeWidth="3" />
+                      </svg>
+                    </div>
+                    <h4 className="text-sm font-bold text-emerald-400 my-1">Nến Búa (Hammer / Pin Bar)</h4>
+                    <span className="text-[10px] font-bold text-emerald-300 bg-emerald-950/80 border border-emerald-800/60 px-2 py-0.5 rounded mb-2">Đảo chiều Tăng tại Đáy</span>
+                    <p className="text-xs text-slate-300 leading-relaxed text-left m-0">
+                      <strong>Cơ chế:</strong> Râu dưới dài gấp 2-3 lần thân nến. Phe bán đã cố gắng dìm giá thủng đáy nhưng gặp lực cầu bắt đáy ồ ạt đẩy giá đóng cửa ở mức cao nhất phiên.
+                    </p>
+                  </div>
+
+                  {/* Pattern 2: Shooting Star & Hanging Man */}
+                  <div className="pattern-box bg-slate-950/80 border border-slate-800 rounded-xl p-4 flex flex-col items-center text-center shadow-md">
+                    <div className="pattern-svg-wrapper py-2">
+                      <svg viewBox="0 0 100 140" width="70" height="110">
+                        <line x1="50" y1="10" x2="50" y2="90" stroke="#ef4444" strokeWidth="3" />
+                        <rect x="25" y="90" width="50" height="30" rx="3" fill="#ef4444" />
+                        <line x1="50" y1="120" x2="50" y2="130" stroke="#ef4444" strokeWidth="2" />
+                      </svg>
+                    </div>
+                    <h4 className="text-sm font-bold text-rose-400 my-1">Sao Băng (Shooting Star)</h4>
+                    <span className="text-[10px] font-bold text-rose-300 bg-rose-950/80 border border-rose-800/60 px-2 py-0.5 rounded mb-2">Đảo chiều Giảm tại Đỉnh</span>
+                    <p className="text-xs text-slate-300 leading-relaxed text-left m-0">
+                      <strong>Cơ chế:</strong> Râu trên dài ngoằng cho thấy phe mua cố rướn vượt đỉnh nhưng bị phe bán táng lệnh xả ồ ạt, dìm nến đóng cửa sát sàn. Báo hiệu kiệt sức phe mua.
+                    </p>
+                  </div>
+
+                  {/* Pattern 3: Marubozu */}
+                  <div className="pattern-box bg-slate-950/80 border border-slate-800 rounded-xl p-4 flex flex-col items-center text-center shadow-md">
+                    <div className="pattern-svg-wrapper py-2">
+                      <svg viewBox="0 0 100 140" width="70" height="110">
+                        <rect x="25" y="10" width="50" height="120" rx="2" fill="#10b981" />
+                      </svg>
+                    </div>
+                    <h4 className="text-sm font-bold text-sky-400 my-1">Nến Cường Lực (Marubozu)</h4>
+                    <span className="text-[10px] font-bold text-sky-300 bg-sky-950/80 border border-sky-800/60 px-2 py-0.5 rounded mb-2">Động lượng Tuyệt Đối</span>
+                    <p className="text-xs text-slate-300 leading-relaxed text-left m-0">
+                      <strong>Cơ chế:</strong> Hoàn toàn không có bóng nến (râu). Một bên kiểm soát trận địa 100% từ giây mở cửa đến đóng cửa, xác nhận xu hướng tiếp diễn cực kỳ mạnh mẽ.
+                    </p>
+                  </div>
+
+                  {/* Pattern 4: Dragonfly & Gravestone Doji */}
+                  <div className="pattern-box bg-slate-950/80 border border-slate-800 rounded-xl p-4 flex flex-col items-center text-center shadow-md">
+                    <div className="pattern-svg-wrapper py-2">
+                      <svg viewBox="0 0 100 140" width="70" height="110">
+                        <line x1="20" y1="20" x2="80" y2="20" stroke="#f59e0b" strokeWidth="4" />
+                        <line x1="50" y1="20" x2="50" y2="135" stroke="#f59e0b" strokeWidth="2.5" />
+                      </svg>
+                    </div>
+                    <h4 className="text-sm font-bold text-amber-400 my-1">Doji Chuồn Chuồn / Bia Mộ</h4>
+                    <span className="text-[10px] font-bold text-amber-300 bg-amber-950/80 border border-amber-800/60 px-2 py-0.5 rounded mb-2">Cân bằng &amp; Điểm Uốn</span>
+                    <p className="text-xs text-slate-300 leading-relaxed text-left m-0">
+                      <strong>Cơ chế:</strong> Giá mở cửa trùng khít giá đóng cửa. Phản ánh thị trường từ chối dứt khoát một vùng giá, chuẩn bị bước vào pha đảo chiều bước ngoặt.
+                    </p>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* TAB 5: CỤM MÔ HÌNH ĐA NẾN KINH ĐIỂN */}
+            {activeTheoryTab === "multi_patterns" && (
+              <div className="theory-tab-content">
+                <div className="theory-multi-patterns-grid grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+                  {/* Pattern 1: Engulfing */}
+                  <div className="pattern-box bg-slate-950/80 border border-slate-800 rounded-xl p-4 flex flex-col items-center text-center shadow-md">
+                    <div className="pattern-svg-wrapper py-2">
+                      <svg viewBox="0 0 120 140" width="80" height="110">
+                        {/* Candle 1 (small red) */}
+                        <line x1="35" y1="45" x2="35" y2="95" stroke="#ef4444" strokeWidth="2" />
+                        <rect x="25" y="55" width="20" height="30" rx="2" fill="#ef4444" />
+                        {/* Candle 2 (giant green) */}
+                        <line x1="85" y1="15" x2="85" y2="125" stroke="#10b981" strokeWidth="2" />
+                        <rect x="65" y="25" width="40" height="90" rx="3" fill="#10b981" />
+                      </svg>
+                    </div>
+                    <h4 className="text-sm font-bold text-emerald-400 my-1">Nhấn Chìm Tăng (Bullish Engulfing)</h4>
+                    <span className="text-[10px] font-bold text-emerald-300 bg-emerald-950/80 border border-emerald-800/60 px-2 py-0.5 rounded mb-2">Nuốt chửng phe bán</span>
+                    <p className="text-xs text-slate-300 leading-relaxed text-left m-0">
+                      Thân nến xanh phía sau bao trọn toàn bộ thân nến đỏ phía trước. Xác nhận phe mua đã hấp thụ sạch sẽ lực cung và đảo ngược thế cờ dứt khoát.
+                    </p>
+                  </div>
+
+                  {/* Pattern 2: Morning Star */}
+                  <div className="pattern-box bg-slate-950/80 border border-slate-800 rounded-xl p-4 flex flex-col items-center text-center shadow-md">
+                    <div className="pattern-svg-wrapper py-2">
+                      <svg viewBox="0 0 130 140" width="90" height="110">
+                        {/* Candle 1 (red) */}
+                        <rect x="15" y="25" width="22" height="70" rx="2" fill="#ef4444" />
+                        {/* Candle 2 (star) */}
+                        <rect x="54" y="105" width="22" height="15" rx="2" fill="#f59e0b" />
+                        {/* Candle 3 (green) */}
+                        <rect x="93" y="40" width="22" height="70" rx="2" fill="#10b981" />
+                      </svg>
+                    </div>
+                    <h4 className="text-sm font-bold text-sky-400 my-1">Bộ Ba Sao Mai (Morning Star)</h4>
+                    <span className="text-[10px] font-bold text-sky-300 bg-sky-950/80 border border-sky-800/60 px-2 py-0.5 rounded mb-2">Bình minh tại Đáy</span>
+                    <p className="text-xs text-slate-300 leading-relaxed text-left m-0">
+                      Gồm 1 nến giảm mạnh, 1 nến nhỏ lưỡng lự (Star) tích lũy ở đáy, và 1 nến xanh tăng vọt đâm sâu &gt; 50% nến 1. Một trong những mô hình tạo đáy chuẩn mực nhất.
+                    </p>
+                  </div>
+
+                  {/* Pattern 3: Evening Star */}
+                  <div className="pattern-box bg-slate-950/80 border border-slate-800 rounded-xl p-4 flex flex-col items-center text-center shadow-md">
+                    <div className="pattern-svg-wrapper py-2">
+                      <svg viewBox="0 0 130 140" width="90" height="110">
+                        {/* Candle 1 (green) */}
+                        <rect x="15" y="45" width="22" height="70" rx="2" fill="#10b981" />
+                        {/* Candle 2 (star) */}
+                        <rect x="54" y="20" width="22" height="15" rx="2" fill="#f59e0b" />
+                        {/* Candle 3 (red) */}
+                        <rect x="93" y="40" width="22" height="75" rx="2" fill="#ef4444" />
+                      </svg>
+                    </div>
+                    <h4 className="text-sm font-bold text-rose-400 my-1">Bộ Ba Sao Hôm (Evening Star)</h4>
+                    <span className="text-[10px] font-bold text-rose-300 bg-rose-950/80 border border-rose-800/60 px-2 py-0.5 rounded mb-2">Hoàng hôn tại Đỉnh</span>
+                    <p className="text-xs text-slate-300 leading-relaxed text-left m-0">
+                      Nến 1 tăng hưng phấn, nến 2 tạo khoảng trống kiệt sức ở đỉnh, nến 3 xả mạnh đóng cửa thấp. Cảnh báo sụp gãy xu hướng tăng và bước vào chu kỳ giảm giá.
+                    </p>
+                  </div>
+
+                  {/* Pattern 4: Three White Soldiers */}
+                  <div className="pattern-box bg-slate-950/80 border border-slate-800 rounded-xl p-4 flex flex-col items-center text-center shadow-md">
+                    <div className="pattern-svg-wrapper py-2">
+                      <svg viewBox="0 0 130 140" width="90" height="110">
+                        <rect x="15" y="80" width="24" height="45" rx="2" fill="#10b981" />
+                        <rect x="52" y="50" width="24" height="50" rx="2" fill="#10b981" />
+                        <rect x="90" y="20" width="24" height="55" rx="2" fill="#10b981" />
+                      </svg>
+                    </div>
+                    <h4 className="text-sm font-bold text-emerald-400 my-1">Ba Chàng Lính Ngự Lâm</h4>
+                    <span className="text-[10px] font-bold text-emerald-300 bg-emerald-950/80 border border-emerald-800/60 px-2 py-0.5 rounded mb-2">Đà Tăng Không Thể Cản</span>
+                    <p className="text-xs text-slate-300 leading-relaxed text-left m-0">
+                      Ba nến xanh tăng liên tiếp mở cửa bên trong thân nến trước và đóng cửa ở mức đỉnh mới. Thể hiện dòng tiền cá mập liên tục gom hàng quyết liệt không cho giá chỉnh.
+                    </p>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* TAB 6: NẾN + VOLUME & VÙNG HỖ TRỢ/KHÁNG CỰ (VSA) */}
+            {activeTheoryTab === "vsa_rules" && (
+              <div className="theory-tab-content">
+                <div className="theory-vsa-cards-grid grid grid-cols-1 md:grid-cols-3 gap-5">
+                  <div className="vsa-rule-card bg-slate-950/80 border border-slate-800 rounded-xl p-4 flex flex-col gap-2.5 shadow-md">
+                    <h4 className="text-sm font-bold text-sky-400 m-0">1. Quy Luật Nỗ Lực vs Kết Quả (VSA)</h4>
+                    <p className="text-xs text-slate-300 leading-relaxed m-0">
+                      <strong>Volume = Nỗ lực; Thân nến = Kết quả.</strong>
+                    </p>
+                    <ul className="text-xs text-slate-400 pl-4 list-disc space-y-1.5 m-0">
+                      <li><strong>Bình thường:</strong> Nến tăng dài + Volume lớn = Xu hướng rất khỏe (Hợp lý).</li>
+                      <li><strong>Bất thường:</strong> Nến thân cực nhỏ nhưng Volume siêu đột biến = Dấu hiệu cá mập đang phân phối hàng kín đáo (Upthrust/Churning).</li>
+                      <li><strong>Cạn kiệt:</strong> Thân nến nhỏ + Volume teo tóp = Cạn cung tại đáy (No Supply), chuẩn bị bứt phá.</li>
+                    </ul>
+                  </div>
+
+                  <div className="vsa-rule-card bg-slate-950/80 border border-slate-800 rounded-xl p-4 flex flex-col gap-2.5 shadow-md">
+                    <h4 className="text-sm font-bold text-rose-400 m-0">2. Nhận Diện Bẫy Bull Trap &amp; Bear Trap</h4>
+                    <p className="text-xs text-slate-300 leading-relaxed m-0">
+                      <strong>Tránh bẫy đu đỉnh hoặc bị cướp hàng:</strong>
+                    </p>
+                    <ul className="text-xs text-slate-400 pl-4 list-disc space-y-1.5 m-0">
+                      <li><strong>Bull Trap (Upthrust):</strong> Giá vượt đỉnh cũ nhưng bị rụt đầu râu trên dài, volume thấp hoặc nến sau phủ định ngay = Bẫy kéo để xả, lập tức hạ tỷ trọng.</li>
+                      <li><strong>Bear Trap (Spring):</strong> Giá chọc thủng đáy hỗ trợ kích hoạt lệnh cắt lỗ hoảng loạn, sau đó rút chân thần tốc trở lại nền giá = Bẫy rũ bỏ của tạo lập trước sóng lớn.</li>
+                    </ul>
+                  </div>
+
+                  <div className="vsa-rule-card bg-slate-950/80 border border-slate-800 rounded-xl p-4 flex flex-col gap-2.5 shadow-md">
+                    <h4 className="text-sm font-bold text-emerald-400 m-0">3. Vị Trí Vàng: Nến Phải Đứng Đúng Chỗ</h4>
+                    <p className="text-xs text-slate-300 leading-relaxed m-0">
+                      <strong>"Một cây búa ở lưng chừng trời chỉ là thanh gỗ vô dụng!"</strong>
+                    </p>
+                    <ul className="text-xs text-slate-400 pl-4 list-disc space-y-1.5 m-0">
+                      <li>Mẫu hình nến chỉ có xác suất thắng &gt; 80% khi xuất hiện tại <strong>Vùng Hỗ Trợ / Kháng Cự trọng yếu (Key Levels)</strong>.</li>
+                      <li>Kết hợp đường trung bình động MA20, MA50 để lọc bỏ tín hiệu nhiễu.</li>
+                      <li>Luôn chờ cây nến xác nhận (Confirmation Candle) tiếp theo trước khi đặt lệnh giải ngân.</li>
+                    </ul>
                   </div>
                 </div>
               </div>
@@ -470,7 +700,7 @@ export function CandlestickPredictionArena() {
             {/* BỐI CẢNH DOANH NGHIỆP */}
             <div className="challenge-context-box bg-slate-950/80 border-l-4 border-sky-400 rounded-r-xl p-3.5 shadow-inner">
               <span className="block font-bold text-sky-400 text-xs mb-1">
-                🏢 Bối cảnh Doanh nghiệp:
+                Bối cảnh Doanh nghiệp:
               </span>
               <p className="m-0 text-xs sm:text-sm text-slate-300 leading-relaxed">
                 {currentChallenge.corporateContext}
@@ -480,7 +710,7 @@ export function CandlestickPredictionArena() {
             {/* BỐI CẢNH THỊ TRƯỜNG & TÂM LÝ */}
             <div className="challenge-context-box bg-slate-950/80 border-l-4 border-purple-400 rounded-r-xl p-3.5 shadow-inner">
               <span className="block font-bold text-purple-400 text-xs mb-1">
-                🌐 Bối cảnh Thị trường &amp; Tâm lý:
+                Bối cảnh Thị trường &amp; Tâm lý:
               </span>
               <p className="m-0 text-xs sm:text-sm text-slate-300 leading-relaxed">
                 {currentChallenge.marketSentiment}
@@ -712,7 +942,6 @@ export function CandlestickPredictionArena() {
                   onClick={() => handleSelectOption(opt.key)}
                 >
                   <span className="challenge-opt-label text-sm sm:text-base font-bold text-slate-100 flex items-center gap-1.5">
-                    {opt.key === "bullish" ? "📈" : opt.key === "bearish" ? "📉" : "⚖️"}{" "}
                     {opt.label}
                   </span>
                   <span className="challenge-opt-desc text-xs text-slate-400 leading-relaxed">
@@ -733,9 +962,6 @@ export function CandlestickPredictionArena() {
           }`}>
             <div className="verdict-header-row flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 pb-4 border-b border-slate-800">
               <div className="flex items-center gap-3">
-                <span className="text-3xl">
-                  {userChoice === currentChallenge.correctOption ? "🎉" : "💡"}
-                </span>
                 <div>
                   <div className="flex items-center gap-2 flex-wrap">
                     <span className={`verdict-tag text-xs font-black px-2.5 py-0.5 rounded-full ${
@@ -776,7 +1002,7 @@ export function CandlestickPredictionArena() {
             <div className="ai-details-grid grid grid-cols-1 md:grid-cols-3 gap-4 my-5">
               <div className="ai-detail-block bg-slate-950/80 border border-slate-800/80 rounded-xl p-4 shadow-inner">
                 <strong className="block text-sky-400 font-bold text-xs mb-1.5">
-                  🔍 Tại sao lại diễn biến như vậy:
+                  Tại sao lại diễn biến như vậy:
                 </strong>
                 <p className="m-0 text-xs sm:text-sm text-slate-300 leading-relaxed">
                   {currentChallenge.aiAnalysis.why}
@@ -785,7 +1011,7 @@ export function CandlestickPredictionArena() {
 
               <div className="ai-detail-block bg-slate-950/80 border border-slate-800/80 rounded-xl p-4 shadow-inner">
                 <strong className="block text-emerald-400 font-bold text-xs mb-1.5">
-                  ⚖️ Động thái Cung - Cầu trên sổ lệnh:
+                  Động thái Cung - Cầu trên sổ lệnh:
                 </strong>
                 <p className="m-0 text-xs sm:text-sm text-slate-300 leading-relaxed">
                   {currentChallenge.aiAnalysis.supplyDemand}
@@ -794,7 +1020,7 @@ export function CandlestickPredictionArena() {
 
               <div className="ai-detail-block bg-slate-950/80 border border-slate-800/80 rounded-xl p-4 shadow-inner">
                 <strong className="block text-purple-400 font-bold text-xs mb-1.5">
-                  🏢 Tác động từ Bối cảnh Doanh nghiệp:
+                  Tác động từ Bối cảnh Doanh nghiệp:
                 </strong>
                 <p className="m-0 text-xs sm:text-sm text-slate-300 leading-relaxed">
                   {currentChallenge.aiAnalysis.corporateImpact}
@@ -803,7 +1029,7 @@ export function CandlestickPredictionArena() {
             </div>
 
             <div className="bg-sky-950/30 border border-sky-800/50 rounded-xl p-4 text-xs sm:text-sm text-slate-200 leading-relaxed">
-              <strong className="text-sky-400 font-bold">💡 Bài học thực chiến rút ra: </strong>
+              <strong className="text-sky-400 font-bold">Bài học thực chiến rút ra: </strong>
               {currentChallenge.aiAnalysis.lesson}
             </div>
           </div>

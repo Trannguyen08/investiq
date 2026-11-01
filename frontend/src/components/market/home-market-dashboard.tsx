@@ -361,8 +361,10 @@ function HomeMarketContent({ overview, sectors, news, dividendEvents }: { overvi
       <MarketColorLegend />
       <MarketSnapshotRibbon indices={indices} />
       <DailyDigestBanner />
-      <MarketStatus meta={overview.meta} />
-      <section className="beginner-hero" aria-labelledby="today-market-title">
+      <section className="beginner-hero relative" aria-labelledby="today-market-title">
+        <div className="absolute top-4 right-4 hidden sm:block">
+          <MarketStatus meta={overview.meta} />
+        </div>
         <div className="beginner-hero-copy">
           <p className="eyebrow">HÔM NAY THỊ TRƯỜNG THẾ NÀO?</p>
           <h1 id="today-market-title"><span aria-hidden="true">{conclusion.emoji}</span> {conclusion.title}</h1>

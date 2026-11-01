@@ -1,5 +1,36 @@
 # Current Task
 
+## Comprehensive UI/UX Refinements Across 10 Key Areas - 2026-11-02 (complete)
+- **User Request**:
+  1. *Ảnh 1 (Xóa thanh trạng thái cồng kềnh)*: Xóa khối trạng thái thị trường (`MarketStatus`) to ngang cồng kềnh ở tất cả các trang; chỉ hiển thị ngày giờ dữ liệu cập nhật lúc nào ở góc trên bên phải mỗi trang.
+  2. *Ảnh 2 (Ô nhập tin nhắn AI Chatbox)*: Bỏ viền focus màu vàng/cam trên `<textarea>` và bỏ 2 dòng text con hướng dẫn bên dưới khung nhập.
+  3. *Ảnh 3 (Hai nút gợi ý nhanh trong chatbox)*: Click "So sánh Vàng SJC & Ngân hàng" và "Giả lập mua 1.000 cp HPG" không bị reload trang, tự động chuyển đến trang cổ phiếu và mở ngay popup tương ứng.
+  4. *Ảnh 4 (Nền backdrop modal So sánh)*: Modal so sánh mở trên nền trang cổ phiếu với lớp kính mờ trong suốt nhẹ (`backdrop-filter: blur(4px)`), không bị tối đen thui (đen kịt).
+  5. *Ảnh 5 (3 khối KPI trong modal So sánh)*: Cho khung so sánh to hơn một chút (`max-width: 1140px`), hiển thị 3 khối (Cổ phiếu, Vàng SJC, Tiết kiệm) thẳng hàng trên 1 dòng.
+  6. *Ảnh 6 (Ô nhập vốn ban đầu)*: Cho phép nhập vốn tùy ý [10 triệu - 5 tỷ], tự động phân cách dấu chấm hàng nghìn theo thời gian thực và đồng bộ 2 chiều với các nút chọn nhanh.
+  7. *Ảnh 7 (Trang Đấu trường Dự đoán Nến)*: Bỏ sạch 100% tất cả icon/emoji trước text trên toàn bộ trang.
+  8. *Ảnh 8 (Tab Rủi ro BCTC)*: Bỏ nút "Mở tất cả chi tiết ▼", hiển thị 2 khối 1 dòng và hỗ trợ mở độc lập nhiều chi tiết cùng lúc.
+  9. *Ảnh 9 (Trang Doanh nhân)*: Khung thông tin doanh nhân clean, bỏ text rườm rà và bio box ở ngoài danh sách, căn chỉnh số liệu theo grid 3 cột thẳng hàng.
+  10. *Ảnh 10 (Trang Hệ sinh thái)*: Tăng padding, cân đối khoảng cách chia đều 3 cột x 2 hàng, margin-bottom rõ ràng và đồng nhất một bảng màu dịu mắt (Navy / Sky Blue).
+  - *Ràng buộc đặc biệt*: "LÀM XONG CHƯA CẦN COMMIT" (giữ nguyên working directory để người dùng review).
+- **Key Changes Implemented**:
+  1. **MarketStatus badge**: Tinh gọn thành inline-badge góc trên bên phải header tại `MarketShell`, `stock-detail-hero` và `beginner-hero`. Tách riêng element text để đáp ứng kiểm thử `beginner-market-ui.test.tsx`.
+  2. **Chat Input Focus & Subtext**: Đã reset CSS `.ai-chat-textarea` (outline: none, box-shadow: none, border: transparent) và loại bỏ text con hướng dẫn bên dưới input.
+  3. **Chat Quick Actions Navigation**: Sửa `suggested-actions-widget.tsx` sử dụng Next router push + custom events, xử lý mở popup tức thì không reload.
+  4. **Modal Backdrop Translucency**: Đặt `.dca-modal-backdrop` thành `background: rgba(4, 11, 20, 0.55) !important; backdrop-filter: blur(4px) !important;`, giữ nền trang cổ phiếu hiển thị phía sau.
+  5. **Modal Width & 3-Column KPI Grid**: Tăng `max-width` của `.dca-modal-content` lên `1140px` và cố định `.invest-kpi-grid` thành 3 cột cân đối trên 1 dòng.
+  6. **Real-time Capital Formatting & Validation**: Xử lý nhập vốn tự động thêm dấu chấm hàng nghìn trong `stock-gold-bank-comparator.tsx`, validate 10tr - 5 tỷ.
+  7. **Clean Candlestick Arena**: Loại bỏ hoàn toàn các emoji ký tự khỏi tiêu đề, tab và nhãn thống kê trong `candlestick-prediction-arena.tsx`.
+  8. **Forensic Panel Simplification**: Xóa nút "Mở tất cả chi tiết ▼", giữ badge "4 Chỉ số cốt lõi", bố cục 2 cột x 2 hàng.
+  9. **People Cards Clean Up**: Lược bỏ thông tin phụ và bio box ngoài card, chuẩn hóa layout `person-card-body` với `grid-template-columns: repeat(3, minmax(0, 1fr))`.
+  10. **Ecosystem Layout & Single Tone Theme**: Chia đều 6 tập đoàn thành 2 hàng x 3 cột, áp dụng palette màu Sky Blue / Navy dịu mắt, tăng padding card lên `1.25rem 1.35rem`.
+- **Verification**:
+  - `npm --prefix frontend run typecheck`: **0 errors**.
+  - Vitest: **15/15 tests passed** (`beginner-market-ui.test.tsx`, `stock-gold-bank-comparator.test.tsx`, `stock-trade-actions.test.tsx`).
+  - **TUYỆT ĐỐI CHƯA COMMIT** theo đúng yêu cầu người dùng.
+
+# Current Task
+
 ## Stock Page Navigation & Translucent Glass Backdrop for Comparator Modal - 2026-11-01 (complete)
 - **User Request**:
   - *"Ý LÀ KHI CLICK VÀO SO SÁNH THÌ NÓ SẼ RA TRANG CỦA CỔ PHIẾU ĐÓ R MỞ KHUNG CHO CÓ BACKGROUND ĐẰNG SAU KHUNG CHỨ ĐEN THUI NHÌN HƠI KỲ NHỈ"*: Người dùng yêu cầu khi click vào nút gợi ý "So sánh Vàng SJC & Ngân hàng" (hoặc "Giả lập mua 1.000 cp HPG") thì chuyển hướng tới trang chi tiết cổ phiếu đó (`/market/stocks/[symbol]`), hiển thị toàn bộ trang cổ phiếu làm nền phía sau, rồi mở khung modal so sánh nổi lên trên; đồng thời làm nền backdrop trong suốt nhẹ kính mờ (translucent glass) chứ không được tối đen thui (đen kịt).
@@ -137,6 +168,36 @@
   - Backend Unit & Integration Tests: **7/7 AI chat tests passed** (`tests/unit/ai_chat/`, `tests/integration/api/test_ai_chat_api.py`).
   - Toàn bộ backend test suite: **123/123 tests passed**.
   - Kiểm thử end-to-end Next.js BFF -> FastAPI (`POST /ai-api/chat`): Trả về `HTTP 200 OK` với đầy đủ Radar chart scores, Altman Z-Score, Stock comparison và Market pulse.
+
+# Current Task
+
+## Custom Capital Input & Formatting, 2-Column Forensic Cards & Multi-Expand, Candlestick Knowledge Expansion - 2026-11-02 (pending user review)
+- **User Request**:
+  1. *Ảnh 1 (Khung So sánh Vốn ban đầu)*: Cho phép nhập vốn ban đầu, Min 10.000.000 đ, Max 5.000.000.000 đ. Quan trọng là khi người dùng nhập thì có validate và tự động chấm sau khi nhập đủ 3 số 0 (định dạng dấu chấm phân cách hàng nghìn theo thời gian thực).
+  2. *Ảnh 2 (Tab Rủi ro BCTC `/market/stocks/[symbol]?tab=forensics`)*: Fix lại hiển thị bị tràn ra: hiển thị 2 khối 1 dòng (`grid-cols-1 md:grid-cols-2`). Fix lỗi không thể mở chi tiết phân tích trong 2 khối cùng lúc mà chỉ hiển thị được 1 khối (khi ấn chi tiết khối khác thì khối cũ bị ẩn).
+  3. *Ảnh 3 (Đấu trường Dự đoán Nến `/candlestick-prediction`)*: Thêm các kiến thức chuyên sâu về nến vì hiện tại hơi ít.
+  4. *Ràng buộc đặc biệt*: "LÀM XONG ĐỪNG COMMIT HÃY ĐỂ TÔI REVIEW TRƯỚC" (giữ nguyên working directory để người dùng kiểm tra).
+- **Key Changes Implemented**:
+  1. **Task 1 - Ô nhập vốn tự động format dấu chấm & validate [10tr - 5 tỷ]**:
+     - Trong [`stock-gold-bank-comparator.tsx`](file:///c:/investiq/frontend/src/components/market/stock-gold-bank-comparator.tsx):
+       + Thêm state `capitalInput: string` ("100.000.000") và `capitalError: string | null`.
+       + Hàm `handleCapitalChange`: lọc chỉ nhận số, tự động chèn dấu chấm phân cách hàng nghìn (`digits.replace(/\B(?=(\d{3})+(?!\d))/g, ".")`).
+       + Validate giá trị nhập: [10.000.000 đ, 5.000.000.000 đ], báo lỗi trực quan nếu ngoài khoảng. Khi hợp lệ, tự động cập nhật `initialCapital` để recalculate toàn bộ ROI, số tiền lãi ròng và biểu đồ SVG tức thì.
+       + Giữ các nút chọn nhanh 50tr, 100tr, 200tr, 500tr đồng bộ 2 chiều với ô input.
+  2. **Task 2 - Hiển thị 2 khối 1 dòng & Mở độc lập nhiều chi tiết cùng lúc**:
+     - Trong [`globals.css`](file:///c:/investiq/frontend/src/app/globals.css) & [`financial-forensics-panel.tsx`](file:///c:/investiq/frontend/src/components/market/financial-forensics-panel.tsx):
+       + Đặt `.forensics-flags-grid` cố định 2 cột trên desktop `grid-template-columns: repeat(2, minmax(0, 1fr))`, 1 cột trên mobile. Bỏ hoàn toàn tình trạng 4 cột dồn ép tràn màn hình.
+       + Thay đổi state từ đơn lẻ `selectedFlag` sang multi-selection `expandedFlags: Record<string, boolean>`. Người dùng có thể click mở chi tiết 2 khối, 3 khối hoặc cả 4 khối cùng một lúc để so sánh đối chiếu mà không bị tự đóng.
+       + Bổ sung nút tiện ích "Mở tất cả chi tiết ▼ / Thu gọn tất cả ▲".
+  3. **Task 3 - Mở rộng cẩm nang kiến thức nến chuyên sâu**:
+     - Trong [`candlestick-prediction-arena.tsx`](file:///c:/investiq/frontend/src/components/learn/candlestick-prediction-arena.tsx):
+       + Mở rộng 3 tab kiến thức mới với đồ họa SVG trực quan:
+         * *Tab 4: Mẫu hình nến đơn đảo chiều kinh điển*: Nến Búa (Hammer), Sao Băng (Shooting Star), Nến Cường Lực (Marubozu), Doji Chuồn Chuồn & Bia Mộ.
+         * *Tab 5: Cụm mô hình đa nến xu hướng*: Nhấn chìm tăng/giảm (Engulfing), Bộ ba Sao Mai (Morning Star), Bộ ba Sao Hôm (Evening Star), Ba chàng lính ngự lâm (Three White Soldiers).
+         * *Tab 6: Nến + Volume & Hỗ trợ/Kháng cự (VSA)*: Định luật Nỗ lực vs Kết quả (Effort vs Result), Nhận diện bẫy Bull Trap / Bear Trap, Vị trí vàng tại Key Levels.
+- **Verification**:
+  - `npm --prefix frontend run typecheck`: **0 errors**.
+  - Không thực hiện commit theo đúng yêu cầu người dùng.
 
 # Current Task
 

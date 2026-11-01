@@ -1521,11 +1521,26 @@ button:disabled { cursor: not-allowed; opacity: 0.55; }
 .person-role-company { margin: 0; color: #9bb0c3; font-size: 0.82rem; }
 .person-role-company strong { color: #7dd3fc; }
 .person-sector-meta { color: #64748b; font-size: 0.72rem; }
-.person-card-body { display: grid; grid-template-columns: 1.3fr 1.3fr 1.4fr; gap: 1rem; padding: 1rem; border-radius: 0.75rem; background: #081726; border: 1px solid #152d42; }
-.person-metric-group { display: flex; flex-direction: column; gap: 0.3rem; }
-.metric-label { color: #7994ab; font-size: 0.72rem; font-weight: 750; text-transform: uppercase; letter-spacing: 0.04em; }
+.person-card-body {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 1.5rem;
+  padding: 1rem 1.25rem;
+  border-radius: 0.75rem;
+  background: #081726;
+  border: 1px solid #152d42;
+  align-items: flex-start;
+}
+@media (max-width: 768px) {
+  .person-card-body {
+    grid-template-columns: 1fr;
+    gap: 0.85rem;
+  }
+}
+.person-metric-group { display: flex; flex-direction: column; gap: 0.35rem; }
+.metric-label { color: #7994ab; font-size: 0.7rem; font-weight: 750; text-transform: uppercase; letter-spacing: 0.05em; }
 .metric-value-row { display: flex; align-items: baseline; gap: 0.6rem; flex-wrap: wrap; }
-.metric-val { color: #f8fafc; font-size: 1.25rem; font-weight: 850; font-variant-numeric: tabular-nums; }
+.metric-val { color: #f8fafc; font-size: 1.25rem; font-weight: 850; font-variant-numeric: tabular-nums; line-height: 1.2; }
 .metric-val.highlight { color: #38bdf8; }
 .metric-tag { padding: 0.15rem 0.45rem; border-radius: 0.35rem; font-size: 0.74rem; font-weight: 800; font-variant-numeric: tabular-nums; }
 .metric-sub { color: #64748b; font-size: 0.68rem; }
@@ -3742,6 +3757,7 @@ body:has(.learn-page) .mobile-menu summary span { background: #d9e8f5; }
   display: flex;
   flex-direction: column;
   gap: 1.5rem;
+  padding: 0.5rem 0 2rem 0;
 }
 
 .eco-explorer-root {
@@ -3754,19 +3770,32 @@ body:has(.learn-page) .mobile-menu summary span { background: #d9e8f5; }
 /* 1. Conglomerate Carousel Selector Strip */
 .eco-selector-strip {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
-  gap: 0.85rem;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 1.15rem;
   width: 100%;
+  margin-bottom: 1.5rem;
+}
+
+@media (max-width: 960px) {
+  .eco-selector-strip {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 600px) {
+  .eco-selector-strip {
+    grid-template-columns: 1fr;
+  }
 }
 
 .eco-strip-card {
   display: flex;
   flex-direction: column;
-  gap: 0.4rem;
-  padding: 1rem 1.15rem;
+  gap: 0.5rem;
+  padding: 1.25rem 1.35rem;
   background: rgba(10, 25, 47, 0.7);
   border: 1px solid rgba(56, 189, 248, 0.18);
-  border-radius: 0.85rem;
+  border-radius: 1rem;
   text-align: left;
   cursor: pointer;
   transition: all 0.25s cubic-bezier(0.16, 1, 0.3, 1);
@@ -5079,8 +5108,14 @@ body:has(.learn-page) .mobile-menu summary span { background: #d9e8f5; }
 
 .forensics-flags-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+  grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 1.25rem;
+}
+
+@media (max-width: 768px) {
+  .forensics-flags-grid {
+    grid-template-columns: 1fr;
+  }
 }
 
 .forensic-flag-card {
@@ -5410,13 +5445,13 @@ body:has(.learn-page) .mobile-menu summary span { background: #d9e8f5; }
   position: relative;
   z-index: 10;
   width: 100%;
-  max-width: 680px;
-  max-height: 90vh;
+  max-width: 1140px !important;
+  max-height: 92vh;
   overflow-y: auto;
   background: #0d233a;
   border: 1px solid rgba(56, 189, 248, 0.25);
   border-radius: 1.25rem;
-  padding: 2rem;
+  padding: 1.75rem 2.25rem;
   box-shadow: 0 20px 50px rgba(0, 0, 0, 0.6);
   display: flex;
   flex-direction: column;
@@ -10533,9 +10568,15 @@ body:has(.learn-page) .mobile-menu summary span { background: #d9e8f5; }
 /* 3 KPI CARDS */
 .invest-kpi-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+  grid-template-columns: repeat(3, minmax(0, 1fr)) !important;
   gap: 1rem;
   margin-bottom: 1.5rem;
+}
+
+@media (max-width: 768px) {
+  .invest-kpi-grid {
+    grid-template-columns: 1fr !important;
+  }
 }
 
 .invest-kpi-card {

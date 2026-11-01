@@ -9,7 +9,14 @@ type Props = {
 };
 
 export function FinancialForensicsPanel({ data, symbol }: Props) {
-  const [selectedFlag, setSelectedFlag] = useState<ForensicRedFlag | null>(null);
+  const [expandedFlags, setExpandedFlags] = useState<Record<string, boolean>>({});
+
+  const toggleFlag = (flagId: string) => {
+    setExpandedFlags((prev) => ({
+      ...prev,
+      [flagId]: !prev[flagId],
+    }));
+  };
 
   if (!data) {
     return (
@@ -275,9 +282,9 @@ export function FinancialForensicsPanel({ data, symbol }: Props) {
           <span className="flags-count-tag text-xs font-bold px-2.5 py-1 rounded-full bg-slate-800 text-slate-300 border border-slate-700">4 Chỉ số cốt lõi</span>
         </div>
 
-        <div className="forensics-flags-grid grid md:grid-cols-2 gap-4">
+        <div className="forensics-flags-grid grid grid-cols-1 md:grid-cols-2 gap-4">
           {red_flags.map((flag) => {
-            const isSelected = selectedFlag?.flag_id === flag.flag_id;
+            const isSelected = !!expandedFlags[flag.flag_id];
             const detail = getForensicDetail(flag.flag_id, flag.severity, symbol);
 
             return (
@@ -286,13 +293,13 @@ export function FinancialForensicsPanel({ data, symbol }: Props) {
                 className={`forensic-flag-card border rounded-xl p-4 flex flex-col gap-3 transition cursor-pointer ${severityTone(flag.severity)} ${
                   isSelected ? "active ring-2 ring-sky-500/50" : "hover:border-slate-700"
                 }`}
-                onClick={() => setSelectedFlag(isSelected ? null : flag)}
+                onClick={() => toggleFlag(flag.flag_id)}
                 role="button"
                 tabIndex={0}
                 onKeyDown={(e) => {
                   if (e.key === "Enter" || e.key === " ") {
                     e.preventDefault();
-                    setSelectedFlag(isSelected ? null : flag);
+                    toggleFlag(flag.flag_id);
                   }
                 }}
               >

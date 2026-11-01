@@ -18,8 +18,8 @@ export function StockTradeActions({
 }) {
   const auth = useAuth();
   const searchParams = useSearchParams();
-  const tradeParam = searchParams.get("trade")?.toLowerCase();
-  const qtyParam = searchParams.get("qty");
+  const tradeParam = searchParams?.get("trade")?.toLowerCase();
+  const qtyParam = searchParams?.get("qty");
 
   const [side, setSide] = useState<"buy" | "sell" | null>(() =>
     tradeParam === "buy" || tradeParam === "sell" ? tradeParam : null
