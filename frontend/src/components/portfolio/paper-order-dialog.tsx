@@ -43,6 +43,7 @@ type PaperOrderDialogProps = {
   side: "buy" | "sell";
   instrument: Instrument | null;
   dashboard?: PaperDashboard | null;
+  initialQuantity?: number | string;
   onClose: () => void;
   onDashboard?: (dashboard: PaperDashboard) => void;
   onSuccess?: (message: string) => void;
@@ -55,6 +56,7 @@ export function PaperOrderDialog(props: PaperOrderDialogProps) {
     side={props.side}
     instrument={props.instrument}
     suppliedDashboard={props.dashboard}
+    initialQuantity={props.initialQuantity}
     onClose={props.onClose}
     onDashboard={props.onDashboard}
     onSuccess={props.onSuccess}
@@ -65,6 +67,7 @@ function PaperOrderDialogContent({
   side,
   instrument,
   suppliedDashboard,
+  initialQuantity,
   onClose,
   onDashboard,
   onSuccess,
@@ -72,6 +75,7 @@ function PaperOrderDialogContent({
   side: "buy" | "sell";
   instrument: Instrument;
   suppliedDashboard?: PaperDashboard | null;
+  initialQuantity?: number | string;
   onClose: () => void;
   onDashboard?: (dashboard: PaperDashboard) => void;
   onSuccess?: (message: string) => void;
@@ -84,7 +88,7 @@ function PaperOrderDialogContent({
   const [pending, setPending] = useState(false);
   const initialHolding = suppliedDashboard?.holdings.find((item) => item.symbol === instrument.symbol);
   const [quantity, setQuantity] = useState(
-    side === "sell" ? String(initialHolding?.available_quantity ?? 0) : "100",
+    initialQuantity ? String(initialQuantity) : (side === "sell" ? String(initialHolding?.available_quantity ?? 0) : "100"),
   );
   const [error, setError] = useState("");
   const dashboard = suppliedDashboard ?? loadedDashboard;

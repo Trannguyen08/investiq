@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { useSearchParams } from "next/navigation";
 import { StockGoldBankComparator } from "@/components/market/stock-gold-bank-comparator";
 
 type Props = {
@@ -61,7 +62,33 @@ export function DCASimulatorModal({ initialSymbol = "HPG", isOpen, onClose }: Pr
 }
 
 export function DCASimulatorButton({ symbol }: { symbol: string }) {
-  const [isOpen, setIsOpen] = useState(false);
+  const searchParams = useSearchParams();
+  const modalParam = searchParams.get("modal");
+
+  const [isOpen, setIsOpen] = useState(() => modalParam === "comparator" || modalParam === "dca");
+
+  useEffect(() => {
+    if (modalParam === "comparator" || modalParam === "dca") {
+      setIsOpen(true);
+    }
+  }, [modalParam]);
+
+  useEffect(() => {
+    const handleOpenModal = () => setIsOpen(true);
+    window.addEventListener("open-dca-comparator-modal", handleOpenModal);
+    return () => window.removeEventListener("open-dca-comparator-modal", handleOpenModal);
+  }, []);
+
+  const handleClose = () => {
+    setIsOpen(false);
+    if (typeof window !== "undefined") {
+      const url = new URL(window.location.href);
+      if (url.searchParams.has("modal")) {
+        url.searchParams.delete("modal");
+        window.history.replaceState({}, "", url.toString());
+      }
+    }
+  };
 
   return (
     <>
@@ -78,7 +105,7 @@ export function DCASimulatorButton({ symbol }: { symbol: string }) {
       <DCASimulatorModal
         initialSymbol={symbol}
         isOpen={isOpen}
-        onClose={() => setIsOpen(false)}
+        onClose={handleClose}
       />
     </>
   );

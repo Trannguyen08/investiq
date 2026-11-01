@@ -1312,8 +1312,8 @@ button:disabled { cursor: not-allowed; opacity: 0.55; }
 /* Market home and market center */
 .market-home,
 .market-page { display: grid; gap: 1.25rem; padding-bottom: 3rem; }
-.market-hero,
-.market-page-hero { display: flex; align-items: end; justify-content: space-between; gap: 2rem; padding: 1.25rem 0 0.5rem; }
+.market-hero { display: flex; align-items: end; justify-content: space-between; gap: 2rem; padding: 1.25rem 0 0.5rem; }
+.market-page-hero { display: flex; align-items: center; justify-content: space-between; gap: 2rem; padding: 2.25rem 2.5rem !important; border-radius: 1.25rem !important; }
 .market-hero h1,
 .market-page-hero h1 { max-width: 53rem; margin: 0.3rem 0 0.75rem; color: #0b1220; font-size: clamp(2.2rem, 5vw, 4.45rem); line-height: 1.02; letter-spacing: -0.055em; }
 .market-page-hero h1 { font-size: clamp(2rem, 4vw, 3.4rem); }

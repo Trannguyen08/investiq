@@ -1,6 +1,6 @@
 "use client";
 
-import Link from "next/link";
+import { useRouter } from "next/navigation";
 import type { SuggestedAction } from "@/types/ai-chat";
 
 export function SuggestedActionsWidget({
@@ -12,7 +12,51 @@ export function SuggestedActionsWidget({
   onSendPrompt?: (prompt: string) => void;
   onActionTriggered?: () => void;
 }) {
+  const router = useRouter();
+
   if (!actions || actions.length === 0) return null;
+
+  const handleNavigate = (url: string) => {
+    onActionTriggered?.();
+    if (typeof window !== "undefined") {
+      router.push(url);
+    }
+  };
+
+  const handleOpenTrade = (sym: string, qty: number) => {
+    onActionTriggered?.();
+    const targetUrl = `/market/stocks/${sym}?trade=buy&qty=${qty}`;
+    if (typeof window !== "undefined") {
+      if (window.location.pathname.startsWith(`/market/stocks/${sym}`)) {
+        const url = new URL(window.location.href);
+        url.searchParams.set("trade", "buy");
+        url.searchParams.set("qty", String(qty));
+        window.history.pushState({}, "", url.toString());
+        window.dispatchEvent(
+          new CustomEvent("open-stock-trade", {
+            detail: { side: "buy", quantity: qty },
+          })
+        );
+      } else {
+        router.push(targetUrl);
+      }
+    }
+  };
+
+  const handleOpenModal = (sym: string, modalType: string) => {
+    onActionTriggered?.();
+    const targetUrl = `/market/stocks/${sym}?modal=${modalType}`;
+    if (typeof window !== "undefined") {
+      if (window.location.pathname.startsWith(`/market/stocks/${sym}`)) {
+        const url = new URL(window.location.href);
+        url.searchParams.set("modal", modalType);
+        window.history.pushState({}, "", url.toString());
+        window.dispatchEvent(new CustomEvent("open-dca-comparator-modal"));
+      } else {
+        router.push(targetUrl);
+      }
+    }
+  };
 
   return (
     <div className="flex flex-wrap items-center gap-2 mt-3 pt-2">
@@ -22,14 +66,14 @@ export function SuggestedActionsWidget({
       {actions.map((act, idx) => {
         if (act.action_type === "NAVIGATE" && act.url) {
           return (
-            <Link
+            <button
               key={idx}
-              href={act.url}
-              onClick={() => onActionTriggered?.()}
-              className="inline-flex items-center px-3 py-1.5 rounded-xl bg-slate-900 border border-slate-700/80 hover:border-sky-500 hover:bg-slate-800 text-xs font-semibold text-sky-300 hover:text-white transition shadow-sm active:scale-95"
+              type="button"
+              onClick={() => handleNavigate(act.url!)}
+              className="inline-flex items-center px-3 py-1.5 rounded-xl bg-slate-900 border border-slate-700/80 hover:border-sky-500 hover:bg-slate-800 text-xs font-semibold text-sky-300 hover:text-white transition shadow-sm active:scale-95 cursor-pointer"
             >
               <span>{act.label}</span>
-            </Link>
+            </button>
           );
         }
 
@@ -39,7 +83,7 @@ export function SuggestedActionsWidget({
               key={idx}
               type="button"
               onClick={() => onSendPrompt?.(act.prompt!)}
-              className="inline-flex items-center px-3 py-1.5 rounded-xl bg-slate-900 border border-teal-800/80 hover:border-teal-400 hover:bg-teal-950/40 text-xs font-semibold text-teal-300 hover:text-white transition shadow-sm active:scale-95"
+              className="inline-flex items-center px-3 py-1.5 rounded-xl bg-slate-900 border border-teal-800/80 hover:border-teal-400 hover:bg-teal-950/40 text-xs font-semibold text-teal-300 hover:text-white transition shadow-sm active:scale-95 cursor-pointer"
             >
               <span>{act.label}</span>
             </button>
@@ -47,28 +91,32 @@ export function SuggestedActionsWidget({
         }
 
         if (act.action_type === "TRADE_ORDER") {
+          const sym = act.symbol || "HPG";
+          const qty = act.quantity || 1000;
           return (
-            <Link
+            <button
               key={idx}
-              href={`/market/stocks/${act.symbol || "HPG"}`}
-              onClick={() => onActionTriggered?.()}
-              className="inline-flex items-center px-3 py-1.5 rounded-xl bg-emerald-950/60 border border-emerald-700/80 hover:border-emerald-400 hover:bg-emerald-900/60 text-xs font-semibold text-emerald-300 hover:text-white transition shadow-sm active:scale-95"
+              type="button"
+              onClick={() => handleOpenTrade(sym, qty)}
+              className="inline-flex items-center px-3 py-1.5 rounded-xl bg-emerald-950/60 border border-emerald-700/80 hover:border-emerald-400 hover:bg-emerald-900/60 text-xs font-semibold text-emerald-300 hover:text-white transition shadow-sm active:scale-95 cursor-pointer"
             >
               <span>{act.label}</span>
-            </Link>
+            </button>
           );
         }
 
         if (act.action_type === "OPEN_MODAL") {
+          const sym = act.symbol || "HPG";
+          const modalType = act.modal_type || "comparator";
           return (
-            <Link
+            <button
               key={idx}
-              href={`/market/stocks/${act.symbol || "HPG"}?modal=${act.modal_type || "comparator"}`}
-              onClick={() => onActionTriggered?.()}
-              className="inline-flex items-center px-3 py-1.5 rounded-xl bg-slate-900 border border-amber-800/80 hover:border-amber-400 hover:bg-amber-950/40 text-xs font-semibold text-amber-300 hover:text-white transition shadow-sm active:scale-95"
+              type="button"
+              onClick={() => handleOpenModal(sym, modalType)}
+              className="inline-flex items-center px-3 py-1.5 rounded-xl bg-slate-900 border border-amber-800/80 hover:border-amber-400 hover:bg-amber-950/40 text-xs font-semibold text-amber-300 hover:text-white transition shadow-sm active:scale-95 cursor-pointer"
             >
               <span>{act.label}</span>
-            </Link>
+            </button>
           );
         }
 
