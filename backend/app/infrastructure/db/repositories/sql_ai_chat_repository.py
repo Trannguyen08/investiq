@@ -158,3 +158,4 @@ class SqlAiChatRepository:
                 (conversation_id, limit),
             ).fetchall()
             return [dict(r) for r in rows]
+

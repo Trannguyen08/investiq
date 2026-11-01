@@ -61,3 +61,4 @@ async def test_ai_financial_service_forensics() -> None:
     result = await ai_service.process_chat("Kiểm tra rủi ro bẫy kế toán BCTC của HPG")
     widget_types = [w["type"] for w in result["widgets"]]
     assert "forensic_warning" in widget_types
+

@@ -21,3 +21,4 @@ CREATE TABLE IF NOT EXISTS ai_messages (
 
 CREATE INDEX IF NOT EXISTS idx_ai_messages_conv_created
     ON ai_messages (conversation_id, created_at ASC);
+

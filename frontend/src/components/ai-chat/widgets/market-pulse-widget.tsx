@@ -9,8 +9,7 @@ export function MarketPulseWidget({ data }: { data: MarketPulseWidgetData }) {
   return (
     <div className="w-full max-w-xl bg-slate-900/95 border border-slate-800 rounded-2xl p-4 sm:p-5 shadow-2xl my-3 text-slate-200">
       <div className="flex items-center justify-between border-b border-slate-800 pb-3 mb-3">
-        <div className="flex items-center gap-2">
-          <span className="text-xl">🌐</span>
+        <div>
           <h4 className="text-sm sm:text-base font-bold text-white m-0">Nhịp đập thị trường toàn sàn</h4>
         </div>
         <div className="flex items-center gap-2">
@@ -47,3 +46,4 @@ export function MarketPulseWidget({ data }: { data: MarketPulseWidgetData }) {
     </div>
   );
 }
+

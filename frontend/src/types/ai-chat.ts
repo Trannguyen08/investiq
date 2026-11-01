@@ -98,3 +98,4 @@ export type AiChatResponse = {
   conversation_id: string;
   message: AiMessage;
 };
+

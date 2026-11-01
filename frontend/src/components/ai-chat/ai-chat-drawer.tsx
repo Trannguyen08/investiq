@@ -7,13 +7,16 @@ import type { AiMessage } from "@/types/ai-chat";
 import { sendChatMessage } from "@/lib/ai-chat-api";
 import { AiChatBubble } from "./ai-chat-bubble";
 
+const STORAGE_KEY = "investiq_ai_session";
+
 const DEFAULT_WELCOME: AiMessage = {
   id: "welcome-msg",
   role: "assistant",
   content:
-    "Xin chào! Tôi là **InvestIQ Assistant** — Trợ lý tài chính và cố vấn đầu tư thông minh được kết nối trực tiếp với dữ liệu thị trường Việt Nam.\n\nBạn có thể hỏi tôi về bất kỳ mã cổ phiếu nào, yêu cầu so sánh đa tài sản, hoặc rà soát cờ đỏ BCTC!",
+    "Xin chào, tôi là InvestIQ Assistant — Trợ lý phân tích tài chính và hỗ trợ đầu tư trực tiếp.\n\n" +
+    "Bạn có thể hỏi tôi về bất kỳ mã cổ phiếu nào trên 3 sàn HOSE, HNX, UPCoM, yêu cầu so sánh đa tài sản hoặc rà soát cờ đỏ BCTC.",
   suggested_actions: [
-    { label: "Phân tích cổ phiếu HPG", action_type: "SEND_PROMPT", prompt: "Phân tích nhanh HPG" },
+    { label: "Phân tích cổ phiếu HPG", action_type: "SEND_PROMPT", prompt: "Phân tích HPG" },
     { label: "So sánh VCB và MBB", action_type: "SEND_PROMPT", prompt: "So sánh VCB và MBB" },
     { label: "Kiểm tra rủi ro BCTC NVL", action_type: "SEND_PROMPT", prompt: "Kiểm tra rủi ro BCTC NVL" },
     { label: "Nhịp đập thị trường hôm nay", action_type: "SEND_PROMPT", prompt: "Thị trường hôm nay thế nào?" },
@@ -24,12 +27,45 @@ const DEFAULT_WELCOME: AiMessage = {
 export function AiChatDrawer() {
   const pathname = usePathname();
   const [isOpen, setIsOpen] = useState(false);
+  const [isMaximized, setIsMaximized] = useState(false);
   const [input, setInput] = useState("");
   const [messages, setMessages] = useState<AiMessage[]>([DEFAULT_WELCOME]);
   const [conversationId, setConversationId] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(false);
 
   const messagesEndRef = useRef<HTMLDivElement | null>(null);
+
+  // Restore session from sessionStorage on mount
+  useEffect(() => {
+    try {
+      const saved = sessionStorage.getItem(STORAGE_KEY);
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        if (parsed.messages && parsed.messages.length > 0) {
+          setMessages(parsed.messages);
+        }
+        if (parsed.conversationId) {
+          setConversationId(parsed.conversationId);
+        }
+      }
+    } catch {
+      // Ignore sessionStorage read errors
+    }
+  }, []);
+
+  // Save session to sessionStorage whenever messages change
+  useEffect(() => {
+    if (messages.length > 1) {
+      try {
+        sessionStorage.setItem(
+          STORAGE_KEY,
+          JSON.stringify({ conversationId, messages })
+        );
+      } catch {
+        // Ignore sessionStorage write errors
+      }
+    }
+  }, [messages, conversationId]);
 
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -39,7 +75,7 @@ export function AiChatDrawer() {
     if (isOpen) {
       scrollToBottom();
     }
-  }, [messages, isOpen]);
+  }, [messages, isOpen, isMaximized]);
 
   const handleSend = async (textToSend?: string) => {
     const text = (textToSend || input).trim();
@@ -66,7 +102,7 @@ export function AiChatDrawer() {
       const errorMsg: AiMessage = {
         id: `err-${Date.now()}`,
         role: "assistant",
-        content: `⚠️ ${(err as Error)?.message || "Có lỗi xảy ra khi kết nối trợ lý AI. Vui lòng thử lại."}`,
+        content: (err as Error)?.message || "Có lỗi xảy ra khi kết nối trợ lý AI. Vui lòng thử lại sau.",
         created_at: new Date().toISOString(),
       };
       setMessages((prev) => [...prev, errorMsg]);
@@ -93,46 +129,67 @@ export function AiChatDrawer() {
         type="button"
         onClick={() => setIsOpen(!isOpen)}
         aria-label="Mở Trợ lý AI InvestIQ"
-        className="fixed bottom-6 right-6 z-50 flex items-center gap-2.5 px-4 py-3 bg-gradient-to-r from-sky-600 to-teal-500 hover:from-sky-500 hover:to-teal-400 text-white font-bold rounded-full shadow-[0_0_20px_rgba(56,189,248,0.4)] hover:shadow-[0_0_30px_rgba(56,189,248,0.6)] transition-all transform hover:-translate-y-1 group"
+        className="fixed bottom-6 right-6 z-50 flex items-center gap-2 px-4 py-3 bg-gradient-to-r from-sky-600 to-teal-600 hover:from-sky-500 hover:to-teal-500 text-white font-bold rounded-full shadow-[0_0_20px_rgba(56,189,248,0.35)] hover:shadow-[0_0_30px_rgba(56,189,248,0.55)] transition-all transform hover:-translate-y-0.5 group"
       >
-        <span className="text-xl animate-pulse">🤖</span>
-        <span className="text-xs sm:text-sm font-extrabold tracking-wide hidden sm:inline">
-          {isOpen ? "Thu nhỏ AI" : "InvestIQ AI"}
+        <span className="w-6 h-6 rounded-lg bg-white/20 text-white flex items-center justify-center text-xs font-black tracking-tight">
+          AI
+        </span>
+        <span className="text-xs sm:text-sm font-bold tracking-wide hidden sm:inline">
+          {isOpen ? "Thu gọn" : "Trợ lý AI"}
         </span>
         <span className="w-2 h-2 rounded-full bg-emerald-400 shadow-[0_0_8px_rgba(52,211,153,0.8)] inline-block" />
       </button>
 
       {/* Chat Popover Window */}
       {isOpen && (
-        <div className="fixed bottom-20 right-4 sm:right-6 z-50 w-[calc(100vw-2rem)] sm:w-[460px] h-[600px] max-h-[82vh] bg-slate-950/95 border border-slate-800 rounded-3xl shadow-2xl flex flex-col overflow-hidden backdrop-blur-xl animate-in fade-in slide-in-from-bottom-5 duration-200">
+        <div
+          className={`fixed z-50 bg-slate-950/95 border border-slate-800 rounded-3xl shadow-2xl flex flex-col overflow-hidden backdrop-blur-xl animate-in fade-in duration-200 ${
+            isMaximized
+              ? "inset-3 sm:inset-8 w-auto h-auto max-h-none"
+              : "bottom-20 right-4 sm:right-6 w-[calc(100vw-2rem)] sm:w-[480px] h-[620px] max-h-[82vh]"
+          }`}
+        >
           {/* Header */}
-          <div className="flex items-center justify-between px-4 py-3.5 bg-slate-900/90 border-b border-slate-800 shrink-0">
+          <div className="flex items-center justify-between px-4 py-3 bg-slate-900/90 border-b border-slate-800 shrink-0">
             <div className="flex items-center gap-2.5">
-              <div className="w-8 h-8 rounded-full bg-gradient-to-tr from-sky-500 to-teal-400 flex items-center justify-center text-white text-base font-black shadow-md">
-                🤖
+              <div className="w-7 h-7 rounded-lg bg-gradient-to-tr from-sky-500 to-teal-400 flex items-center justify-center text-slate-950 text-xs font-black shadow-md">
+                AI
               </div>
               <div>
-                <div className="flex items-center gap-1.5">
-                  <h3 className="text-sm font-bold text-white m-0">InvestIQ AI Assistant</h3>
+                <div className="flex items-center gap-2">
+                  <h3 className="text-sm font-bold text-white m-0">InvestIQ Assistant</h3>
                   <span className="w-2 h-2 rounded-full bg-emerald-400 inline-block" />
                 </div>
-                <span className="text-[11px] text-slate-400 block">Cố vấn tài chính &amp; phân tích dữ liệu</span>
+                <span className="text-[11px] text-slate-400 block">Cố vấn phân tích định lượng trực tiếp</span>
               </div>
             </div>
 
-            <div className="flex items-center gap-1">
-              <Link
-                href="/ai-assistant"
-                title="Mở rộng toàn màn hình"
-                className="w-8 h-8 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800 flex items-center justify-center transition text-sm"
+            <div className="flex items-center gap-1.5">
+              {/* Maximize / Restore Toggle */}
+              <button
+                type="button"
+                onClick={() => setIsMaximized(!isMaximized)}
+                title={isMaximized ? "Thu nhỏ cửa sổ" : "Phóng to toàn màn hình"}
+                className="px-2 py-1 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800 transition text-xs font-semibold"
               >
-                ⤢
+                {isMaximized ? "Thu nhỏ" : "Phóng to"}
+              </button>
+
+              {/* Full Page Link */}
+              <Link
+                href={`/ai-assistant${conversationId ? `?conv=${conversationId}` : ""}`}
+                title="Mở không gian làm việc chuyên biệt"
+                className="px-2 py-1 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800 transition text-xs font-semibold"
+              >
+                Trang AI
               </Link>
+
+              {/* Close Button */}
               <button
                 type="button"
                 onClick={() => setIsOpen(false)}
-                title="Đóng cửa sổ chat"
-                className="w-8 h-8 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800 flex items-center justify-center transition text-lg"
+                title="Đóng cửa sổ"
+                className="w-7 h-7 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800 flex items-center justify-center transition text-sm"
               >
                 ✕
               </button>
@@ -146,9 +203,9 @@ export function AiChatDrawer() {
             ))}
 
             {isLoading && (
-              <div className="flex items-center gap-2.5 text-xs text-sky-400 bg-slate-900/80 p-3 rounded-2xl border border-slate-800 w-fit animate-pulse">
-                <span className="animate-spin text-sm">⚙️</span>
-                <span>AI đang đối chiếu dữ liệu thị trường và phân tích...</span>
+              <div className="flex items-center gap-2.5 text-xs text-sky-400 bg-slate-900/80 p-3 rounded-2xl border border-slate-800 w-fit">
+                <span className="w-2 h-2 rounded-full bg-sky-400 animate-ping inline-block" />
+                <span>Đang truy xuất dữ liệu định lượng và phân tích...</span>
               </div>
             )}
             <div ref={messagesEndRef} />
@@ -161,7 +218,7 @@ export function AiChatDrawer() {
                 value={input}
                 onChange={(e) => setInput(e.target.value)}
                 onKeyDown={handleKeyDown}
-                placeholder="Hỏi về mã cổ phiếu, BCTC, nến, so sánh..."
+                placeholder="Nhập mã CP (HPG, VCB, MBB...), câu hỏi phân tích..."
                 rows={1}
                 className="flex-1 bg-transparent border-0 text-xs sm:text-sm text-slate-100 placeholder-slate-500 focus:outline-none resize-none max-h-24 py-1"
               />
@@ -170,9 +227,9 @@ export function AiChatDrawer() {
                 onClick={() => handleSend()}
                 disabled={!input.trim() || isLoading}
                 aria-label="Gửi tin nhắn"
-                className="w-8 h-8 rounded-xl bg-sky-500 hover:bg-sky-400 disabled:opacity-40 disabled:hover:bg-sky-500 text-white flex items-center justify-center transition shrink-0 shadow-md"
+                className="px-3 py-1.5 rounded-xl bg-sky-500 hover:bg-sky-400 disabled:opacity-40 disabled:hover:bg-sky-500 text-white font-bold text-xs flex items-center justify-center transition shrink-0 shadow-md"
               >
-                ➔
+                Gửi
               </button>
             </div>
             <div className="flex items-center justify-between text-[10px] text-slate-500 mt-1.5 px-1">

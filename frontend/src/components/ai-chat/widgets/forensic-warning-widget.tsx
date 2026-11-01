@@ -9,7 +9,7 @@ export function ForensicWarningWidget({ data }: { data: ForensicWarningWidgetDat
     zone === "safe"
       ? "Vùng An toàn (Rủi ro phá sản thấp)"
       : zone === "grey"
-        ? "Vùng Xám / Thận trọng (Cần theo dõi thêm)"
+        ? "Vùng Thận trọng (Cần theo dõi thêm)"
         : "Vùng Báo động (Áp lực tài chính cao)";
 
   const zoneColor =
@@ -25,14 +25,11 @@ export function ForensicWarningWidget({ data }: { data: ForensicWarningWidgetDat
   return (
     <div className="w-full max-w-xl bg-slate-900/95 border border-slate-800 rounded-2xl p-4 sm:p-5 shadow-2xl my-3 text-slate-200">
       <div className="flex items-center justify-between border-b border-slate-800 pb-3 mb-4">
-        <div className="flex items-center gap-2">
-          <span className="text-xl">🩺</span>
-          <div>
-            <h4 className="text-sm sm:text-base font-bold text-white m-0">
-              Giám định sức khỏe tài chính &amp; BCTC: {symbol}
-            </h4>
-            <span className="text-[11px] text-slate-400">Mô hình Altman Z-Score &amp; Kiểm toán Forensics</span>
-          </div>
+        <div>
+          <h4 className="text-sm sm:text-base font-bold text-white m-0">
+            Giám định sức khỏe tài chính và BCTC: {symbol}
+          </h4>
+          <span className="text-[11px] text-slate-400">Mô hình Altman Z-Score và Kiểm toán Forensics</span>
         </div>
         <div className={`px-2.5 py-1 rounded-full text-xs font-bold border ${zoneColor}`}>
           Z-Score: {altman_z_score.toFixed(2)}
@@ -50,19 +47,18 @@ export function ForensicWarningWidget({ data }: { data: ForensicWarningWidgetDat
           <div className="w-[25%] bg-amber-500/80" title="Thận trọng (1.8 - 2.9)" />
           <div className="w-[35%] bg-emerald-500/80" title="An toàn (>2.9)" />
         </div>
-        <div className="flex justify-between text-[10px] text-slate-400 mt-1 font-mono">
-          <span>0 (Nguy hiểm)</span>
-          <span>1.81</span>
-          <span>2.99</span>
-          <span>4.5+ (Rất tốt)</span>
+        <div className="flex justify-between text-[10px] text-slate-500 mt-1 font-mono">
+          <span>0.0 (Báo động)</span>
+          <span>1.8</span>
+          <span>2.9</span>
+          <span>4.5+ (An toàn)</span>
         </div>
       </div>
 
       {/* Red Flags List */}
       <div>
-        <h5 className="text-xs font-bold text-slate-300 mb-2 flex items-center gap-1.5">
-          <span>🚩</span>
-          <span>Chi tiết cờ đỏ kế toán cần lưu ý:</span>
+        <h5 className="text-xs font-bold text-slate-300 mb-2">
+          Chi tiết cờ đỏ kế toán cần lưu ý:
         </h5>
         <div className="space-y-2">
           {flags.map((f, idx) => (
@@ -76,9 +72,15 @@ export function ForensicWarningWidget({ data }: { data: ForensicWarningWidgetDat
                     : "bg-slate-950/60 border-slate-800 text-slate-300"
               }`}
             >
-              <span className="text-sm mt-0.5 shrink-0">
-                {f.level === "danger" ? "🚨" : f.level === "warning" ? "⚠️" : "ℹ️"}
-              </span>
+              <span
+                className={`w-2 h-2 rounded-full mt-1 shrink-0 ${
+                  f.level === "danger"
+                    ? "bg-rose-500 shadow-[0_0_8px_rgba(244,63,94,0.6)]"
+                    : f.level === "warning"
+                      ? "bg-amber-400 shadow-[0_0_8px_rgba(251,191,36,0.6)]"
+                      : "bg-sky-400"
+                }`}
+              />
               <div>
                 <strong className="font-bold block text-slate-100">{f.title}</strong>
                 <p className="text-[11px] text-slate-400 m-0 mt-0.5 leading-relaxed">{f.detail}</p>

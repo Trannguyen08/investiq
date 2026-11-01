@@ -63,3 +63,4 @@ export function POST(request: Request, context: Context) {
 export function DELETE(request: Request, context: Context) {
   return proxy(request, context, "DELETE");
 }
+

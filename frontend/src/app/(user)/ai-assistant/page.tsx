@@ -9,8 +9,9 @@ export const metadata: Metadata = {
 
 export default function AiAssistantPage() {
   return (
-    <main id="main-content" className="w-full min-h-[calc(100vh-4rem)] bg-[#06111f] text-slate-100 flex flex-col">
+    <main id="main-content" className="market-page ai-assistant-page w-full min-h-[calc(100vh-4rem)] bg-[#06111f] text-slate-100 flex flex-col">
       <AiAssistantWorkspace />
     </main>
   );
 }
+

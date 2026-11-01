@@ -105,3 +105,4 @@ class AiChatResponse(BaseModel):
 
 class CreateConversationRequest(BaseModel):
     title: str = Field(default="Hội thoại mới", max_length=200)
+

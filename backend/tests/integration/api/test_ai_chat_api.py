@@ -36,3 +36,4 @@ async def test_ai_chat_endpoint_general_prompt() -> None:
         assert response.status_code == 200
         body = response.json()
         assert "InvestIQ" in body["message"]["content"]
+

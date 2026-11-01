@@ -1673,7 +1673,7 @@ button:disabled { cursor: not-allowed; opacity: 0.55; }
   .market-loading { grid-template-columns: repeat(2, 1fr); padding-top: 3rem; }
 }
 
-/* Dark navy system theme for market, community, paper-trading, and news */
+/* Dark navy system theme for market, community, paper-trading, news, and ai-assistant */
 html:has(.paper-page),
 html:has(.market-page),
 html:has(.market-home),
@@ -1683,6 +1683,7 @@ html:has(.news-page),
 html:has(.article-page),
 html:has(.candlestick-prediction-page),
 html:has(.candlestick-arena),
+html:has(.ai-assistant-page),
 body:has(.paper-page),
 body:has(.market-page),
 body:has(.market-home),
@@ -1691,7 +1692,8 @@ body:has(.community-page),
 body:has(.news-page),
 body:has(.article-page),
 body:has(.candlestick-prediction-page),
-body:has(.candlestick-arena) {
+body:has(.candlestick-arena),
+body:has(.ai-assistant-page) {
   background: #06111f !important;
   color: #d7e5f2;
   min-height: 100vh;
@@ -1705,7 +1707,8 @@ body:has(.community-page) .site-header,
 body:has(.news-page) .site-header,
 body:has(.article-page) .site-header,
 body:has(.candlestick-prediction-page) .site-header,
-body:has(.candlestick-arena) .site-header {
+body:has(.candlestick-arena) .site-header,
+body:has(.ai-assistant-page) .site-header {
   border-color: #18324a;
   background: rgb(6 17 31 / 94%);
 }
@@ -1718,7 +1721,8 @@ body:has(.community-page) .nav-link,
 body:has(.news-page) .nav-link,
 body:has(.article-page) .nav-link,
 body:has(.candlestick-prediction-page) .nav-link,
-body:has(.candlestick-arena) .nav-link {
+body:has(.candlestick-arena) .nav-link,
+body:has(.ai-assistant-page) .nav-link {
   color: #9eb2c8;
 }
 
@@ -1731,6 +1735,7 @@ body:has(.news-page) .nav-link:hover,
 body:has(.article-page) .nav-link:hover,
 body:has(.candlestick-prediction-page) .nav-link:hover,
 body:has(.candlestick-arena) .nav-link:hover,
+body:has(.ai-assistant-page) .nav-link:hover,
 body:has(.paper-page) .nav-link.active,
 body:has(.market-page) .nav-link.active,
 body:has(.market-home) .nav-link.active,
@@ -1739,7 +1744,8 @@ body:has(.community-page) .nav-link.active,
 body:has(.news-page) .nav-link.active,
 body:has(.article-page) .nav-link.active,
 body:has(.candlestick-prediction-page) .nav-link.active,
-body:has(.candlestick-arena) .nav-link.active {
+body:has(.candlestick-arena) .nav-link.active,
+body:has(.ai-assistant-page) .nav-link.active {
   color: #f3f8fd;
   background: #10273d;
 }
@@ -1753,6 +1759,7 @@ body:has(.news-page) .account-trigger,
 body:has(.article-page) .account-trigger,
 body:has(.candlestick-prediction-page) .account-trigger,
 body:has(.candlestick-arena) .account-trigger,
+body:has(.ai-assistant-page) .account-trigger,
 body:has(.paper-page) .account-link,
 body:has(.market-page) .account-link,
 body:has(.market-home) .account-link,
@@ -1761,10 +1768,18 @@ body:has(.community-page) .account-link,
 body:has(.news-page) .account-link,
 body:has(.article-page) .account-link,
 body:has(.candlestick-prediction-page) .account-link,
-body:has(.candlestick-arena) .account-link {
+body:has(.candlestick-arena) .account-link,
+body:has(.ai-assistant-page) .account-link {
   border-color: #24425d;
   color: #d9e8f5;
   background: #0b1c2e;
+}
+
+body:has(.ai-assistant-page) .shell {
+  width: 100% !important;
+  max-width: 100% !important;
+  margin: 0 !important;
+  padding: 0 !important;
 }
 
 body:has(.paper-page) .header-search,

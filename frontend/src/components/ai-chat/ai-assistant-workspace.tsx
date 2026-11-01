@@ -10,15 +10,17 @@ import {
 } from "@/lib/ai-chat-api";
 import { AiChatBubble } from "./ai-chat-bubble";
 
+const STORAGE_KEY = "investiq_ai_session";
+
 const DEFAULT_WELCOME: AiMessage = {
   id: "workspace-welcome",
   role: "assistant",
   content:
-    "Chào mừng bạn đến với **InvestIQ Financial Assistant** — Trợ lý phân tích tài chính toàn diện.\n\n" +
+    "Chào mừng bạn đến với InvestIQ Financial Assistant — Trợ lý phân tích tài chính toàn diện.\n\n" +
     "Tôi được trang bị hệ thống phân tích định lượng kết nối trực tiếp với 1.396 mã chứng khoán, dữ liệu BCTC và biểu đồ kỹ thuật. " +
     "Bạn có thể bắt đầu bằng một câu hỏi cụ thể hoặc chọn một gợi ý bên dưới:",
   suggested_actions: [
-    { label: "Phân tích toàn diện HPG", action_type: "SEND_PROMPT", prompt: "Phân tích toàn diện HPG" },
+    { label: "Phân tích toàn diện HPG", action_type: "SEND_PROMPT", prompt: "Phân tích HPG" },
     { label: "So sánh VCB và MBB", action_type: "SEND_PROMPT", prompt: "So sánh VCB và MBB" },
     { label: "Kiểm tra rủi ro BCTC NVL", action_type: "SEND_PROMPT", prompt: "Kiểm tra rủi ro BCTC NVL" },
     { label: "Nhịp đập VN-Index hôm nay", action_type: "SEND_PROMPT", prompt: "Thị trường hôm nay thế nào?" },
@@ -37,12 +39,42 @@ export function AiAssistantWorkspace() {
 
   const messagesEndRef = useRef<HTMLDivElement | null>(null);
 
-  // Load conversations list on mount
+  // Restore messages from sessionStorage or query param on mount
   useEffect(() => {
+    try {
+      const saved = sessionStorage.getItem(STORAGE_KEY);
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        if (parsed.messages && parsed.messages.length > 0) {
+          setMessages(parsed.messages);
+        }
+        if (parsed.conversationId) {
+          setActiveConvId(parsed.conversationId);
+        }
+      }
+    } catch {
+      // Ignore storage errors
+    }
+
+    // Load server conversations list if authenticated
     fetchUserConversations().then((data) => {
       setConversations(data);
     });
   }, []);
+
+  // Save to sessionStorage when messages change
+  useEffect(() => {
+    if (messages.length > 1) {
+      try {
+        sessionStorage.setItem(
+          STORAGE_KEY,
+          JSON.stringify({ conversationId: activeConvId, messages })
+        );
+      } catch {
+        // Ignore storage errors
+      }
+    }
+  }, [messages, activeConvId]);
 
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -73,6 +105,11 @@ export function AiAssistantWorkspace() {
   const handleNewChat = () => {
     setActiveConvId(null);
     setMessages([DEFAULT_WELCOME]);
+    try {
+      sessionStorage.removeItem(STORAGE_KEY);
+    } catch {
+      // Ignore
+    }
   };
 
   const handleDeleteConversation = async (e: React.MouseEvent, convId: string) => {
@@ -106,7 +143,6 @@ export function AiAssistantWorkspace() {
       const res = await sendChatMessage(text, activeConvId);
       if (res.conversation_id && res.conversation_id !== activeConvId) {
         setActiveConvId(res.conversation_id);
-        // Refresh conversations list
         fetchUserConversations().then(setConversations);
       }
       setMessages((prev) => [...prev, res.message]);
@@ -114,7 +150,7 @@ export function AiAssistantWorkspace() {
       const errorMsg: AiMessage = {
         id: `err-${Date.now()}`,
         role: "assistant",
-        content: `⚠️ ${(err as Error)?.message || "Có lỗi xảy ra khi kết nối trợ lý AI. Vui lòng thử lại."}`,
+        content: (err as Error)?.message || "Có lỗi xảy ra khi kết nối trợ lý AI. Vui lòng thử lại sau.",
         created_at: new Date().toISOString(),
       };
       setMessages((prev) => [...prev, errorMsg]);
@@ -131,34 +167,32 @@ export function AiAssistantWorkspace() {
   };
 
   return (
-    <div className="w-full h-[calc(100vh-5rem)] max-w-7xl mx-auto flex overflow-hidden rounded-3xl border border-slate-800 bg-slate-950/90 shadow-2xl text-slate-100 my-4">
+    <div className="w-full h-[calc(100vh-4rem)] flex overflow-hidden bg-[#06111f] text-slate-100">
       {/* Sidebar: Chat History */}
       <aside
         className={`${
-          sidebarOpen ? "w-72 sm:w-80" : "w-0 -translate-x-full"
+          sidebarOpen ? "w-64 sm:w-72" : "w-0 -translate-x-full"
         } transition-all duration-300 bg-slate-900/95 border-r border-slate-800 flex flex-col shrink-0 overflow-hidden`}
       >
         {/* Sidebar Header */}
-        <div className="p-4 border-b border-slate-800 flex items-center justify-between">
-          <div className="flex items-center gap-2">
-            <span className="text-xl">💬</span>
-            <span className="font-extrabold text-sm text-white">Lịch sử hội thoại</span>
-          </div>
+        <div className="p-3.5 border-b border-slate-800 flex items-center justify-between">
+          <span className="font-bold text-xs uppercase tracking-wider text-slate-300">
+            Lịch sử hội thoại
+          </span>
           <button
             type="button"
             onClick={handleNewChat}
-            className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-sky-500/15 hover:bg-sky-500/25 border border-sky-500/30 text-sky-300 font-bold text-xs transition shadow-sm"
+            className="px-2.5 py-1 rounded-lg bg-sky-500/15 hover:bg-sky-500/25 border border-sky-500/30 text-sky-300 font-bold text-xs transition shadow-sm"
           >
-            <span>+</span>
-            <span>Mới</span>
+            Tạo mới
           </button>
         </div>
 
         {/* Conversations List */}
-        <div className="flex-1 overflow-y-auto p-2.5 space-y-1">
+        <div className="flex-1 overflow-y-auto p-2 space-y-1">
           {conversations.length === 0 ? (
             <div className="p-4 text-center text-xs text-slate-500">
-              Chưa có phiên lưu trữ. Các phiên hỏi đáp sẽ tự động được lưu tại đây khi bạn đăng nhập!
+              Chưa có phiên lưu trữ. Các phiên hỏi đáp sẽ tự động được lưu khi bạn đăng nhập.
             </div>
           ) : (
             conversations.map((conv) => {
@@ -167,9 +201,9 @@ export function AiAssistantWorkspace() {
                 <div
                   key={conv.id}
                   onClick={() => handleSelectConversation(conv.id)}
-                  className={`group flex items-center justify-between p-3 rounded-xl cursor-pointer text-xs transition ${
+                  className={`group flex items-center justify-between p-2.5 rounded-xl cursor-pointer text-xs transition ${
                     isActive
-                      ? "bg-sky-950/60 text-white border border-sky-800/80 font-bold shadow-sm"
+                      ? "bg-sky-950/70 text-white border border-sky-800/80 font-bold shadow-sm"
                       : "text-slate-400 hover:bg-slate-800/60 hover:text-slate-200 border border-transparent"
                   }`}
                 >
@@ -183,9 +217,9 @@ export function AiAssistantWorkspace() {
                     type="button"
                     onClick={(e) => handleDeleteConversation(e, conv.id)}
                     title="Xóa cuộc trò chuyện này"
-                    className="opacity-0 group-hover:opacity-100 text-slate-500 hover:text-rose-400 p-1 rounded transition"
+                    className="opacity-0 group-hover:opacity-100 text-slate-400 hover:text-rose-400 px-1.5 py-0.5 rounded transition text-xs font-semibold"
                   >
-                    🗑️
+                    Xóa
                   </button>
                 </div>
               );
@@ -197,35 +231,42 @@ export function AiAssistantWorkspace() {
         <div className="p-3 border-t border-slate-800/80 bg-slate-950/50 text-[11px] text-slate-400 flex items-center justify-between">
           <span className="flex items-center gap-1.5">
             <span className="w-2 h-2 rounded-full bg-emerald-400 inline-block" />
-            <span>AI Connected</span>
+            <span>AI Trực tuyến</span>
           </span>
-          <span className="text-slate-500">InvestIQ v2.0</span>
+          <span className="text-slate-500">InvestIQ Quantitative</span>
         </div>
       </aside>
 
       {/* Main Chat Workspace */}
-      <main className="flex-1 flex flex-col h-full overflow-hidden bg-slate-950 relative">
+      <main className="flex-1 flex flex-col h-full overflow-hidden bg-[#06111f] relative">
         {/* Workspace Top Bar */}
-        <div className="px-5 py-3.5 bg-slate-900/80 border-b border-slate-800 flex items-center justify-between shrink-0">
+        <div className="px-4 sm:px-6 py-3 bg-slate-900/80 border-b border-slate-800 flex items-center justify-between shrink-0">
           <div className="flex items-center gap-3">
             <button
               type="button"
               onClick={() => setSidebarOpen(!sidebarOpen)}
-              className="p-1.5 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800 transition text-sm"
+              className="p-1.5 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800 transition text-sm font-semibold"
               title="Đóng / mở sidebar lịch sử"
             >
               ☰
             </button>
-            <div>
-              <h2 className="text-base font-extrabold text-white m-0 flex items-center gap-2">
-                <span>🤖 InvestIQ AI Financial Assistant</span>
-                <span className="text-[10px] px-2 py-0.5 rounded-full bg-emerald-500/15 text-emerald-300 border border-emerald-500/30 font-bold">
-                  Trực tuyến
-                </span>
-              </h2>
-              <p className="text-xs text-slate-400 m-0 mt-0.5">
-                Cố vấn tài chính chuyên sâu hỗ trợ phân tích cổ phiếu, BCTC, chỉ báo nến và so sánh tài sản.
-              </p>
+            <div className="flex items-center gap-2.5">
+              <div className="w-7 h-7 rounded-lg bg-gradient-to-tr from-sky-500 to-teal-400 flex items-center justify-center text-slate-950 text-xs font-black shadow-md">
+                AI
+              </div>
+              <div>
+                <div className="flex items-center gap-2">
+                  <h2 className="text-sm sm:text-base font-bold text-white m-0">
+                    InvestIQ Financial Assistant
+                  </h2>
+                  <span className="text-[10px] px-2 py-0.5 rounded-full bg-emerald-500/15 text-emerald-300 border border-emerald-500/30 font-bold">
+                    Trực tuyến
+                  </span>
+                </div>
+                <p className="text-[11px] text-slate-400 m-0 hidden sm:block">
+                  Cố vấn tài chính định lượng hỗ trợ phân tích cổ phiếu, BCTC, chỉ báo nến và so sánh tài sản.
+                </p>
+              </div>
             </div>
           </div>
         </div>
@@ -233,7 +274,7 @@ export function AiAssistantWorkspace() {
         {/* Message Stream Area */}
         <div className="flex-1 overflow-y-auto p-4 sm:p-6 space-y-4">
           {isLoadingHistory ? (
-            <div className="h-full flex items-center justify-center text-slate-400 text-sm animate-pulse">
+            <div className="h-full flex items-center justify-center text-slate-400 text-sm">
               <span>Đang tải lịch sử hội thoại...</span>
             </div>
           ) : (
@@ -243,8 +284,8 @@ export function AiAssistantWorkspace() {
           )}
 
           {isLoading && (
-            <div className="flex items-center gap-3 text-xs text-sky-400 bg-slate-900/90 p-3.5 rounded-2xl border border-slate-800 w-fit animate-pulse shadow-lg">
-              <span className="animate-spin text-base">⚙️</span>
+            <div className="flex items-center gap-2.5 text-xs text-sky-400 bg-slate-900/90 p-3 rounded-2xl border border-slate-800 w-fit shadow-lg">
+              <span className="w-2 h-2 rounded-full bg-sky-400 animate-ping inline-block" />
               <span>AI đang tra cứu dữ liệu thị trường và phân tích...</span>
             </div>
           )}
@@ -252,29 +293,29 @@ export function AiAssistantWorkspace() {
         </div>
 
         {/* Input Bar */}
-        <div className="p-4 bg-slate-900/90 border-t border-slate-800 shrink-0">
+        <div className="p-3 sm:p-4 bg-slate-900/90 border-t border-slate-800 shrink-0">
           <div className="max-w-4xl mx-auto">
-            <div className="flex items-end gap-3 bg-slate-950 border border-slate-800 focus-within:border-sky-500 rounded-2xl p-3 transition shadow-xl">
+            <div className="flex items-end gap-2 sm:gap-3 bg-slate-950 border border-slate-800 focus-within:border-sky-500 rounded-2xl p-2.5 sm:p-3 transition shadow-xl">
               <textarea
                 value={input}
                 onChange={(e) => setInput(e.target.value)}
                 onKeyDown={handleKeyDown}
-                placeholder="Nhập câu hỏi tài chính (VD: 'Đánh giá HPG', 'So sánh VCB và MBB', 'Khám BCTC NVL')..."
-                rows={2}
-                className="flex-1 bg-transparent border-0 text-sm text-slate-100 placeholder-slate-500 focus:outline-none resize-none max-h-32 py-1 leading-relaxed"
+                placeholder="Nhập mã CP hoặc câu hỏi (VD: 'Đánh giá HPG', 'So sánh VCB và MBB', 'Khám BCTC NVL')..."
+                rows={1}
+                className="flex-1 bg-transparent border-0 text-xs sm:text-sm text-slate-100 placeholder-slate-500 focus:outline-none resize-none max-h-32 py-1 leading-relaxed"
               />
               <button
                 type="button"
                 onClick={() => handleSend()}
                 disabled={!input.trim() || isLoading}
-                className="px-5 py-2.5 rounded-xl bg-gradient-to-r from-sky-500 to-teal-500 hover:from-sky-400 hover:to-teal-400 disabled:opacity-40 disabled:hover:from-sky-500 disabled:hover:to-teal-500 text-white font-extrabold text-xs transition shrink-0 shadow-lg"
+                className="px-4 py-2 rounded-xl bg-gradient-to-r from-sky-500 to-teal-500 hover:from-sky-400 hover:to-teal-400 disabled:opacity-40 disabled:hover:from-sky-500 disabled:hover:to-teal-500 text-white font-extrabold text-xs transition shrink-0 shadow-lg"
               >
-                Gửi ➔
+                Gửi
               </button>
             </div>
             <div className="flex items-center justify-between text-[11px] text-slate-400 mt-2 px-2 font-medium">
-              <span>💡 Nhấn Enter để gửi · Shift+Enter để xuống dòng</span>
-              <span>Dữ liệu thời gian thực được bảo chứng bởi InvestIQ Data Engine</span>
+              <span>Nhấn Enter để gửi · Shift+Enter để xuống dòng</span>
+              <span>Dữ liệu thời gian thực InvestIQ</span>
             </div>
           </div>
         </div>

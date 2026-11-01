@@ -7,8 +7,7 @@ export function StockComparisonWidget({ data }: { data: StockComparisonWidgetDat
 
   return (
     <div className="w-full max-w-xl bg-slate-900/95 border border-slate-800 rounded-2xl p-4 sm:p-5 shadow-2xl my-3 text-slate-200">
-      <div className="flex items-center gap-2 border-b border-slate-800 pb-3 mb-4">
-        <span className="text-lg">⚖️</span>
+      <div className="border-b border-slate-800 pb-3 mb-4">
         <h4 className="text-sm sm:text-base font-bold text-white m-0">{title}</h4>
       </div>
 
@@ -111,10 +110,11 @@ export function StockComparisonWidget({ data }: { data: StockComparisonWidgetDat
 
       {summary_verdict && (
         <div className="p-3 bg-sky-950/30 border border-sky-800/40 rounded-xl text-xs text-sky-200">
-          <span className="font-bold text-sky-400 block mb-0.5">📌 Đánh giá của AI:</span>
+          <span className="font-bold text-sky-400 block mb-0.5">Nhận định định lượng:</span>
           {summary_verdict}
         </div>
       )}
     </div>
   );
 }
+

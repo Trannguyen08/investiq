@@ -178,17 +178,17 @@ class AiFinancialService:
             roe2 = float(_get_val(inst2, "roe_percent", 16.5) or 16.5)
 
             verdict_text = (
-                f"**{t1}** có lợi thế định giá P/E hấp dẫn hơn ({pe1:.1f}x so với {pe2:.1f}x của {t2}), "
-                f"trong khi **{t2}** ghi nhận tỷ suất sinh lời ROE {roe2:.1f}% và thanh khoản giao dịch mạnh mẽ. "
+                f"{t1} có lợi thế định giá P/E hấp dẫn hơn ({pe1:.1f}x so với {pe2:.1f}x của {t2}), "
+                f"trong khi {t2} ghi nhận tỷ suất sinh lời ROE {roe2:.1f}% và thanh khoản giao dịch mạnh mẽ. "
                 f"Tùy vào khẩu vị (giá trị vs tăng trưởng) để bạn phân bổ tỷ trọng phù hợp."
             )
 
-            text_parts.append(f"### ⚖️ Đối chiếu so sánh: {t1} vs {t2}")
+            text_parts.append(f"Đối chiếu so sánh: {t1} vs {t2}")
             text_parts.append(verdict_text)
             text_parts.append(
-                f"- **{t1} ({name1})**: Giá hiện tại {p1:,.0f} đ ({change1:+.2f}%), "
+                f"- {t1} ({name1}): Giá hiện tại {p1:,.0f} đ ({change1:+.2f}%), "
                 f"P/E {pe1:.1f}x, P/B {pb1:.1f}x, ROE {roe1:.1f}%. Vị thế cơ bản ổn định, thuộc rổ ngành {sector1}.\n"
-                f"- **{t2} ({name2})**: Giá hiện tại {p2:,.0f} đ ({change2:+.2f}%), "
+                f"- {t2} ({name2}): Giá hiện tại {p2:,.0f} đ ({change2:+.2f}%), "
                 f"P/E {pe2:.1f}x, P/B {pb2:.1f}x, ROE {roe2:.1f}%. Sức bật thị giá và sự quan tâm của dòng tiền tốt."
             )
 
@@ -275,12 +275,12 @@ class AiFinancialService:
 
             verdict = "TÍCH CỰC" if (val_score + fin_score + tech_score) / 3 >= 70 else "THEO DÕI"
 
-            text_parts.append(f"### 📊 Báo cáo phân tích chuyên sâu: **{sym}** - {name}")
+            text_parts.append(f"Báo cáo phân tích chuyên sâu: {sym} - {name}")
             text_parts.append(
-                f"**Thị giá:** {price:,.0f} đ ({change_p:+.2f}%) | **Sàn:** {exchange} | **Ngành:** {sector}\n"
-                f"**Định giá:** P/E hiện tại **{pe:.1f}x**, P/B **{pb:.1f}x**, ROE **{roe:.1f}%**.\n"
-                f"**Tín hiệu kỹ thuật:** RSI (14) đang ở mức **{rsi:.1f}**, thị giá {'nằm trên' if price >= ma20 else 'áp sát'} MA20 ({ma20:,.0f} đ). "
-                f"Vùng hỗ trợ cứng quanh **{key_support:,.0f} đ**, kháng cự gần tại **{key_resistance:,.0f} đ**."
+                f"Thị giá: {price:,.0f} đ ({change_p:+.2f}%) | Sàn: {exchange} | Ngành: {sector}\n"
+                f"Định giá: P/E hiện tại {pe:.1f}x, P/B {pb:.1f}x, ROE {roe:.1f}%.\n"
+                f"Tín hiệu kỹ thuật: RSI (14) đang ở mức {rsi:.1f}, thị giá {'nằm trên' if price >= ma20 else 'áp sát'} MA20 ({ma20:,.0f} đ). "
+                f"Vùng hỗ trợ quanh {key_support:,.0f} đ, kháng cự gần tại {key_resistance:,.0f} đ."
             )
 
             points = [
@@ -362,12 +362,12 @@ class AiFinancialService:
                 declines = breadth.get("declines", 479)
                 matched_val = float(breadth.get("matched_value", 15000000000000)) / 1e12
 
-                text_parts.append("### 🌐 Nhịp đập thị trường chứng khoán")
+                text_parts.append("Nhịp đập thị trường chứng khoán")
                 text_parts.append(
-                    f"- **Chỉ số VN-Index**: **{vn_val:,.2f} điểm** ({vn_change:+.2f}%).\n"
-                    f"- **Độ rộng thị trường**: **{advances} mã tăng** / **{declines} mã giảm**.\n"
-                    f"- **Thanh khoản toàn sàn**: xấp xỉ **{matched_val:,.1f} nghìn tỷ đồng**.\n"
-                    f"Thị trường đang trong trạng thái tích lũy phân hóa mạnh. Dòng tiền luân chuyển giữa các nhóm ngành dẫn dắt (Ngân hàng, Thép, Bán lẻ)."
+                    f"- Chỉ số VN-Index: {vn_val:,.2f} điểm ({vn_change:+.2f}%).\n"
+                    f"- Độ rộng thị trường: {advances} mã tăng / {declines} mã giảm.\n"
+                    f"- Thanh khoản toàn sàn: xấp xỉ {matched_val:,.1f} nghìn tỷ đồng.\n"
+                    f"Thị trường đang trong trạng thái tích lũy phân hóa. Dòng tiền luân chuyển giữa các nhóm ngành dẫn dắt."
                 )
 
                 widgets.append({
@@ -393,12 +393,12 @@ class AiFinancialService:
         # Case 4: General learning / concept / external fallback
         else:
             text_parts.append(
-                "Chào bạn! Tôi là **InvestIQ Financial Assistant** — Trợ lý tài chính và cố vấn đầu tư thông minh của bạn.\n\n"
-                "Tôi có thể hỗ trợ bạn tức thì với dữ liệu trực tiếp từ hệ thống InvestIQ:\n"
-                "1. **Phân tích toàn diện mã cổ phiếu**: Đánh giá định giá P/E, P/B, ROE, sức mạnh kỹ thuật nến & RSI (Ví dụ: *'Đánh giá HPG'*, *'Phân tích VNM'*).\n"
-                "2. **So sánh đối đầu & đa tài sản**: So sánh 2 mã cổ phiếu hoặc so sánh với Vàng SJC & Ngân hàng (Ví dụ: *'Nên chọn VCB hay MBB?'*).\n"
-                "3. **Kiểm tra bẫy kế toán & Altman Z-Score**: Chẩn đoán sức khỏe BCTC và rủi ro nợ vay (Ví dụ: *'Kiểm tra rủi ro NVL'*).\n"
-                "4. **Nhịp đập thị trường**: Diễn biến VN-Index, thanh khoản, độ rộng dòng tiền."
+                "Chào bạn, tôi là InvestIQ Financial Assistant — Trợ lý phân tích tài chính và hỗ trợ đầu tư trực tiếp.\n\n"
+                "Tôi có thể hỗ trợ bạn tức thì với các công cụ định lượng từ hệ thống InvestIQ:\n"
+                "1. Phân tích toàn diện mã cổ phiếu: Đánh giá định giá P/E, P/B, ROE, sức mạnh kỹ thuật nến và RSI (Ví dụ: 'Đánh giá HPG', 'Phân tích VNM').\n"
+                "2. So sánh đối đầu đa tài sản: So sánh 2 mã cổ phiếu hoặc so sánh với Vàng SJC và Tiết kiệm ngân hàng (Ví dụ: 'So sánh VCB và MBB').\n"
+                "3. Kiểm tra rủi ro BCTC và Altman Z-Score: Chẩn đoán sức khỏe tài chính và cờ đỏ kế toán (Ví dụ: 'Kiểm tra rủi ro NVL').\n"
+                "4. Nhịp đập thị trường: Diễn biến VN-Index, thanh khoản và độ rộng dòng tiền."
             )
             if external_context:
                 text_parts.append(f"\n*{external_context}*")

@@ -1,6 +1,6 @@
 # Current Task
 
-## AI Financial Assistant Chatbox & Multi-Factor Quantitative Intelligence - 2026-11-01 (in-progress)
+## AI Financial Assistant Chatbox & Multi-Factor Quantitative Intelligence - 2026-11-01 (complete)
 - **User Request**:
   1. *Triển khai Chatbox AI*: Tập trung làm tính năng chatbox AI với các output phong phú (rich widgets), không can thiệp/áp dụng AI vào các module khác.
   2. *Chuyển nhánh Git*: Chuyển sang nhánh `feature/AI` trước khi bắt đầu code.
@@ -9,6 +9,11 @@
   5. *Ưu tiên dữ liệu hệ thống*: Tận dụng triệt để dữ liệu hiện tại của hệ thống (giá realtime, nến OHLC, chỉ số P/E, P/B, ROE, Altman Z-score, BCTC, lịch cổ tức), chỉ tìm kiếm/crawl bên ngoài khi thiếu thông tin vĩ mô.
   6. *Bắt kỹ yêu cầu & Phản hồi chuyên sâu*: Bắt chính xác ý định (intent detection), trích xuất mã cổ phiếu, cung cấp phân tích tài chính sâu bằng tiếng Việt và rich widgets tương tác.
   7. *Lưu trữ lịch sử chat*: Tự động lưu các phiên trò chuyện vào CSDL PostgreSQL (`ai_conversations`, `ai_messages`) khi người dùng đã đăng nhập.
+  8. *Fix lỗi mất kết quả khi phóng to*: Đồng bộ `sessionStorage` giữa khung chat popover (`AiChatDrawer`) và trang toàn màn hình (`AiAssistantWorkspace`), bổ sung nút phóng to trực tiếp (maximize in-place) không gián đoạn.
+  9. *Fix UI full màu nền hệ thống*: Áp dụng dark theme `#06111f` cho `.ai-assistant-page`, loại bỏ viền trắng của `.shell` (`width: 100% !important; padding: 0 !important;`).
+  10. *Style text response tinh gọn, bỏ toàn bộ icon & dấu `**`*:
+      - Backend & Frontend: Loại bỏ 100% các icon/emoji đứng trước text (`🤖`, `📊`, `⚖️`, `🌐`, `🩺`, `🚩`, `💡`, `📌`, `🗑️`).
+      - Loại bỏ toàn bộ ký tự `**` thô kệch, format typography chuẩn mực (tiêu đề phân tách, gạch đầu dòng thẩm mỹ, highlight thông số tài chính).
 - **Key Changes Implemented**:
   1. **Git Branch & Database Migration**:
      - Đã tạo và chuyển sang nhánh `feature/AI`.
