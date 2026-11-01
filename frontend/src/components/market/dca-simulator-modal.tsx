@@ -24,7 +24,7 @@ export function DCASimulatorModal({ initialSymbol = "HPG", isOpen, onClose }: Pr
 
   return (
     <div
-      className="dca-modal-overlay fixed inset-0 z-[150] flex items-center justify-center p-3 sm:p-5 bg-slate-950/85 backdrop-blur-md transition-opacity"
+      className="dca-modal-overlay fixed inset-0 z-[150] flex items-center justify-center p-3 sm:p-5 transition-opacity"
       role="dialog"
       aria-modal="true"
       aria-labelledby="invest-title"
@@ -63,7 +63,7 @@ export function DCASimulatorModal({ initialSymbol = "HPG", isOpen, onClose }: Pr
 
 export function DCASimulatorButton({ symbol }: { symbol: string }) {
   const searchParams = useSearchParams();
-  const modalParam = searchParams.get("modal");
+  const modalParam = searchParams.get("modal")?.toLowerCase();
 
   const [isOpen, setIsOpen] = useState(() => modalParam === "comparator" || modalParam === "dca");
 
