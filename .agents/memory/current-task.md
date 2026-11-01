@@ -1,5 +1,38 @@
 # Current Task
 
+## AI Chatbox UI Polish & Financial Deep-Link Alignment - 2026-11-01 (complete)
+- **User Request**:
+  1. *Việc 1 (Ảnh 1)*: Tăng padding khung hiển thị tên cổ phiếu (`.stock-detail-hero`) trên trang `/market/stocks/[symbol]`.
+  2. *Việc 2 (Ảnh 2)*: Trong thẻ lịch chia cổ tức doanh nghiệp (`DividendCalendarWidget`), cho khung chứa ngày dài hơn 1 tý để nội dung `GDKHQ` không bị tràn xuống dưới và cho mã cổ phiếu chữ trắng nổi bật, rõ ràng hơn.
+  3. *Việc 3*: Khi click vào mục "Báo cáo tài chính [mã]" trong chatbox thì chuyển đúng sang tab Báo cáo tài chính & Tăng trưởng thay vì tab Biểu đồ.
+  4. *Việc 4 (Ảnh 4)*: Bỏ focus màu vàng/cam trên `<textarea>` khung chat và bỏ dòng text hướng dẫn bên dưới khung nhập.
+- **Key Changes Implemented**:
+  1. **Việc 1 - Tăng padding khung hiển thị cổ phiếu (`.stock-detail-hero`)**:
+     - Trong `frontend/src/app/globals.css:2069`: Đặt `padding: 2.25rem 2.5rem !important; border-radius: 1.25rem !important; align-items: center;`.
+     - Trong `frontend/src/app/(user)/market/stocks/[symbol]/page.tsx:212`: Đổi class container sang `p-8 sm:p-10`.
+  2. **Việc 2 - Ô ngày lịch cổ tức & Ticker badge chữ trắng**:
+     - Trong `frontend/src/app/globals.css`:
+       + Sửa `.dividend-card-date` thành `min-width: 76px; min-height: 84px; height: auto; padding: 0.65rem 0.5rem; border-radius: 10px;`.
+       + Sửa `.dividend-symbol-badge` thành chữ trắng `color: #ffffff !important; background-color: #2563eb !important; font-weight: 800; font-size: 0.85rem; padding: 0.2rem 0.55rem;`.
+     - Trong `frontend/src/components/market/dividend-calendar-widget.tsx`:
+       + Tăng chiều rộng ô ngày lên `w-20 min-h-[82px] p-2.5`, thêm `whitespace-nowrap` cho tag `GDKHQ`.
+       + Badge mã cổ phiếu cập nhật `text-white font-black text-xs px-2.5 py-1 rounded shadow-sm`.
+  3. **Việc 3 - Khớp Deep-link BCTC trong Chatbox**:
+     - Trong `frontend/src/components/market/stock-detail-tabs.tsx`:
+       + Bổ sung alias mapping cho `resolveTab`: Chuyển đổi toàn diện `financials`, `financial`, `bctc`, `statements` về tab `"growth"`.
+       + Đồng bộ state `selectedTab` ngay khi `queryTab` từ URL thay đổi (hỗ trợ chuyển tab mượt mà ngay cả khi đã ở trang chi tiết cổ phiếu).
+     - Trong `backend/app/application/use_cases/ai_chat/ai_financial_service.py`: Đặt `url: f"/market/stocks/{sym}?tab=growth"`.
+  4. **Việc 4 - Bỏ viền vàng focus và xóa dòng text dưới khung nhập**:
+     - Thêm CSS reset `.ai-chat-textarea, .ai-chat-textarea:focus, .ai-chat-textarea:focus-visible` trong `frontend/src/app/globals.css` với `outline: none !important; box-shadow: none !important; border: none !important;`.
+     - Trong cả `frontend/src/components/ai-chat/ai-chat-drawer.tsx` và `frontend/src/components/ai-chat/ai-assistant-workspace.tsx`:
+       + Thêm class `ai-chat-textarea`, inline `style={{ outline: "none", boxShadow: "none" }}` và các Tailwind utilities `outline-none focus:outline-none focus:ring-0 focus-visible:outline-none`.
+       + Xóa bỏ hoàn toàn thẻ chứa dòng chữ `Enter để gửi · Shift+Enter để xuống dòng` và `Dữ liệu thời gian thực InvestIQ`.
+- **Verification**:
+  - `npm --prefix frontend run typecheck`: **0 errors**.
+  - Python backend imports & test: **OK**.
+  - Commit `098dbc0` pushed to `origin/feature/AI`.
+  - Backend chạy cổng 8000, Frontend dev server chạy cổng 3000 sẵn sàng.
+
 ## AI Financial Assistant Chatbox & Multi-Factor Quantitative Intelligence - 2026-11-01 (complete)
 - **User Request**:
   1. *Triển khai Chatbox AI*: Tập trung làm tính năng chatbox AI với các output phong phú (rich widgets), không can thiệp/áp dụng AI vào các module khác.
