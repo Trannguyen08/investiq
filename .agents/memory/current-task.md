@@ -1,5 +1,18 @@
 # Current Task
 
+## Direct In-Place Asset Comparison & Paper Trade Modals - 2026-11-01 (complete)
+- **User Request**:
+  - *"Ý LÀ KHI CHỌN SO SÁNH THÌ NÓ PHẢI MỞ KHUNG LUÔN"*: Người dùng yêu cầu khi click vào nút gợi ý "So sánh Vàng SJC & Ngân hàng" (cũng như "Giả lập mua 1.000 cp HPG") trong chatbox, hệ thống phải mở khung popup so sánh trực tiếp ngay tại chỗ trên màn hình, không chuyển trang và không reload trang.
+- **Key Changes Implemented**:
+  1. Tạo component toàn cục [`AiGlobalActionModals`](file:///c:/investiq/frontend/src/components/ai-chat/ai-global-action-modals.tsx) và tích hợp vào [`(user)/layout.tsx`](file:///c:/investiq/frontend/src/app/(user)/layout.tsx).
+  2. Quản lý trạng thái popup So sánh đa tài sản (`DCASimulatorModal`) và Đặt lệnh mua giả lập (`PaperOrderDialog`) ở cấp độ toàn ứng dụng.
+  3. Trong [`suggested-actions-widget.tsx`](file:///c:/investiq/frontend/src/components/ai-chat/widgets/suggested-actions-widget.tsx):
+     - Khi user click "So sánh Vàng SJC & Ngân hàng": Thu nhỏ chatbox (nếu đang mở popover drawer) và bắn sự kiện `open-global-comparator` kèm mã cổ phiếu tương ứng (VD: `HPG`). Khung so sánh `DCASimulatorModal` lập tức hiện lên màn hình ở lớp `z-[150]` với đầy đủ biểu đồ lợi suất, bảng đối chiếu và thanh trượt DCA qua các năm.
+     - Khi user click "Giả lập mua 1.000 cp [mã]": Bắn sự kiện `open-global-trade` mở ngay phiếu đặt lệnh mua mô phỏng 1.000 CP trực tiếp trên màn hình hiện tại.
+- **Verification**:
+  - `npm --prefix frontend run typecheck`: **0 errors**.
+  - Commit `0ad1998` pushed to `origin/feature/AI`.
+
 ## AI Chatbox Modal Triggers & Market Center Hero Padding - 2026-11-01 (complete)
 - **User Request**:
   1. *2 thao tác gợi ý bị reload trang*: Khi click vào "So sánh Vàng SJC & Ngân hàng" và "Giả lập mua 1.000 cp HPG" trong chatbox thì chỉ reload lại trang chứ không thực hiện gì.
