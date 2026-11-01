@@ -26,6 +26,7 @@ const DEFAULT_WELCOME: AiMessage = {
 
 export function AiChatDrawer() {
   const pathname = usePathname();
+  const [mounted, setMounted] = useState(false);
   const [isOpen, setIsOpen] = useState(false);
   const [isMaximized, setIsMaximized] = useState(false);
   const [input, setInput] = useState("");
@@ -37,6 +38,7 @@ export function AiChatDrawer() {
 
   // Restore session from sessionStorage on mount
   useEffect(() => {
+    setMounted(true);
     try {
       const saved = sessionStorage.getItem(STORAGE_KEY);
       if (saved) {
@@ -118,7 +120,7 @@ export function AiChatDrawer() {
     }
   };
 
-  if (pathname === "/ai-assistant") {
+  if (!mounted || pathname === "/ai-assistant") {
     return null;
   }
 

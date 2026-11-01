@@ -29,6 +29,7 @@ const DEFAULT_WELCOME: AiMessage = {
 };
 
 export function AiAssistantWorkspace() {
+  const [mounted, setMounted] = useState(false);
   const [conversations, setConversations] = useState<AiConversation[]>([]);
   const [activeConvId, setActiveConvId] = useState<string | null>(null);
   const [messages, setMessages] = useState<AiMessage[]>([DEFAULT_WELCOME]);
@@ -41,6 +42,7 @@ export function AiAssistantWorkspace() {
 
   // Restore messages from sessionStorage or query param on mount
   useEffect(() => {
+    setMounted(true);
     try {
       const saved = sessionStorage.getItem(STORAGE_KEY);
       if (saved) {
@@ -165,6 +167,14 @@ export function AiAssistantWorkspace() {
       handleSend();
     }
   };
+
+  if (!mounted) {
+    return (
+      <div className="w-full h-[calc(100vh-4rem)] flex items-center justify-center bg-[#06111f] text-slate-500 text-xs">
+        Đang khởi tạo không gian làm việc AI...
+      </div>
+    );
+  }
 
   return (
     <div className="w-full h-[calc(100vh-4rem)] flex overflow-hidden bg-[#06111f] text-slate-100">
