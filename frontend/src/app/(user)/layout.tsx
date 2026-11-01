@@ -2,6 +2,7 @@ import type { ReactNode } from "react";
 
 import { UserHeader } from "@/components/layout/user-header";
 import { AiChatDrawer } from "@/components/ai-chat/ai-chat-drawer";
+import { AiGlobalActionModals } from "@/components/ai-chat/ai-global-action-modals";
 
 export default function UserLayout({ children }: Readonly<{ children: ReactNode }>) {
   return (
@@ -10,6 +11,7 @@ export default function UserLayout({ children }: Readonly<{ children: ReactNode 
       <UserHeader />
       <div className="shell">{children}</div>
       <AiChatDrawer />
+      <AiGlobalActionModals />
     </>
   );
 }

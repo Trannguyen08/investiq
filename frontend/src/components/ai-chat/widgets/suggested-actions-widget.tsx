@@ -25,36 +25,23 @@ export function SuggestedActionsWidget({
 
   const handleOpenTrade = (sym: string, qty: number) => {
     onActionTriggered?.();
-    const targetUrl = `/market/stocks/${sym}?trade=buy&qty=${qty}`;
     if (typeof window !== "undefined") {
-      if (window.location.pathname.startsWith(`/market/stocks/${sym}`)) {
-        const url = new URL(window.location.href);
-        url.searchParams.set("trade", "buy");
-        url.searchParams.set("qty", String(qty));
-        window.history.pushState({}, "", url.toString());
-        window.dispatchEvent(
-          new CustomEvent("open-stock-trade", {
-            detail: { side: "buy", quantity: qty },
-          })
-        );
-      } else {
-        router.push(targetUrl);
-      }
+      window.dispatchEvent(
+        new CustomEvent("open-global-trade", {
+          detail: { symbol: sym, side: "buy", quantity: qty },
+        })
+      );
     }
   };
 
-  const handleOpenModal = (sym: string, modalType: string) => {
+  const handleOpenModal = (sym: string, _modalType: string) => {
     onActionTriggered?.();
-    const targetUrl = `/market/stocks/${sym}?modal=${modalType}`;
     if (typeof window !== "undefined") {
-      if (window.location.pathname.startsWith(`/market/stocks/${sym}`)) {
-        const url = new URL(window.location.href);
-        url.searchParams.set("modal", modalType);
-        window.history.pushState({}, "", url.toString());
-        window.dispatchEvent(new CustomEvent("open-dca-comparator-modal"));
-      } else {
-        router.push(targetUrl);
-      }
+      window.dispatchEvent(
+        new CustomEvent("open-global-comparator", {
+          detail: { symbol: sym },
+        })
+      );
     }
   };
 

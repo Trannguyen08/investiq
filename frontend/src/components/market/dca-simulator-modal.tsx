@@ -24,7 +24,7 @@ export function DCASimulatorModal({ initialSymbol = "HPG", isOpen, onClose }: Pr
 
   return (
     <div
-      className="dca-modal-overlay fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-5 bg-slate-950/80 backdrop-blur-md transition-opacity"
+      className="dca-modal-overlay fixed inset-0 z-[150] flex items-center justify-center p-3 sm:p-5 bg-slate-950/85 backdrop-blur-md transition-opacity"
       role="dialog"
       aria-modal="true"
       aria-labelledby="invest-title"
