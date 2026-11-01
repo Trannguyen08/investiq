@@ -84,6 +84,35 @@ def authenticated_user_id(
     return user.id
 
 
+def optional_user_id(
+    repository: Annotated[SqlUserRepository, Depends(get_user_repository)],
+    authorization: Annotated[str | None, Header()] = None,
+) -> str | None:
+    """Resolve an active user if a valid bearer token is present, else None."""
+    scheme, _, token = (authorization or "").partition(" ")
+    if scheme.casefold() != "bearer" or not token:
+        return None
+    secret = settings.auth_jwt_secret
+    if secret is None:
+        return None
+    try:
+        claims = JwtHandler(
+            secret.get_secret_value(),
+            settings.auth_issuer,
+            settings.auth_audience,
+            settings.auth_access_token_seconds,
+            settings.auth_jwt_previous_secret.get_secret_value()
+            if settings.auth_jwt_previous_secret
+            else None,
+        ).verify(token)
+        user = repository.active_session_user(
+            str(claims["sid"]), str(claims["sub"]), datetime.now(UTC)
+        )
+        return user.id if user else None
+    except Exception:
+        return None
+
+
 def require_admin_user(
     request: Request,
     repository: Annotated[SqlUserRepository, Depends(get_user_repository)],

@@ -3,6 +3,36 @@
 Record durable decisions in reverse chronological order. Do not record routine implementation
 details.
 
+## 2026-11-01 — Quantitative Financial AI Assistant & Multi-Factor Interactive Radar Architecture
+
+- **Status:** Accepted and implemented on `feature/AI`
+- **Context:** Investors require rapid, quantitative, and objective stock analysis without relying on hallucination-prone generic LLMs. The user required an interactive AI Financial Assistant chatbox with rich UI widgets (radar chart, valuation & health scores, comparison cards, forensic red flags, market pulses, and suggested action pills), priority for in-system real-time and fundamental financial data, database persistence for authenticated users, and Tailwind-first styling.
+- **Decision:**
+  1. *Deterministic Multi-Factor RAG & In-System Engine*:
+     - Prioritize in-system quantitative queries through `MarketService` (real-time quotes, 60-day OHLC candles, P/E, P/B, ROE, technical indicators RSI(14), MA20, MA50, and Altman Z-score forensics).
+     - Fallback web search (DuckDuckGo search) only when user queries external macro events or concepts not present in the local database.
+     - Multi-factor scoring (0-100) across 5 financial dimensions: Valuation, Financial Health, Growth, Technical Momentum, and Cash Flow.
+  2. *Rich Interactive Output Schema*:
+     - Standardized widget payload envelope (`widgets: [{type, data}]`):
+       + `stock_score_card`: 5-axis SVG Radar chart, price & change, key support/resistance, investment verdict (`TÍCH CỰC` / `THEO DÕI` / `THẬN TRỌNG`), and concise quantitative bullet points.
+       + `stock_comparison`: Side-by-side multi-stock comparison table with financial metrics and identified pros/cons.
+       + `forensic_warning`: Altman Z-score distress gauge and 4 automated accounting red flags.
+       + `market_pulse`: Overall exchange breadth, VN-Index change, and aggregate market sentiment.
+       + `suggested_actions`: Contextual action pills enabling one-click navigation to candlestick charts, comparison tools, or prompt follow-ups.
+  3. *Guest & Authenticated Dual Support*:
+     - Unauthenticated guests receive ephemeral session IDs (`guest-...`) allowing instant exploration without blocking 401 errors.
+     - Authenticated users have sessions and messages automatically persisted in PostgreSQL (`ai_conversations`, `ai_messages`) with conversation renaming, pagination, and deletion.
+  4. *Tailwind-First UI & Global Drawer Integration*:
+     - Implemented `AiAssistantWorkspace` as a dedicated full-page experience (`/ai-assistant`) with sidebar history.
+     - Implemented `AiChatDrawer` as an omnipresent Floating Action Button (FAB) drawer across all other pages, automatically hiding itself on `/ai-assistant` to prevent UI redundancy.
+     - 100% styled with Tailwind CSS utility classes adhering to the `#06111f` dark palette, avoiding global CSS dependencies.
+- **Consequences:** Provides an immediate, zero-latency quantitative assistant for Vietnamese equities, completely eliminating LLM financial hallucination while delivering interactive visual widgets.
+
+# Architecture Decision Log
+
+Record durable decisions in reverse chronological order. Do not record routine implementation
+details.
+
 ## 2026-10-28 — Enterprise Admin System Architecture, Strict JWT Security & Unified CSS Table Engine
 
 - **Status:** Accepted and implemented on `feature/admin`

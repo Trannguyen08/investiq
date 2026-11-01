@@ -1,5 +1,55 @@
 # Current Task
 
+## AI Financial Assistant Chatbox & Multi-Factor Quantitative Intelligence - 2026-11-01 (in-progress)
+- **User Request**:
+  1. *Triển khai Chatbox AI*: Tập trung làm tính năng chatbox AI với các output phong phú (rich widgets), không can thiệp/áp dụng AI vào các module khác.
+  2. *Chuyển nhánh Git*: Chuyển sang nhánh `feature/AI` trước khi bắt đầu code.
+  3. *Frontend Next.js & Tailwind*: Sử dụng Next.js App Router và Tailwind CSS, hạn chế tối đa CSS tùy biến/global CSS.
+  4. *Tạo endpoint riêng cho AI*: Response từ AI thông qua endpoint mới `/api/v1/ai/...`.
+  5. *Ưu tiên dữ liệu hệ thống*: Tận dụng triệt để dữ liệu hiện tại của hệ thống (giá realtime, nến OHLC, chỉ số P/E, P/B, ROE, Altman Z-score, BCTC, lịch cổ tức), chỉ tìm kiếm/crawl bên ngoài khi thiếu thông tin vĩ mô.
+  6. *Bắt kỹ yêu cầu & Phản hồi chuyên sâu*: Bắt chính xác ý định (intent detection), trích xuất mã cổ phiếu, cung cấp phân tích tài chính sâu bằng tiếng Việt và rich widgets tương tác.
+  7. *Lưu trữ lịch sử chat*: Tự động lưu các phiên trò chuyện vào CSDL PostgreSQL (`ai_conversations`, `ai_messages`) khi người dùng đã đăng nhập.
+- **Key Changes Implemented**:
+  1. **Git Branch & Database Migration**:
+     - Đã tạo và chuyển sang nhánh `feature/AI`.
+     - Tạo file migration `backend/app/infrastructure/db/migrations/0019_ai_chat.sql` khởi tạo bảng `ai_conversations` và `ai_messages` kèm foreign keys, indexes và triggers cập nhật thời gian. Chạy migration thành công vào PostgreSQL.
+  2. **Backend Engine & API**:
+     - `backend/app/schemas/ai_chat.py`: Khai báo schemas Pydantic cho chat request, messages, radar scores, stock score card, comparison table, forensic red flags, market pulse, và suggested action pills.
+     - `backend/app/infrastructure/db/repositories/sql_ai_chat_repository.py`: Repository xử lý lưu trữ conversation & message vào DB cho authenticated users, hỗ trợ pagination và cascade delete.
+     - `backend/app/application/use_cases/ai_chat/ai_financial_service.py`: Bộ xử lý AI tài chính định lượng:
+       + Nhận diện intent: Phân tích đơn mã, so sánh đối đầu 2+ mã, rủi ro BCTC / Altman Z-Score, tổng quan thị trường sàn, kiến thức và tìm kiếm thông tin bên ngoài.
+       + Tính toán định lượng 5 trục: Định giá (P/E, P/B), Sức khỏe tài chính, Tăng trưởng, Kỹ thuật (RSI 14, MA20, MA50), Dòng tiền.
+       + Sinh rich widgets: `StockScoreCardWidgetData`, `StockComparisonWidgetData`, `ForensicWarningWidgetData`, `MarketPulseWidgetData`, `SuggestedAction`.
+     - `backend/app/api/v1/ai_chat.py`: Đăng ký các endpoints:
+       + `POST /api/v1/ai/chat`: Xử lý tin nhắn chat, hỗ trợ cả guest lẫn user đã đăng nhập.
+       + `GET /api/v1/ai/conversations`: Danh sách phiên chat của user.
+       + `GET /api/v1/ai/conversations/{id}`: Chi tiết tin nhắn trong phiên chat.
+       + `DELETE /api/v1/ai/conversations/{id}`: Xóa phiên chat.
+     - `backend/app/api/deps.py`: Bổ sung dependency `optional_user_id` để linh hoạt tiếp nhận cả khách vãng lai và user có token JWT.
+  3. **Frontend BFF & Rich UI Components**:
+     - `frontend/src/types/ai-chat.ts`: Khai báo interfaces TypeScript đồng bộ với Pydantic backend models.
+     - `frontend/src/lib/server/ai-chat-server-api.ts` & `frontend/src/app/ai-api/[[...path]]/route.ts`: BFF proxy chuyển tiếp yêu cầu từ client tới FastAPI backend kèm auth cookies/bearer token nếu có.
+     - `frontend/src/lib/ai-chat-api.ts`: Client API client gọi qua route handler `/ai-api/...`.
+     - `frontend/src/components/ai-chat/widgets/stock-score-card-widget.tsx`: Card phân tích cổ phiếu kèm SVG Radar Chart 5 chiều toán học, định giá, nhận định Tích cực/Theo dõi và hỗ trợ/kháng cự.
+     - `frontend/src/components/ai-chat/widgets/stock-comparison-widget.tsx`: Bảng so sánh trực quan đa mã, đánh giá ưu/nhược điểm từng cổ phiếu.
+     - `frontend/src/components/ai-chat/widgets/forensic-warning-widget.tsx`: Thước đo rủi ro phá sản Altman Z-Score và danh sách cờ đỏ BCTC.
+     - `frontend/src/components/ai-chat/widgets/market-pulse-widget.tsx`: Mini card nhịp đập toàn thị trường.
+     - `frontend/src/components/ai-chat/widgets/suggested-actions-widget.tsx`: Action pills linh hoạt (điều hướng biểu đồ nến, so sánh tài sản, prompt gợi ý tiếp theo).
+     - `frontend/src/components/ai-chat/ai-chat-bubble.tsx`: Render bong bóng tin nhắn, markdown parser, timestamp và các widget đính kèm.
+     - `frontend/src/components/ai-chat/ai-chat-drawer.tsx`: Floating Action Button (FAB) góc phải dưới màn hình + cửa sổ chat drawer thu phóng tiện lợi, tự động ẩn khi đang ở trang `/ai-assistant`.
+     - `frontend/src/components/ai-chat/ai-assistant-workspace.tsx`: Không gian làm việc toàn màn hình với Sidebar quản lý lịch sử hội thoại, tạo phiên mới, xóa phiên, input chat và gợi ý khởi đầu.
+     - `frontend/src/app/(user)/ai-assistant/page.tsx`: Tuyến trang riêng biệt `/ai-assistant` tối ưu theme tối `#06111f`.
+     - `frontend/src/app/(user)/layout.tsx`: Tích hợp `<AiChatDrawer />` toàn hệ thống.
+     - `frontend/src/components/layout/user-header.tsx`: Thêm mục điều hướng `Trợ lý AI` kèm badge "Mới" nổi bật trên thanh menu.
+- **Verification**:
+  - `npm --prefix frontend run typecheck`: **0 errors**.
+  - Frontend Vitest: **36/36 test files passed, 139/139 tests passed**.
+  - Backend Unit & Integration Tests: **7/7 AI chat tests passed** (`tests/unit/ai_chat/`, `tests/integration/api/test_ai_chat_api.py`).
+  - Toàn bộ backend test suite: **123/123 tests passed**.
+  - Kiểm thử end-to-end Next.js BFF -> FastAPI (`POST /ai-api/chat`): Trả về `HTTP 200 OK` với đầy đủ Radar chart scores, Altman Z-Score, Stock comparison và Market pulse.
+
+# Current Task
+
 ## Market Grid Two-Column Restoration, Candlestick Height & Theme Dark Harmonization - 2026-10-31 (complete)
 - **User Request**:
   1. *Lỗi 2 khối ở Ảnh 3 cũ phải nằm chung 1 dòng*: Bản đồ nhiệt ngành (Sector Heatmap) và Khối số liệu nhanh (Độ rộng toàn thị trường, Định giá P/E & P/B sàn, Thanh khoản & Khối ngoại) bị xếp chồng dọc thành 2 dòng riêng biệt; yêu cầu đưa 2 khối nằm chung 1 hàng trên màn hình desktop/tablet.

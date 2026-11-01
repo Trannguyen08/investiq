@@ -30,6 +30,7 @@ from app.api.v1.market_data import (
     stream_router as market_stream_router,
 )
 from app.api.v1.news import router as news_router
+from app.api.v1.ai_chat import router as ai_chat_router
 from app.api.v1.portfolio import (
     public_portfolio_router,
 )
@@ -103,6 +104,7 @@ app.include_router(watchlist_router)
 app.include_router(paper_portfolio_router)
 app.include_router(public_portfolio_router)
 app.include_router(thesis_router)
+app.include_router(ai_chat_router)
 
 
 def _request_id(request: Request) -> str:
@@ -115,6 +117,7 @@ def _private_error_headers(request: Request) -> dict[str, str]:
         "/api/v1/admin",
         "/api/v1/watchlists",
         "/api/v1/paper-portfolio",
+        "/api/v1/ai",
     )
     return {"Cache-Control": "no-store"} if request.url.path.startswith(private_prefixes) else {}
 

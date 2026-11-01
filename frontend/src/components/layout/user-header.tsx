@@ -12,6 +12,7 @@ export const userNavigationLinks = [
   ["/", "Tổng quan"],
   ["/market/stocks", "Thị trường"],
   ["/candlestick-prediction", "Dự đoán nến"],
+  ["/ai-assistant", "Trợ lý AI"],
   ["/portfolio", "Danh mục"],
   ["/community", "Cộng đồng"],
   ["/learn", "Chứng khoán căn bản"],
@@ -191,9 +192,10 @@ export function UserHeader() {
           <nav className="desktop-nav hidden md:flex items-center gap-1" aria-label="Điều hướng chính">
             {userNavigationLinks.map(([href, label]) => {
               const active = href === "/" ? pathname === "/" : href.startsWith("/market/") ? pathname.startsWith("/market") : pathname.startsWith(href);
+              const isAi = href === "/ai-assistant";
               return (
                 <Link
-                  className={`nav-link px-3 py-1.5 text-xs font-semibold rounded-lg transition ${
+                  className={`nav-link px-3 py-1.5 text-xs font-semibold rounded-lg transition inline-flex items-center gap-1.5 ${
                     active ? "active bg-slate-800/90 text-sky-400 font-bold shadow-inner" : "text-slate-300 hover:text-white hover:bg-slate-800/50"
                   }`}
                   href={href}
@@ -201,6 +203,11 @@ export function UserHeader() {
                   aria-current={active ? "page" : undefined}
                 >
                   {label}
+                  {isAi && (
+                    <span className="px-1.5 py-0.5 bg-gradient-to-r from-amber-500 to-amber-400 text-slate-950 font-black text-[9px] leading-none rounded-full uppercase tracking-tighter">
+                      Mới
+                    </span>
+                  )}
                 </Link>
               );
             })}
