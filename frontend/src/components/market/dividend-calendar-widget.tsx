@@ -106,17 +106,17 @@ export function DividendCalendarWidget({ initialEvents = [] }: DividendCalendarW
 
             return (
               <article key={event.id} className="dividend-event-card bg-slate-900/90 border border-slate-800 hover:border-slate-700/80 rounded-2xl overflow-hidden shadow-lg hover:shadow-xl transition flex flex-row group">
-                <div className="dividend-card-date bg-slate-950/80 border-r border-slate-800/80 w-[78px] flex flex-col items-center justify-center p-3 text-center shrink-0">
+                <div className="dividend-card-date bg-slate-950/80 border-r border-slate-800/80 w-20 min-h-[82px] flex flex-col items-center justify-center p-2.5 text-center shrink-0">
                   <span className="dividend-date-day text-2xl font-black text-white leading-none tracking-tight">{displayDay}</span>
                   <span className="dividend-date-month text-[11px] font-semibold text-slate-400 mt-1">{displayMonth}</span>
-                  <small className="dividend-date-tag text-[9px] font-extrabold text-sky-400 uppercase tracking-widest mt-1 bg-sky-950 px-1.5 py-0.5 rounded border border-sky-800/50">GDKHQ</small>
+                  <small className="dividend-date-tag text-[9px] font-black text-sky-400 uppercase tracking-wider mt-1 bg-sky-950 px-1.5 py-0.5 rounded border border-sky-800/50 whitespace-nowrap">GDKHQ</small>
                 </div>
                 <div className="dividend-card-content flex-1 p-3.5 flex flex-col justify-between gap-2.5 min-w-0">
                   <div className="dividend-card-header flex items-center justify-between flex-wrap gap-1.5">
                     <div className="flex items-center gap-1.5 flex-wrap">
                       <Link
                         href={`/market/stocks/${encodeURIComponent(event.symbol)}?tab=dividend`}
-                        className="dividend-symbol-badge bg-blue-600 hover:bg-blue-500 text-white font-extrabold text-xs px-2 py-0.5 rounded transition"
+                        className="dividend-symbol-badge bg-blue-600 hover:bg-blue-500 text-white font-black text-xs px-2.5 py-1 rounded transition shadow-sm"
                       >
                         {event.symbol}
                       </Link>

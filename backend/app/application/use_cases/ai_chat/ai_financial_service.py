@@ -343,7 +343,7 @@ class AiFinancialService:
 
             suggested_actions.extend([
                 {"label": f"Xem biểu đồ nến {sym}", "action_type": "NAVIGATE", "url": f"/market/stocks/{sym}"},
-                {"label": f"Báo cáo tài chính {sym}", "action_type": "NAVIGATE", "url": f"/market/stocks/{sym}?tab=financials"},
+                {"label": f"Báo cáo tài chính {sym}", "action_type": "NAVIGATE", "url": f"/market/stocks/{sym}?tab=growth"},
                 {"label": "So sánh Vàng SJC & Ngân hàng", "action_type": "OPEN_MODAL", "modal_type": "COMPARATOR", "symbol": sym},
                 {"label": f"Giả lập mua 1.000 cp {sym}", "action_type": "TRADE_ORDER", "symbol": sym, "quantity": 1000},
             ])

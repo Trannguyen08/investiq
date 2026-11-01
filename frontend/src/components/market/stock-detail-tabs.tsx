@@ -17,14 +17,37 @@ type StockDetailTabsProps = {
 };
 
 function resolveTab(tabParam: string | null | undefined): StockTabId {
+  if (!tabParam) return "chart";
+  const normalized = tabParam.toLowerCase().trim();
   if (
-    tabParam === "growth" ||
-    tabParam === "dividend" ||
-    tabParam === "news" ||
-    tabParam === "chart" ||
-    tabParam === "forensics"
+    normalized === "growth" ||
+    normalized === "financials" ||
+    normalized === "financial" ||
+    normalized === "bctc" ||
+    normalized === "statements"
   ) {
-    return tabParam;
+    return "growth";
+  }
+  if (
+    normalized === "dividend" ||
+    normalized === "dividends" ||
+    normalized === "co-tuc"
+  ) {
+    return "dividend";
+  }
+  if (
+    normalized === "forensics" ||
+    normalized === "altman" ||
+    normalized === "rui-ro" ||
+    normalized === "warning"
+  ) {
+    return "forensics";
+  }
+  if (
+    normalized === "news" ||
+    normalized === "tin-tuc"
+  ) {
+    return "news";
   }
   return "chart";
 }
@@ -42,9 +65,16 @@ export function StockDetailTabs({
   const searchParams = useSearchParams();
   const queryTab = searchParams.get("tab");
 
-  const [selectedTab, setSelectedTab] = useState<StockTabId | null>(null);
+  const [selectedTab, setSelectedTab] = useState<StockTabId>(() =>
+    resolveTab(queryTab || initialTab)
+  );
 
-  const activeTab = selectedTab ?? resolveTab(queryTab || initialTab);
+  // Sync state whenever URL search param 'tab' changes
+  if (queryTab && resolveTab(queryTab) !== selectedTab) {
+    setSelectedTab(resolveTab(queryTab));
+  }
+
+  const activeTab = selectedTab;
 
   const handleSelectTab = (tabId: StockTabId) => {
     setSelectedTab(tabId);

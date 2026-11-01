@@ -129,10 +129,13 @@ function FormattedContent({ text }: { text: string }) {
   const sanitized = sanitizeText(text);
 
   // If text contains continuous single-line financial reports, split into distinct lines
-  let normalized = sanitized
-    .replace(/(Định giá:)/g, "\n- $1")
-    .replace(/(Tín hiệu kỹ thuật:|Kỹ thuật:)/g, "\n- $1")
-    .replace(/(Vùng hỗ trợ|Vùng giá trọng yếu:)/g, "\n- $1");
+  const normalized = sanitized
+    .replace(/(Báo cáo phân tích chuyên sâu:[^\n]+)/g, "$1\n\n")
+    .replace(/(Đối chiếu so sánh:[^\n]+)/g, "$1\n\n")
+    .replace(/([^\n])\s*(Thị giá:)/g, "$1\n- $2")
+    .replace(/([^\n])\s*(Định giá:)/g, "$1\n- $2")
+    .replace(/([^\n])\s*(Tín hiệu kỹ thuật:|Kỹ thuật:)/g, "$1\n- $2")
+    .replace(/([^\n])\s*(Vùng hỗ trợ|Vùng giá trọng yếu:)/g, "$1\n- $2");
 
   const rawBlocks = normalized.split(/\n\n+/);
 

@@ -242,7 +242,8 @@ export function AiChatDrawer() {
                 onKeyDown={handleKeyDown}
                 placeholder="Nhập mã CP (HPG, VCB, MBB...), câu hỏi phân tích..."
                 rows={1}
-                className="flex-1 bg-transparent border-0 text-xs sm:text-sm text-slate-100 placeholder-slate-500 focus:outline-none resize-none max-h-24 py-1"
+                className="ai-chat-textarea flex-1 bg-transparent border-0 text-xs sm:text-sm text-slate-100 placeholder-slate-500 focus:outline-none focus:ring-0 focus-visible:outline-none outline-none resize-none max-h-24 py-1"
+                style={{ outline: "none", boxShadow: "none" }}
               />
               <button
                 type="button"
@@ -253,10 +254,6 @@ export function AiChatDrawer() {
               >
                 Gửi
               </button>
-            </div>
-            <div className="flex items-center justify-between text-[10px] text-slate-500 mt-1.5 px-1">
-              <span>Enter để gửi · Shift+Enter để xuống dòng</span>
-              <span>Dữ liệu thời gian thực InvestIQ</span>
             </div>
           </div>
         </div>

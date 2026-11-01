@@ -312,7 +312,8 @@ export function AiAssistantWorkspace() {
                 onKeyDown={handleKeyDown}
                 placeholder="Nhập mã CP hoặc câu hỏi (VD: 'Đánh giá HPG', 'So sánh VCB và MBB', 'Khám BCTC NVL')..."
                 rows={1}
-                className="flex-1 bg-transparent border-0 text-xs sm:text-sm text-slate-100 placeholder-slate-500 focus:outline-none resize-none max-h-32 py-1 leading-relaxed"
+                className="ai-chat-textarea flex-1 bg-transparent border-0 text-xs sm:text-sm text-slate-100 placeholder-slate-500 focus:outline-none focus:ring-0 focus-visible:outline-none outline-none resize-none max-h-32 py-1 leading-relaxed"
+                style={{ outline: "none", boxShadow: "none" }}
               />
               <button
                 type="button"
@@ -322,10 +323,6 @@ export function AiAssistantWorkspace() {
               >
                 Gửi
               </button>
-            </div>
-            <div className="flex items-center justify-between text-[11px] text-slate-400 mt-2 px-2 font-medium">
-              <span>Nhấn Enter để gửi · Shift+Enter để xuống dòng</span>
-              <span>Dữ liệu thời gian thực InvestIQ</span>
             </div>
           </div>
         </div>
