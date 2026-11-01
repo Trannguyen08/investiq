@@ -1,5 +1,26 @@
 # Current Task
 
+## AI Chatbox Modal Triggers & Market Center Hero Padding - 2026-11-01 (complete)
+- **User Request**:
+  1. *2 thao tác gợi ý bị reload trang*: Khi click vào "So sánh Vàng SJC & Ngân hàng" và "Giả lập mua 1.000 cp HPG" trong chatbox thì chỉ reload lại trang chứ không thực hiện gì.
+  2. *Tăng padding cho khung Trung tâm thị trường*: Tăng khoảng cách đệm (padding) bên trong khung header "Trung tâm thị trường" (`.market-page-hero`) để không gian hiển thị thông thoáng và cân đối.
+- **Key Changes Implemented**:
+  1. **Direct Triggers cho 2 thao tác trong Chatbox**:
+     - Trong [`suggested-actions-widget.tsx`](file:///c:/investiq/frontend/src/components/ai-chat/widgets/suggested-actions-widget.tsx):
+       + Thay thẻ `<Link>` bằng `<button type="button">`.
+       + Với `OPEN_MODAL`: Nếu đang ở trang cổ phiếu tương ứng, kích hoạt ngay sự kiện `open-dca-comparator-modal` và cập nhật URL query `?modal=comparator` không cần reload trang. Nếu ở trang khác, điều hướng trực tiếp bằng Next.js router.
+       + Với `TRADE_ORDER`: Kích hoạt ngay sự kiện `open-stock-trade` kèm `detail: { side: "buy", quantity: qty }` và cập nhật query `?trade=buy&qty=1000`.
+     - Trong [`dca-simulator-modal.tsx`](file:///c:/investiq/frontend/src/components/market/dca-simulator-modal.tsx):
+       + `DCASimulatorButton`: Lắng nghe query param `?modal=comparator` và sự kiện `open-dca-comparator-modal`, tự động mở popup So sánh Cổ phiếu vs Vàng & Tiết kiệm tức thì.
+     - Trong [`stock-trade-actions.tsx`](file:///c:/investiq/frontend/src/components/portfolio/stock-trade-actions.tsx) và [`paper-order-dialog.tsx`](file:///c:/investiq/frontend/src/components/portfolio/paper-order-dialog.tsx):
+       + Lắng nghe query param `?trade=buy&qty=1000` và sự kiện `open-stock-trade`. Tự động mở hộp thoại đặt lệnh mua mô phỏng và pre-fill đúng số lượng cổ phiếu (1.000 CP).
+  2. **Tăng padding khung Trung tâm thị trường (`.market-page-hero`)**:
+     - Trong [`globals.css`](file:///c:/investiq/frontend/src/app/globals.css): Tách `.market-page-hero` khỏi rule cũ, đặt `padding: 2.25rem 2.5rem !important; border-radius: 1.25rem !important; align-items: center;`.
+     - Trong [`market-workspace.tsx`](file:///c:/investiq/frontend/src/components/market/market-workspace.tsx): Cập nhật class Tailwind container lên `p-8 sm:p-10`.
+- **Verification**:
+  - `npm --prefix frontend run typecheck`: **0 errors**.
+  - Commit `bf5ddde` pushed to `origin/feature/AI`.
+
 ## AI Chatbox UI Polish & Financial Deep-Link Alignment - 2026-11-01 (complete)
 - **User Request**:
   1. *Việc 1 (Ảnh 1)*: Tăng padding khung hiển thị tên cổ phiếu (`.stock-detail-hero`) trên trang `/market/stocks/[symbol]`.
