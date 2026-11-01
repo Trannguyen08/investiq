@@ -1,5 +1,23 @@
 # Current Task
 
+## Stock Page Navigation & Translucent Glass Backdrop for Comparator Modal - 2026-11-01 (complete)
+- **User Request**:
+  - *"Ý LÀ KHI CLICK VÀO SO SÁNH THÌ NÓ SẼ RA TRANG CỦA CỔ PHIẾU ĐÓ R MỞ KHUNG CHO CÓ BACKGROUND ĐẰNG SAU KHUNG CHỨ ĐEN THUI NHÌN HƠI KỲ NHỈ"*: Người dùng yêu cầu khi click vào nút gợi ý "So sánh Vàng SJC & Ngân hàng" (hoặc "Giả lập mua 1.000 cp HPG") thì chuyển hướng tới trang chi tiết cổ phiếu đó (`/market/stocks/[symbol]`), hiển thị toàn bộ trang cổ phiếu làm nền phía sau, rồi mở khung modal so sánh nổi lên trên; đồng thời làm nền backdrop trong suốt nhẹ kính mờ (translucent glass) chứ không được tối đen thui (đen kịt).
+- **Key Changes Implemented**:
+  1. Trong [`suggested-actions-widget.tsx`](file:///c:/investiq/frontend/src/components/ai-chat/widgets/suggested-actions-widget.tsx):
+     - Khi user click "So sánh Vàng SJC & Ngân hàng": Thu nhỏ chatbox và điều hướng tới `/market/stocks/{symbol}?modal=comparator`.
+     - Nếu đã ở sẵn trang cổ phiếu đó, cập nhật searchParams và bắn sự kiện `open-dca-comparator-modal`.
+     - Tương tự cho "Giả lập mua 1.000 cp [mã]": Điều hướng tới `/market/stocks/{symbol}?trade=buy&qty=1000`.
+  2. Trong [`dca-simulator-modal.tsx`](file:///c:/investiq/frontend/src/components/market/dca-simulator-modal.tsx):
+     - Chuẩn hóa `searchParams.get("modal")?.toLowerCase()` để nhận cả `comparator` lẫn `COMPARATOR`.
+     - Gỡ bỏ background tối đè `bg-slate-950/85 backdrop-blur-md` ở container overlay.
+  3. Trong [`globals.css`](file:///c:/investiq/frontend/src/app/globals.css):
+     - Sửa `.dca-modal-backdrop` thành `background: rgba(4, 11, 20, 0.55) !important; backdrop-filter: blur(4px) !important;`.
+     - Giúp toàn bộ trang chi tiết cổ phiếu (tiêu đề cổ phiếu, thị giá, biểu đồ nến, trạng thái thị trường) hiển thị rõ nét và đẹp mắt phía sau lớp kính mờ của khung modal, xóa bỏ hoàn toàn hiện tượng đen kịt.
+- **Verification**:
+  - `npm --prefix frontend run typecheck`: **0 errors**.
+  - Commit `2704ca6` pushed to `origin/feature/AI`.
+
 ## Direct In-Place Asset Comparison & Paper Trade Modals - 2026-11-01 (complete)
 - **User Request**:
   - *"Ý LÀ KHI CHỌN SO SÁNH THÌ NÓ PHẢI MỞ KHUNG LUÔN"*: Người dùng yêu cầu khi click vào nút gợi ý "So sánh Vàng SJC & Ngân hàng" (cũng như "Giả lập mua 1.000 cp HPG") trong chatbox, hệ thống phải mở khung popup so sánh trực tiếp ngay tại chỗ trên màn hình, không chuyển trang và không reload trang.
