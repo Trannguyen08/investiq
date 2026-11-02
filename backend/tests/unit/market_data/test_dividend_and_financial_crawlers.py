@@ -17,14 +17,14 @@ from app.infrastructure.external.crawlers.financial_statements_crawler import (
 from app.main import app
 
 
-def test_parse_epoch_date():
+def test_parse_epoch_date() -> None:
     assert _parse_epoch_date("/Date(1717088400000)/") == "2024-05-31"
     assert _parse_epoch_date("25/12/2024") == "2024-12-25"
     assert _parse_epoch_date("2024-12-25T00:00:00") == "2024-12-25"
     assert _parse_epoch_date("") == ""
 
 
-def test_classify_dividend():
+def test_classify_dividend() -> None:
     div_type, ratio, cash = _classify_dividend("Trả cổ tức năm 2023 bằng tiền mặt tỷ lệ 10%")
     assert div_type == "cash"
     assert ratio == "10%"
@@ -40,7 +40,7 @@ def test_classify_dividend():
     assert ratio == "10:1"
 
 
-def test_dividend_crawler_parse_cafef():
+def test_dividend_crawler_parse_cafef() -> None:
     mock_cafef_data = {
         "Success": True,
         "Data": [
@@ -65,7 +65,7 @@ def test_dividend_crawler_parse_cafef():
         assert result[0]["cash_value"] == 500.0
 
 
-def test_financial_statements_crawler_parse():
+def test_financial_statements_crawler_parse() -> None:
     mock_response = [
         {
             "code": "dttbhccdv",
@@ -96,7 +96,7 @@ def test_financial_statements_crawler_parse():
         assert result["charts"][3]["revenue_billion"] == 35000.0
 
 
-def test_api_dividend_calendar_and_stock_endpoints():
+def test_api_dividend_calendar_and_stock_endpoints() -> None:
     client = TestClient(app)
 
     # 1. Calendar endpoint

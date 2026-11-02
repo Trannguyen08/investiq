@@ -80,7 +80,7 @@ def _check_and_dispatch_due_reminders() -> None:
     due = repo.get_due_reminders(window_hours=48)
     now = datetime.now(UTC)
 
-    for r in due:
+    for r in (due or []):
         try:
             ev_date = r["event_at"]
             days_left = (
@@ -119,7 +119,7 @@ def _check_and_dispatch_paper_daily_reports() -> None:
     )
 
     repo = get_paper_report_repository()
-    active_subs = repo.get_all_active_subscriptions()
+    active_subs = repo.list_active_subscriptions()
     service = get_paper_trading_service()
 
     for sub in active_subs:
@@ -138,9 +138,12 @@ def _check_and_dispatch_paper_daily_reports() -> None:
 
         try:
             dashboard = service.dashboard(str(uid))
-            account_dict = dashboard.get("account", {})
-            holdings_list = dashboard.get("holdings", [])
-            trades_list = dashboard.get("trades", [])
+            account_raw = dashboard.get("account")
+            account_dict: dict[str, Any] = dict(account_raw) if isinstance(account_raw, dict) else {}
+            holdings_raw = dashboard.get("holdings")
+            holdings_list: list[dict[str, Any]] = list(holdings_raw) if isinstance(holdings_raw, list) else []
+            trades_raw = dashboard.get("trades")
+            trades_list: list[dict[str, Any]] | None = list(trades_raw) if isinstance(trades_raw, list) else None
 
             if not holdings_list and not trades_list:
                 continue

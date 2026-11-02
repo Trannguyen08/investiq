@@ -310,11 +310,13 @@ def instrument_dividends(symbol: str, response: Response) -> dict[str, object]:
     # Calculate summary metrics
     current_inst = _service().instrument(normalized)
     price_val = None
-    if current_inst and isinstance(current_inst.get("data"), dict):
-        try:
-            price_val = float(current_inst["data"].get("price") or 0)
-        except Exception:
-            price_val = None
+    if isinstance(current_inst, dict):
+        raw_data = current_inst.get("data")
+        if isinstance(raw_data, dict):
+            try:
+                price_val = float(raw_data.get("price") or 0)
+            except Exception:
+                price_val = None
 
     latest_event = events[0] if events else None
     cash_events = [e for e in events if e.get("type") == "cash" and e.get("cash_value")]

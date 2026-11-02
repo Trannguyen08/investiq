@@ -5,11 +5,11 @@ from app.main import app
 
 
 @pytest.fixture
-def client():
+def client() -> TestClient:
     return TestClient(app)
 
 
-def test_event_reminders_crud_and_quick_test(client):
+def test_event_reminders_crud_and_quick_test(client: TestClient) -> None:
     payload = {
         "email": "investor@investiq.vn",
         "event_id": "TCB-2026-11-16",

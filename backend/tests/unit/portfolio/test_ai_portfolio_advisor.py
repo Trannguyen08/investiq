@@ -6,7 +6,7 @@ from app.infrastructure.external.notifications.paper_portfolio_email import (
 )
 
 
-def test_ai_portfolio_advisor_deep_loss():
+def test_ai_portfolio_advisor_deep_loss() -> None:
     account = {
         "starting_cash": "1000000000",
         "total_value": "950000000",
@@ -46,7 +46,7 @@ def test_ai_portfolio_advisor_deep_loss():
     assert len(review.action_items) > 0
 
 
-def test_ai_portfolio_advisor_take_profit():
+def test_ai_portfolio_advisor_take_profit() -> None:
     account = {
         "starting_cash": "1000000000",
         "total_value": "1150000000",
@@ -75,7 +75,7 @@ def test_ai_portfolio_advisor_take_profit():
     assert "KỶ LUẬT KIỂM SOÁT TỐT" in review.stop_loss_discipline
 
 
-def test_paper_portfolio_email_builder_and_sending():
+def test_paper_portfolio_email_builder_and_sending() -> None:
     account = {
         "starting_cash": "1000000000",
         "total_value": "1050000000",
@@ -108,7 +108,7 @@ def test_paper_portfolio_email_builder_and_sending():
     assert success is True
 
 
-def test_sql_paper_report_repository_fallback():
+def test_sql_paper_report_repository_fallback() -> None:
     repo = SqlPaperReportRepository(None)
     sub = repo.upsert_subscription("user-999", "tester@investiq.vn", is_active=True)
     assert sub["user_id"] == "user-999"

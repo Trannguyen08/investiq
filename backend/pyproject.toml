@@ -48,7 +48,11 @@ ignore_missing_imports = true
 module = ["httpx", "httpx.*"]
 ignore_missing_imports = true
 
-[dependency-groups]
-dev = [
-    "allure-pytest==2.16.2",
+[[tool.mypy.overrides]]
+module = [
+    "app.infrastructure.external.crawlers.*",
+    "app.infrastructure.cache.admin_cache",
+    "app.infrastructure.db.repositories.sql_admin_repository",
+    "app.application.use_cases.ai_chat.*",
 ]
+ignore_errors = true

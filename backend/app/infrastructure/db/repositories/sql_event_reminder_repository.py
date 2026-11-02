@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import builtins
 import logging
 from datetime import UTC, datetime, timedelta
 from threading import RLock
@@ -143,7 +144,7 @@ class SqlEventReminderRepository:
             logger.warning("db_delete_reminder_failed", extra={"error": str(exc)})
             return True
 
-    def get_due_reminders(self, window_hours: int = 48) -> list[dict[str, Any]]:
+    def get_due_reminders(self, window_hours: int = 48) -> builtins.list[dict[str, Any]]:
         """Returns pending reminders where the event date is within the reminder window."""
         due_items: list[dict[str, Any]] = []
         now = datetime.now(UTC)

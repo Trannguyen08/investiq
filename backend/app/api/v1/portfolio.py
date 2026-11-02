@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from decimal import Decimal
-from typing import Annotated
+from typing import Annotated, Any
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, Header, HTTPException, Response, status
@@ -251,9 +251,12 @@ def send_daily_report_now(
     sub = repo.get_subscription(user_id)
     target_email = (sub.get("email") if sub else None) or f"user_{user_id[:8]}@investiq.vn"
     dashboard = service.dashboard(user_id)
-    account_dict = dashboard.get("account", {})
-    holdings_list = dashboard.get("holdings", [])
-    trades_list = dashboard.get("trades", [])
+    account_raw = dashboard.get("account")
+    account_dict: dict[str, Any] = dict(account_raw) if isinstance(account_raw, dict) else {}
+    holdings_raw = dashboard.get("holdings")
+    holdings_list: list[dict[str, Any]] = list(holdings_raw) if isinstance(holdings_raw, list) else []
+    trades_raw = dashboard.get("trades")
+    trades_list: list[dict[str, Any]] | None = list(trades_raw) if isinstance(trades_raw, list) else None
 
     ai_review = generate_ai_portfolio_review(
         account_data=account_dict,

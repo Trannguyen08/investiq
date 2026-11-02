@@ -10,13 +10,13 @@ from app.main import app
 client = TestClient(app)
 
 
-def test_admin_market_data_pipeline_unauthorized():
+def test_admin_market_data_pipeline_unauthorized() -> None:
     res = client.get("/api/v1/admin/market-data-pipeline")
     # require_auth_bff rejects without auth cookie/token
     assert res.status_code in {401, 403}
 
 
-def test_admin_market_data_pipeline_authorized():
+def test_admin_market_data_pipeline_authorized() -> None:
     app.dependency_overrides[require_auth_bff] = lambda: {"user_id": "admin-1", "role": "admin"}
     app.dependency_overrides[require_admin_user] = lambda: "admin-1"
 

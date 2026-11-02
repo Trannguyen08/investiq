@@ -16,7 +16,8 @@ logger = logging.getLogger("investiq.events.worker")
 def run_events_ingestion_cycle() -> dict[str, Any]:
     """Execute continuous event crawling, deduplication, and pruning of past events."""
     try:
-        from app.api.v1.market_data import get_market_provider, get_market_read_cache
+        from app.api.v1.market_data import get_market_provider
+        from app.infrastructure.cache.market_cache import get_market_read_cache
 
         try:
             provider = get_market_provider()
