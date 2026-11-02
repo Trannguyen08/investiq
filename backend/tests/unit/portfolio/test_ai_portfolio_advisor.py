@@ -1,10 +1,9 @@
-import pytest
 from app.application.use_cases.portfolio.ai_portfolio_advisor import generate_ai_portfolio_review
+from app.infrastructure.db.repositories.sql_paper_report_repository import SqlPaperReportRepository
 from app.infrastructure.external.notifications.paper_portfolio_email import (
     build_paper_portfolio_email_html,
     send_paper_portfolio_daily_email,
 )
-from app.infrastructure.db.repositories.sql_paper_report_repository import SqlPaperReportRepository
 
 
 def test_ai_portfolio_advisor_deep_loss():
@@ -122,4 +121,3 @@ def test_sql_paper_report_repository_fallback():
 
     active_subs = repo.list_active_subscriptions()
     assert any(s["user_id"] == "user-999" for s in active_subs)
-

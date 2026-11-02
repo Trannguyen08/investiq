@@ -17,7 +17,7 @@ type Props = {
 };
 
 export function IndexAnalyticsPanel({ currentIndex, allIndices }: Props) {
-  const candles = currentIndex.candles ?? [];
+  const candles = useMemo(() => currentIndex.candles ?? [], [currentIndex.candles]);
   const currentVal = Number(currentIndex.value) || 0;
 
   // 1. Multi-horizon returns & 52-week statistics

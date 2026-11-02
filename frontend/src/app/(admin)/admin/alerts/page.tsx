@@ -191,4 +191,3 @@ export default async function AdminAlertsPage({
     </div>
   );
 }
-

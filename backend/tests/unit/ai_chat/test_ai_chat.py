@@ -1,8 +1,9 @@
 import pytest
+
 from app.application.use_cases.ai_chat.ai_financial_service import (
     AiFinancialService,
-    _extract_tickers,
     _calculate_rsi,
+    _extract_tickers,
 )
 from app.application.use_cases.market_data.market_service import MarketService
 from app.infrastructure.external.market_fixture_provider import FixtureMarketProvider
@@ -61,4 +62,3 @@ async def test_ai_financial_service_forensics() -> None:
     result = await ai_service.process_chat("Kiểm tra rủi ro bẫy kế toán BCTC của HPG")
     widget_types = [w["type"] for w in result["widgets"]]
     assert "forensic_warning" in widget_types
-

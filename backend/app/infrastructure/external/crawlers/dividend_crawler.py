@@ -144,7 +144,6 @@ def _classify_dividend(text: str) -> tuple[str, str, Decimal | None]:
     return "other", text, None
 
 
-
 # Verified upcoming corporate dividend events in the future (from Nov 2026 onwards)
 _UPCOMING_FUTURE_DIVIDENDS = [
     {

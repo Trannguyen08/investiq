@@ -32,4 +32,3 @@ describe("CandlestickPredictionArena", () => {
     expect(screen.getByText(/Bài học thực chiến rút ra/i)).toBeInTheDocument();
   });
 });
-

@@ -117,4 +117,3 @@ export function StockComparisonWidget({ data }: { data: StockComparisonWidgetDat
     </div>
   );
 }
-

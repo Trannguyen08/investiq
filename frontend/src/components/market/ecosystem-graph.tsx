@@ -261,7 +261,7 @@ export function EcosystemGraph({
               <h2 className="eco-hero-title">{detail.name}</h2>
               <div className="eco-hero-founder-row">
                 <span className="eco-founder-badge">
-                  
+
                   Lãnh đạo sáng lập: <strong>{detail.founder_name}</strong>
                 </span>
                 <Link

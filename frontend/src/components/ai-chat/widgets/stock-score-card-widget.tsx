@@ -193,4 +193,3 @@ export function StockScoreCardWidget({ data }: { data: StockScoreCardWidgetData 
     </div>
   );
 }
-

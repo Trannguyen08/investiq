@@ -6,7 +6,7 @@ import asyncio
 import json
 from decimal import Decimal
 from functools import lru_cache
-from typing import Annotated, Literal
+from typing import Annotated, Any, Literal
 from uuid import UUID, uuid4
 
 from fastapi import (
@@ -47,7 +47,6 @@ from app.schemas.market import (
     EcosystemsResponse,
     EventReminderActionResponse,
     EventReminderCreateRequest,
-    EventReminderItem,
     EventReminderListEnvelope,
     EventsResponse,
     FinancialForensicsEnvelope,
@@ -411,6 +410,7 @@ def create_event_reminder(payload: EventReminderCreateRequest) -> dict[str, Any]
     from app.infrastructure.db.repositories.sql_event_reminder_repository import (
         get_event_reminder_repository,
     )
+
     repo = get_event_reminder_repository()
     created = repo.create(
         email=payload.email,
@@ -435,6 +435,7 @@ def list_event_reminders(
     from app.infrastructure.db.repositories.sql_event_reminder_repository import (
         get_event_reminder_repository,
     )
+
     repo = get_event_reminder_repository()
     items = repo.list(email=email)
     return {
@@ -448,6 +449,7 @@ def delete_event_reminder(reminder_id: str) -> dict[str, Any]:
     from app.infrastructure.db.repositories.sql_event_reminder_repository import (
         get_event_reminder_repository,
     )
+
     repo = get_event_reminder_repository()
     repo.delete(reminder_id)
     return {
@@ -457,7 +459,9 @@ def delete_event_reminder(reminder_id: str) -> dict[str, Any]:
     }
 
 
-@router.post("/events/reminders/{reminder_id}/test-send", response_model=EventReminderActionResponse)
+@router.post(
+    "/events/reminders/{reminder_id}/test-send", response_model=EventReminderActionResponse
+)
 def test_send_reminder(reminder_id: str) -> dict[str, Any]:
     from app.infrastructure.db.repositories.sql_event_reminder_repository import (
         get_event_reminder_repository,
@@ -465,6 +469,7 @@ def test_send_reminder(reminder_id: str) -> dict[str, Any]:
     from app.infrastructure.external.notifications.event_reminder_email import (
         send_event_reminder_email,
     )
+
     repo = get_event_reminder_repository()
     items = repo.list()
     target = next((i for i in items if str(i.get("id")) == str(reminder_id)), None)
@@ -476,7 +481,9 @@ def test_send_reminder(reminder_id: str) -> dict[str, Any]:
         symbol=target["symbol"],
         event_title=target["event_title"],
         event_type=target["event_type"],
-        event_date_str=target["event_at"].strftime("%d/%m/%Y") if hasattr(target["event_at"], "strftime") else str(target["event_at"]),
+        event_date_str=target["event_at"].strftime("%d/%m/%Y")
+        if hasattr(target["event_at"], "strftime")
+        else str(target["event_at"]),
         days_left=target.get("days_before", 1),
     )
     return {
@@ -491,12 +498,15 @@ def quick_test_reminder(payload: EventReminderCreateRequest) -> dict[str, Any]:
     from app.infrastructure.external.notifications.event_reminder_email import (
         send_event_reminder_email,
     )
+
     success, msg = send_event_reminder_email(
         to_email=payload.email,
         symbol=payload.symbol,
         event_title=payload.event_title,
         event_type=payload.event_type,
-        event_date_str=payload.event_at.strftime("%d/%m/%Y") if hasattr(payload.event_at, "strftime") else str(payload.event_at),
+        event_date_str=payload.event_at.strftime("%d/%m/%Y")
+        if hasattr(payload.event_at, "strftime")
+        else str(payload.event_at),
         days_left=payload.days_before,
     )
     return {

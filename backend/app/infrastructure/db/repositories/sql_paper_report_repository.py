@@ -22,33 +22,34 @@ class SqlPaperReportRepository:
         if self._pool is None:
             return _MEM_STORE.get(user_id)
         try:
-            with self._pool.connection() as conn:
-                with conn.cursor() as cur:
-                    cur.execute(
-                        """
+            with self._pool.connection() as conn, conn.cursor() as cur:
+                cur.execute(
+                    """
                         SELECT id, user_id, email, is_active, last_sent_at, created_at, updated_at
                         FROM paper_portfolio_daily_reports
                         WHERE user_id = %s;
                         """,
-                        (user_id,),
-                    )
-                    row = cur.fetchone()
-                    if not row:
-                        return None
-                    return {
-                        "id": str(row[0]),
-                        "user_id": str(row[1]),
-                        "email": str(row[2]),
-                        "is_active": bool(row[3]),
-                        "last_sent_at": row[4],
-                        "created_at": row[5],
-                        "updated_at": row[6],
-                    }
+                    (user_id,),
+                )
+                row = cur.fetchone()
+                if not row:
+                    return None
+                return {
+                    "id": str(row[0]),
+                    "user_id": str(row[1]),
+                    "email": str(row[2]),
+                    "is_active": bool(row[3]),
+                    "last_sent_at": row[4],
+                    "created_at": row[5],
+                    "updated_at": row[6],
+                }
         except Exception as exc:
             logger.warning("Failed to fetch paper report sub from DB, using fallback: %s", exc)
             return _MEM_STORE.get(user_id)
 
-    def upsert_subscription(self, user_id: str, email: str, is_active: bool = True) -> dict[str, Any]:
+    def upsert_subscription(
+        self, user_id: str, email: str, is_active: bool = True
+    ) -> dict[str, Any]:
         now = datetime.now(UTC)
         record = {
             "id": str(uuid4()),
@@ -65,8 +66,7 @@ class SqlPaperReportRepository:
             return record
 
         try:
-            with self._pool.connection() as conn:
-                with conn.cursor() as cur:
+            with self._pool.connection() as conn, conn.cursor() as cur:
                     cur.execute(
                         """
                         INSERT INTO paper_portfolio_daily_reports (user_id, email, is_active, updated_at)
@@ -100,28 +100,27 @@ class SqlPaperReportRepository:
         if self._pool is None:
             return [sub for sub in _MEM_STORE.values() if sub.get("is_active")]
         try:
-            with self._pool.connection() as conn:
-                with conn.cursor() as cur:
-                    cur.execute(
-                        """
+            with self._pool.connection() as conn, conn.cursor() as cur:
+                cur.execute(
+                    """
                         SELECT id, user_id, email, is_active, last_sent_at, created_at, updated_at
                         FROM paper_portfolio_daily_reports
                         WHERE is_active = TRUE;
                         """
-                    )
-                    rows = cur.fetchall()
-                    return [
-                        {
-                            "id": str(r[0]),
-                            "user_id": str(r[1]),
-                            "email": str(r[2]),
-                            "is_active": bool(r[3]),
-                            "last_sent_at": r[4],
-                            "created_at": r[5],
-                            "updated_at": r[6],
-                        }
-                        for r in rows
-                    ]
+                )
+                rows = cur.fetchall()
+                return [
+                    {
+                        "id": str(r[0]),
+                        "user_id": str(r[1]),
+                        "email": str(r[2]),
+                        "is_active": bool(r[3]),
+                        "last_sent_at": r[4],
+                        "created_at": r[5],
+                        "updated_at": r[6],
+                    }
+                    for r in rows
+                ]
         except Exception as exc:
             logger.warning("Failed to list active paper report subs from DB: %s", exc)
             return [sub for sub in _MEM_STORE.values() if sub.get("is_active")]
@@ -135,17 +134,16 @@ class SqlPaperReportRepository:
             return
 
         try:
-            with self._pool.connection() as conn:
-                with conn.cursor() as cur:
-                    cur.execute(
-                        """
+            with self._pool.connection() as conn, conn.cursor() as cur:
+                cur.execute(
+                    """
                         UPDATE paper_portfolio_daily_reports
                         SET last_sent_at = %s, updated_at = %s
                         WHERE user_id = %s;
                         """,
-                        (target_time, target_time, user_id),
-                    )
-                    conn.commit()
+                    (target_time, target_time, user_id),
+                )
+                conn.commit()
         except Exception as exc:
             logger.warning("Failed to mark paper report sent in DB: %s", exc)
 
@@ -158,4 +156,3 @@ def get_paper_report_repository() -> SqlPaperReportRepository:
         return SqlPaperReportRepository(pool)
     except Exception:
         return SqlPaperReportRepository(None)
-

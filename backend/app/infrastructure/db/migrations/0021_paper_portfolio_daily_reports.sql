@@ -13,4 +13,3 @@ CREATE TABLE IF NOT EXISTS paper_portfolio_daily_reports (
 
 CREATE INDEX IF NOT EXISTS idx_paper_daily_reports_active ON paper_portfolio_daily_reports (is_active);
 CREATE INDEX IF NOT EXISTS idx_paper_daily_reports_user ON paper_portfolio_daily_reports (user_id);
-

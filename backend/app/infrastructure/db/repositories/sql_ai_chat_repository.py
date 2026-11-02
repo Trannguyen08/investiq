@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 from typing import Any
+
 from psycopg.rows import dict_row
 from psycopg_pool import ConnectionPool
 
@@ -94,7 +95,7 @@ class SqlAiChatRepository:
             connection.transaction(),
             connection.cursor() as cursor,
         ):
-            res = cursor.execute(
+            cursor.execute(
                 """
                 DELETE FROM ai_conversations
                 WHERE id = %s AND user_id = %s
@@ -158,4 +159,3 @@ class SqlAiChatRepository:
                 (conversation_id, limit),
             ).fetchall()
             return [dict(r) for r in rows]
-

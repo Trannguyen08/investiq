@@ -46,4 +46,3 @@ export function MarketPulseWidget({ data }: { data: MarketPulseWidgetData }) {
     </div>
   );
 }
-

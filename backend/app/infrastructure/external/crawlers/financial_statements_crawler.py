@@ -516,25 +516,30 @@ _VN30_CURATED_DATA: dict[str, dict[str, Any]] = {
     },
 }
 
+
 # Standard Default Industry Template for any stock not in explicit map
 def _generate_fallback_data(symbol: str, period_type: str = "quarter") -> dict[str, Any]:
     """Generates realistic, mathematically balanced statements for unindexed stocks."""
     is_quarter = period_type == "quarter"
-    periods = ["Q3-2026", "Q2-2026", "Q1-2026", "Q4-2025"] if is_quarter else ["2025", "2024", "2023", "2022"]
-    
+    periods = (
+        ["Q3-2026", "Q2-2026", "Q1-2026", "Q4-2025"]
+        if is_quarter
+        else ["2025", "2024", "2023", "2022"]
+    )
+
     # Base deterministic scale from symbol letters
     scale = sum(ord(c) for c in symbol) * 2.5
     rev_base = max(120.0, round(scale, 1))
-    
+
     rev_multipliers = [1.12, 1.08, 1.02, 1.0] if is_quarter else [1.18, 1.09, 1.04, 1.0]
     rev_series = [round(rev_base * m, 1) for m in rev_multipliers]
     gp_series = [round(r * 0.26, 1) for r in rev_series]
     np_series = [round(r * 0.085, 1) for r in rev_series]
-    
+
     assets_base = rev_base * (1.8 if is_quarter else 2.2)
     assets_series = [round(assets_base * m, 1) for m in rev_multipliers]
     debt_series = [round(a * 0.45, 1) for a in assets_series]
-    eq_series = [round(a - d, 1) for a, d in zip(assets_series, debt_series)]
+    eq_series = [round(a - d, 1) for a, d in zip(assets_series, debt_series, strict=False)]
 
     charts = []
     for i, p in enumerate(periods):
@@ -544,35 +549,73 @@ def _generate_fallback_data(symbol: str, period_type: str = "quarter") -> dict[s
         assets = assets_series[i]
         debt = debt_series[i]
         eq = eq_series[i]
-        
-        charts.append({
-            "period": p,
-            "revenue_billion": rev,
-            "gross_profit_billion": gp,
-            "net_profit_billion": np_val,
-            "gross_margin_percent": round((gp / rev) * 100, 2) if rev > 0 else 26.0,
-            "net_margin_percent": round((np_val / rev) * 100, 2) if rev > 0 else 8.5,
-            "total_assets_billion": assets,
-            "total_debt_billion": debt,
-            "equity_billion": eq,
-        })
+
+        charts.append(
+            {
+                "period": p,
+                "revenue_billion": rev,
+                "gross_profit_billion": gp,
+                "net_profit_billion": np_val,
+                "gross_margin_percent": round((gp / rev) * 100, 2) if rev > 0 else 26.0,
+                "net_margin_percent": round((np_val / rev) * 100, 2) if rev > 0 else 8.5,
+                "total_assets_billion": assets,
+                "total_debt_billion": debt,
+                "equity_billion": eq,
+            }
+        )
 
     # Detailed metrics rows
     inc_metrics = [
-        {"code": "DTTBHCCDV", "name": "Doanh thu bán hàng và CCDV", "values": [r * 1e9 for r in rev_series]},
-        {"code": "GV", "name": "Giá vốn hàng bán", "values": [(r - gp) * 1e9 for r, gp in zip(rev_series, gp_series)]},
-        {"code": "LNGBHCCDV", "name": "Lợi nhuận gộp về BH và CCDV", "values": [gp * 1e9 for gp in gp_series]},
-        {"code": "LNSTTNDN", "name": "Lợi nhuận sau thuế TNDN", "values": [np_v * 1e9 for np_v in np_series]},
+        {
+            "code": "DTTBHCCDV",
+            "name": "Doanh thu bán hàng và CCDV",
+            "values": [r * 1e9 for r in rev_series],
+        },
+        {
+            "code": "GV",
+            "name": "Giá vốn hàng bán",
+            "values": [(r - gp) * 1e9 for r, gp in zip(rev_series, gp_series, strict=False)],
+        },
+        {
+            "code": "LNGBHCCDV",
+            "name": "Lợi nhuận gộp về BH và CCDV",
+            "values": [gp * 1e9 for gp in gp_series],
+        },
+        {
+            "code": "LNSTTNDN",
+            "name": "Lợi nhuận sau thuế TNDN",
+            "values": [np_v * 1e9 for np_v in np_series],
+        },
     ]
     bs_metrics = [
         {"code": "TotalAsset", "name": "Tổng tài sản", "values": [a * 1e9 for a in assets_series]},
-        {"code": "TotalDebt", "name": "Nợ phải trả (Tổng nợ)", "values": [d * 1e9 for d in debt_series]},
-        {"code": "TotalOwnerCapital", "name": "Vốn chủ sở hữu", "values": [e * 1e9 for e in eq_series]},
+        {
+            "code": "TotalDebt",
+            "name": "Nợ phải trả (Tổng nợ)",
+            "values": [d * 1e9 for d in debt_series],
+        },
+        {
+            "code": "TotalOwnerCapital",
+            "name": "Vốn chủ sở hữu",
+            "values": [e * 1e9 for e in eq_series],
+        },
     ]
     cf_metrics = [
-        {"code": "CFO", "name": "Lưu chuyển tiền thuần từ HĐKD", "values": [np_v * 1.15 * 1e9 for np_v in np_series]},
-        {"code": "CFI", "name": "Lưu chuyển tiền thuần từ HĐĐT", "values": [-np_v * 0.65 * 1e9 for np_v in np_series]},
-        {"code": "CFF", "name": "Lưu chuyển tiền thuần từ HĐTC", "values": [-np_v * 0.3 * 1e9 for np_v in np_series]},
+        {
+            "code": "CFO",
+            "name": "Lưu chuyển tiền thuần từ HĐKD",
+            "values": [np_v * 1.15 * 1e9 for np_v in np_series],
+        },
+        {
+            "code": "CFI",
+            "name": "Lưu chuyển tiền thuần từ HĐĐT",
+            "values": [-np_v * 0.65 * 1e9 for np_v in np_series],
+        },
+        {
+            "code": "CFF",
+            "name": "Lưu chuyển tiền thuần từ HĐTC",
+            "values": [-np_v * 0.3 * 1e9 for np_v in np_series],
+        },
     ]
 
     return {
@@ -634,14 +677,17 @@ class FinancialStatementsCrawler:
                 cf=cf_data,
             )
         except Exception as exc:
-            logger.warning("cafef_crawl_failed_using_curated", extra={"symbol": clean_symbol, "error": str(exc)})
+            logger.warning(
+                "cafef_crawl_failed_using_curated",
+                extra={"symbol": clean_symbol, "error": str(exc)},
+            )
             result = {}
 
         # 2. Check if result is empty or incomplete; if so, fallback to curated/benchmark model
         periods = result.get("periods", [])
         charts = result.get("charts", [])
         inc_m = result.get("income_statement", [])
-        
+
         if not periods or not charts or not inc_m or len(charts) == 0:
             result = self._get_curated_or_fallback(clean_symbol, norm_period)
 
@@ -658,7 +704,6 @@ class FinancialStatementsCrawler:
         limit: int,
     ) -> dict[str, Any]:
         """Fetch a specific report type (1=Income Statement, 2=Balance Sheet, 3/4=Cash Flow)."""
-        current_year = datetime.now(UTC).year
 
         # Targeted candidate end dates covering latest real CafeF filings
         if period_type == "quarter":
@@ -781,23 +826,42 @@ class FinancialStatementsCrawler:
 
         # Extensive keyword vocabulary covering manufacturing, retail, banking, securities, insurance
         revenue_series = _get_metric_series(
-            inc_metrics, [
-                "dttbhccdv", "totalincome", "doanh thu bán hàng", "doanh thu thuần", 
-                "tổng doanh thu", "dthd", "doanh thu hoạt động", "thu nhập lãi thuần", 
-                "tnlt", "thu nhập lãi và các khoản tương tự"
-            ]
+            inc_metrics,
+            [
+                "dttbhccdv",
+                "totalincome",
+                "doanh thu bán hàng",
+                "doanh thu thuần",
+                "tổng doanh thu",
+                "dthd",
+                "doanh thu hoạt động",
+                "thu nhập lãi thuần",
+                "tnlt",
+                "thu nhập lãi và các khoản tương tự",
+            ],
         )
         gross_profit_series = _get_metric_series(
-            inc_metrics, [
-                "lngbhccdv", "lợi nhuận gộp", "totalprofit", "lợi nhuận trước thuế", 
-                "lợi nhuận thuần từ hđkd", "lnsttndn", "netincome"
-            ]
+            inc_metrics,
+            [
+                "lngbhccdv",
+                "lợi nhuận gộp",
+                "totalprofit",
+                "lợi nhuận trước thuế",
+                "lợi nhuận thuần từ hđkd",
+                "lnsttndn",
+                "netincome",
+            ],
         )
         net_profit_series = _get_metric_series(
-            inc_metrics, [
-                "lnsttndn", "netincome", "lợi nhuận sau thuế", "lợi nhuận ròng", 
-                "lợi nhuận kt sau thuế", "lợi nhuận sau thuế của công ty mẹ"
-            ]
+            inc_metrics,
+            [
+                "lnsttndn",
+                "netincome",
+                "lợi nhuận sau thuế",
+                "lợi nhuận ròng",
+                "lợi nhuận kt sau thuế",
+                "lợi nhuận sau thuế của công ty mẹ",
+            ],
         )
 
         total_assets_series = _get_metric_series(bs_metrics, ["totalasset", "tts", "tổng tài sản"])
@@ -805,7 +869,8 @@ class FinancialStatementsCrawler:
             bs_metrics, ["totaldebt", "npt", "tổng nợ", "nợ phải trả", "tiengui"]
         )
         equity_series = _get_metric_series(
-            bs_metrics, ["totalownercapital", "vcsh", "vốn chủ sở hữu", "vonqui", "vốn và các quỹ", "vốn chủ"]
+            bs_metrics,
+            ["totalownercapital", "vcsh", "vốn chủ sở hữu", "vonqui", "vốn và các quỹ", "vốn chủ"],
         )
 
         chart_data: list[dict[str, Any]] = []
@@ -827,7 +892,23 @@ class FinancialStatementsCrawler:
 
             # If equity is missing or zero, compute based on total assets
             if (eq is None or eq <= 0) and assets is not None and assets > 0:
-                is_bank = any(b in symbol for b in ["VCB", "CTG", "BID", "TCB", "MBB", "ACB", "STB", "HDB", "TPB", "SHB", "SSB", "VPB"])
+                is_bank = any(
+                    b in symbol
+                    for b in [
+                        "VCB",
+                        "CTG",
+                        "BID",
+                        "TCB",
+                        "MBB",
+                        "ACB",
+                        "STB",
+                        "HDB",
+                        "TPB",
+                        "SHB",
+                        "SSB",
+                        "VPB",
+                    ]
+                )
                 eq = round(assets * (0.075 if is_bank else 0.45), 2)
 
             # Financial balance logic: If debt is missing but assets and equity exist
@@ -848,7 +929,9 @@ class FinancialStatementsCrawler:
             gross_margin = (
                 round((gp / rev) * 100, 2) if gp is not None and rev and rev > 0 else None
             )
-            net_margin = round((np_val / rev) * 100, 2) if np_val is not None and rev and rev > 0 else None
+            net_margin = (
+                round((np_val / rev) * 100, 2) if np_val is not None and rev and rev > 0 else None
+            )
 
             if net_margin is None and np_b and rev_b and rev_b > 0:
                 net_margin = round((np_b / rev_b) * 100, 2)
@@ -905,7 +988,11 @@ class FinancialStatementsCrawler:
         if not curated:
             return _generate_fallback_data(symbol, period_type)
 
-        periods = ["Q3-2026", "Q2-2026", "Q1-2026", "Q4-2025"] if is_quarter else ["2025", "2024", "2023", "2022"]
+        periods = (
+            ["Q3-2026", "Q2-2026", "Q1-2026", "Q4-2025"]
+            if is_quarter
+            else ["2025", "2024", "2023", "2022"]
+        )
         prefix = "q_" if is_quarter else "y_"
 
         rev_list = curated.get(f"{prefix}rev", [1000.0] * 4)
@@ -924,33 +1011,71 @@ class FinancialStatementsCrawler:
             d = debt_list[i] if i < len(debt_list) else debt_list[-1]
             e = equity_list[i] if i < len(equity_list) else equity_list[-1]
 
-            charts.append({
-                "period": p,
-                "revenue_billion": r,
-                "gross_profit_billion": g,
-                "net_profit_billion": n,
-                "gross_margin_percent": round((g / r) * 100, 2) if r > 0 else 25.0,
-                "net_margin_percent": round((n / r) * 100, 2) if r > 0 else 10.0,
-                "total_assets_billion": a,
-                "total_debt_billion": d,
-                "equity_billion": e,
-            })
+            charts.append(
+                {
+                    "period": p,
+                    "revenue_billion": r,
+                    "gross_profit_billion": g,
+                    "net_profit_billion": n,
+                    "gross_margin_percent": round((g / r) * 100, 2) if r > 0 else 25.0,
+                    "net_margin_percent": round((n / r) * 100, 2) if r > 0 else 10.0,
+                    "total_assets_billion": a,
+                    "total_debt_billion": d,
+                    "equity_billion": e,
+                }
+            )
 
         inc_metrics = [
-            {"code": "DTTBHCCDV", "name": "Doanh thu bán hàng và cung cấp dịch vụ", "values": [r * 1e9 for r in rev_list]},
-            {"code": "GV", "name": "Giá vốn hàng bán", "values": [(r - g) * 1e9 for r, g in zip(rev_list, gp_list)]},
-            {"code": "LNGBHCCDV", "name": "Lợi nhuận gộp về bán hàng và CCDV", "values": [g * 1e9 for g in gp_list]},
-            {"code": "LNSTTNDN", "name": "Lợi nhuận sau thuế TNDN", "values": [n * 1e9 for n in np_list]},
+            {
+                "code": "DTTBHCCDV",
+                "name": "Doanh thu bán hàng và cung cấp dịch vụ",
+                "values": [r * 1e9 for r in rev_list],
+            },
+            {
+                "code": "GV",
+                "name": "Giá vốn hàng bán",
+                "values": [(r - g) * 1e9 for r, g in zip(rev_list, gp_list, strict=False)],
+            },
+            {
+                "code": "LNGBHCCDV",
+                "name": "Lợi nhuận gộp về bán hàng và CCDV",
+                "values": [g * 1e9 for g in gp_list],
+            },
+            {
+                "code": "LNSTTNDN",
+                "name": "Lợi nhuận sau thuế TNDN",
+                "values": [n * 1e9 for n in np_list],
+            },
         ]
         bs_metrics = [
-            {"code": "TotalAsset", "name": "Tổng cộng tài sản", "values": [a * 1e9 for a in assets_list]},
+            {
+                "code": "TotalAsset",
+                "name": "Tổng cộng tài sản",
+                "values": [a * 1e9 for a in assets_list],
+            },
             {"code": "TotalDebt", "name": "Nợ phải trả", "values": [d * 1e9 for d in debt_list]},
-            {"code": "TotalOwnerCapital", "name": "Vốn chủ sở hữu", "values": [e * 1e9 for e in equity_list]},
+            {
+                "code": "TotalOwnerCapital",
+                "name": "Vốn chủ sở hữu",
+                "values": [e * 1e9 for e in equity_list],
+            },
         ]
         cf_metrics = [
-            {"code": "CFO", "name": "Lưu chuyển tiền thuần từ hoạt động kinh doanh", "values": [n * 1.15 * 1e9 for n in np_list]},
-            {"code": "CFI", "name": "Lưu chuyển tiền thuần từ hoạt động đầu tư", "values": [-n * 0.6 * 1e9 for n in np_list]},
-            {"code": "CFF", "name": "Lưu chuyển tiền thuần từ hoạt động tài chính", "values": [-n * 0.35 * 1e9 for n in np_list]},
+            {
+                "code": "CFO",
+                "name": "Lưu chuyển tiền thuần từ hoạt động kinh doanh",
+                "values": [n * 1.15 * 1e9 for n in np_list],
+            },
+            {
+                "code": "CFI",
+                "name": "Lưu chuyển tiền thuần từ hoạt động đầu tư",
+                "values": [-n * 0.6 * 1e9 for n in np_list],
+            },
+            {
+                "code": "CFF",
+                "name": "Lưu chuyển tiền thuần từ hoạt động tài chính",
+                "values": [-n * 0.35 * 1e9 for n in np_list],
+            },
         ]
 
         return {

@@ -179,13 +179,15 @@
   1. *Áp dụng phân trang cho Trang Sự kiện (/market/events)*.
   2. *Áp dụng phân trang cho Trang Cổ tức trong Chi tiết mã cổ (StockDividendPanel trong /market/stocks/[symbol]?tab=dividend)*.
 - **Key Changes Implemented**:
-  1. **Phân trang Trang Sự kiện (rontend/src/components/market/market-workspace.tsx)**:
+  1. **Phân trang Trang Sự kiện (
+rontend/src/components/market/market-workspace.tsx)**:
      - Cấu hình phân trang PAGE_SIZE = 10 sự kiện mỗi trang.
      - Tự động nhóm các sự kiện theo ngày sau khi đã phân trang (pagedEvents).
      - Thanh điều hướng phân trang market-pagination event-pagination với nút ← Trang trước (disabled khi ở trang đầu), chỉ số Trang X / Y (Z sự kiện), và nút Trang sau → (disabled khi ở trang cuối).
      - Tự động reset về trang 1 khi người dùng đổi bộ lọc mã cổ phiếu hoặc loại sự kiện (useEffect).
      - Cuộn mượt lên đầu danh sách sự kiện khi chuyển trang (window.scrollTo).
-  2. **Phân trang Trang Cổ tức chi tiết mã (rontend/src/components/market/stock-dividend-panel.tsx)**:
+  2. **Phân trang Trang Cổ tức chi tiết mã (
+rontend/src/components/market/stock-dividend-panel.tsx)**:
      - Cấu hình phân trang PAGE_SIZE = 8 đợt chi trả mỗi trang.
      - Thanh phân trang trực quan: hiển thị Hiển thị X - Y trong tổng số Z đợt chi trả, nút ← Trước, danh sách số trang có ellipsis thông minh (1, 2, ..., N), và nút Sau →.
      - Tự động reset về trang 1 khi người dùng chuyển đổi giữa các tab lọc (*Tất cả*, *Tiền mặt*, *Cổ phiếu & Quyền*).
@@ -210,7 +212,8 @@
      - Trong \dividend-calendar-widget.tsx\ & \globals.css\:
        + Giảm \padding-top\ của container từ .5rem\ + \py-6\ xuống rem 1.5rem 1.5rem\ gọn gàng.
        + Bổ sung \margin-bottom: 1rem\ (\mb-3 sm:mb-4\) cho khối text tiêu đề để tạo khoảng cách thở thông thoáng.
-       + Căn phải toàn bộ khung lọc và ô tìm kiếm: \dividend-filter-toolbar\ được thiết lập \lex-direction: column; align-items: flex-end; justify-content: flex-end; margin-left: auto;\, giúp thanh chọn loại cổ tức và ô input tìm kiếm căn thẳng tắp theo biên phải của thẻ card.
+       + Căn phải toàn bộ khung lọc và ô tìm kiếm: \dividend-filter-toolbar\ được thiết lập \
+lex-direction: column; align-items: flex-end; justify-content: flex-end; margin-left: auto;\, giúp thanh chọn loại cổ tức và ô input tìm kiếm căn thẳng tắp theo biên phải của thẻ card.
   2. **Ảnh 2: Hệ thống Crawler & Worker Tự Động Thu Thập Sự Kiện Doanh Nghiệp**:
      - *Crawler Engine (\corporate_events_crawler.py\)*:
        + Bổ sung kho dữ liệu 48+ sự kiện doanh nghiệp trọng điểm cho VN30 và các cổ phiếu đầu ngành, phủ kín toàn bộ 8 danh mục: Cổ tức tiền mặt (\cash_dividend\), Cổ tức cổ phiếu (\stock_dividend\), Đại hội cổ đông (\shareholder_meeting\), Giao dịch nội bộ (\insider_trading\), Phát hành cổ phiếu (\share_issuance\), Niêm yết bổ sung (\dditional_listing\), Báo cáo kết quả kinh doanh (\earnings\), Sự kiện doanh nghiệp (\corporate_action\).

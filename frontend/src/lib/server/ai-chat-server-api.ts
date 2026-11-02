@@ -31,4 +31,3 @@ export async function aiChatRequest(pathWithQuery: string, init?: RequestInit) {
     },
   });
 }
-

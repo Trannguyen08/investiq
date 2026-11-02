@@ -6,9 +6,7 @@ from app.main import app
 
 @pytest.mark.anyio
 async def test_ai_chat_endpoint_guest() -> None:
-    async with AsyncClient(
-        transport=ASGITransport(app=app), base_url="http://test"
-    ) as client:
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
         response = await client.post(
             "/api/v1/ai/chat",
             json={"message": "Đánh giá cổ phiếu HPG"},
@@ -26,9 +24,7 @@ async def test_ai_chat_endpoint_guest() -> None:
 
 @pytest.mark.anyio
 async def test_ai_chat_endpoint_general_prompt() -> None:
-    async with AsyncClient(
-        transport=ASGITransport(app=app), base_url="http://test"
-    ) as client:
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
         response = await client.post(
             "/api/v1/ai/chat",
             json={"message": "Xin chào, bạn có thể giúp gì cho tôi?"},
@@ -36,4 +32,3 @@ async def test_ai_chat_endpoint_general_prompt() -> None:
         assert response.status_code == 200
         body = response.json()
         assert "InvestIQ" in body["message"]["content"]
-

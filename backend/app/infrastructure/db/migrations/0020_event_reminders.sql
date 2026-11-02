@@ -16,4 +16,3 @@ CREATE TABLE IF NOT EXISTS event_reminders (
 
 CREATE INDEX IF NOT EXISTS idx_event_reminders_status_event_at ON event_reminders(status, event_at);
 CREATE INDEX IF NOT EXISTS idx_event_reminders_email_event_id ON event_reminders(email, event_id);
-

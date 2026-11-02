@@ -7,7 +7,6 @@ focusing on capital preservation, stop-loss discipline, profit-taking, and risk 
 from __future__ import annotations
 
 from dataclasses import dataclass
-from decimal import Decimal
 from typing import Any
 
 
@@ -44,11 +43,17 @@ def generate_ai_portfolio_review(
     trades_data: list[dict[str, Any]] | None = None,
 ) -> AIPortfolioReview:
     """Analyze paper portfolio and produce structured AI advisor insights."""
-    total_val = float(account_data.get("total_value") or account_data.get("starting_cash") or 1_000_000_000)
+    total_val = float(
+        account_data.get("total_value") or account_data.get("starting_cash") or 1_000_000_000
+    )
     avail_cash = float(account_data.get("available_cash") or account_data.get("cash_balance") or 0)
-    invested_cost = float(account_data.get("invested_cost") or 0)
     total_pnl = float(account_data.get("total_pnl") or account_data.get("unrealized_pnl") or 0)
-    total_return_pct = float(str(account_data.get("total_return_percent") or "0").replace("%", "").replace("+", "").replace("−", "-"))
+    total_return_pct = float(
+        str(account_data.get("total_return_percent") or "0")
+        .replace("%", "")
+        .replace("+", "")
+        .replace("−", "-")
+    )
 
     cash_ratio = (avail_cash / total_val) * 100 if total_val > 0 else 100.0
 
@@ -68,7 +73,12 @@ def generate_ai_portfolio_review(
         curr_price = float(h.get("current_price") or avg_cost)
         mkt_val = float(h.get("market_value") or (qty * curr_price))
         pnl = float(h.get("unrealized_pnl") or ((curr_price - avg_cost) * qty))
-        pnl_pct_raw = str(h.get("unrealized_pnl_percent") or "0").replace("%", "").replace("+", "").replace("−", "-")
+        pnl_pct_raw = (
+            str(h.get("unrealized_pnl_percent") or "0")
+            .replace("%", "")
+            .replace("+", "")
+            .replace("−", "-")
+        )
         try:
             pnl_pct = float(pnl_pct_raw)
         except ValueError:
@@ -202,15 +212,25 @@ def generate_ai_portfolio_review(
     # 4. Kế hoạch hành động cụ thể cho phiên kế tiếp
     action_items = []
     if deep_loss_symbols:
-        action_items.append(f"Xem xét bán hạ tỷ trọng hoặc cắt dứt điểm các mã {', '.join([s[0] for s in deep_loss_symbols])} để giải phóng dòng tiền.")
+        action_items.append(
+            f"Xem xét bán hạ tỷ trọng hoặc cắt dứt điểm các mã {', '.join([s[0] for s in deep_loss_symbols])} để giải phóng dòng tiền."
+        )
     if big_gain_symbols:
-        action_items.append(f"Cân nhắc đặt lệnh chốt lời một phần (1/3 vị thế) cho mã {big_gain_symbols[0][0]} để khóa lợi nhuận.")
+        action_items.append(
+            f"Cân nhắc đặt lệnh chốt lời một phần (1/3 vị thế) cho mã {big_gain_symbols[0][0]} để khóa lợi nhuận."
+        )
     if cash_ratio < 15.0:
-        action_items.append("Bán bớt vị thế yếu nhất để tăng tỷ lệ tiền mặt dự phòng lên tối thiểu 20%.")
+        action_items.append(
+            "Bán bớt vị thế yếu nhất để tăng tỷ lệ tiền mặt dự phòng lên tối thiểu 20%."
+        )
     elif cash_ratio > 70.0 and len(analyzed_holdings) < 3:
-        action_items.append("Lọc thêm 1-2 cổ phiếu thuộc nhóm ngành khác (Ngân hàng, Thép, Bán lẻ) để đa dạng hóa danh mục.")
+        action_items.append(
+            "Lọc thêm 1-2 cổ phiếu thuộc nhóm ngành khác (Ngân hàng, Thép, Bán lẻ) để đa dạng hóa danh mục."
+        )
     else:
-        action_items.append("Tiếp tục nắm giữ các mã đang vận động tích cực trên đường trung bình MA20.")
+        action_items.append(
+            "Tiếp tục nắm giữ các mã đang vận động tích cực trên đường trung bình MA20."
+        )
 
     # Tóm tắt chung
     verdict = (
@@ -229,4 +249,3 @@ def generate_ai_portfolio_review(
         action_items=action_items,
         holdings_analyzed=analyzed_holdings,
     )
-

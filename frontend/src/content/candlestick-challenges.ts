@@ -69,4 +69,3 @@ export const CANDLESTICK_THEORY = {
     ],
   },
 };
-

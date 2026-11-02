@@ -250,16 +250,16 @@ export function CandlestickPredictionArena() {
                         <line x1="40" y1="35" x2="40" y2="80" stroke="#10b981" strokeWidth="3" />
                         <rect x="15" y="80" width="50" height="110" rx="3" fill="#10b981" />
                         <line x1="40" y1="190" x2="40" y2="245" stroke="#10b981" strokeWidth="3" />
-                        
+
                         <circle cx="40" cy="35" r="4" fill="#38bdf8" />
                         <text x="-5" y="39" fill="#38bdf8" fontSize="12" fontWeight="700" textAnchor="end">Đỉnh (High)</text>
-                        
+
                         <text x="-5" y="85" fill="#34d399" fontSize="12" fontWeight="700" textAnchor="end">Đóng (Close)</text>
-                        
+
                         <text x="40" y="140" fill="#ffffff" fontSize="12" fontWeight="800" textAnchor="middle">NẾN XANH</text>
-                        
+
                         <text x="-5" y="195" fill="#34d399" fontSize="12" fontWeight="700" textAnchor="end">Mở (Open)</text>
-                        
+
                         <circle cx="40" cy="245" r="4" fill="#38bdf8" />
                         <text x="-5" y="249" fill="#38bdf8" fontSize="12" fontWeight="700" textAnchor="end">Đáy (Low)</text>
                       </g>
@@ -269,16 +269,16 @@ export function CandlestickPredictionArena() {
                         <line x1="40" y1="35" x2="40" y2="80" stroke="#ef4444" strokeWidth="3" />
                         <rect x="15" y="80" width="50" height="110" rx="3" fill="#ef4444" />
                         <line x1="40" y1="190" x2="40" y2="245" stroke="#ef4444" strokeWidth="3" />
-                        
+
                         <circle cx="40" cy="35" r="4" fill="#38bdf8" />
                         <text x="85" y="39" fill="#38bdf8" fontSize="12" fontWeight="700">Đỉnh (High)</text>
-                        
+
                         <text x="85" y="85" fill="#f87171" fontSize="12" fontWeight="700">Mở (Open)</text>
-                        
+
                         <text x="40" y="140" fill="#ffffff" fontSize="12" fontWeight="800" textAnchor="middle">NẾN ĐỎ</text>
-                        
+
                         <text x="85" y="195" fill="#f87171" fontSize="12" fontWeight="700">Đóng (Close)</text>
-                        
+
                         <circle cx="40" cy="245" r="4" fill="#38bdf8" />
                         <text x="85" y="249" fill="#38bdf8" fontSize="12" fontWeight="700">Đáy (Low)</text>
                       </g>
@@ -571,7 +571,7 @@ export function CandlestickPredictionArena() {
                   <div className="vsa-rule-card bg-slate-950/80 border border-slate-800 rounded-xl p-4 flex flex-col gap-2.5 shadow-md">
                     <h4 className="text-sm font-bold text-emerald-400 m-0">3. Vị Trí Vàng: Nến Phải Đứng Đúng Chỗ</h4>
                     <p className="text-xs text-slate-300 leading-relaxed m-0">
-                      <strong>"Một cây búa ở lưng chừng trời chỉ là thanh gỗ vô dụng!"</strong>
+                      <strong>&ldquo;Một cây búa ở lưng chừng trời chỉ là thanh gỗ vô dụng!&rdquo;</strong>
                     </p>
                     <ul className="text-xs text-slate-400 pl-4 list-disc space-y-1.5 m-0">
                       <li>Mẫu hình nến chỉ có xác suất thắng &gt; 80% khi xuất hiện tại <strong>Vùng Hỗ Trợ / Kháng Cự trọng yếu (Key Levels)</strong>.</li>

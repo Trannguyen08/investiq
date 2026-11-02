@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from datetime import datetime
 from decimal import Decimal
+from typing import Any
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
@@ -618,7 +619,15 @@ class EventReminderCreateRequest(StrictModel):
             if "days_before" not in normalized and "remind_days_before" in normalized:
                 normalized["days_before"] = normalized["remind_days_before"]
             # Lọc bỏ các key dư thừa không thuộc model fields
-            allowed_keys = {"email", "event_id", "symbol", "event_title", "event_type", "event_at", "days_before"}
+            allowed_keys = {
+                "email",
+                "event_id",
+                "symbol",
+                "event_title",
+                "event_type",
+                "event_at",
+                "days_before",
+            }
             return {k: v for k, v in normalized.items() if k in allowed_keys}
         return data
 

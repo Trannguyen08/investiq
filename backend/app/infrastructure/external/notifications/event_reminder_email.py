@@ -82,7 +82,9 @@ def parse_and_format_event_date(date_input: Any) -> tuple[str, str]:
     if dt:
         weekday_name = WEEKDAY_VI.get(dt.weekday(), "")
         short_date = dt.strftime("%d/%m/%Y")
-        full_date_text = f"{weekday_name}, ngày {short_date}" if weekday_name else f"Ngày {short_date}"
+        full_date_text = (
+            f"{weekday_name}, ngày {short_date}" if weekday_name else f"Ngày {short_date}"
+        )
         return full_date_text, short_date
 
     raw = str(date_input or "Theo lịch công bố")
@@ -121,7 +123,6 @@ def render_event_reminder_html(
         else f"Sự kiện sẽ diễn ra sau {days_left} ngày"
     )
 
-    event_link = f"{app_url}/market/events?symbol={safe_symbol}"
     stock_link = f"{app_url}/market/stocks/{safe_symbol}"
 
     return f"""<!DOCTYPE html>
@@ -137,7 +138,7 @@ def render_event_reminder_html(
       <td align="center">
         <!-- Main Container -->
         <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="max-width: 600px; background-color: #0b1f33; border: 1px solid #1a3854; border-radius: 16px; overflow: hidden; box-shadow: 0 12px 40px rgba(0,0,0,0.5);">
-          
+
           <!-- Header Banner -->
           <tr>
             <td style="padding: 28px 32px; background: linear-gradient(135deg, #091a2b 0%, #0d2842 100%); border-bottom: 1px solid #1c3e5e;">
@@ -281,9 +282,11 @@ def is_dummy_or_test_email(email: str) -> bool:
         return True
     if any(cleaned.endswith(d) for d in DUMMY_DOMAINS):
         return True
-    if cleaned.startswith("investor@") or cleaned.startswith("tester@") or cleaned.startswith("dummy@"):
-        return True
-    return False
+    return bool(
+        cleaned.startswith("investor@")
+        or cleaned.startswith("tester@")
+        or cleaned.startswith("dummy@")
+    )
 
 
 def send_event_reminder_email(
@@ -330,14 +333,19 @@ def send_event_reminder_email(
             (PREVIEWS_DIR / filename).write_text(html_content, encoding="utf-8")
         except Exception:
             pass
-        return True, f"Bản xem trước email nhắc nhở đã được lưu thành công cho {to_email} (Test/Dev mode)."
+        return (
+            True,
+            f"Bản xem trước email nhắc nhở đã được lưu thành công cho {to_email} (Test/Dev mode).",
+        )
 
     # 2. Gửi qua SMTP cấu hình thực tế
     if settings.auth_smtp_host and settings.auth_mail_from:
         try:
             message = EmailMessage()
             # Tiêu đề email bao gồm cả ngày diễn ra cụ thể để người dùng biết ngay
-            message["Subject"] = f"[InvestIQ] Nhắc lịch sự kiện: {symbol} - {event_title} ({short_date})"
+            message["Subject"] = (
+                f"[InvestIQ] Nhắc lịch sự kiện: {symbol} - {event_title} ({short_date})"
+            )
             message["From"] = settings.auth_mail_from
             message["To"] = to_email
 

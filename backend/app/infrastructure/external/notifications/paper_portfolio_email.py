@@ -26,11 +26,17 @@ def build_paper_portfolio_email_html(
     """Render a premium responsive fintech dark-themed email report with AI feedback."""
     now_str = report_date_str or datetime.now(UTC).strftime("%d/%m/%Y")
 
-    total_val = float(account_data.get("total_value") or account_data.get("starting_cash") or 1_000_000_000)
+    total_val = float(
+        account_data.get("total_value") or account_data.get("starting_cash") or 1_000_000_000
+    )
     avail_cash = float(account_data.get("available_cash") or account_data.get("cash_balance") or 0)
-    invested_cost = float(account_data.get("invested_cost") or 0)
     total_pnl = float(account_data.get("total_pnl") or account_data.get("unrealized_pnl") or 0)
-    total_return_pct = float(str(account_data.get("total_return_percent") or "0").replace("%", "").replace("+", "").replace("−", "-"))
+    total_return_pct = float(
+        str(account_data.get("total_return_percent") or "0")
+        .replace("%", "")
+        .replace("+", "")
+        .replace("−", "-")
+    )
 
     pnl_color = "#10b981" if total_pnl >= 0 else "#f43f5e"
     pnl_sign = "+" if total_pnl >= 0 else ""
@@ -43,20 +49,37 @@ def build_paper_portfolio_email_html(
             h_sign = "+" if h.pnl >= 0 else ""
             holdings_rows_html += f"""
             <tr style="border-bottom: 1px solid #1a3854;">
-              <td style="padding: 12px 10px; font-weight: 800; color: #38bdf8; font-size: 13px;">{h.symbol}</td>
-              <td style="padding: 12px 10px; text-align: right; color: #cbd5e1; font-size: 12px;">{h.quantity:,} CP</td>
-              <td style="padding: 12px 10px; text-align: right; color: #94a3b8; font-size: 12px;">{h.average_cost:,.0f} đ</td>
-              <td style="padding: 12px 10px; text-align: right; color: #f8fafc; font-weight: 700; font-size: 12px;">{h.current_price:,.0f} đ</td>
-              <td style="padding: 12px 10px; text-align: right; font-weight: 800; color: {h_pnl_color}; font-size: 12px;">
+              <td style="padding: 12px 10px; font-weight: 800; color: #38bdf8; font-size: 13px;">{
+                h.symbol
+            }</td>
+              <td style="padding: 12px 10px; text-align: right; color: #cbd5e1; font-size: 12px;">{
+                h.quantity:,} CP</td>
+              <td style="padding: 12px 10px; text-align: right; color: #94a3b8; font-size: 12px;">{
+                h.average_cost:,.0f} đ</td>
+              <td style="padding: 12px 10px; text-align: right; color: #f8fafc; font-weight: 700; font-size: 12px;">{
+                h.current_price:,.0f} đ</td>
+              <td style="padding: 12px 10px; text-align: right; font-weight: 800; color: {
+                h_pnl_color
+            }; font-size: 12px;">
                 {h_sign}{h.pnl_percent:.1f}%<br>
-                <span style="font-size: 10px; font-weight: 600; opacity: 0.85;">{h_sign}{h.pnl:,.0f} đ</span>
+                <span style="font-size: 10px; font-weight: 600; opacity: 0.85;">{h_sign}{
+                h.pnl:,.0f} đ</span>
               </td>
               <td style="padding: 12px 10px; font-size: 11px; color: #cbd5e1; line-height: 1.4;">
                 <span style="display: inline-block; padding: 2px 6px; border-radius: 4px; font-weight: 700; font-size: 10px; margin-bottom: 3px; {
-                    'background: #7f1d1d; color: #fecaca; border: 1px solid #dc2626;' if h.risk_level == 'high' else
-                    ('background: #064e3b; color: #a7f3d0; border: 1px solid #059669;' if h.risk_level == 'safe' else 'background: #1e3a5f; color: #93c5fd; border: 1px solid #2563eb;')
-                }">
-                  { 'RỦI RO CAO' if h.risk_level == 'high' else ('AN TOÀN' if h.risk_level == 'safe' else 'THEO DÕI') }
+                "background: #7f1d1d; color: #fecaca; border: 1px solid #dc2626;"
+                if h.risk_level == "high"
+                else (
+                    "background: #064e3b; color: #a7f3d0; border: 1px solid #059669;"
+                    if h.risk_level == "safe"
+                    else "background: #1e3a5f; color: #93c5fd; border: 1px solid #2563eb;"
+                )
+            }">
+                  {
+                "RỦI RO CAO"
+                if h.risk_level == "high"
+                else ("AN TOÀN" if h.risk_level == "safe" else "THEO DÕI")
+            }
                 </span><br>
                 {h.recommendation}
               </td>
@@ -72,12 +95,18 @@ def build_paper_portfolio_email_html(
         """
 
     # Build action items list
-    action_items_html = "".join([
-        f'<li style="margin-bottom: 8px; color: #e2e8f0; font-size: 12px; line-height: 1.5;">{item}</li>'
-        for item in ai_review.action_items
-    ])
+    action_items_html = "".join(
+        [
+            f'<li style="margin-bottom: 8px; color: #e2e8f0; font-size: 12px; line-height: 1.5;">{item}</li>'
+            for item in ai_review.action_items
+        ]
+    )
 
-    score_color = "#10b981" if ai_review.portfolio_health_score >= 80 else ("#f59e0b" if ai_review.portfolio_health_score >= 60 else "#f43f5e")
+    score_color = (
+        "#10b981"
+        if ai_review.portfolio_health_score >= 80
+        else ("#f59e0b" if ai_review.portfolio_health_score >= 60 else "#f43f5e")
+    )
 
     html = f"""<!DOCTYPE html>
 <html lang="vi">
@@ -107,7 +136,7 @@ def build_paper_portfolio_email_html(
       <td align="center">
         <!-- Main Container -->
         <table role="presentation" class="email-container" width="620" cellpadding="0" cellspacing="0" style="max-width: 620px; width: 100%; background: #0b1f33; border: 1px solid #1e3f5d; border-radius: 18px; overflow: hidden; box-shadow: 0 20px 40px rgba(0, 0, 0, 0.6);">
-          
+
           <!-- Header Bar -->
           <tr>
             <td style="padding: 28px 24px 20px; background: linear-gradient(135deg, #091c2d 0%, #0d2840 100%); border-bottom: 1px solid #1a3c5a;">
@@ -329,9 +358,11 @@ def is_dummy_or_test_email(email: str) -> bool:
         return True
     if any(cleaned.endswith(d) for d in DUMMY_DOMAINS):
         return True
-    if cleaned.startswith("investor@") or cleaned.startswith("tester@") or cleaned.startswith("user_"):
-        return True
-    return False
+    return bool(
+        cleaned.startswith("investor@")
+        or cleaned.startswith("tester@")
+        or cleaned.startswith("user_")
+    )
 
 
 def send_paper_portfolio_daily_email(
@@ -371,9 +402,17 @@ def send_paper_portfolio_daily_email(
     from app.infrastructure.config.settings import settings
 
     smtp_host = settings.auth_smtp_host or os.getenv("SMTP_HOST") or os.getenv("INVESTIQ_SMTP_HOST")
-    smtp_port = settings.auth_smtp_port or int(os.getenv("SMTP_PORT") or os.getenv("INVESTIQ_SMTP_PORT") or 587)
-    smtp_user = settings.auth_smtp_username or os.getenv("SMTP_USER") or os.getenv("INVESTIQ_SMTP_USER")
-    smtp_password = (settings.auth_smtp_password.get_secret_value() if settings.auth_smtp_password else None) or os.getenv("SMTP_PASSWORD") or os.getenv("INVESTIQ_SMTP_PASSWORD")
+    smtp_port = settings.auth_smtp_port or int(
+        os.getenv("SMTP_PORT") or os.getenv("INVESTIQ_SMTP_PORT") or 587
+    )
+    smtp_user = (
+        settings.auth_smtp_username or os.getenv("SMTP_USER") or os.getenv("INVESTIQ_SMTP_USER")
+    )
+    smtp_password = (
+        (settings.auth_smtp_password.get_secret_value() if settings.auth_smtp_password else None)
+        or os.getenv("SMTP_PASSWORD")
+        or os.getenv("INVESTIQ_SMTP_PASSWORD")
+    )
     sender_email = settings.auth_mail_from or os.getenv("SMTP_FROM") or "no-reply@investiq.vn"
 
     if not smtp_host:
@@ -384,7 +423,9 @@ def send_paper_portfolio_daily_email(
 
     try:
         msg = MIMEMultipart("alternative")
-        msg["Subject"] = f"InvestIQ - Báo Cáo Danh Mục Thử Nghiệm & Nhận Xét AI ({report_date_str or datetime.now(UTC).strftime('%d/%m/%Y')})"
+        msg["Subject"] = (
+            f"InvestIQ - Báo Cáo Danh Mục Thử Nghiệm & Nhận Xét AI ({report_date_str or datetime.now(UTC).strftime('%d/%m/%Y')})"
+        )
         msg["From"] = f"InvestIQ AI Advisor <{sender_email}>"
         msg["To"] = to_email
 
@@ -402,4 +443,3 @@ def send_paper_portfolio_daily_email(
     except Exception as exc:
         logger.error("Failed to send paper portfolio email via SMTP: %s", exc)
         return False, f"Lỗi gửi email: {exc}"
-

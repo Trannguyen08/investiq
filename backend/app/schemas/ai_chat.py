@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from typing import Any, Literal
+
 from pydantic import BaseModel, Field
 
 
@@ -105,4 +106,3 @@ class AiChatResponse(BaseModel):
 
 class CreateConversationRequest(BaseModel):
     title: str = Field(default="Hội thoại mới", max_length=200)
-

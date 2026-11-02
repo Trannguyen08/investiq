@@ -401,4 +401,3 @@ export function deleteEventReminder(reminderId: string): Promise<{ message: stri
     return res.json();
   });
 }
-

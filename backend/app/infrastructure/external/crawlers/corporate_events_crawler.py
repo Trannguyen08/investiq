@@ -128,7 +128,6 @@ _BASE_CORPORATE_EVENTS: list[dict[str, Any]] = [
         "source_name": "PV GAS Công bố thông tin",
         "source_url": None,
     },
-
     # 2. STOCK DIVIDEND (Cổ tức cổ phiếu)
     {
         "id": "hpg-2026-11-28-stock-div",
@@ -190,7 +189,6 @@ _BASE_CORPORATE_EVENTS: list[dict[str, Any]] = [
         "source_name": "VPBank Công bố thông tin",
         "source_url": None,
     },
-
     # 3. SHAREHOLDER MEETING (Đại hội cổ đông)
     {
         "id": "vic-2026-11-15-meeting",
@@ -252,7 +250,6 @@ _BASE_CORPORATE_EVENTS: list[dict[str, Any]] = [
         "source_name": "Bất động sản Phát Đạt",
         "source_url": None,
     },
-
     # 4. INSIDER TRADING (Giao dịch nội bộ)
     {
         "id": "hdb-2026-11-12-insider",
@@ -314,7 +311,6 @@ _BASE_CORPORATE_EVENTS: list[dict[str, Any]] = [
         "source_name": "MBBank IR",
         "source_url": None,
     },
-
     # 5. SHARE ISSUANCE (Phát hành cổ phiếu)
     {
         "id": "ssi-2026-11-19-issuance",
@@ -364,7 +360,6 @@ _BASE_CORPORATE_EVENTS: list[dict[str, Any]] = [
         "source_name": "Kinh Bắc City IR",
         "source_url": None,
     },
-
     # 6. ADDITIONAL LISTING (Niêm yết bổ sung)
     {
         "id": "tcb-2026-11-16-listing",
@@ -414,7 +409,6 @@ _BASE_CORPORATE_EVENTS: list[dict[str, Any]] = [
         "source_name": "HoSE Thông báo",
         "source_url": None,
     },
-
     # 7. EARNINGS (Kết quả kinh doanh / BCTC)
     {
         "id": "fpt-2026-11-21-earnings",
@@ -464,7 +458,6 @@ _BASE_CORPORATE_EVENTS: list[dict[str, Any]] = [
         "source_name": "Vietcombank IR",
         "source_url": None,
     },
-
     # 8. CORPORATE ACTION (Sự kiện doanh nghiệp khác)
     {
         "id": "vic-2026-11-10-action",
@@ -574,7 +567,8 @@ class CorporateEventsCrawler:
         with self._lock:
             # Filter out past/expired events: event_at.date() >= today
             active = [
-                event for event in self._registry
+                event
+                for event in self._registry
                 if event.event_at.astimezone(_MARKET_TZ).date() >= today
             ]
             active.sort(key=lambda item: (item.event_at, item.symbol, item.id))
@@ -599,6 +593,7 @@ class CorporateEventsCrawler:
             from app.infrastructure.external.crawlers.dividend_crawler import (
                 get_dividend_crawler,
             )
+
             div_crawler = get_dividend_crawler()
             div_events = div_crawler.get_market_calendar(limit=40)
             for d in div_events:
@@ -624,10 +619,15 @@ class CorporateEventsCrawler:
             logger.warning("Could not ingest dividend crawler events: %s", exc)
 
         # 3. Ingest live VCI gateway events if provider or gateway available
-        if provider is not None and hasattr(provider, "_gateway") and hasattr(provider, "_instruments"):
+        if (
+            provider is not None
+            and hasattr(provider, "_gateway")
+            and hasattr(provider, "_instruments")
+        ):
             try:
                 symbols = [
-                    item.symbol for item in sorted(
+                    item.symbol
+                    for item in sorted(
                         provider._instruments,
                         key=lambda x: getattr(x, "interest_score", 0),
                         reverse=True,

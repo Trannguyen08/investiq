@@ -5,10 +5,9 @@ Multi-factor scoring, Fallback Web Search, and Structured Rich Widgets.
 from __future__ import annotations
 
 import logging
-import os
 import re
-from decimal import Decimal
 from typing import Any
+
 import httpx
 
 from app.application.use_cases.market_data.market_service import MarketService
@@ -20,10 +19,50 @@ _TICKER_PATTERN = re.compile(r"\b([A-Z]{3})\b")
 
 # Stop words that look like tickers but are Vietnamese words
 _NON_TICKER_WORDS = {
-    "CHO", "CON", "CAC", "NAM", "THI", "GIA", "NEN", "MUA", "BAN", "XEM", "LUC",
-    "QUA", "NAY", "VAY", "NHO", "LON", "TOC", "NGU", "GAP", "DCA", "BCTC", "EPS",
-    "ROE", "ROA", "USD", "VND", "VSA", "MAC", "MAI", "DAO", "SAN", "COT", "DON",
-    "TUC", "TRA", "DAN", "DOC", "BAI", "THE", "KHI", "BAO", "LAI", "COI", "HOI",
+    "CHO",
+    "CON",
+    "CAC",
+    "NAM",
+    "THI",
+    "GIA",
+    "NEN",
+    "MUA",
+    "BAN",
+    "XEM",
+    "LUC",
+    "QUA",
+    "NAY",
+    "VAY",
+    "NHO",
+    "LON",
+    "TOC",
+    "NGU",
+    "GAP",
+    "DCA",
+    "BCTC",
+    "EPS",
+    "ROE",
+    "ROA",
+    "USD",
+    "VND",
+    "VSA",
+    "MAC",
+    "MAI",
+    "DAO",
+    "SAN",
+    "COT",
+    "DON",
+    "TUC",
+    "TRA",
+    "DAN",
+    "DOC",
+    "BAI",
+    "THE",
+    "KHI",
+    "BAO",
+    "LAI",
+    "COI",
+    "HOI",
 }
 
 
@@ -76,10 +115,32 @@ class AiFinancialService:
         query_lower = user_message.lower()
 
         # Intent detection
-        is_comparison = any(kw in query_lower for kw in ["so sánh", "hay là", "vs", "hơn", "chọn mã nào"]) and len(tickers) >= 2
-        is_gold_bank = any(kw in query_lower for kw in ["vàng", "ngân hàng", "tiết kiệm", "gửi tiền"])
-        is_forensics = any(kw in query_lower for kw in ["gian lận", "bẫy", "báo cáo tài chính", "bctc", "nợ", "phải thu", "phá sản", "sức khỏe", "z-score", "altman"])
-        is_market_general = any(kw in query_lower for kw in ["thị trường", "vnindex", "vn-index", "hôm nay", "toàn sàn", "ngành nào"])
+        is_comparison = (
+            any(kw in query_lower for kw in ["so sánh", "hay là", "vs", "hơn", "chọn mã nào"])
+            and len(tickers) >= 2
+        )
+        is_gold_bank = any(
+            kw in query_lower for kw in ["vàng", "ngân hàng", "tiết kiệm", "gửi tiền"]
+        )
+        is_forensics = any(
+            kw in query_lower
+            for kw in [
+                "gian lận",
+                "bẫy",
+                "báo cáo tài chính",
+                "bctc",
+                "nợ",
+                "phải thu",
+                "phá sản",
+                "sức khỏe",
+                "z-score",
+                "altman",
+            ]
+        )
+        is_market_general = any(
+            kw in query_lower
+            for kw in ["thị trường", "vnindex", "vn-index", "hôm nay", "toàn sàn", "ngành nào"]
+        )
 
         # Fetch internal market data for recognized tickers
         stock_data: dict[str, Any] = {}
@@ -90,10 +151,14 @@ class AiFinancialService:
                     candle_res = self._market.candles(ticker, interval="1d", limit=60)
                     candle_list = candle_res.get("data", []) if isinstance(candle_res, dict) else []
                     closes = [
-                        float(c["close"]) for c in candle_list if isinstance(c, dict) and "close" in c
+                        float(c["close"])
+                        for c in candle_list
+                        if isinstance(c, dict) and "close" in c
                     ]
                     forensics_res = self._market.forensics(ticker)
-                    forensics = forensics_res.get("data", {}) if isinstance(forensics_res, dict) else {}
+                    forensics = (
+                        forensics_res.get("data", {}) if isinstance(forensics_res, dict) else {}
+                    )
                     stock_data[ticker] = {
                         "instrument": inst,
                         "candles_count": len(candle_list),
@@ -131,7 +196,9 @@ class AiFinancialService:
                 )
                 if resp.status_code == 200:
                     text = resp.text
-                    snippets = re.findall(r'<a class="result__snippet[^>]*>(.*?)</a>', text, re.DOTALL)
+                    snippets = re.findall(
+                        r'<a class="result__snippet[^>]*>(.*?)</a>', text, re.DOTALL
+                    )
                     clean_snippets = [re.sub(r"<[^>]+>", "", s).strip() for s in snippets[:3]]
                     if clean_snippets:
                         return "Thông tin cập nhật: " + " ".join(clean_snippets)
@@ -217,20 +284,37 @@ class AiFinancialService:
                 },
             ]
 
-            widgets.append({
-                "type": "stock_comparison",
-                "data": {
-                    "title": f"Bảng so sánh đối đầu {t1} và {t2}",
-                    "items": comparison_items,
-                    "summary_verdict": verdict_text,
-                },
-            })
+            widgets.append(
+                {
+                    "type": "stock_comparison",
+                    "data": {
+                        "title": f"Bảng so sánh đối đầu {t1} và {t2}",
+                        "items": comparison_items,
+                        "summary_verdict": verdict_text,
+                    },
+                }
+            )
 
-            suggested_actions.extend([
-                {"label": f"Xem biểu đồ {t1}", "action_type": "NAVIGATE", "url": f"/market/stocks/{t1}"},
-                {"label": f"Xem biểu đồ {t2}", "action_type": "NAVIGATE", "url": f"/market/stocks/{t2}"},
-                {"label": "So sánh Cổ phiếu vs Vàng & Ngân hàng", "action_type": "OPEN_MODAL", "modal_type": "COMPARATOR", "symbol": t1},
-            ])
+            suggested_actions.extend(
+                [
+                    {
+                        "label": f"Xem biểu đồ {t1}",
+                        "action_type": "NAVIGATE",
+                        "url": f"/market/stocks/{t1}",
+                    },
+                    {
+                        "label": f"Xem biểu đồ {t2}",
+                        "action_type": "NAVIGATE",
+                        "url": f"/market/stocks/{t2}",
+                    },
+                    {
+                        "label": "So sánh Cổ phiếu vs Vàng & Ngân hàng",
+                        "action_type": "OPEN_MODAL",
+                        "modal_type": "COMPARATOR",
+                        "symbol": t1,
+                    },
+                ]
+            )
 
         # Case 2: Stock Analysis for single ticker
         elif len(stock_data) == 1:
@@ -252,12 +336,13 @@ class AiFinancialService:
             # Technical RSI & Moving Averages
             rsi = _calculate_rsi(closes) if len(closes) >= 15 else 52.0
             ma20 = sum(closes[-20:]) / 20 if len(closes) >= 20 else price
-            ma50 = sum(closes[-50:]) / 50 if len(closes) >= 50 else price
 
             # Support & Resistance estimation from 30 recent closes
             recent_30 = closes[-30:] if len(closes) >= 30 else [price * 0.95, price * 1.05]
             key_support = round(min(recent_30) * 0.99, -2) if recent_30 else round(price * 0.95, -2)
-            key_resistance = round(max(recent_30) * 1.01, -2) if recent_30 else round(price * 1.05, -2)
+            key_resistance = (
+                round(max(recent_30) * 1.01, -2) if recent_30 else round(price * 1.05, -2)
+            )
 
             # Scoring factors (0-100)
             val_score = min(95, max(40, int(100 - (pe / 25.0) * 50)))
@@ -271,7 +356,15 @@ class AiFinancialService:
                 tech_score += 15  # oversold rebound potential
             elif rsi > 70:
                 tech_score -= 10  # overbought risk
-            cashflow_score = 80 if not any(getattr(f, "severity", "") == "high" or (isinstance(f, dict) and f.get("severity") == "high") for f in flags) else 45
+            cashflow_score = (
+                80
+                if not any(
+                    getattr(f, "severity", "") == "high"
+                    or (isinstance(f, dict) and f.get("severity") == "high")
+                    for f in flags
+                )
+                else 45
+            )
 
             verdict = "TÍCH CỰC" if (val_score + fin_score + tech_score) / 3 >= 70 else "THEO DÕI"
 
@@ -289,64 +382,103 @@ class AiFinancialService:
                 f"Sức khỏe tài chính Z-Score đạt {z_score:.2f} (Vùng {zone}).",
             ]
 
-            widgets.append({
-                "type": "stock_score_card",
-                "data": {
-                    "symbol": sym,
-                    "name": name,
-                    "current_price": price,
-                    "change_percent": change_p,
-                    "pe": pe,
-                    "pb": pb,
-                    "roe_percent": roe,
-                    "scores": {
-                        "valuation": val_score,
-                        "financial_health": fin_score,
-                        "growth": growth_score,
-                        "technical": tech_score,
-                        "cashflow": cashflow_score,
+            widgets.append(
+                {
+                    "type": "stock_score_card",
+                    "data": {
+                        "symbol": sym,
+                        "name": name,
+                        "current_price": price,
+                        "change_percent": change_p,
+                        "pe": pe,
+                        "pb": pb,
+                        "roe_percent": roe,
+                        "scores": {
+                            "valuation": val_score,
+                            "financial_health": fin_score,
+                            "growth": growth_score,
+                            "technical": tech_score,
+                            "cashflow": cashflow_score,
+                        },
+                        "verdict": verdict,
+                        "key_support": key_support,
+                        "key_resistance": key_resistance,
+                        "analysis_points": points,
                     },
-                    "verdict": verdict,
-                    "key_support": key_support,
-                    "key_resistance": key_resistance,
-                    "analysis_points": points,
-                },
-            })
+                }
+            )
 
             # Check if forensics requested or has warning flags
             if is_forensics or flags or zone != "safe":
                 flag_items = []
                 for f in flags[:4]:
-                    sev = getattr(f, "severity", "") if not isinstance(f, dict) else f.get("severity", "")
-                    title = getattr(f, "title", "") if not isinstance(f, dict) else f.get("title", "Cảnh báo chỉ số")
-                    desc = getattr(f, "description", "") if not isinstance(f, dict) else f.get("description", "Cần theo dõi thêm trong BCTC.")
-                    flag_items.append({
-                        "level": "danger" if sev == "high" else "warning",
-                        "title": title,
-                        "detail": desc,
-                    })
-                widgets.append({
-                    "type": "forensic_warning",
-                    "data": {
-                        "symbol": sym,
-                        "altman_z_score": z_score,
-                        "zone": zone,
-                        "flags": flag_items or [
-                            {
-                                "level": "info",
-                                "title": "BCTC lành mạnh",
-                                "detail": "Chưa ghi nhận cờ đỏ đáng kể về dòng tiền hay đòn bẩy nợ.",
-                            }
-                        ],
-                    },
-                })
+                    sev = (
+                        getattr(f, "severity", "")
+                        if not isinstance(f, dict)
+                        else f.get("severity", "")
+                    )
+                    title = (
+                        getattr(f, "title", "")
+                        if not isinstance(f, dict)
+                        else f.get("title", "Cảnh báo chỉ số")
+                    )
+                    desc = (
+                        getattr(f, "description", "")
+                        if not isinstance(f, dict)
+                        else f.get("description", "Cần theo dõi thêm trong BCTC.")
+                    )
+                    flag_items.append(
+                        {
+                            "level": "danger" if sev == "high" else "warning",
+                            "title": title,
+                            "detail": desc,
+                        }
+                    )
+                widgets.append(
+                    {
+                        "type": "forensic_warning",
+                        "data": {
+                            "symbol": sym,
+                            "altman_z_score": z_score,
+                            "zone": zone,
+                            "flags": flag_items
+                            or [
+                                {
+                                    "level": "info",
+                                    "title": "BCTC lành mạnh",
+                                    "detail": "Chưa ghi nhận cờ đỏ đáng kể về dòng tiền hay đòn bẩy nợ.",
+                                }
+                            ],
+                        },
+                    }
+                )
 
-            suggested_actions.extend([
-                {"label": f"Xem biểu đồ nến {sym}", "action_type": "NAVIGATE", "url": f"/market/stocks/{sym}"},
-                {"label": f"Báo cáo tài chính {sym}", "action_type": "NAVIGATE", "url": f"/market/stocks/{sym}?tab=growth"},
-                {"label": "So sánh Vàng SJC & Ngân hàng", "action_type": "OPEN_MODAL", "modal_type": "comparator", "symbol": sym},
-                {"label": f"Giả lập mua 1.000 cp {sym}", "action_type": "TRADE_ORDER", "symbol": sym, "quantity": 1000},
-            ])
+            suggested_actions.extend(
+                [
+                    {
+                        "label": f"Xem biểu đồ nến {sym}",
+                        "action_type": "NAVIGATE",
+                        "url": f"/market/stocks/{sym}",
+                    },
+                    {
+                        "label": f"Báo cáo tài chính {sym}",
+                        "action_type": "NAVIGATE",
+                        "url": f"/market/stocks/{sym}?tab=growth",
+                    },
+                    {
+                        "label": "So sánh Vàng SJC & Ngân hàng",
+                        "action_type": "OPEN_MODAL",
+                        "modal_type": "comparator",
+                        "symbol": sym,
+                    },
+                    {
+                        "label": f"Giả lập mua 1.000 cp {sym}",
+                        "action_type": "TRADE_ORDER",
+                        "symbol": sym,
+                        "quantity": 1000,
+                    },
+                ]
+            )
 
         # Case 3: Market overview query
         elif is_market_general:
@@ -370,25 +502,43 @@ class AiFinancialService:
                     f"Thị trường đang trong trạng thái tích lũy phân hóa. Dòng tiền luân chuyển giữa các nhóm ngành dẫn dắt."
                 )
 
-                widgets.append({
-                    "type": "market_pulse",
-                    "data": {
-                        "vnindex": vn_val,
-                        "change_percent": vn_change,
-                        "advances": advances,
-                        "declines": declines,
-                        "liquidity_trillion": round(matched_val, 1),
-                    },
-                })
+                widgets.append(
+                    {
+                        "type": "market_pulse",
+                        "data": {
+                            "vnindex": vn_val,
+                            "change_percent": vn_change,
+                            "advances": advances,
+                            "declines": declines,
+                            "liquidity_trillion": round(matched_val, 1),
+                        },
+                    }
+                )
 
-                suggested_actions.extend([
-                    {"label": "Vào bảng giá trực tiếp", "action_type": "NAVIGATE", "url": "/market/stocks"},
-                    {"label": "Xem bản đồ nhiệt ngành", "action_type": "NAVIGATE", "url": "/market/stocks#heatmap"},
-                    {"label": "Đấu trường dự đoán nến", "action_type": "NAVIGATE", "url": "/candlestick-prediction"},
-                ])
+                suggested_actions.extend(
+                    [
+                        {
+                            "label": "Vào bảng giá trực tiếp",
+                            "action_type": "NAVIGATE",
+                            "url": "/market/stocks",
+                        },
+                        {
+                            "label": "Xem bản đồ nhiệt ngành",
+                            "action_type": "NAVIGATE",
+                            "url": "/market/stocks#heatmap",
+                        },
+                        {
+                            "label": "Đấu trường dự đoán nến",
+                            "action_type": "NAVIGATE",
+                            "url": "/candlestick-prediction",
+                        },
+                    ]
+                )
             except Exception as exc:
                 logger.error("Market overview fetch failed: %s", exc)
-                text_parts.append("Hệ thống đang đồng bộ dữ liệu thị trường mới nhất. Vui lòng thử lại sau giây lát.")
+                text_parts.append(
+                    "Hệ thống đang đồng bộ dữ liệu thị trường mới nhất. Vui lòng thử lại sau giây lát."
+                )
 
         # Case 4: General learning / concept / external fallback
         else:
@@ -403,12 +553,30 @@ class AiFinancialService:
             if external_context:
                 text_parts.append(f"\n*{external_context}*")
 
-            suggested_actions.extend([
-                {"label": "Phân tích cổ phiếu HPG", "action_type": "SEND_PROMPT", "prompt": "Phân tích HPG"},
-                {"label": "So sánh VCB và MBB", "action_type": "SEND_PROMPT", "prompt": "So sánh VCB và MBB"},
-                {"label": "Kiểm tra rủi ro BCTC NVL", "action_type": "SEND_PROMPT", "prompt": "Kiểm tra BCTC NVL"},
-                {"label": "Nhịp đập VN-Index hôm nay", "action_type": "SEND_PROMPT", "prompt": "Thị trường hôm nay thế nào?"},
-            ])
+            suggested_actions.extend(
+                [
+                    {
+                        "label": "Phân tích cổ phiếu HPG",
+                        "action_type": "SEND_PROMPT",
+                        "prompt": "Phân tích HPG",
+                    },
+                    {
+                        "label": "So sánh VCB và MBB",
+                        "action_type": "SEND_PROMPT",
+                        "prompt": "So sánh VCB và MBB",
+                    },
+                    {
+                        "label": "Kiểm tra rủi ro BCTC NVL",
+                        "action_type": "SEND_PROMPT",
+                        "prompt": "Kiểm tra BCTC NVL",
+                    },
+                    {
+                        "label": "Nhịp đập VN-Index hôm nay",
+                        "action_type": "SEND_PROMPT",
+                        "prompt": "Thị trường hôm nay thế nào?",
+                    },
+                ]
+            )
 
         return {
             "content": "\n\n".join(text_parts),

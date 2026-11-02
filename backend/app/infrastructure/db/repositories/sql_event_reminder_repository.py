@@ -91,8 +91,7 @@ class SqlEventReminderRepository:
 
         try:
             pool = get_pool()
-            with pool.connection() as conn:
-                with conn.cursor(row_factory=dict_row) as cur:
+            with pool.connection() as conn, conn.cursor(row_factory=dict_row) as cur:
                     if clean_email:
                         cur.execute(
                             """
@@ -152,8 +151,7 @@ class SqlEventReminderRepository:
 
         try:
             pool = get_pool()
-            with pool.connection() as conn:
-                with conn.cursor(row_factory=dict_row) as cur:
+            with pool.connection() as conn, conn.cursor(row_factory=dict_row) as cur:
                     cur.execute(
                         """
                         SELECT id::text, email, event_id, symbol, event_title, event_type, event_at, days_before, status, created_at
@@ -174,10 +172,7 @@ class SqlEventReminderRepository:
 
         with self._lock:
             for item in self._memory_store.values():
-                if (
-                    item.get("status") == "pending"
-                    and now <= item["event_at"] <= deadline
-                ):
+                if item.get("status") == "pending" and now <= item["event_at"] <= deadline:
                     due_items.append(item)
         return due_items
 
@@ -211,4 +206,3 @@ def get_event_reminder_repository() -> SqlEventReminderRepository:
             if _reminder_repo is None:
                 _reminder_repo = SqlEventReminderRepository()
     return _reminder_repo
-
