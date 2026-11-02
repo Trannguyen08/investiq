@@ -1,9 +1,44 @@
 # Current Task
 
-## Frontend Clean Code & Modular Component Extraction - 2026-11-03 (in progress)
-- User Request: Clean frontend code, extract reusable components, reduce lines of code without altering UI.
-- Branch: refactor/frontend-clean-code (branched off origin/dev).
-- Objectives: Clean empty lines, extract Admin UI modules, modularize paper trading and market workspace.
+## Modularize globals.css with Domain Modules & Leverage Tailwind Utilities - 2026-11-03 (completed)
+- **User Request**: "có thể cho tailwind san sẻ bớt nhiệm vụ với global.css được k, thấy file đó nhiều dòng quá, yêu cầu trong quá trình refactor thì giao diện UI hiện tại của hệ thống phải k thay đổi"
+- **Branch**: `refactor/frontend-clean-code` (đã commit `c3ba8dd` và push lên `origin/refactor/frontend-clean-code`).
+- **Core Results**:
+  1. **Tách module CSS chuyên biệt theo miền nghiệp vụ trong `frontend/src/app/styles/`**:
+     - `admin.css` (1.093 dòng): Toàn bộ style của Admin Console (Sidebar, Topbar, User/Article/System Tables, Modals, Badges).
+     - `ecosystems.css` (1.046 dòng): Bản đồ Hệ sinh thái & Mạng lưới tập đoàn kinh tế.
+     - `financial-forensics.css` (605 dòng): Phân tích sức khỏe BCTC, Altman Z-Score, Beneish M-Score.
+     - `candlestick-arena.css` (646 dòng): Đấu trường dự đoán nến thực chiến.
+     - `investment-comparator.css` (789 dòng): Bộ so sánh Cổ phiếu vs Vàng SJC vs Ngân hàng & Giả lập tích sản DCA.
+     - `dividends-financials.css` (819 dòng): Lịch cổ tức & Báo cáo tài chính trực quan.
+     - `community-theses.css` (932 dòng): Cộng đồng & Luận điểm đầu tư.
+  2. **Tối ưu file `globals.css`**:
+     - Giảm từ **10.879 dòng** xuống còn **~4.200 dòng** (giảm tới hơn **6.650 dòng code** trực tiếp trong file này).
+     - Giữ nguyên các Base Design Tokens, Root CSS Layout, Animations và CSS Contract cho trang học (`learning-css-contract.test.ts`).
+     - Tận dụng Tailwind v4 `@import "./styles/..."` bundler chuẩn, bảo toàn 100% specificity và thứ tự cascading.
+  3. **San sẻ bớt nhiệm vụ sang Tailwind v4 Utility Classes**:
+     - Áp dụng Tailwind utility classes (`flex`, `items-center`, `justify-between`, `gap-2`, `rounded-lg`, `border`, v.v.) trực tiếp trên các module UI tái cấu trúc (`admin-page-controls.tsx`, `events-view.tsx`, `indices-view.tsx`, `people-view.tsx`, `paper-trading-dashboard.tsx`) thay thế các inline style và custom class đơn lẻ.
+  4. **Cam kết 100% Giao diện UI không thay đổi**:
+     - Không thay đổi bất kỳ class name nào đang được component gọi.
+     - Giữ nguyên toàn bộ token màu sắc, typography, animation và responsive media query.
+     - Không icon trước text theo đúng chuẩn UI InvestIQ.
+- **Verification**:
+  - Pre-Push Gate & Local CI Script (`check-pr.ps1`): 5/5 bước xanh 100%.
+  - Vitest: 37/37 test files passed (143/143 tests).
+  - TypeScript Check (`tsc --noEmit`): 0 errors.
+  - ESLint (`npm run lint`): 0 errors, 0 warnings.
+  - Backend Mypy & Ruff: 0 errors trong 41 files.
+  - Backend Pytest: 133/133 unit tests passed.
+  - Git Diff Check (`origin/dev`): Sạch hoàn toàn (0 whitespace errors).
+
+## Frontend Clean Code & Modular Component Extraction - 2026-11-03 (completed)
+- **User Request**: Clean frontend code, extract reusable components, reduce lines of code without altering UI.
+- **Branch**: `refactor/frontend-clean-code`.
+- **Core Results**:
+  - Giảm ròng **2.343 dòng code** frontend.
+  - Tách `admin-page-controls.tsx` dùng chung cho 6 trang quản trị admin.
+  - Tách `portfolio-math.ts`, `paper-pnl-dialog.tsx`, `paper-daily-report-card.tsx`, `paper-social-card.tsx` (giảm `paper-trading-dashboard.tsx` từ 1.905 dòng xuống 577 dòng).
+  - Tách `events-view.tsx`, `indices-view.tsx`, `people-view.tsx` (giảm `market-workspace.tsx` từ 1.241 dòng xuống 246 dòng).
 
 ## Backend CI & Unit Test Failure Resolution - 2026-11-02 (completed)
 - **User Request**: "looix tesst backend" (Lỗi test backend trên CI).
