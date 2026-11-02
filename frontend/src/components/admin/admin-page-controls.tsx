@@ -58,6 +58,7 @@ export function isNextRedirect(err: unknown): boolean {
 
 /**
  * Thanh điều hướng phân trang dùng chung cho các màn hình Admin.
+ * Tận dụng Tailwind utility classes kết hợp với component token Admin.
  */
 export function AdminPaginationBar({
   page,
@@ -84,9 +85,8 @@ export function AdminPaginationBar({
   if (variant === "buttons") {
     return (
       <nav
-        className="admin-pagination-bar"
+        className="admin-pagination-bar rounded-lg"
         aria-label={ariaLabel}
-        style={{ borderRadius: "0.5rem" }}
       >
         <span>
           Đang xem trang <strong>{page}</strong> / {totalPages} (Tổng {totalItems} {itemLabel})
@@ -99,9 +99,8 @@ export function AdminPaginationBar({
           ) : (
             <button
               type="button"
-              className="admin-btn-detail"
+              className="admin-btn-detail opacity-50 cursor-not-allowed"
               disabled
-              style={{ opacity: 0.5, cursor: "not-allowed" }}
             >
               Trang trước
             </button>
@@ -113,9 +112,8 @@ export function AdminPaginationBar({
           ) : (
             <button
               type="button"
-              className="admin-btn-detail"
+              className="admin-btn-detail opacity-50 cursor-not-allowed"
               disabled
-              style={{ opacity: 0.5, cursor: "not-allowed" }}
             >
               Trang sau
             </button>
@@ -127,19 +125,13 @@ export function AdminPaginationBar({
 
   return (
     <nav
-      className="admin-pagination-bar"
+      className="admin-pagination-bar flex items-center justify-between mt-5"
       aria-label={ariaLabel}
-      style={{
-        display: "flex",
-        justifyContent: "space-between",
-        alignItems: "center",
-        marginTop: "1.25rem",
-      }}
     >
-      <div style={{ fontSize: "0.85rem", color: "#64748b" }}>
+      <div className="text-xs text-slate-500">
         Hiển thị trang <strong>{page}</strong> / <strong>{totalPages}</strong> (Tổng cộng {totalItems} {itemLabel})
       </div>
-      <div style={{ display: "flex", gap: "0.5rem" }}>
+      <div className="flex items-center gap-2">
         {page > 1 ? (
           <Link className="admin-page-link" href={prevPageUrl}>
             ← Trang trước
