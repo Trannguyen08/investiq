@@ -40,7 +40,7 @@ describe("DividendCalendarWidget", () => {
     expect(screen.getByText(/Lịch chia cổ tức sắp diễn ra/i)).toBeInTheDocument();
     expect(screen.getByText("FPT")).toBeInTheDocument();
     expect(screen.getByText("HPG")).toBeInTheDocument();
-    expect(screen.getAllByText(/⏳ Còn/i).length).toBeGreaterThan(0);
+    expect(screen.getAllByText(/Còn/i).length).toBeGreaterThan(0);
   });
 
   it("filters events by type and search query", () => {

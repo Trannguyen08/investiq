@@ -5,7 +5,7 @@ from __future__ import annotations
 from datetime import datetime
 from decimal import Decimal
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 
 class StrictModel(BaseModel):
@@ -593,3 +593,56 @@ class FinancialStatementsData(StrictModel):
 class FinancialStatementsEnvelope(StrictModel):
     data: FinancialStatementsData
     meta: MarketMeta
+
+
+class EventReminderCreateRequest(StrictModel):
+    email: str = Field(min_length=3, max_length=255)
+    event_id: str = Field(min_length=1, max_length=120)
+    symbol: str = Field(min_length=1, max_length=20)
+    event_title: str = Field(min_length=1, max_length=500)
+    event_type: str = Field(default="corporate_action", max_length=80)
+    event_at: datetime
+    days_before: int = Field(default=1, ge=1, le=7)
+
+    @model_validator(mode="before")
+    @classmethod
+    def normalize_fields(cls, data: Any) -> Any:
+        if isinstance(data, dict):
+            # Tạo bản sao shallow để chuẩn hóa
+            normalized = dict(data)
+            if "event_at" not in normalized and "event_date" in normalized:
+                val = normalized["event_date"]
+                if isinstance(val, str) and "T" not in val:
+                    val = f"{val}T00:00:00Z"
+                normalized["event_at"] = val
+            if "days_before" not in normalized and "remind_days_before" in normalized:
+                normalized["days_before"] = normalized["remind_days_before"]
+            # Lọc bỏ các key dư thừa không thuộc model fields
+            allowed_keys = {"email", "event_id", "symbol", "event_title", "event_type", "event_at", "days_before"}
+            return {k: v for k, v in normalized.items() if k in allowed_keys}
+        return data
+
+
+class EventReminderItem(StrictModel):
+    id: str
+    email: str
+    event_id: str
+    symbol: str
+    event_title: str
+    event_type: str
+    event_at: datetime
+    days_before: int
+    status: str
+    created_at: datetime
+
+
+class EventReminderListEnvelope(StrictModel):
+    data: list[EventReminderItem]
+    meta: MarketMeta
+
+
+class EventReminderActionResponse(StrictModel):
+    success: bool
+    message: str
+    reminder_id: str | None = None
+    email_preview: str | None = None

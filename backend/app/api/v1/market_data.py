@@ -45,6 +45,10 @@ from app.schemas.market import (
     DividendCalendarEnvelope,
     EcosystemDetailEnvelope,
     EcosystemsResponse,
+    EventReminderActionResponse,
+    EventReminderCreateRequest,
+    EventReminderItem,
+    EventReminderListEnvelope,
     EventsResponse,
     FinancialForensicsEnvelope,
     FinancialStatementsEnvelope,
@@ -400,6 +404,105 @@ def intraday_trades(
 ) -> dict[str, object]:
     _public_headers(response)
     return _service().intraday_trades(symbol, limit)
+
+
+@router.post("/events/reminders", response_model=EventReminderActionResponse)
+def create_event_reminder(payload: EventReminderCreateRequest) -> dict[str, Any]:
+    from app.infrastructure.db.repositories.sql_event_reminder_repository import (
+        get_event_reminder_repository,
+    )
+    repo = get_event_reminder_repository()
+    created = repo.create(
+        email=payload.email,
+        event_id=payload.event_id,
+        symbol=payload.symbol,
+        event_title=payload.event_title,
+        event_type=payload.event_type,
+        event_at=payload.event_at,
+        days_before=payload.days_before,
+    )
+    return {
+        "success": True,
+        "message": f"Đã bật nhắc nhở cho sự kiện {payload.symbol}. Hệ thống sẽ gửi email thông báo trước sự kiện 1-2 ngày.",
+        "reminder_id": created["id"],
+    }
+
+
+@router.get("/events/reminders", response_model=EventReminderListEnvelope)
+def list_event_reminders(
+    email: Annotated[str | None, Query(max_length=255)] = None,
+) -> dict[str, Any]:
+    from app.infrastructure.db.repositories.sql_event_reminder_repository import (
+        get_event_reminder_repository,
+    )
+    repo = get_event_reminder_repository()
+    items = repo.list(email=email)
+    return {
+        "data": items,
+        "meta": _service().meta(),
+    }
+
+
+@router.delete("/events/reminders/{reminder_id}", response_model=EventReminderActionResponse)
+def delete_event_reminder(reminder_id: str) -> dict[str, Any]:
+    from app.infrastructure.db.repositories.sql_event_reminder_repository import (
+        get_event_reminder_repository,
+    )
+    repo = get_event_reminder_repository()
+    repo.delete(reminder_id)
+    return {
+        "success": True,
+        "message": "Đã hủy nhắc nhở thành công",
+        "reminder_id": reminder_id,
+    }
+
+
+@router.post("/events/reminders/{reminder_id}/test-send", response_model=EventReminderActionResponse)
+def test_send_reminder(reminder_id: str) -> dict[str, Any]:
+    from app.infrastructure.db.repositories.sql_event_reminder_repository import (
+        get_event_reminder_repository,
+    )
+    from app.infrastructure.external.notifications.event_reminder_email import (
+        send_event_reminder_email,
+    )
+    repo = get_event_reminder_repository()
+    items = repo.list()
+    target = next((i for i in items if str(i.get("id")) == str(reminder_id)), None)
+    if not target:
+        raise HTTPException(status_code=404, detail="Không tìm thấy lịch nhắc nhở này")
+
+    success, msg = send_event_reminder_email(
+        to_email=target["email"],
+        symbol=target["symbol"],
+        event_title=target["event_title"],
+        event_type=target["event_type"],
+        event_date_str=target["event_at"].strftime("%d/%m/%Y") if hasattr(target["event_at"], "strftime") else str(target["event_at"]),
+        days_left=target.get("days_before", 1),
+    )
+    return {
+        "success": success,
+        "message": msg,
+        "reminder_id": reminder_id,
+    }
+
+
+@router.post("/events/reminders/quick-test", response_model=EventReminderActionResponse)
+def quick_test_reminder(payload: EventReminderCreateRequest) -> dict[str, Any]:
+    from app.infrastructure.external.notifications.event_reminder_email import (
+        send_event_reminder_email,
+    )
+    success, msg = send_event_reminder_email(
+        to_email=payload.email,
+        symbol=payload.symbol,
+        event_title=payload.event_title,
+        event_type=payload.event_type,
+        event_date_str=payload.event_at.strftime("%d/%m/%Y") if hasattr(payload.event_at, "strftime") else str(payload.event_at),
+        days_left=payload.days_before,
+    )
+    return {
+        "success": success,
+        "message": msg,
+    }
 
 
 @router.get("/events", response_model=EventsResponse)

@@ -365,7 +365,7 @@ export function StockGoldBankComparator({
         {/* Stock Card */}
         <div className="invest-kpi-card stock-border bg-slate-950/90 border-2 border-blue-500/60 rounded-xl p-4 flex flex-col justify-between shadow-lg shadow-blue-500/5">
           <div className="invest-kpi-head flex items-center justify-between mb-2 gap-1.5">
-            <span className="text-xs font-bold text-blue-400 truncate">📈 CỔ PHIẾU {symbol}</span>
+            <span className="text-xs font-bold text-blue-400 truncate">CỔ PHIẾU {symbol}</span>
             <span className={`kpi-roi-badge text-xs font-black px-2 py-0.5 rounded-full shrink-0 ${
               latest.stockRoi >= 0 ? "up bg-emerald-950 text-emerald-400 border border-emerald-800/60" : "down bg-rose-950 text-rose-400 border border-rose-800/60"
             }`}>
@@ -381,7 +381,7 @@ export function StockGoldBankComparator({
         {/* Gold SJC Card */}
         <div className="invest-kpi-card gold-border bg-slate-950/90 border-2 border-amber-500/60 rounded-xl p-4 flex flex-col justify-between shadow-lg shadow-amber-500/5">
           <div className="invest-kpi-head flex items-center justify-between mb-2 gap-1.5">
-            <span className="text-xs font-bold text-amber-400 truncate">🥇 VÀNG MIẾNG SJC</span>
+            <span className="text-xs font-bold text-amber-400 truncate">VÀNG MIẾNG SJC</span>
             <span className={`kpi-roi-badge text-xs font-black px-2 py-0.5 rounded-full shrink-0 ${
               latest.goldRoi >= 0 ? "up bg-emerald-950 text-emerald-400 border border-emerald-800/60" : "down bg-rose-950 text-rose-400 border border-rose-800/60"
             }`}>
@@ -397,7 +397,7 @@ export function StockGoldBankComparator({
         {/* Bank Savings Card */}
         <div className="invest-kpi-card bank-border bg-slate-950/90 border-2 border-emerald-500/60 rounded-xl p-4 flex flex-col justify-between shadow-lg shadow-emerald-500/5">
           <div className="invest-kpi-head flex items-center justify-between mb-2 gap-1.5">
-            <span className="text-xs font-bold text-emerald-400 truncate">🏦 TIẾT KIỆM NGÂN HÀNG</span>
+            <span className="text-xs font-bold text-emerald-400 truncate">TIẾT KIỆM NGÂN HÀNG</span>
             <span className="kpi-roi-badge up text-xs font-black px-2 py-0.5 rounded-full bg-emerald-950 text-emerald-400 border border-emerald-800/60 shrink-0">
               +{latest.bankRoi}%
             </span>
@@ -551,7 +551,7 @@ export function StockGoldBankComparator({
       {/* FINANCIAL ADVISOR TAKEAWAY */}
       <div className="invest-insight-box bg-slate-950/80 border border-slate-800 rounded-xl p-5 text-xs sm:text-sm leading-relaxed text-slate-300 shadow-inner">
         <h4 className="text-sm sm:text-base font-bold text-white m-0 mb-2 flex items-center gap-2">
-          <span>💡</span> Nhận Định Tài Chính &amp; Góc Nhìn Đầu Tư
+          Nhận Định Tài Chính &amp; Góc Nhìn Đầu Tư
         </h4>
         <p className="m-0 mb-3">
           Trong chu kỳ từ <b className="text-white">{startYear}</b> đến <b className="text-white">2026</b>, kênh <b className="text-sky-400">

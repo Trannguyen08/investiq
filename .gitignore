@@ -232,3 +232,7 @@ docs/tutorial/
 
 # Neon CLI local state
 .neon
+
+# InvestIQ local email previews and transient storage
+backend/app/storage/*
+!backend/app/storage/.gitkeep

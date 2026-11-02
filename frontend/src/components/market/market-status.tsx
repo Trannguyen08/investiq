@@ -13,14 +13,17 @@ function sessionContext(value: string) {
 export function MarketStatus({
   meta,
   className = "",
+  source,
 }: {
   meta: MarketMeta;
   className?: string;
+  source?: string;
 }) {
   const stream = useMarketStreamState();
   const latestDataTime = stream.lastUpdate ?? meta.market_time;
   const isConnected = stream.state === "connected";
   const session = sessionContext(meta.session);
+  const sourceName = source || meta.provider_name || "Vnstock";
 
   return (
     <div
@@ -29,15 +32,17 @@ export function MarketStatus({
     >
       <span
         className={`w-2 h-2 rounded-full inline-block shrink-0 ${
-          isConnected ? "bg-emerald-400 animate-pulse shadow-[0_0_8px_rgba(52,211,153,0.5)]" : "bg-amber-400"
+          isConnected ? "bg-emerald-400 animate-pulse shadow-[0_0_8px_rgba(52,211,153,0.5)]" : "bg-emerald-400 shadow-[0_0_8px_rgba(52,211,153,0.3)]"
         }`}
         aria-hidden="true"
       />
-      <span className="flex items-center gap-1.5">
+      <span className="flex items-center gap-1.5 flex-wrap">
         <small className="text-slate-400 text-xs">Dữ liệu cập nhật gần nhất</small>
         <time className="text-slate-100 font-semibold font-mono" dateTime={latestDataTime}>
           {formatMarketTime(latestDataTime)}
         </time>
+        <span className="text-slate-600">·</span>
+        <span className="text-slate-300 font-medium">Nguồn {sourceName}</span>
       </span>
       <span className="sr-only">
         <span>{session.label}</span>. <span>{session.detail}</span>

@@ -358,16 +358,16 @@ function HomeMarketContent({ overview, sectors, news, dividendEvents }: { overvi
 
   return (
     <main id="main-content" className="market-home beginner-home">
-      <MarketColorLegend />
+      <div className="home-top-bar flex flex-col md:flex-row md:items-center justify-between gap-2.5">
+        <MarketColorLegend />
+        <MarketStatus meta={overview.meta} source="Vnstock" />
+      </div>
       <MarketSnapshotRibbon indices={indices} />
       <DailyDigestBanner />
       <section className="beginner-hero relative" aria-labelledby="today-market-title">
-        <div className="absolute top-4 right-4 hidden sm:block">
-          <MarketStatus meta={overview.meta} />
-        </div>
         <div className="beginner-hero-copy">
           <p className="eyebrow">HÔM NAY THỊ TRƯỜNG THẾ NÀO?</p>
-          <h1 id="today-market-title"><span aria-hidden="true">{conclusion.emoji}</span> {conclusion.title}</h1>
+          <h1 id="today-market-title">{conclusion.title}</h1>
           <p>{conclusion.detail} Số liệu được trình bày để bạn hiểu nhanh trước khi đi sâu.</p>
           {primary && <div className="hero-index-value"><span>VN-Index</span><strong>{Number(primary.value).toLocaleString("vi-VN")}</strong><em className={changeTone(primary.change_percent)}>{formatPercent(primary.change_percent)}</em></div>}
           <SentimentGauge score={sentiment} />

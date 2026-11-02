@@ -343,3 +343,62 @@ export function getInstrumentFinancialStatements(
     120,
   );
 }
+
+export interface CreateEventReminderPayload {
+  email: string;
+  event_id: string;
+  symbol: string;
+  event_title: string;
+  event_date: string;
+  event_type?: string;
+  remind_days_before?: number;
+  extra_info?: Record<string, unknown>;
+}
+
+export interface EventReminderItem {
+  id: string;
+  email: string;
+  event_id: string;
+  symbol: string;
+  event_title: string;
+  event_date: string;
+  event_type: string;
+  remind_days_before: number;
+  target_date: string;
+  is_sent: boolean;
+  sent_at: string | null;
+  created_at: string;
+}
+
+export function createEventReminder(payload: CreateEventReminderPayload): Promise<{ data: EventReminderItem; message: string }> {
+  const base = resolveApiBase();
+  return fetch(`${base}/v1/market/events/reminders`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(payload),
+  }).then(async (res) => {
+    if (!res.ok) {
+      const err = await res.json().catch(() => null);
+      throw new Error(err?.detail || `Lỗi ${res.status}`);
+    }
+    return res.json();
+  });
+}
+
+export function getEventReminders(email: string): Promise<{ data: EventReminderItem[] }> {
+  return requestJson<{ data: EventReminderItem[] }>(
+    `/v1/market/events/reminders?email=${encodeURIComponent(email)}`,
+    0,
+  );
+}
+
+export function deleteEventReminder(reminderId: string): Promise<{ message: string }> {
+  const base = resolveApiBase();
+  return fetch(`${base}/v1/market/events/reminders/${encodeURIComponent(reminderId)}`, {
+    method: "DELETE",
+  }).then(async (res) => {
+    if (!res.ok) throw new Error(`Lỗi ${res.status}`);
+    return res.json();
+  });
+}
+

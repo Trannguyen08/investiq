@@ -11,6 +11,8 @@ type StockDividendPanelProps = {
 
 export function StockDividendPanel({ symbol, summary, events }: StockDividendPanelProps) {
   const [filterType, setFilterType] = useState<"all" | "cash" | "stock">("all");
+  const [page, setPage] = useState(1);
+  const PAGE_SIZE = 8;
 
   const filteredEvents = useMemo(() => {
     if (filterType === "cash") {
@@ -21,6 +23,15 @@ export function StockDividendPanel({ symbol, summary, events }: StockDividendPan
     }
     return events;
   }, [events, filterType]);
+
+  const totalFiltered = filteredEvents.length;
+  const totalPages = Math.ceil(totalFiltered / PAGE_SIZE) || 1;
+  const clampedPage = Math.min(Math.max(1, page), totalPages);
+
+  const pagedEvents = useMemo(() => {
+    const start = (clampedPage - 1) * PAGE_SIZE;
+    return filteredEvents.slice(start, start + PAGE_SIZE);
+  }, [filteredEvents, clampedPage]);
 
   // Aggregate cash payouts by year for visual bar chart
   const annualCashPayouts = useMemo(() => {
@@ -121,7 +132,10 @@ export function StockDividendPanel({ symbol, summary, events }: StockDividendPan
               className={`dividend-pill-btn px-3 py-1.5 text-xs font-semibold rounded-lg transition ${
                 filterType === "all" ? "active bg-sky-500 text-white shadow-sm" : "text-slate-400 hover:text-slate-200"
               }`}
-              onClick={() => setFilterType("all")}
+              onClick={() => {
+                setFilterType("all");
+                setPage(1);
+              }}
             >
               Tất cả ({events.length})
             </button>
@@ -130,65 +144,133 @@ export function StockDividendPanel({ symbol, summary, events }: StockDividendPan
               className={`dividend-pill-btn px-3 py-1.5 text-xs font-semibold rounded-lg transition ${
                 filterType === "cash" ? "active bg-emerald-600 text-white shadow-sm" : "text-slate-400 hover:text-slate-200"
               }`}
-              onClick={() => setFilterType("cash")}
+              onClick={() => {
+                setFilterType("cash");
+                setPage(1);
+              }}
             >
-              💵 Tiền mặt
+              Tiền mặt
             </button>
             <button
               type="button"
               className={`dividend-pill-btn px-3 py-1.5 text-xs font-semibold rounded-lg transition ${
                 filterType === "stock" ? "active bg-purple-600 text-white shadow-sm" : "text-slate-400 hover:text-slate-200"
               }`}
-              onClick={() => setFilterType("stock")}
+              onClick={() => {
+                setFilterType("stock");
+                setPage(1);
+              }}
             >
-              📜 Cổ phiếu &amp; Quyền
+              Cổ phiếu &amp; Quyền
             </button>
           </div>
         </div>
 
         {filteredEvents.length > 0 ? (
-          <div className="dividend-table-wrapper overflow-x-auto rounded-xl border border-slate-800">
-            <table className="dividend-table w-full text-left border-collapse text-xs sm:text-sm">
-              <thead>
-                <tr className="bg-slate-950/80 border-b border-slate-800 text-slate-400 text-xs uppercase tracking-wider">
-                  <th scope="col" className="py-3 px-4 font-bold">Ngày GDKHQ</th>
-                  <th scope="col" className="py-3 px-4 font-bold">Hình thức</th>
-                  <th scope="col" className="py-3 px-4 font-bold">Tỷ lệ / Giá trị</th>
-                  <th scope="col" className="py-3 px-4 font-bold">Nội dung chi tiết</th>
-                  <th scope="col" className="py-3 px-4 font-bold">Ngày thực hiện</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-slate-800/50">
-                {filteredEvents.map((e, index) => {
-                  const isCash = e.type === "cash";
-                  return (
-                    <tr key={`${e.id || "div"}-${e.ex_date || ""}-${index}`} className="hover:bg-slate-800/40 transition">
-                      <td className="dividend-date-cell py-3.5 px-4 font-bold text-white whitespace-nowrap">
-                        <strong>{e.ex_date || e.event_date || "--"}</strong>
-                      </td>
-                      <td className="py-3.5 px-4 whitespace-nowrap">
-                        <span className={`dividend-type-badge text-xs font-bold px-2 py-0.5 rounded ${
-                          isCash ? "badge-cash bg-emerald-950 text-emerald-400 border border-emerald-800/60" : "badge-stock bg-purple-950 text-purple-400 border border-purple-800/60"
-                        }`}>
-                          {isCash ? "Tiền mặt" : e.type === "bonus" ? "Thưởng cp" : e.type === "issuance" ? "Phát hành" : "Cổ phiếu"}
-                        </span>
-                      </td>
-                      <td className="dividend-ratio-cell py-3.5 px-4 whitespace-nowrap">
-                        <strong className="text-slate-100 font-extrabold">{e.ratio || (e.cash_value ? `${e.cash_value.toLocaleString("vi-VN")} đ` : "--")}</strong>
-                        {e.cash_value && isCash && (
-                          <small className="dividend-sub-val block text-[11px] text-emerald-400/90 font-medium">({e.cash_value.toLocaleString("vi-VN")} đ/cp)</small>
-                        )}
-                      </td>
-                      <td className="dividend-title-cell py-3.5 px-4 text-slate-300 max-w-md">{e.title}</td>
-                      <td className="dividend-paydate-cell py-3.5 px-4 text-slate-400 whitespace-nowrap">
-                        {e.payout_date || e.record_date || "Theo thông báo"}
-                      </td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
-          </div>
+          <>
+            <div className="dividend-table-wrapper overflow-x-auto rounded-xl border border-slate-800">
+              <table className="dividend-table w-full text-left border-collapse text-xs sm:text-sm">
+                <thead>
+                  <tr className="bg-slate-950/80 border-b border-slate-800 text-slate-400 text-xs uppercase tracking-wider">
+                    <th scope="col" className="py-3 px-4 font-bold">Ngày GDKHQ</th>
+                    <th scope="col" className="py-3 px-4 font-bold">Hình thức</th>
+                    <th scope="col" className="py-3 px-4 font-bold">Tỷ lệ / Giá trị</th>
+                    <th scope="col" className="py-3 px-4 font-bold">Nội dung chi tiết</th>
+                    <th scope="col" className="py-3 px-4 font-bold">Ngày thực hiện</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-800/50">
+                  {pagedEvents.map((e, index) => {
+                    const isCash = e.type === "cash";
+                    return (
+                      <tr key={`${e.id || "div"}-${e.ex_date || ""}-${index}`} className="hover:bg-slate-800/40 transition">
+                        <td className="dividend-date-cell py-3.5 px-4 font-bold text-white whitespace-nowrap">
+                          <strong>{e.ex_date || e.event_date || "--"}</strong>
+                        </td>
+                        <td className="py-3.5 px-4 whitespace-nowrap">
+                          <span className={`dividend-type-badge text-xs font-bold px-2 py-0.5 rounded ${
+                            isCash ? "badge-cash bg-emerald-950 text-emerald-400 border border-emerald-800/60" : "badge-stock bg-purple-950 text-purple-400 border border-purple-800/60"
+                          }`}>
+                            {isCash ? "Tiền mặt" : e.type === "bonus" ? "Thưởng cp" : e.type === "issuance" ? "Phát hành" : "Cổ phiếu"}
+                          </span>
+                        </td>
+                        <td className="dividend-ratio-cell py-3.5 px-4 whitespace-nowrap">
+                          <strong className="text-slate-100 font-extrabold">{e.ratio || (e.cash_value ? `${e.cash_value.toLocaleString("vi-VN")} đ` : "--")}</strong>
+                          {e.cash_value && isCash && (
+                            <small className="dividend-sub-val block text-[11px] text-emerald-400/90 font-medium">({e.cash_value.toLocaleString("vi-VN")} đ/cp)</small>
+                          )}
+                        </td>
+                        <td className="dividend-title-cell py-3.5 px-4 text-slate-300 max-w-md">{e.title}</td>
+                        <td className="dividend-paydate-cell py-3.5 px-4 text-slate-400 whitespace-nowrap">
+                          {e.payout_date || e.record_date || "Theo thông báo"}
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+
+            {totalFiltered > 0 && (
+              <div className="dividend-pagination-bar mt-4 pt-3 border-t border-slate-800 flex flex-col sm:flex-row items-center justify-between gap-3 text-xs">
+                <div className="text-slate-400">
+                  Hiển thị <strong className="text-slate-200 font-bold">{(clampedPage - 1) * PAGE_SIZE + 1} - {Math.min(clampedPage * PAGE_SIZE, totalFiltered)}</strong> trong tổng số <strong className="text-slate-200 font-bold">{totalFiltered}</strong> đợt chi trả
+                </div>
+                {totalPages > 1 && (
+                  <div className="flex items-center gap-1.5">
+                    <button
+                      type="button"
+                      disabled={clampedPage <= 1}
+                      onClick={() => setPage((p) => Math.max(1, p - 1))}
+                      className="px-3 py-1.5 rounded-lg bg-slate-950 border border-slate-800 text-slate-300 hover:text-white hover:border-slate-700 disabled:opacity-40 disabled:cursor-not-allowed transition font-semibold"
+                    >
+                      ← Trước
+                    </button>
+                    <div className="flex items-center gap-1">
+                      {Array.from({ length: totalPages }, (_, i) => i + 1).map((pNum) => {
+                        if (
+                          totalPages <= 7 ||
+                          pNum === 1 ||
+                          pNum === totalPages ||
+                          Math.abs(pNum - clampedPage) <= 1
+                        ) {
+                          return (
+                            <button
+                              key={pNum}
+                              type="button"
+                              onClick={() => setPage(pNum)}
+                              className={`w-7 h-7 rounded-md text-xs font-bold transition flex items-center justify-center ${
+                                pNum === clampedPage
+                                  ? "bg-sky-600 text-white shadow-sm"
+                                  : "bg-slate-950 text-slate-400 hover:text-white hover:bg-slate-900 border border-slate-800"
+                              }`}
+                            >
+                              {pNum}
+                            </button>
+                          );
+                        }
+                        if (pNum === 2 && clampedPage > 3) {
+                          return <span key="ellipsis-start" className="text-slate-500 px-0.5">...</span>;
+                        }
+                        if (pNum === totalPages - 1 && clampedPage < totalPages - 2) {
+                          return <span key="ellipsis-end" className="text-slate-500 px-0.5">...</span>;
+                        }
+                        return null;
+                      })}
+                    </div>
+                    <button
+                      type="button"
+                      disabled={clampedPage >= totalPages}
+                      onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
+                      className="px-3 py-1.5 rounded-lg bg-slate-950 border border-slate-800 text-slate-300 hover:text-white hover:border-slate-700 disabled:opacity-40 disabled:cursor-not-allowed transition font-semibold"
+                    >
+                      Sau →
+                    </button>
+                  </div>
+                )}
+              </div>
+            )}
+          </>
         ) : (
           <div className="market-empty compact bg-slate-950/60 border border-slate-800 rounded-xl p-8 text-center text-slate-400">
             <p className="text-xs sm:text-sm m-0">Không có dữ liệu cổ tức nào thuộc bộ lọc này.</p>

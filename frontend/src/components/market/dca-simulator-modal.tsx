@@ -98,7 +98,6 @@ export function DCASimulatorButton({ symbol }: { symbol: string }) {
         onClick={() => setIsOpen(true)}
         title="So sánh hiệu suất đầu tư Cổ phiếu vs Vàng vs Ngân hàng"
       >
-        <span aria-hidden="true" className="text-amber-400">⚖️</span>
         <span>So sánh Cổ phiếu vs Vàng &amp; Tiết kiệm</span>
       </button>
 

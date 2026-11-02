@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useMemo, useState } from "react";
 import type { DividendItem } from "@/types/market";
+import { EventReminderModal, type ReminderTargetEvent } from "./event-reminder-modal";
 
 type DividendCalendarWidgetProps = {
   initialEvents?: DividendItem[];
@@ -11,6 +12,7 @@ type DividendCalendarWidgetProps = {
 export function DividendCalendarWidget({ initialEvents = [] }: DividendCalendarWidgetProps) {
   const [filterType, setFilterType] = useState<"all" | "cash" | "stock">("all");
   const [searchQuery, setSearchQuery] = useState("");
+  const [reminderEvent, setReminderEvent] = useState<ReminderTargetEvent | null>(null);
 
   const filteredEvents = useMemo(() => {
     return initialEvents.filter((event) => {
@@ -29,21 +31,21 @@ export function DividendCalendarWidget({ initialEvents = [] }: DividendCalendarW
   }, [initialEvents, filterType, searchQuery]);
 
   return (
-    <section className="dividend-calendar-section w-full py-6 text-slate-100" aria-labelledby="dividend-calendar-title">
+    <section className="dividend-calendar-section w-full pb-6 text-slate-100" aria-labelledby="dividend-calendar-title">
       <div className="beginner-heading flex flex-col lg:flex-row lg:items-end justify-between gap-4 mb-6">
-        <div>
-          <p className="eyebrow text-xs font-bold text-sky-400 uppercase tracking-widest mb-1">
+        <div className="dividend-heading-copy mb-3 sm:mb-4">
+          <p className="eyebrow text-xs font-bold text-sky-400 uppercase tracking-widest mb-1.5">
             DỮ LIỆU SẮP DIỄN RA (TƯƠNG LAI)
           </p>
-          <h2 id="dividend-calendar-title" className="text-xl sm:text-2xl font-extrabold text-white tracking-tight my-1">
+          <h2 id="dividend-calendar-title" className="text-xl sm:text-2xl font-extrabold text-white tracking-tight my-1.5">
             Lịch chia cổ tức sắp diễn ra
           </h2>
-          <p className="text-xs sm:text-sm text-slate-400 max-w-2xl leading-relaxed m-0">
+          <p className="text-xs sm:text-sm text-slate-400 max-w-2xl leading-relaxed m-0 mt-1">
             Theo dõi ngày chốt quyền GDKHQ và chi trả cổ tức trong thời gian tới của các doanh nghiệp niêm yết (Dữ liệu trực tiếp).
           </p>
         </div>
-        <div className="dividend-filter-toolbar flex flex-wrap items-center gap-3">
-          <div className="dividend-type-pills flex items-center gap-1.5 bg-slate-900/90 border border-slate-800 p-1 rounded-xl shadow-inner" role="radiogroup" aria-label="Lọc theo loại cổ tức">
+        <div className="dividend-filter-toolbar flex flex-col items-end gap-2.5 ml-auto">
+          <div className="dividend-type-pills flex items-center justify-end gap-1.5 bg-slate-900/90 border border-slate-800 p-1 rounded-xl shadow-inner" role="radiogroup" aria-label="Lọc theo loại cổ tức">
             <button
               type="button"
               className={`dividend-pill-btn px-3 py-1.5 text-xs font-semibold rounded-lg transition ${
@@ -60,7 +62,7 @@ export function DividendCalendarWidget({ initialEvents = [] }: DividendCalendarW
               }`}
               onClick={() => setFilterType("cash")}
             >
-              💵 Cổ tức tiền
+              Cổ tức tiền mặt
             </button>
             <button
               type="button"
@@ -69,17 +71,17 @@ export function DividendCalendarWidget({ initialEvents = [] }: DividendCalendarW
               }`}
               onClick={() => setFilterType("stock")}
             >
-              📜 Cổ tức cổ phiếu
+              Cổ tức cổ phiếu
             </button>
           </div>
-          <div className="dividend-search-box">
+          <div className="dividend-search-box flex justify-end w-full sm:w-auto">
             <input
               type="text"
               placeholder="Lọc theo mã (HPG, FPT...)"
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
               aria-label="Tìm kiếm mã cổ phiếu chia cổ tức"
-              className="dividend-search-input bg-slate-900/90 border border-slate-800 text-slate-200 text-xs rounded-xl px-3.5 py-2 w-48 focus:outline-none focus:ring-1 focus:ring-sky-500 placeholder-slate-500"
+              className="dividend-search-input bg-slate-900/90 border border-slate-800 text-slate-200 text-xs rounded-xl px-3.5 py-2 w-full sm:w-64 focus:outline-none focus:ring-1 focus:ring-sky-500 placeholder-slate-500 text-left"
             />
           </div>
         </div>
@@ -127,7 +129,7 @@ export function DividendCalendarWidget({ initialEvents = [] }: DividendCalendarW
                       </span>
                       {daysLeft > 0 && (
                         <span className="dividend-countdown-badge text-[10px] font-bold px-1.5 py-0.5 rounded bg-amber-950/80 border border-amber-800/60 text-amber-300">
-                          ⏳ Còn {daysLeft} ngày
+                          Còn {daysLeft} ngày
                         </span>
                       )}
                     </div>
@@ -148,12 +150,36 @@ export function DividendCalendarWidget({ initialEvents = [] }: DividendCalendarW
                     ) : (
                       <span className="dividend-source-text text-slate-400 truncate">Nguồn: {event.source}</span>
                     )}
-                    <Link
-                      href={`/market/stocks/${encodeURIComponent(event.symbol)}?tab=dividend`}
-                      className="dividend-detail-link text-sky-400 hover:text-sky-300 font-semibold shrink-0 transition"
-                    >
-                      Lịch sử {event.symbol} →
-                    </Link>
+                    <div className="flex items-center gap-2 shrink-0">
+                      <button
+                        type="button"
+                        onClick={() =>
+                          setReminderEvent({
+                            id: event.id,
+                            symbol: event.symbol,
+                            title: event.title,
+                            date: event.ex_date || event.event_date || "",
+                            type: "dividend",
+                            extraInfo: {
+                              cash_value: event.cash_value,
+                              ratio: event.ratio,
+                              record_date: event.record_date,
+                              payout_date: event.payout_date,
+                            },
+                          })
+                        }
+                        className="dividend-reminder-btn text-[11px] font-semibold text-sky-400 hover:text-sky-300 hover:bg-sky-950/70 border border-sky-800/60 rounded-lg px-2.5 py-1 transition"
+                        title="Đặt nhắc nhở qua Email trước 1-2 ngày"
+                      >
+                        Nhắc nhở
+                      </button>
+                      <Link
+                        href={`/market/stocks/${encodeURIComponent(event.symbol)}?tab=dividend`}
+                        className="dividend-detail-link text-slate-400 hover:text-slate-200 font-semibold shrink-0 transition"
+                      >
+                        Lịch sử →
+                      </Link>
+                    </div>
                   </div>
                 </div>
               </article>
@@ -166,6 +192,12 @@ export function DividendCalendarWidget({ initialEvents = [] }: DividendCalendarW
           <p className="text-xs m-0">Thử thay đổi bộ lọc phân loại hoặc tìm kiếm với từ khóa khác.</p>
         </div>
       )}
+
+      <EventReminderModal
+        isOpen={Boolean(reminderEvent)}
+        onClose={() => setReminderEvent(null)}
+        event={reminderEvent}
+      />
     </section>
   );
 }

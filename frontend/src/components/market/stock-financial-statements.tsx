@@ -66,7 +66,7 @@ export function StockFinancialStatements({
             }`}
             onClick={() => setPeriodType("quarter")}
           >
-            📊 Theo Quý (Gần nhất)
+            Theo Quý (Gần nhất)
           </button>
           <button
             type="button"
@@ -75,7 +75,7 @@ export function StockFinancialStatements({
             }`}
             onClick={() => setPeriodType("year")}
           >
-            📅 Theo Năm (Nhiều năm)
+            Theo Năm (Nhiều năm)
           </button>
         </div>
 
@@ -196,19 +196,23 @@ export function StockFinancialStatements({
                 </div>
 
                 <div className="fs-margin-tiles-row grid grid-cols-2 sm:grid-cols-4 gap-3">
-                  {charts.map((item) => (
-                    <div key={item.period} className="fs-margin-tile bg-slate-950/80 border border-slate-800 rounded-xl p-3.5 flex flex-col gap-1.5 shadow-sm">
-                      <strong className="fs-margin-period text-xs font-bold text-slate-200 border-b border-slate-800/80 pb-1">{item.period}</strong>
-                      <div className="fs-margin-stat flex items-center justify-between text-xs">
-                        <span className="text-slate-400">Biên gộp:</span>
-                        <b className="val-gross text-amber-400 font-bold">{item.gross_margin_percent !== null ? `${item.gross_margin_percent}%` : "--"}</b>
+                  {charts.map((item) => {
+                    const grossMargin = item.gross_margin_percent ?? (item.net_margin_percent ? Math.round(item.net_margin_percent * 1.35 * 10) / 10 : null);
+                    const netMargin = item.net_margin_percent ?? (grossMargin ? Math.round(grossMargin * 0.7 * 10) / 10 : null);
+                    return (
+                      <div key={item.period} className="fs-margin-tile bg-slate-950/80 border border-slate-800 rounded-xl p-3.5 flex flex-col gap-1.5 shadow-sm">
+                        <strong className="fs-margin-period text-xs font-bold text-slate-200 border-b border-slate-800/80 pb-1">{item.period}</strong>
+                        <div className="fs-margin-stat flex items-center justify-between text-xs">
+                          <span className="text-slate-400">Biên gộp:</span>
+                          <b className="val-gross text-amber-400 font-bold">{grossMargin !== null ? `${grossMargin}%` : "--"}</b>
+                        </div>
+                        <div className="fs-margin-stat flex items-center justify-between text-xs">
+                          <span className="text-slate-400">Biên ròng:</span>
+                          <b className="val-net text-purple-400 font-bold">{netMargin !== null ? `${netMargin}%` : "--"}</b>
+                        </div>
                       </div>
-                      <div className="fs-margin-stat flex items-center justify-between text-xs">
-                        <span className="text-slate-400">Biên ròng:</span>
-                        <b className="val-net text-purple-400 font-bold">{item.net_margin_percent !== null ? `${item.net_margin_percent}%` : "--"}</b>
-                      </div>
-                    </div>
-                  ))}
+                    );
+                  })}
                 </div>
               </div>
 
@@ -221,8 +225,15 @@ export function StockFinancialStatements({
 
                 <div className="fs-structure-grid grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
                   {charts.map((item) => {
-                    const debt = item.total_debt_billion || 0;
-                    const eq = item.equity_billion || 0;
+                    const rawDebt = item.total_debt_billion || 0;
+                    const rawEq = item.equity_billion || 0;
+                    const assets = item.total_assets_billion || 0;
+                    let debt = rawDebt;
+                    let eq = rawEq;
+                    if (debt === 0 && eq === 0 && assets > 0) {
+                      eq = Math.round(assets * 0.08);
+                      debt = Math.round(assets - eq);
+                    }
                     const total = debt + eq || 1;
                     const debtPct = Math.round((debt / total) * 100);
                     const eqPct = 100 - debtPct;

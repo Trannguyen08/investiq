@@ -123,7 +123,7 @@ export function DailyDigestBanner() {
               {/* Key Drivers */}
               <div className="digest-section-block bg-slate-950/50 border border-slate-800 rounded-xl p-4">
                 <h3 className="section-block-title text-sm sm:text-base font-bold text-slate-200 mb-3 flex items-center gap-2 m-0">
-                  <span aria-hidden="true">🎯</span> 3 Yếu tố dẫn dắt phiên hôm nay
+                  3 Yếu tố dẫn dắt phiên hôm nay
                 </h3>
                 <ul className="drivers-list flex flex-col gap-2.5 m-0 pl-0 list-none">
                   {digest.key_drivers.map((driver, idx) => (
@@ -139,7 +139,7 @@ export function DailyDigestBanner() {
               <div className="digest-two-col grid md:grid-cols-2 gap-4">
                 <div className="digest-col-box bg-slate-950/50 border border-slate-800 rounded-xl p-4">
                   <h4 className="col-box-title text-xs sm:text-sm font-bold text-slate-200 mb-3 flex items-center gap-2 m-0 uppercase tracking-wider">
-                    <span aria-hidden="true">⚡</span> Bùng nổ khối lượng đột biến
+                    Bùng nổ khối lượng đột biến
                   </h4>
                   <div className="col-ticker-list flex flex-col gap-2">
                     {digest.volume_breakouts.map((item) => (
@@ -164,7 +164,7 @@ export function DailyDigestBanner() {
 
                 <div className="digest-col-box bg-slate-950/50 border border-slate-800 rounded-xl p-4">
                   <h4 className="col-box-title text-xs sm:text-sm font-bold text-slate-200 mb-3 flex items-center gap-2 m-0 uppercase tracking-wider">
-                    <span aria-hidden="true">🚀</span> Cổ phiếu tăng giá mạnh nhất
+                    Cổ phiếu tăng giá mạnh nhất
                   </h4>
                   <div className="col-ticker-list flex flex-col gap-2">
                     {digest.gainers.map((item) => (
@@ -192,7 +192,7 @@ export function DailyDigestBanner() {
               {digest.upcoming_events.length > 0 && (
                 <div className="digest-section-block bg-slate-950/50 border border-slate-800 rounded-xl p-4">
                   <h3 className="section-block-title text-sm sm:text-base font-bold text-slate-200 mb-3 flex items-center gap-2 m-0">
-                    <span aria-hidden="true">📅</span> Lịch sự kiện doanh nghiệp đáng chú ý
+                    Lịch sự kiện doanh nghiệp đáng chú ý
                   </h3>
                   <div className="catalyst-events-grid grid sm:grid-cols-2 md:grid-cols-3 gap-3">
                     {digest.upcoming_events.map((ev, idx) => (

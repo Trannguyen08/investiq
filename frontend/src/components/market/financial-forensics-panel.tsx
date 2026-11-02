@@ -174,10 +174,7 @@ export function FinancialForensicsPanel({ data, symbol }: Props) {
           </div>
 
           {is_finance ? (
-            <div className="z-finance-notice flex items-start gap-3 p-4 rounded-xl bg-slate-950/60 border border-slate-800 text-xs">
-              <span className="notice-icon text-lg" aria-hidden="true">
-                ℹ️
-              </span>
+            <div className="z-finance-notice p-4 rounded-xl bg-slate-950/60 border border-slate-800 text-xs">
               <div>
                 <strong className="text-slate-200 block mb-1">Đặc thù ngành Tài chính / Ngân hàng</strong>
                 <p className="text-slate-400 m-0 leading-relaxed">
@@ -259,10 +256,7 @@ export function FinancialForensicsPanel({ data, symbol }: Props) {
 
           <div className="summary-body flex flex-col gap-3">
             <p className="summary-text text-xs sm:text-sm text-slate-300 m-0 leading-relaxed">{risk_summary}</p>
-            <div className="recommendation-callout flex items-start gap-3 bg-sky-950/40 border border-sky-900/50 rounded-xl p-3.5 text-xs">
-              <span className="callout-icon text-lg" aria-hidden="true">
-                💡
-              </span>
+            <div className="recommendation-callout bg-sky-950/40 border border-sky-900/50 rounded-xl p-3.5 text-xs">
               <div>
                 <strong className="text-sky-300 block mb-1">Khuyến nghị hành động:</strong>
                 <p className="text-slate-300 m-0 leading-relaxed">{recommendation}</p>
@@ -326,7 +320,6 @@ export function FinancialForensicsPanel({ data, symbol }: Props) {
 
                 <div className="flag-implication bg-slate-950/40 p-2.5 rounded-lg border border-slate-850 text-xs">
                   <div className="implication-header flex items-center gap-1.5 mb-1">
-                    <span className="implication-icon">⚠️</span>
                     <strong className="implication-label text-slate-300">Hệ quả tiềm ẩn:</strong>
                   </div>
                   <p className="implication-body text-slate-400 m-0 leading-relaxed">{flag.implication}</p>
@@ -344,22 +337,22 @@ export function FinancialForensicsPanel({ data, symbol }: Props) {
                     </div>
 
                     <div className="expanded-block formula-block bg-slate-950/80 p-2.5 rounded-lg border border-slate-800">
-                      <span className="block-label text-slate-400 font-semibold block mb-1">📐 CÔNG THỨC ĐỊNH LƯỢNG:</span>
+                      <span className="block-label text-slate-400 font-semibold block mb-1">CÔNG THỨC ĐỊNH LƯỢNG:</span>
                       <code className="block-code font-mono text-sky-300 text-xs">{detail.formula}</code>
                     </div>
 
                     <div className="expanded-block deepdive-block bg-slate-950/80 p-2.5 rounded-lg border border-slate-800">
-                      <span className="block-label text-slate-400 font-semibold block mb-1">🔍 PHÂN TÍCH RỦI RO &amp; Ý NGHĨA KẾ TOÁN:</span>
+                      <span className="block-label text-slate-400 font-semibold block mb-1">PHÂN TÍCH RỦI RO &amp; Ý NGHĨA KẾ TOÁN:</span>
                       <p className="block-text text-slate-300 m-0 leading-relaxed">{detail.deepDive}</p>
                     </div>
 
                     <div className="expanded-block warning-block bg-slate-950/80 p-2.5 rounded-lg border border-slate-800">
-                      <span className="block-label text-slate-400 font-semibold block mb-1">🚨 DẤU HIỆU CẢNH BÁO CẦN LƯU TÂM:</span>
+                      <span className="block-label text-slate-400 font-semibold block mb-1">DẤU HIỆU CẢNH BÁO CẦN LƯU TÂM:</span>
                       <p className="block-text text-amber text-amber-300 m-0 leading-relaxed">{detail.warningSign}</p>
                     </div>
 
                     <div className="expanded-block checklist-block bg-slate-950/80 p-2.5 rounded-lg border border-slate-800">
-                      <span className="block-label text-slate-400 font-semibold block mb-1">📋 HƯỚNG DẪN SOI TRÊN BCTC QUÝ:</span>
+                      <span className="block-label text-slate-400 font-semibold block mb-1">HƯỚNG DẪN SOI TRÊN BCTC QUÝ:</span>
                       <ul className="block-checklist m-0 pl-4 list-disc text-slate-300 space-y-1">
                         {detail.auditChecklist.map((c, i) => (
                           <li key={i}>{c}</li>
@@ -375,10 +368,7 @@ export function FinancialForensicsPanel({ data, symbol }: Props) {
       </div>
 
       {/* Educational Notice for Beginners */}
-      <aside className="forensics-education-footer bg-slate-900/90 border border-slate-800 rounded-2xl p-5 flex items-start gap-4 text-xs shadow-sm">
-        <div className="edu-icon text-2xl" aria-hidden="true">
-          📖
-        </div>
+      <aside className="forensics-education-footer bg-slate-900/90 border border-slate-800 rounded-2xl p-5 text-xs shadow-sm">
         <div className="edu-content">
           <strong className="text-sm font-bold text-slate-200 block mb-1">Tại sao nhà đầu tư cần đọc BCTC Forensic trước khi mua?</strong>
           <p className="text-slate-400 m-0 leading-relaxed">

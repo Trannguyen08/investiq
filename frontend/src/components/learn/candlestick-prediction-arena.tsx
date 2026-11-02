@@ -733,7 +733,7 @@ export function CandlestickPredictionArena() {
                 </span>
                 {userChoice && (
                   <span className="text-amber-400 font-bold flex items-center gap-1">
-                    ★ Nến kết quả
+                    Nến kết quả
                   </span>
                 )}
               </div>

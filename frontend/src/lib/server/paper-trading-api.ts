@@ -3,7 +3,7 @@ import "server-only";
 import { resolveApiBase } from "@/lib/api-base";
 import { authenticatedSession } from "@/lib/server/user-auth";
 
-const allowedPath = /^(?:|orders|orders\/[a-f0-9-]{1,64}|visibility|leaderboard|public\/[0-9a-f-]{36})$/;
+const allowedPath = /^(?:|orders|orders\/[a-f0-9-]{1,64}|visibility|leaderboard|public\/[0-9a-f-]{36}|daily-report\/subscription|daily-report\/send-now)$/;
 
 export async function paperTradingRequest(pathWithQuery: string, init?: RequestInit) {
   const [path, search] = pathWithQuery.split("?");

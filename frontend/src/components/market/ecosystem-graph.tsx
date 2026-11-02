@@ -261,7 +261,7 @@ export function EcosystemGraph({
               <h2 className="eco-hero-title">{detail.name}</h2>
               <div className="eco-hero-founder-row">
                 <span className="eco-founder-badge">
-                  <span className="founder-icon">👑</span>
+                  
                   Lãnh đạo sáng lập: <strong>{detail.founder_name}</strong>
                 </span>
                 <Link
@@ -315,14 +315,14 @@ export function EcosystemGraph({
                 className={`eco-layout-btn ${viewLayout === "tree" ? "active" : ""}`}
                 onClick={() => setViewLayout("tree")}
               >
-                🌳 Sơ đồ Cấu trúc Phân nhánh
+                Sơ đồ Cấu trúc Phân nhánh
               </button>
               <button
                 type="button"
                 className={`eco-layout-btn ${viewLayout === "matrix" ? "active" : ""}`}
                 onClick={() => setViewLayout("matrix")}
               >
-                📊 Ma trận Thẻ Chi tiết
+                Ma trận Thẻ Chi tiết
               </button>
             </div>
 
@@ -361,7 +361,7 @@ export function EcosystemGraph({
                 <div className="eco-tree-level level-parent">
                   <div className="level-badge-wrap">
                     <span className="level-badge parent" style={{ color: theme.accent, borderColor: theme.accent }}>
-                      👑 HẠT NHÂN TẬP ĐOÀN MẸ &amp; TRUNG TÂM ĐIỀU PHỐI VỐN
+                      HẠT NHÂN TẬP ĐOÀN MẸ &amp; TRUNG TÂM ĐIỀU PHỐI VỐN
                     </span>
                   </div>
 
@@ -440,7 +440,7 @@ export function EcosystemGraph({
               <div className="eco-tree-level level-listed">
                 <div className="level-badge-wrap">
                   <span className="level-badge listed">
-                    📈 CÔNG TY THÀNH VIÊN NIÊM YẾT TRÊN SÀN CHỨNG KHOÁN ({listedNodes.length})
+                    CÔNG TY THÀNH VIÊN NIÊM YẾT TRÊN SÀN CHỨNG KHOÁN ({listedNodes.length})
                   </span>
                 </div>
 
@@ -466,7 +466,7 @@ export function EcosystemGraph({
                   <div className="eco-tree-level level-unlisted">
                     <div className="level-badge-wrap">
                       <span className="level-badge unlisted">
-                        🔒 DOANH NGHIỆP NGOÀI SÀN &amp; HỆ SINH THÁI DỊCH VỤ ({unlistedNodes.length})
+                        DOANH NGHIỆP NGOÀI SÀN &amp; HỆ SINH THÁI DỊCH VỤ ({unlistedNodes.length})
                       </span>
                     </div>
 
@@ -596,7 +596,7 @@ function NodeVisualCard({
             className="ownership-fill"
             style={{
               width: `${Math.min(100, Math.max(0, Number(node.ownership_percent) || 0))}%`,
-              background: isListed ? accentColor : "#a855f7",
+              background: isListed ? accentColor : "#38bdf8",
             }}
           />
         </div>

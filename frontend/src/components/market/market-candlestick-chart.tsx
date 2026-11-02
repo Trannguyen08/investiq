@@ -713,7 +713,7 @@ export function MarketCandlestickChart({
                 setDrawingHover(null);
               }}
             >
-              ✏️ {isDrawingTrendline ? (drawingStart ? "Bấm điểm kết thúc" : "Bấm điểm bắt đầu...") : "Vẽ Trendline"}
+              {isDrawingTrendline ? (drawingStart ? "Bấm điểm kết thúc" : "Bấm điểm bắt đầu...") : "Vẽ Trendline"}
             </button>
             {trendlines.length > 0 && (
               <button
@@ -726,7 +726,7 @@ export function MarketCandlestickChart({
                 }}
                 title="Xóa tất cả các đường trendline đã vẽ"
               >
-                🗑️ Xóa đường vẽ ({trendlines.length})
+                Xóa đường vẽ ({trendlines.length})
               </button>
             )}
           </div>

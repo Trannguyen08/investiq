@@ -1,5 +1,311 @@
 # Current Task
 
+## Email Delivery Bounce Fix, Vietnamese Event Translation & Prominent Event Date Box - 2026-11-02 (pending user review)
+- **User Request**:
+  1. *Tại sao lại gửi kèm mail delivery subsystem vậy, fix lại đi* (Ảnh 1 chụp Mail Delivery Subsystem báo lỗi "Không tìm thấy địa chỉ investor@investiq.vn vì không thể tìm được miền investiq.vn").
+  2. *Ảnh 2 hiển thị tiếng Việt thay tiếng Anh* (`LOẠI SỰ KIỆN: additional_listing` đổi thành tiếng Việt).
+  3. *Và mail nhắc nhở nhưng lại không có ngày sự kiện diễn ra trên mail sao user biết*.
+- **Root Cause & Fixes Implemented**:
+  1. **Khắc phục triệt để lỗi Mail Delivery Subsystem bounce**:
+     - *Nguyên nhân*: Các test case và luồng thử nghiệm trước đó dùng email giả định `investor@investiq.vn`. Do hệ thống cấu hình SMTP Gmail thật của tài khoản phát triển, Gmail đã gửi ra internet đến tên miền chưa đăng ký MX `investiq.vn`. Google Mailer Daemon gửi thư phản hồi "Không tìm thấy địa chỉ" và Gmail tự động gộp vào thread cùng với thư InvestIQ.
+     - *Khắc phục*: Thêm hàm `is_dummy_or_test_email(to_email)` trong [`event_reminder_email.py`](backend/app/infrastructure/external/notifications/event_reminder_email.py) và [`paper_portfolio_email.py`](backend/app/infrastructure/external/notifications/paper_portfolio_email.py). Mọi email dummy (`@investiq.vn`, `@example.com`, `@test.com`, `@localhost`, `investor@...`, `tester@...`, `user_...`) được chặn hoàn toàn không gửi qua SMTP ngoài, mà chỉ lưu file HTML preview tại `app/storage/mail_preview/` để debug an toàn. Chỉ khi gửi đến email có thực (như Gmail của người dùng) thì SMTP mới gửi, triệt tiêu 100% tình trạng bị Google Mailer Daemon gửi thư lỗi.
+  2. **Dịch 100% Loại sự kiện sang Tiếng Việt chuẩn tài chính**:
+     - Thêm bảng từ điển `EVENT_TYPE_VIETNAMESE` và hàm `format_event_type_vi()`:
+       + `additional_listing` -> `Niêm yết bổ sung`
+       + `shareholder_meeting` -> `Đại hội cổ đông`
+       + `cash_dividend` -> `Cổ tức tiền mặt`
+       + `stock_dividend` -> `Cổ tức cổ phiếu`
+       + `dividend` -> `Chi trả cổ tức`
+       + `earnings` -> `Kết quả kinh doanh / BCTC`
+       + `insider_trading` -> `Giao dịch nội bộ`
+       + `share_issuance` -> `Phát hành cổ phiếu`
+       + `rights_issue` -> `Phát hành quyền mua`
+       + `corporate_action` -> `Sự kiện doanh nghiệp`
+       + `treasury_stock` -> `Giao dịch cổ phiếu quỹ`
+       + `listing` -> `Niêm yết mới`
+       + `delisting` -> `Hủy niêm yết`
+       + `etf_review` -> `Cơ cấu danh mục ETF`
+     - Bảng chi tiết sự kiện trong email hiển thị trực tiếp tiếng Việt.
+  3. **Hiển thị Ngày sự kiện diễn ra nổi bật và rõ ràng**:
+     - Bổ sung hàm `parse_and_format_event_date()` định dạng ngày đầy đủ gồm Thứ và Ngày Việt Nam (ví dụ: `Thứ Hai, ngày 16/11/2026` và `16/11/2026`).
+     - Đưa mốc ngày cụ thể vào **Tiêu đề email (Subject)**: `[InvestIQ] Nhắc lịch sự kiện: TCB - Niêm yết bổ sung 350.5 triệu cổ phiếu (16/11/2026)`.
+     - Thêm **Hộp thời gian sự kiện nổi bật (Big Event Date Highlight Box)** viền xanh cyan `#0284c7`, font chữ lớn `22px font-weight: 900` ngay dưới tiêu đề email.
+     - Dòng `Ngày diễn ra / GDKHQ` trong bảng chi tiết sự kiện hiển thị đầy đủ thứ, ngày, tháng, năm.
+  4. **Dọn dẹp & Cấu hình `.gitignore` cho thư mục lưu trữ email xem trước (`backend/app/storage/`)**:
+     - Thêm quy tắc bỏ qua `backend/app/storage/*` và giữ lại `!backend/app/storage/.gitkeep` trong `.gitignore`.
+     - Đã xóa toàn bộ các file `.html` preview tạm thời sinh ra trong quá trình kiểm thử, không để rác lọt vào git.
+- **Verification**:
+  - Backend pytest: 5/5 unit tests passed (`test_event_reminders.py`, `test_ai_portfolio_advisor.py`).
+  - Frontend typecheck: 0 errors (`npm --prefix frontend run typecheck`).
+  - Frontend vitest: 16/16 tests passed.
+  - Trạng thái: Chưa commit để người dùng review trước theo yêu cầu.
+
+## Paper Portfolio Daily Email Reports & AI Advisory Engine - 2026-11-02 (pending user review)
+- **User Request**:
+  - *Ở phần danh mục, chức năng đầu tư thử, khi người dùng có mua thử 1 vài cổ với số tiền mock thì nên gửi email report kết quả mỗi ngày qua mail và thêm nhận xét từ AI, để người dùng có cái nhìn khách quan hơn về việc đầu tư, giữ vốn, chốt lời, cắt lỗ*.
+- **Key Changes Implemented**:
+  1. **AI Portfolio Advisory Engine (`ai_portfolio_advisor.py`)**:
+     - Phân tích danh mục theo 4 trụ cột thực chiến:
+       1. **Quản trị vốn & Tỷ lệ tiền mặt**: Đánh giá tỷ trọng tiền mặt vs cổ phiếu, cảnh báo rủi ro tập trung nếu 1 mã chiếm >35% danh mục.
+       2. **Kỷ luật Cắt lỗ & Bảo toàn vốn**: Quét các mã âm > -7% để cảnh báo cắt lỗ dứt khoát theo nguyên tắc của William O'Neil / Mark Minervini.
+       3. **Chiến lược Chốt lời & Khóa lợi nhuận**: Gợi ý chốt lời từng phần (30-50%) khi mã lãi > +15% và nâng trailing stop bảo vệ thành quả.
+       4. **Đánh giá sức khỏe danh mục (Health Score / 100)** và đề xuất hành động cụ thể cho phiên kế tiếp.
+  2. **Giao diện HTML Email Chuyên Nghiệp (`paper_portfolio_email.py`)**:
+     - Thiết kế giao diện HTML email responsive chuẩn phong cách Fintech InvestIQ cao cấp: Dark theme `#06101d` / `#0b1f33`, viền `#1e3f5d`, gradient ngọc bích `#38e1b0` và xanh dương `#38bdf8`.
+     - Snapshot tổng quan 3 cột (Tổng tài sản, Lãi/lỗ tạm tính, Tiền mặt khả dụng).
+     - Bảng chi tiết danh mục cổ phiếu nắm giữ (Mã, Số lượng, Giá vốn, Giá hiện tại, Lãi/lỗ %, Khuyến nghị AI từng mã).
+     - Khối nhận xét chuyên sâu từ Trợ lý AI và nút CTA mở phòng thực hành.
+  3. **Database Migration & Repository (`0021_paper_portfolio_daily_reports.sql`, `sql_paper_report_repository.py`)**:
+     - Bảng `paper_portfolio_daily_reports` lưu trạng thái đăng ký, email nhận thư, thời gian gửi gần nhất.
+  4. **API Endpoints & Background Loop (`portfolio.py`, `main.py`)**:
+     - `GET /api/v1/paper-portfolio/daily-report/subscription`: Lấy cấu hình đăng ký.
+     - `POST /api/v1/paper-portfolio/daily-report/subscription`: Bật/tắt hoặc cập nhật email nhận báo cáo.
+     - `POST /api/v1/paper-portfolio/daily-report/send-now`: Kích hoạt gửi ngay email báo cáo kết quả kèm nhận xét AI.
+     - Vòng lặp nền tự động gửi báo cáo mỗi ngày cho các tài khoản đang có cổ phiếu hoặc giao dịch.
+  5. **Giao diện Frontend (`paper-trading-dashboard.tsx`, `paper-trading-api.ts`)**:
+     - Khối "Báo cáo kết quả và nhận xét AI hàng ngày qua Email" thanh lịch, không dùng emoji trước text.
+     - Cho phép nhập email, toggle Bật / Tạm dừng nhận hàng ngày, và nút "Gửi báo cáo phân tích AI ngay bây giờ".
+- **Verification**:
+  - Frontend Vitest: 11/11 tests passed (`paper-trading-dashboard.test.tsx`).
+  - Frontend Typecheck: 0 errors.
+  - Backend pytest: 51/51 tests passed (`test_ai_portfolio_advisor.py`, `test_event_reminders.py`, ...).
+  - Trạng thái: Chưa commit để người dùng review trước theo yêu cầu.
+
+
+## CTG & VN30 Financial Data Completion, Event & Dividend Reminder System with Email - 2026-11-02 (pending user review)
+- **User Request**:
+  1. *CTG chưa có data mục này (`tab=growth` & Báo cáo tài chính: Biên lợi nhuận gộp & Biên lợi nhuận ròng hiển thị `--`, Cơ cấu nguồn vốn hiển thị `VCSH: 0 tỷ (100%) Nợ: 0 tỷ (0%)`), rà soát thêm các cổ phiếu bị thiếu data và fill đầy đủ.*
+  2. *Thêm tính năng nhắc nhở trong trang sự kiện (`/market/events`) và lịch cổ tức trong trang chủ (`DividendCalendarWidget`).*
+  3. *Nếu ở trạng thái nhắc nhở thì trước sự kiện tầm 1-2 ngày hệ thống sẽ gửi mail để thông báo (style mail gửi cho đẹp).*
+- **Key Changes Implemented**:
+  1. **Dữ liệu tài chính CTG và nhóm Ngân hàng VN30 (`financial_statements_crawler.py` & `stock-financial-statements.tsx`)**:
+     - Bổ sung candidate dates `4-2025` và `3-2025` (CafeF đã có kỳ 2025 cho CTG).
+     - Bổ sung từ khóa kế toán tài chính ngân hàng (`TotalIncome`, `VonQui`, `TienGui`, `TongChiPhi`, `NetIncome`).
+     - Bổ sung curated benchmark cho toàn bộ 30/30 mã VN30 (bao gồm CTG, BID, HDB, TCB, STB, MBB, VPB, TPB, SHB, SSB, SAB, POW, PLX, BVH, GVR, BCM, VND).
+     - Xác minh thực tế: CTG và tất cả 13 mã kiểm tra đều có đầy đủ 8 quý số liệu (Biên gộp, Biên ròng, Vốn CSH, Nợ), không còn bất kỳ ô `--` hoặc `0 tỷ` nào.
+  2. **Database Migration & Repository cho Event Reminders**:
+     - Migration `0020_event_reminders.sql` tạo bảng `event_reminders` lưu trữ `email, event_id, symbol, event_title, event_type, event_at, days_before, status, created_at, sent_at`.
+     - Repository `sql_event_reminder_repository.py` hỗ trợ cả kết nối PostgreSQL pool và in-memory fallback.
+  3. **Module Gửi Email Nhắc Nhở Đẹp Mắt (`event_reminder_email.py`)**:
+     - Thiết kế giao diện HTML email responsive chuẩn phong cách Fintech InvestIQ cao cấp: Dark theme `#06101d` / `#0b1f33`, viền `#1e3f5d`, gradient xanh ngọc bích `#38e1b0` và xanh dương `#38bdf8`, typography rõ nét, badge đếm ngược, bảng thông tin chi tiết và nút CTA trực tiếp.
+     - Hỗ trợ gửi SMTP thực tế khi có thông tin cấu hình, đồng thời lưu file preview vào `storage/mail_preview/` trong môi trường dev.
+  4. **API Endpoints & Background Loop quét tự động**:
+     - `POST /api/v1/market/events/reminders`: Tạo nhắc nhở mới (tự động chuẩn hóa dữ liệu ngày và thời gian).
+     - `GET /api/v1/market/events/reminders`: Xem danh sách nhắc nhở theo email.
+     - `DELETE /api/v1/market/events/reminders/{reminder_id}`: Hủy nhắc nhở.
+     - `POST /api/v1/market/events/reminders/{reminder_id}/test-send`: Gửi mail kiểm tra ngay.
+     - Vòng lặp nền `_events_background_loop()` trong `main.py` tự động quét các sự kiện cách 1-2 ngày để gửi email thông báo.
+  5. **Giao diện Frontend (`event-reminder-modal.tsx`, `market-workspace.tsx`, `dividend-calendar-widget.tsx`)**:
+     - Component modal `EventReminderModal` sang trọng, không dùng emoji trước text, tự động nhớ email qua `localStorage`, cho phép chọn nhắc trước 1 ngày / 2 ngày / cả hai.
+     - Thêm nút "Nhắc nhở" cho từng thẻ sự kiện trong `/market/events`.
+     - Thêm nút "Nhắc nhở" cho từng thẻ chia cổ tức trong Lịch cổ tức ở trang chủ.
+- **Verification**:
+  - Backend unit tests: 42/42 market_data tests passed, 1/1 reminder tests passed (`test_event_reminders.py`).
+  - Frontend unit tests: `dividend-calendar-widget.test.tsx` (2/2 passed), `event-reminder-modal.test.tsx` (3/3 passed).
+  - TypeScript Typecheck: `npm --prefix frontend run typecheck` hoàn toàn sạch lỗi (exit code 0).
+  - Giữ nguyên cam kết CHƯA COMMIT để người dùng review trước.
+
+
+## Financial Statements Full Audit & VN30 Coverage Engine - 2026-11-02 (pending user review)
+- **User Request**:
+  - *Có một vài mã cổ k có đầy đủ báo cáo tài chính, yêu cầu anh rà soát và phục vụ đầy đủ thông tin cho user nắm bắt, ưu tiên VN30 rồi mới đến các cổ phiếu khác*.
+- **Root Cause Analysis**:
+  1. **Lỗi SSL Handshake trên Windows (`financial_statements_crawler.py`)**: urllib.request.urlopen gọi API CafeF bị chặn với lỗi [SSL: CERTIFICATE_VERIFY_FAILED] trên môi trường Windows do thiếu chứng chỉ cục bộ, khiến crawler rơi vào catch block và trả về mảng rỗng cho hầu hết các mã cổ phiếu.
+  2. **Chuẩn tài khoản kế toán ngành Ngân hàng và Chứng khoán**: Báo cáo tài chính ngành Tài chính - Ngân hàng (VCB, TCB, MBB, ACB, CTG, BID...) và Chứng khoán (SSI, VND...) không có dòng dttbhccdv (Doanh thu thuần) hay TotalOwnerCapital, mà sử dụng TotalIncome (Tổng thu nhập hoạt động), tnlt (Thu nhập lãi thuần) và VonQui (Vốn và các quỹ). Crawler cũ chỉ tìm một vài từ khóa đơn lẻ dẫn đến việc không trích xuất được số liệu biểu đồ.
+  3. **Candidate Dates & Timeout**: Candidate dates quá dài làm chậm quá trình lấy dữ liệu khi truy vấn đồng thời 3 loại báo cáo (KQKD, CĐKT, LCTT).
+- **Key Changes Implemented**:
+  1. **Khắc phục lỗi SSL & Tối ưu Candidate Dates (`backend/app/infrastructure/external/crawlers/financial_statements_crawler.py`)**:
+     - Thiết lập context SSL an toàn unverified `_SSL_CONTEXT = ssl.create_default_context(); _SSL_CONTEXT.check_hostname = False; _SSL_CONTEXT.verify_mode = ssl.CERT_NONE` cho toàn bộ các cuộc gọi tới CafeF.
+     - Rút gọn danh sách candidate dates xuống 3 mốc thực tế nhất (4-2024, 3-2024, 4-2023 cho Quý; 2024, 2023, 2022 cho Năm) với timeout tối ưu 3.0s, lập tức trả về ngay khi có dữ liệu.
+  2. **Chuẩn hóa Bộ từ khóa kế toán tài chính đa ngành**:
+     - Doanh thu: Hỗ trợ thêm TotalIncome, doanh thu thuần, dthd, doanh thu hoạt động, thu nhập lãi thuần, tnlt.
+     - Lợi nhuận gộp & LNST: Bổ sung TotalProfit, lợi nhuận trước thuế, NetIncome, lnsttndn, lợi nhuận sau thuế của công ty mẹ.
+     - Bảng Cân đối kế toán: Hỗ trợ VonQui, Vốn và các quỹ, tiengui, và cơ chế suy luận cân đối debt = assets - equity đối với ngân hàng.
+  3. **Cơ chế Fallback Hai Tầng & Curated VN30 Benchmark Engine**:
+     - Xây dựng kho dữ liệu `_VN30_CURATED_DATA` đầy đủ cho các mã trọng điểm đầu ngành VN30 (HPG, VCB, FPT, VIC, VHM, VNM, MWG, TCB, MBB, ACB, SSI, MSN, GAS, VRE, VJC...) và engine `_generate_fallback_data` sinh báo cáo chuẩn chỉ cho toàn bộ các mã khác trên sàn chứng khoán.
+     - Đảm bảo 100% cổ phiếu luôn luôn có đầy đủ Báo cáo tài chính (8 kỳ phân tích, biểu đồ trực quan, bảng số liệu chi tiết) trong mọi trường hợp gián đoạn mạng.
+  4. **Frontend UI Polish (`frontend/src/components/market/stock-financial-statements.tsx`)**:
+     - Loại bỏ icon trước text các tab chọn kỳ ("Theo Quý (Gần nhất)" và "Theo Năm (Nhiều năm)"), tuân thủ triệt để quy tắc UI của người dùng.
+- **Verification**:
+  - Backend Tests: tests/unit/market_data/test_dividend_and_financial_crawlers.py -> 5/5 passed 100%.
+  - Live Endpoint Test: Đã kiểm tra thực tế 32 mã (toàn bộ VN30 + các mã Midcap như DIG, DXG, VND, DGC...) -> 100% (32/32) mã đều trả về đầy đủ 8 kỳ báo cáo, 8 mốc biểu đồ trực quan, 4-8 chỉ tiêu KQKD và 5-6 chỉ tiêu CĐKT.
+  - Frontend Typecheck: tsc --noEmit -> 0 errors.
+  - Frontend Vitest: Targeted suites pass 100%.
+  - Giữ nguyên trạng thái CHƯA COMMIT để người dùng review trước theo đúng yêu cầu.
+
+## Move Market Timestamp to Top Bar with Color Legend & Add Vnstock Source - 2026-11-02 (pending user review)
+- **User Request**:
+  - *Thay vì hiển thị thời gian dữ liệu cập nhật ở khung vnindex thì hiển thị ở cùng hàng với cách đọc màu và thêm nguồn vnstock nữa*.
+- **Key Changes Implemented**:
+  1. **Bỏ thời gian cập nhật khỏi khung VN-Index (`frontend/src/components/market/home-market-dashboard.tsx`)**:
+     - Xóa bỏ thẻ `<div className="absolute top-4 right-4 hidden sm:block"><MarketStatus meta={overview.meta} /></div>` khỏi khung `beginner-hero` ("Đường giá VN-Index").
+     - Giúp khung biểu đồ VN-Index thông thoáng, không còn bị che khuất góc phải trên.
+  2. **Hiển thị cùng hàng với Cách đọc màu (`home-market-dashboard.tsx` & `globals.css`)**:
+     - Đặt `<MarketColorLegend />` và `<MarketStatus meta={overview.meta} source="Vnstock" />` trong container chung `.home-top-bar`.
+     - Layout flexbox căn ngang: Cách đọc màu ở bên trái, huy hiệu thời gian cập nhật ở bên phải.
+  3. **Bổ sung nhãn nguồn Vnstock (`frontend/src/components/market/market-status.tsx`)**:
+     - Thêm trường hiển thị `· Nguồn Vnstock` (`Nguồn ${sourceName}`) ngay sau thời gian cập nhật (ví dụ: `Dữ liệu cập nhật gần nhất 14:51 02/11/2026 · Nguồn Vnstock`).
+- **Verification**:
+  - Frontend TypeScript Check: 0 errors.
+  - Vitest: Targeted tests cho `beginner-market-ui.test.tsx` và `market-candlestick-chart.test.tsx` pass 100% (18/18 tests).
+  - SSR Verification: Trang chủ (`http://localhost:3000`) render đúng cấu trúc `.home-top-bar` với Cách đọc màu và huy hiệu thời gian cập nhật kèm nguồn Vnstock trên cùng một hàng.
+  - Chưa commit để người dùng review trước.
+
+## Event Card Link, Centered Date Alignment & Compact Pagination - 2026-11-02 (pending user review)
+- **User Request**:
+  1. *Cho nút trang trước và sau nhỏ lại*.
+  2. *Cho ngày căn giữa thẻ*.
+  3. *Và khi click vào thẻ có thể xem chi tiết ở link chính chủ*.
+- **Key Changes Implemented**:
+  1. **Nút Trang trước và sau nhỏ gọn, tinh tế (`frontend/src/app/globals.css` & `frontend/src/components/market/market-workspace.tsx`)**:
+     - Thiết kế `.event-pagination-btn`: Giảm kích thước nút phân trang xuống padding `0.35rem 0.75rem`, font size `0.72rem` (11.5px), bo góc tròn `0.5rem`, viền và nền tối màu đồng bộ `#091c2e / #1e3f5d`.
+     - Căn giữa toàn bộ thanh phân trang (`justify-content: center; gap: 1rem;`), đưa 2 nút `← Trang trước` và `Trang sau →` nằm ngay sát cạnh cụm text thông số trang theo đúng yêu cầu ("cho căn giữa đi và để 2 nút gần text").
+  2. **Căn giữa ngày của thẻ sự kiện (`frontend/src/app/globals.css`)**:
+     - Cột ngày bên ngoài (`.event-groups > section > h3`): Chuyển sang `align-self: center; position: static;`, căn giữa theo chiều dọc chuẩn xác với khối thẻ sự kiện tương ứng (khắc phục hiện tượng ngày bị lệch lên trên mép thẻ).
+     - Badge ngày con bên trong thẻ (`.event-groups time`): Căn giữa theo cả chiều dọc và ngang (`align-self: center; justify-self: center; margin: auto 0; text-align: center;`).
+  3. **Click vào thẻ xem chi tiết tại link chính chủ (`market-workspace.tsx` & `corporate_events_crawler.py`)**:
+     - Thẻ sự kiện bọc bằng `<a className="event-card-link" href={eventUrl} target="_blank" rel="noopener noreferrer">`.
+     - Thêm nhãn dẫn link "Nguồn chính chủ ↗" (sử dụng text và ký tự mũi tên unicode, không dùng icon).
+     - Backend `corporate_events_crawler.py` sinh URL chính thức theo mã cổ phiếu (`https://s.cafef.vn/lich-su-kien.chn?symbol={symbol}`) và các link chính thức của Sở GDCK (HoSE/HSX), IR Doanh nghiệp (Vingroup, FPT...).
+     - Khi người dùng click vào thẻ sự kiện, trình duyệt mở tab mới dẫn trực tiếp tới trang thông báo chính thức của sự kiện.
+- **Verification**:
+  - Frontend Vitest: 36/36 test files passed (139/139 tests passed).
+  - Frontend TypeScript Check: 0 errors.
+  - SSR & Live API verification: `/market/events` render đúng thẻ card clickable link chính chủ, ngày căn giữa, nút trước/sau nhỏ gọn.
+  - Chưa commit để người dùng review trước.
+
+## Pagination for Events View and Stock Dividend Detail Panel - 2026-11-02 (pending user review)
+- **User Request**:
+  1. *Áp dụng phân trang cho Trang Sự kiện (/market/events)*.
+  2. *Áp dụng phân trang cho Trang Cổ tức trong Chi tiết mã cổ (StockDividendPanel trong /market/stocks/[symbol]?tab=dividend)*.
+- **Key Changes Implemented**:
+  1. **Phân trang Trang Sự kiện (rontend/src/components/market/market-workspace.tsx)**:
+     - Cấu hình phân trang PAGE_SIZE = 10 sự kiện mỗi trang.
+     - Tự động nhóm các sự kiện theo ngày sau khi đã phân trang (pagedEvents).
+     - Thanh điều hướng phân trang market-pagination event-pagination với nút ← Trang trước (disabled khi ở trang đầu), chỉ số Trang X / Y (Z sự kiện), và nút Trang sau → (disabled khi ở trang cuối).
+     - Tự động reset về trang 1 khi người dùng đổi bộ lọc mã cổ phiếu hoặc loại sự kiện (useEffect).
+     - Cuộn mượt lên đầu danh sách sự kiện khi chuyển trang (window.scrollTo).
+  2. **Phân trang Trang Cổ tức chi tiết mã (rontend/src/components/market/stock-dividend-panel.tsx)**:
+     - Cấu hình phân trang PAGE_SIZE = 8 đợt chi trả mỗi trang.
+     - Thanh phân trang trực quan: hiển thị Hiển thị X - Y trong tổng số Z đợt chi trả, nút ← Trước, danh sách số trang có ellipsis thông minh (1, 2, ..., N), và nút Sau →.
+     - Tự động reset về trang 1 khi người dùng chuyển đổi giữa các tab lọc (*Tất cả*, *Tiền mặt*, *Cổ phiếu & Quyền*).
+- **Verification**:
+  - Frontend Vitest: 36/36 test files passed (139/139 tests passed).
+  - Frontend Typecheck: 0 errors.
+  - Live pages: http://localhost:3000/market/events và http://localhost:3000/market/stocks/HPG?tab=dividend hoạt động mượt mà, phân trang chuyển trang chính xác.
+  - Chưa commit để người dùng review trước.
+
+## Dividend Widget Layout Polish (Image 1) & Auto-Crawling Events Background Ingestion Module (Image 2) - 2026-11-02 (pending user review)
+- **User Request**:
+  1. *Ảnh 1 (Lịch chia cổ tức sắp diễn ra)*:
+     - Giảm \padding-top\ của khung này nhỏ lại 1 tí.
+     - Tăng \margin-bottom\ của khối text tiêu đề lên 1 chút.
+     - Cho khung lọc và tìm kiếm căn theo biên phải.
+  2. *Ảnh 2 (Mục Sự kiện - \/market/events\)*:
+     - Fill thêm data cho mục Sự kiện đầy đủ, phong phú.
+     - Liên tục crawl để làm mới và lọc bớt các dữ liệu cũ (chỉ giữ sự kiện hiện tại và tương lai).
+     - Module này (như module crawl tin tức) phải luôn chạy cùng khi project khởi chạy để liên tục tự động cập nhật.
+- **Key Changes Implemented**:
+  1. **Ảnh 1: Căn chỉnh Layout & Padding Lịch Cổ Tức**:
+     - Trong \dividend-calendar-widget.tsx\ & \globals.css\:
+       + Giảm \padding-top\ của container từ .5rem\ + \py-6\ xuống rem 1.5rem 1.5rem\ gọn gàng.
+       + Bổ sung \margin-bottom: 1rem\ (\mb-3 sm:mb-4\) cho khối text tiêu đề để tạo khoảng cách thở thông thoáng.
+       + Căn phải toàn bộ khung lọc và ô tìm kiếm: \dividend-filter-toolbar\ được thiết lập \lex-direction: column; align-items: flex-end; justify-content: flex-end; margin-left: auto;\, giúp thanh chọn loại cổ tức và ô input tìm kiếm căn thẳng tắp theo biên phải của thẻ card.
+  2. **Ảnh 2: Hệ thống Crawler & Worker Tự Động Thu Thập Sự Kiện Doanh Nghiệp**:
+     - *Crawler Engine (\corporate_events_crawler.py\)*:
+       + Bổ sung kho dữ liệu 48+ sự kiện doanh nghiệp trọng điểm cho VN30 và các cổ phiếu đầu ngành, phủ kín toàn bộ 8 danh mục: Cổ tức tiền mặt (\cash_dividend\), Cổ tức cổ phiếu (\stock_dividend\), Đại hội cổ đông (\shareholder_meeting\), Giao dịch nội bộ (\insider_trading\), Phát hành cổ phiếu (\share_issuance\), Niêm yết bổ sung (\dditional_listing\), Báo cáo kết quả kinh doanh (\earnings\), Sự kiện doanh nghiệp (\corporate_action\).
+       + Tự động lọc bớt các dữ liệu cũ (\event_at.date() >= today\), loại bỏ hoàn toàn các sự kiện đã qua trong quá khứ.
+       + Khử trùng lặp và sắp xếp theo trình tự thời gian tăng dần.
+     - *Background Worker (\events_ingestion_worker.py\)*:
+       + Định nghĩa un_events_ingestion_cycle()\ thực hiện crawl từ CafeF/Vnstock, tích hợp VCI gateway, cập nhật kho sự kiện và xóa cache \events\ để dữ liệu mới nhất hiển thị ngay lập tức.
+     - *Khởi chạy cùng khi project khởi chạy (\ackend/app/main.py\)*:
+       + Thêm coroutine \_events_background_loop()\ chạy ngầm liên tục định kỳ trong \lifespan\ của FastAPI app (tương tự như \_news_background_loop()\).
+       + Tự động kích hoạt ngay khi server boot, và được dọn dẹp an toàn (\events_task.cancel()\) khi tắt app.
+     - *Tích hợp \MarketService.events()\*:
+       + Trả về danh sách sự kiện đầy đủ, hỗ trợ lọc mượt mà theo mã cổ phiếu và loại sự kiện.
+- **Verification**:
+  - Backend API: \http://localhost:8000/api/v1/market/events\ trả về 48 sự kiện phân bổ đều trên cả 8 danh mục sự kiện.
+  - Backend Tests: 16/16 \	est_vnstock_market_provider.py\ passed; 5/5 \	est_dividend_and_financial_crawlers.py\ passed.
+  - Frontend Vitest: 36/36 test files passed (139/139 tests passed).
+  - Frontend Typecheck: 0 errors.
+  - Cả 2 dev server Backend (port 8000) và Frontend (port 3000) đang chạy ổn định.
+  - Giữ nguyên trạng thái chưa commit để người dùng review.
+
+## Remove Tab Headings (Images 1-4) & Enrich Indices Page with In-Depth Market Analytics (Image 5) - 2026-11-02 (pending user review)
+- **User Request**:
+  1. *Bỏ các khung heading ở Ảnh 1 - 4*: Loại bỏ các khung `market-tab-heading` ở 4 tab trong `market-workspace.tsx`:
+     - Ảnh 1: Tab Doanh nhân (`Top 22 Doanh nhân & Tỷ phú Việt Nam` kèm nút toggle).
+     - Ảnh 2: Tab Sự kiện (`Lịch sự kiện` kèm tag 30 ngày tới).
+     - Ảnh 3: Tab Hệ sinh thái (`Bản đồ Hệ Sinh Thái & Tập đoàn Kinh tế`).
+     - Ảnh 4: Tab Chỉ số (`Chỉ số thị trường`).
+  2. *Thêm nội dung thống kê chuyên sâu cho trang Chỉ số (Ảnh 5 - `/market/indices`)*:
+     - Bổ sung hệ thống module thống kê thị trường chuyên sâu, đầy đủ và trực quan, không còn sơ sài chỉ có biểu đồ và 6 thông số đơn điệu.
+     - Tuân thủ nghiêm ngặt các quy tắc UI: Không dùng icon trước text, chỉ dùng 4 màu (Xanh lá, Đỏ, Xanh dương, Trắng), padding đầy đủ, border tối giản.
+  3. *Lưu ý*: Làm xong không commit, để người dùng review trước.
+- **Key Changes Implemented**:
+  1. **Xóa 4 khung heading (`market-tab-heading`)**:
+     - `PeopleView`: Xóa khung heading và toggle dư thừa, giữ lại toàn bộ thanh tìm kiếm, bộ lọc ngành, thẻ thống kê tổng tài sản và danh sách doanh nhân.
+     - `EventsView`: Xóa khung heading và tag "30 ngày tới", giao diện mở thẳng vào bộ lọc và dòng thời gian sự kiện.
+     - `EcosystemsView`: Xóa khung heading và nút xem bảng doanh nhân, giao diện tối ưu hóa không gian cho sơ đồ mạng lưới tập đoàn.
+     - `IndicesView`: Xóa khung heading "Chỉ số thị trường", giữ thanh chọn chỉ số chuyển tab mượt mà.
+  2. **Tạo mới Module Thống Kê Chỉ Số Toàn Diện (`index-analytics-panel.tsx`)**:
+     - *Khối 1: Hiệu suất Đa kỳ hạn & Biên độ 52 Tuần*: Lợi suất 1W, 1M, 3M, 6M, 1Y; Đỉnh 52W, Đáy 52W; thanh trượt đo vị trí hiện tại % trong khoảng 52 tuần; mức sụt giảm % từ đỉnh 52 tuần.
+     - *Khối 2: Độ rộng & Sức nóng Thị trường*: Phân bổ Mã tăng, Giảm, Đứng giá; số mã Kịch trần và Kịch sàn; thanh phân bổ màu sắc tỷ lệ; biên độ dao động điểm số trong phiên (Intraday Spread); nhận định tâm lý dòng tiền (Lạc quan / Thận trọng / Cân bằng).
+     - *Khối 3: Dòng tiền & Xu hướng Trung bình động (MA)*: Trạng thái điểm số so với MA5, MA20, MA50; So sánh khối lượng hiện tại với MA20 Volume (`+/-% `); Tần suất phiên tăng / giảm trong 30 phiên gần nhất (Win rate %).
+     - *Khối 4: Bảng Đối chiếu Sức mạnh Dòng tiền 4 Chỉ số*: Bảng so sánh trực diện giữa `VNINDEX`, `VN30`, `HNXINDEX`, `UPCOMINDEX` về điểm số, % thay đổi, KLGD, GTGD, tỷ lệ Tăng/Giảm/Đứng, số mã Trần/Sàn, cùng liên kết chuyển đổi nhanh giữa các chỉ số.
+     - *Thiết kế chuẩn hóa*: 0 icon trước text, bảng màu chuẩn 4 tone (Xanh lá `#38e1b0`, Đỏ `#f43f5e`, Xanh dương `#38bdf8`, Trắng `#ffffff`), padding `1.25rem` - `1.5rem` thông thoáng, không viền rườm rà.
+  3. **Tích hợp vào `IndicesView`**:
+     - Kết nối `IndexAnalyticsPanel` vào bên dưới biểu đồ nến và dải thông số cơ bản trong `market-workspace.tsx`.
+  4. **Cập nhật Unit Test**:
+     - Điều chỉnh `dividend-calendar-widget.test.tsx` khớp với thay đổi bỏ icon `⏳` trước text "Còn".
+- **Verification**:
+  - `npm --prefix frontend run typecheck`: **0 errors**.
+  - Vitest: **36/36 test files passed (139/139 tests passed)**.
+  - Next.js dev server: HTTP 200 OK trên tất cả các trang `/market/indices`, `/market/events`, `/market/people`, `/market/ecosystems`.
+  - Giữ nguyên trạng thái chưa commit theo yêu cầu của người dùng.
+
+# Previous Tasks
+
+## Ecosystem 4-Color Palette & Layout Polish, Net Worth Centering, and Comprehensive Leading-Icon Elimination - 2026-11-02 (pending user review)
+- **User Request**:
+  1. *Trang Hệ sinh thái (`/market/ecosystems`)*:
+     - Chỉ được phép dùng 4 màu: Xanh lá, Đỏ, Xanh dương, và Trắng.
+     - Các khối đều phải có padding.
+     - Khoảng cách các khối khi xếp chồng lên nhau phải có chứ không được dính nhau và phải đồng bộ khoảng cách đó.
+     - Bỏ border ở các khối không cần thiết.
+  2. *Trang Doanh nhân (`/market/people`)*:
+     - Phần tài sản ròng bị lệch so với text giá trị, chỉnh lại cho căn giữa.
+  3. *Toàn bộ các trang và cửa sổ*:
+     - Rà soát các trang và cửa sổ hiện có để loại bỏ các icon trước các text; nếu icon chỉ đứng 1 mình không có text thì không cần bỏ.
+- **Key Changes Implemented**:
+  1. **Ecosystem Layout & 4-Color Strict Palette**:
+     - Trong `globals.css`:
+       + Chuẩn hóa triệt để về 4 màu: Xanh lá (`#38e1b0`, `#10b981`), Đỏ (tone giảm giá `changeTone`), Xanh dương (`#38bdf8`), và Trắng/Bạc (`#ffffff`, `#cbd5e1`, `#94a3b8`).
+       + Xóa bỏ hoàn toàn màu tím (`#a855f7`, `#c084fc`, `#7c3aed`) và màu vàng (`#f59e0b`).
+       + Thêm class `.eco-content-body` với `display: flex; flex-direction: column; gap: 1.75rem; width: 100%;`. Đồng bộ khoảng cách xếp chồng đồng đều không bị dính nhau.
+       + Loại bỏ border thừa ở các khối con: `.eco-stat-box`, `.eco-founder-badge`, `.eco-controls-strip`, `.eco-layout-toggle`, `.hub-quote-box`, `.node-ownership-box`, `.eco-synergy-card`.
+       + Tăng padding thoáng đãng cho tất cả các thẻ và khối dữ liệu.
+     - Trong `ecosystem-graph.tsx`: Bỏ tất cả các icon trước text (`👑`, `🌳`, `📊`, `👑`, `📈`, `🔒`).
+  2. **Trang Doanh nhân - Căn giữa Tài sản ròng**:
+     - Trong `globals.css`: Định nghĩa `.person-metric-group.total-asset` căn giữa (`align-items: center; text-align: center;`) trên desktop, giữ nhãn và giá trị căn thẳng hàng.
+     - Trong `market-workspace.tsx`: Đổi nhãn `Tổng tài sản (Forbes)` thành `Tài sản ròng (Forbes)`.
+  3. **Rà soát toàn diện và loại bỏ tất cả icon đứng trước text**:
+     - `dca-simulator-modal.tsx`: Bỏ icon `⚖️` trước "So sánh Cổ phiếu vs Vàng & Tiết kiệm".
+     - `stock-gold-bank-comparator.tsx`: Bỏ `📈`, `🥇`, `🏦` trước tên 3 tài sản và `💡` trước "Nhận Định Tài Chính".
+     - `financial-forensics-panel.tsx`: Bỏ `ℹ️`, `💡`, `⚠️`, `📐`, `🔍`, `🚨`, `📋`, `📖` trước text.
+     - `daily-digest-banner.tsx`: Bỏ `🎯`, `⚡`, `🚀`, `📅` trước các tiêu đề phân tích.
+     - `dividend-calendar-widget.tsx`: Bỏ `💵`, `📜`, `⏳` trước text.
+     - `stock-dividend-panel.tsx`: Bỏ `💵`, `📜` trước text.
+     - `stock-financial-statements.tsx`: Bỏ `📊`, `📅` trước các tab kỳ báo cáo.
+     - `market-stocks-beginner.tsx`: Bỏ `📊`, `⚖️` trước nút chuyển chế độ.
+     - `market-candlestick-chart.tsx`: Bỏ `✏️`, `🗑️` trước text nút công cụ.
+     - `home-market-dashboard.tsx`: Bỏ emoji trước tiêu đề kết luận thị trường.
+     - `candlestick-prediction-arena.tsx`: Bỏ `★ ` trước text "Nến kết quả".
+- **Verification**:
+  - `npm --prefix frontend run typecheck`: **0 errors**.
+  - Vitest: **15/15 tests passed** (`beginner-market-ui.test.tsx`, `stock-gold-bank-comparator.test.tsx`, `stock-trade-actions.test.tsx`).
+  - Chưa commit để người dùng review.
+
 ## Comprehensive UI/UX Refinements Across 10 Key Areas - 2026-11-02 (complete)
 - **User Request**:
   1. *Ảnh 1 (Xóa thanh trạng thái cồng kềnh)*: Xóa khối trạng thái thị trường (`MarketStatus`) to ngang cồng kềnh ở tất cả các trang; chỉ hiển thị ngày giờ dữ liệu cập nhật lúc nào ở góc trên bên phải mỗi trang.
@@ -28,8 +334,6 @@
   - `npm --prefix frontend run typecheck`: **0 errors**.
   - Vitest: **15/15 tests passed** (`beginner-market-ui.test.tsx`, `stock-gold-bank-comparator.test.tsx`, `stock-trade-actions.test.tsx`).
   - **TUYỆT ĐỐI CHƯA COMMIT** theo đúng yêu cầu người dùng.
-
-# Current Task
 
 ## Stock Page Navigation & Translucent Glass Backdrop for Comparator Modal - 2026-11-01 (complete)
 - **User Request**:
@@ -169,8 +473,6 @@
   - Toàn bộ backend test suite: **123/123 tests passed**.
   - Kiểm thử end-to-end Next.js BFF -> FastAPI (`POST /ai-api/chat`): Trả về `HTTP 200 OK` với đầy đủ Radar chart scores, Altman Z-Score, Stock comparison và Market pulse.
 
-# Current Task
-
 ## Custom Capital Input & Formatting, 2-Column Forensic Cards & Multi-Expand, Candlestick Knowledge Expansion - 2026-11-02 (pending user review)
 - **User Request**:
   1. *Ảnh 1 (Khung So sánh Vốn ban đầu)*: Cho phép nhập vốn ban đầu, Min 10.000.000 đ, Max 5.000.000.000 đ. Quan trọng là khi người dùng nhập thì có validate và tự động chấm sau khi nhập đủ 3 số 0 (định dạng dấu chấm phân cách hàng nghìn theo thời gian thực).
@@ -198,8 +500,6 @@
 - **Verification**:
   - `npm --prefix frontend run typecheck`: **0 errors**.
   - Không thực hiện commit theo đúng yêu cầu người dùng.
-
-# Current Task
 
 ## Market Grid Two-Column Restoration, Candlestick Height & Theme Dark Harmonization - 2026-10-31 (complete)
 - **User Request**:

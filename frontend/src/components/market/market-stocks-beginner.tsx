@@ -212,7 +212,7 @@ function StockComparisonDialog({
             }`}
             onClick={() => setComparisonMode("peers")}
           >
-            📊 So sánh giữa các mã cổ phiếu
+            So sánh giữa các mã cổ phiếu
           </button>
           <button
             type="button"
@@ -225,7 +225,7 @@ function StockComparisonDialog({
             }`}
             onClick={() => setComparisonMode("gold_bank")}
           >
-            ⚖️ So sánh với Vàng SJC &amp; Ngân hàng theo Năm
+            So sánh với Vàng SJC &amp; Ngân hàng theo Năm
           </button>
         </div>
 
