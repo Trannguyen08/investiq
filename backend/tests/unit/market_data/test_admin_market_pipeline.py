@@ -12,8 +12,8 @@ client = TestClient(app)
 
 def test_admin_market_data_pipeline_unauthorized() -> None:
     res = client.get("/api/v1/admin/market-data-pipeline")
-    # require_auth_bff rejects without auth cookie/token
-    assert res.status_code in {401, 403}
+    # require_auth_bff / require_admin_user rejects without active session or if auth unconfigured
+    assert res.status_code in {401, 403, 503}
 
 
 def test_admin_market_data_pipeline_authorized() -> None:

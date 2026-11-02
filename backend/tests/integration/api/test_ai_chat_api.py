@@ -1,3 +1,5 @@
+from unittest.mock import patch
+
 import pytest
 from httpx import ASGITransport, AsyncClient
 
@@ -24,11 +26,15 @@ async def test_ai_chat_endpoint_guest() -> None:
 
 @pytest.mark.anyio
 async def test_ai_chat_endpoint_general_prompt() -> None:
-    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
-        response = await client.post(
-            "/api/v1/ai/chat",
-            json={"message": "Xin chào, bạn có thể giúp gì cho tôi?"},
-        )
-        assert response.status_code == 200
-        body = response.json()
-        assert "InvestIQ" in body["message"]["content"]
+    with patch(
+        "app.application.use_cases.ai_chat.ai_financial_service.AiFinancialService._search_external_info"
+    ) as mock_search:
+        mock_search.return_value = ""
+        async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
+            response = await client.post(
+                "/api/v1/ai/chat",
+                json={"message": "Xin chào, bạn có thể giúp gì cho tôi?"},
+            )
+            assert response.status_code == 200
+            body = response.json()
+            assert "InvestIQ" in body["message"]["content"]

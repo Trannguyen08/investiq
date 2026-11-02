@@ -85,7 +85,6 @@ def authenticated_user_id(
 
 
 def optional_user_id(
-    repository: Annotated[SqlUserRepository, Depends(get_user_repository)],
     authorization: Annotated[str | None, Header()] = None,
 ) -> str | None:
     """Resolve an active user if a valid bearer token is present, else None."""
@@ -105,6 +104,7 @@ def optional_user_id(
             if settings.auth_jwt_previous_secret
             else None,
         ).verify(token)
+        repository = SqlUserRepository(get_pool())
         user = repository.active_session_user(
             str(claims["sid"]), str(claims["sub"]), datetime.now(UTC)
         )

@@ -99,26 +99,89 @@ def test_financial_statements_crawler_parse() -> None:
 def test_api_dividend_calendar_and_stock_endpoints() -> None:
     client = TestClient(app)
 
-    # 1. Calendar endpoint
-    res_cal = client.get("/api/v1/market/dividends/calendar?limit=10")
-    assert res_cal.status_code == 200
-    cal_data = res_cal.json()
-    assert "data" in cal_data
-    assert "events" in cal_data["data"]
+    with patch(
+        "app.infrastructure.external.crawlers.dividend_crawler.DividendCrawler.get_market_calendar"
+    ) as mock_cal, patch(
+        "app.infrastructure.external.crawlers.dividend_crawler.DividendCrawler.get_symbol_dividends"
+    ) as mock_div, patch(
+        "app.infrastructure.external.crawlers.financial_statements_crawler.FinancialStatementsCrawler.get_financial_statements"
+    ) as mock_fs:
+        mock_cal.return_value = [
+            {
+                "id": "HPG-2026-11-20",
+                "symbol": "HPG",
+                "title": "Chi trả cổ tức tiền mặt 2026",
+                "event_date": "2026-11-20",
+                "ex_date": "2026-11-20",
+                "record_date": "2026-11-21",
+                "payout_date": "2026-12-05",
+                "type": "cash",
+                "ratio": "15%",
+                "cash_value": 1500.0,
+                "source": "CafeF",
+            }
+        ]
+        mock_div.return_value = [
+            {
+                "id": "HPG-2026-11-20",
+                "symbol": "HPG",
+                "title": "Chi trả cổ tức tiền mặt 2026",
+                "event_date": "2026-11-20",
+                "ex_date": "2026-11-20",
+                "type": "cash",
+                "ratio": "15%",
+                "cash_value": 1500.0,
+            }
+        ]
+        mock_fs.return_value = {
+            "symbol": "HPG",
+            "period_type": "quarter",
+            "periods": ["Q3 2024"],
+            "charts": [
+                {
+                    "period": "Q3 2024",
+                    "revenue_billion": 35000.0,
+                    "gross_profit_billion": 5000.0,
+                    "net_profit_billion": 3000.0,
+                    "gross_margin_percent": 14.3,
+                    "net_margin_percent": 8.6,
+                    "total_assets_billion": 180000.0,
+                    "total_debt_billion": 80000.0,
+                    "equity_billion": 100000.0,
+                }
+            ],
+            "income_statement": [
+                {"code": "REV", "name": "Doanh thu thuần", "values": [35000.0]}
+            ],
+            "balance_sheet": [
+                {"code": "ASSET", "name": "Tổng tài sản", "values": [180000.0]}
+            ],
+            "cash_flow": [
+                {"code": "CASH", "name": "Lưu chuyển tiền tệ", "values": [2000.0]}
+            ],
+            "source": "Vietstock",
+        }
 
-    # 2. Instrument dividends endpoint
-    res_div = client.get("/api/v1/market/instruments/HPG/dividends")
-    assert res_div.status_code == 200
-    div_data = res_div.json()
-    assert div_data["data"]["symbol"] == "HPG"
-    assert "events" in div_data["data"]
+        # 1. Calendar endpoint
+        res_cal = client.get("/api/v1/market/dividends/calendar?limit=10")
+        assert res_cal.status_code == 200
+        cal_data = res_cal.json()
+        assert "data" in cal_data
+        assert "events" in cal_data["data"]
 
-    # 3. Instrument financial statements endpoint
-    res_fs = client.get(
-        "/api/v1/market/instruments/HPG/financial-statements?period_type=quarter&limit=4"
-    )
-    assert res_fs.status_code == 200
-    fs_data = res_fs.json()
-    assert fs_data["data"]["symbol"] == "HPG"
-    assert "charts" in fs_data["data"]
-    assert "income_statement" in fs_data["data"]
+        # 2. Instrument dividends endpoint
+        res_div = client.get("/api/v1/market/instruments/HPG/dividends")
+        assert res_div.status_code == 200
+        div_data = res_div.json()
+        assert div_data["data"]["symbol"] == "HPG"
+        assert "events" in div_data["data"]
+
+        # 3. Instrument financial statements endpoint
+        res_fs = client.get(
+            "/api/v1/market/instruments/HPG/financial-statements?period_type=quarter&limit=4"
+        )
+        assert res_fs.status_code == 200
+        fs_data = res_fs.json()
+        assert fs_data["data"]["symbol"] == "HPG"
+        assert "charts" in fs_data["data"]
+        assert "income_statement" in fs_data["data"]

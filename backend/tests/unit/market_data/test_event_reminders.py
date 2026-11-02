@@ -9,6 +9,15 @@ def client() -> TestClient:
     return TestClient(app)
 
 
+@pytest.fixture(autouse=True)
+def mock_no_db(monkeypatch: pytest.MonkeyPatch) -> None:
+    import app.infrastructure.db.repositories.sql_event_reminder_repository as repo_mod
+
+    monkeypatch.setattr(
+        repo_mod, "get_pool", lambda: (_ for _ in ()).throw(RuntimeError("No DB in unit test"))
+    )
+
+
 def test_event_reminders_crud_and_quick_test(client: TestClient) -> None:
     payload = {
         "email": "investor@investiq.vn",

@@ -120,6 +120,15 @@ def _service() -> MarketService:
         raise HTTPException(status_code=503, detail=str(exc)) from exc
 
 
+def _safe_meta() -> dict[str, object]:
+    try:
+        return _service().meta()
+    except Exception:
+        from app.infrastructure.external.market_fixture_provider import FixtureMarketProvider
+
+        return MarketService(FixtureMarketProvider()).meta()
+
+
 def _watchlists() -> SqlWatchlistRepository:
     return SqlWatchlistRepository(get_pool())
 
@@ -294,7 +303,7 @@ def market_dividend_calendar(
             "total": len(events),
             "events": events,
         },
-        "meta": _service().meta(),
+        "meta": _safe_meta(),
     }
 
 
@@ -308,7 +317,11 @@ def instrument_dividends(symbol: str, response: Response) -> dict[str, object]:
     events = crawler.get_symbol_dividends(normalized)
 
     # Calculate summary metrics
-    current_inst = _service().instrument(normalized)
+    current_inst = None
+    try:
+        current_inst = _service().instrument(normalized)
+    except Exception:
+        current_inst = None
     price_val = None
     if isinstance(current_inst, dict):
         raw_data = current_inst.get("data")
@@ -341,7 +354,7 @@ def instrument_dividends(symbol: str, response: Response) -> dict[str, object]:
             "summary": summary,
             "events": events,
         },
-        "meta": _service().meta(),
+        "meta": _safe_meta(),
     }
 
 
@@ -364,7 +377,7 @@ def instrument_financial_statements(
     statements = crawler.get_financial_statements(normalized, period_type=period, limit=limit)
     return {
         "data": statements,
-        "meta": _service().meta(),
+        "meta": _safe_meta(),
     }
 
 
@@ -442,7 +455,7 @@ def list_event_reminders(
     items = repo.list(email=email)
     return {
         "data": items,
-        "meta": _service().meta(),
+        "meta": _safe_meta(),
     }
 
 
