@@ -236,7 +236,6 @@ export async function changeAlertStatusAction(formData: FormData) {
   redirect("/admin/alerts?notice=Đã cập nhật trạng thái cảnh báo");
 }
 
-
 export async function syncMarketDividendsAction() {
   await requireAdminSession();
   try {

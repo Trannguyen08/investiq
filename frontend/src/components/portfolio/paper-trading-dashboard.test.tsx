@@ -2,15 +2,11 @@ import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-li
 
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-
-
 import { PaperTradingDashboard } from "@/components/portfolio/paper-trading-dashboard";
 
 import type { MarketInstrument } from "@/types/market";
 
 import type { PaperDashboard } from "@/types/portfolio";
-
-
 
 const useAuth = vi.fn();
 
@@ -19,8 +15,6 @@ const refresh = vi.fn();
 vi.mock("@/hooks/use-auth", () => ({ useAuth: () => useAuth() }));
 
 vi.mock("next/navigation", () => ({ useRouter: () => ({ refresh }) }));
-
-
 
 const dashboard: PaperDashboard = {
 
@@ -88,8 +82,6 @@ const dashboard: PaperDashboard = {
 
 };
 
-
-
 const marketInstrument: MarketInstrument = {
 
   symbol: "FPT",
@@ -146,8 +138,6 @@ const marketInstrument: MarketInstrument = {
 
 };
 
-
-
 const marketInstruments = [
 
   marketInstrument,
@@ -155,8 +145,6 @@ const marketInstruments = [
   { ...marketInstrument, symbol: "HPG", name: "Tập đoàn Hòa Phát", price: "29150", change_percent: "2.64", is_vn30: false },
 
 ];
-
-
 
 const pendingOrder = {
 
@@ -202,13 +190,9 @@ const pendingOrder = {
 
 };
 
-
-
 describe("PaperTradingDashboard", () => {
 
   afterEach(() => cleanup());
-
-
 
   beforeEach(() => {
 
@@ -218,13 +202,9 @@ describe("PaperTradingDashboard", () => {
 
   });
 
-
-
   it("shows private cash, holdings, profit and observed-data disclaimers", async () => {
 
     render(<PaperTradingDashboard positiveNews={[]} marketInstruments={marketInstruments} />);
-
-
 
     expect(await screen.findByRole("heading", { name: "Danh mục mô phỏng của bạn" })).toBeInTheDocument();
 
@@ -260,19 +240,13 @@ describe("PaperTradingDashboard", () => {
 
   });
 
-
-
   it("opens a read-only unrealized P&L scenario and recalculates only from quantity", async () => {
 
     render(<PaperTradingDashboard positiveNews={[]} marketInstruments={marketInstruments} />);
 
-
-
     await screen.findByRole("heading", { name: "Danh mục mô phỏng của bạn" });
 
     fireEvent.click(screen.getByRole("button", { name: /Lãi\/lỗ chưa chốt/ }));
-
-
 
     const dialog = screen.getByRole("dialog", { name: "Lãi/lỗ dự kiến nếu bán" });
 
@@ -290,23 +264,17 @@ describe("PaperTradingDashboard", () => {
 
     expect(screen.queryByRole("button", { name: /xác nhận bán/i })).not.toBeInTheDocument();
 
-
-
     fireEvent.change(quantity, { target: { value: "50" } });
 
     expect(quantity).toHaveValue(50);
 
     expect(dialog).toHaveTextContent("79.750 ₫");
 
-
-
     fireEvent.keyDown(document, { key: "Escape" });
 
     expect(screen.queryByRole("dialog", { name: "Lãi/lỗ dự kiến nếu bán" })).not.toBeInTheDocument();
 
   });
-
-
 
   it("attributes realized gains and losses to their completed sell trades", async () => {
 
@@ -354,13 +322,9 @@ describe("PaperTradingDashboard", () => {
 
     render(<PaperTradingDashboard positiveNews={[]} marketInstruments={marketInstruments} />);
 
-
-
     await screen.findByRole("heading", { name: "Danh mục mô phỏng của bạn" });
 
     fireEvent.click(screen.getByRole("button", { name: /Lãi\/lỗ đã chốt/ }));
-
-
 
     const dialog = screen.getByRole("dialog", { name: "Lãi/lỗ thực tế đã chốt" });
 
@@ -383,8 +347,6 @@ describe("PaperTradingDashboard", () => {
     expect(dialog).toHaveTextContent("Chỉ để đối chiếu hiện tại");
 
   });
-
-
 
   it("places a CSRF-protected simulated order and refreshes the dashboard", async () => {
 
@@ -414,15 +376,11 @@ describe("PaperTradingDashboard", () => {
 
     render(<PaperTradingDashboard positiveNews={[]} marketInstruments={marketInstruments} />);
 
-
-
     await screen.findByRole("heading", { name: "Danh mục mô phỏng của bạn" });
 
     fireEvent.click(screen.getByRole("button", { name: "Mua HPG" }));
 
     fireEvent.click(screen.getByRole("button", { name: "Xác nhận mua" }));
-
-
 
     expect(await screen.findByRole("status")).toHaveTextContent(/Mua thành công: Đã tự động khớp 100 HPG/);
 
@@ -442,13 +400,9 @@ describe("PaperTradingDashboard", () => {
 
   });
 
-
-
   it("shows a recoverable market-data error instead of disguising it as an empty board", async () => {
 
     render(<PaperTradingDashboard positiveNews={[]} marketInstruments={[]} marketLoadError />);
-
-
 
     expect(await screen.findByRole("alert", { name: "" })).toHaveTextContent("Không thể tải bảng giá");
 
@@ -459,8 +413,6 @@ describe("PaperTradingDashboard", () => {
     expect(refresh).toHaveBeenCalledOnce();
 
   });
-
-
 
   it("explains automatic educational fills and omits the status filter", async () => {
 
@@ -478,8 +430,6 @@ describe("PaperTradingDashboard", () => {
 
     render(<PaperTradingDashboard positiveNews={[]} marketInstruments={marketInstruments} />);
 
-
-
     expect(await screen.findByText(/Tự động khớp trong môi trường học tập/)).toBeInTheDocument();
 
     expect(screen.getByText(/lệnh có thể chờ, khớp một phần hoặc không khớp/)).toBeInTheDocument();
@@ -489,8 +439,6 @@ describe("PaperTradingDashboard", () => {
     expect(screen.queryByRole("button", { name: "Hủy lệnh" })).not.toBeInTheDocument();
 
   });
-
-
 
   it("loads P/E and P/B for visible rows that do not include fundamentals", async () => {
 
@@ -504,11 +452,7 @@ describe("PaperTradingDashboard", () => {
 
     vi.stubGlobal("fetch", fetchMock);
 
-
-
     render(<PaperTradingDashboard positiveNews={[]} marketInstruments={[instrumentWithoutRatios]} />);
-
-
 
     expect(await screen.findByText("18.5 / 4.2")).toBeInTheDocument();
 
@@ -523,8 +467,6 @@ describe("PaperTradingDashboard", () => {
     expect(within(row).getByText("TC +100.000")).toHaveClass("price-reference");
 
   });
-
-
 
   it("loads fundamental ratios in bounded batches as each page becomes visible", async () => {
 
@@ -548,29 +490,19 @@ describe("PaperTradingDashboard", () => {
 
     vi.stubGlobal("fetch", fetchMock);
 
-
-
     render(<PaperTradingDashboard positiveNews={[]} marketInstruments={instruments} />);
-
-
 
     await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(2));
 
     expect(decodeURIComponent(String(fetchMock.mock.calls[1][0])).split(",")).toHaveLength(15);
 
-
-
     fireEvent.click(screen.getByRole("button", { name: /Trang sau/ }));
-
-
 
     await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(3));
 
     expect(String(fetchMock.mock.calls[2][0])).toContain("S15");
 
   });
-
-
 
   it("keeps the market table in view when changing pages", async () => {
 
@@ -600,15 +532,11 @@ describe("PaperTradingDashboard", () => {
 
     });
 
-
-
     render(<PaperTradingDashboard positiveNews={[]} marketInstruments={instruments} />);
 
     await screen.findByRole("heading", { name: /Danh mục mô phỏng/ });
 
     fireEvent.click(screen.getByRole("button", { name: /Trang sau/ }));
-
-
 
     expect(screen.getByText("S15")).toBeInTheDocument();
 
@@ -616,21 +544,15 @@ describe("PaperTradingDashboard", () => {
 
   });
 
-
-
   it("requires login before creating a private simulation account", () => {
 
     useAuth.mockReturnValue({ status: "anonymous", user: null });
 
     render(<PaperTradingDashboard positiveNews={[]} marketInstruments={marketInstruments} />);
 
-
-
     expect(screen.getByRole("link", { name: "Đăng nhập để bắt đầu" })).toHaveAttribute("href", "/login");
 
   });
-
-
 
   it("renders AI daily portfolio report section and handles instant send", async () => {
 
@@ -648,25 +570,17 @@ describe("PaperTradingDashboard", () => {
 
     vi.stubGlobal("fetch", fetchMock);
 
-
-
     render(<PaperTradingDashboard positiveNews={[]} marketInstruments={marketInstruments} />);
 
     await screen.findByRole("heading", { name: "Danh mục mô phỏng của bạn" });
-
-
 
     expect(screen.getByText("Báo cáo kết quả và nhận xét AI hàng ngày qua Email")).toBeInTheDocument();
 
     expect(screen.getByRole("button", { name: "Gửi báo cáo phân tích AI ngay bây giờ" })).toBeInTheDocument();
 
-
-
     const emailInput = screen.getByLabelText("Địa chỉ Email nhận báo cáo:");
 
     fireEvent.change(emailInput, { target: { value: "trader@gmail.com" } });
-
-
 
     fireEvent.click(screen.getByRole("button", { name: "Gửi báo cáo phân tích AI ngay bây giờ" }));
 

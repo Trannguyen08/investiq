@@ -202,7 +202,6 @@ export async function savePreAuth(raw: string, value: PreAuth) {
   await storeSet(key("preauth", raw), encrypt(value), 15 * 60);
 }
 
-
 export async function verifyCsrf(request: Request) {
   const origin = request.headers.get("origin");
   const fetchSite = request.headers.get("sec-fetch-site");

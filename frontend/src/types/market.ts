@@ -265,7 +265,6 @@ export type StockGrowthData = {
   insights: string[];
 };
 
-
 export type StockGrowthEnvelope = {
   data: StockGrowthData;
   meta: MarketMeta;
@@ -440,7 +439,6 @@ export type DailyDigestEnvelope = {
   data: DailyDigestData;
   meta: MarketMeta;
 };
-
 
 export type DividendItem = {
   id: string;

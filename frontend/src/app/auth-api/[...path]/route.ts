@@ -115,7 +115,6 @@ export async function GET(request: Request, context: Context) {
   }
 }
 
-
 export async function POST(request: Request, context: Context) {
   try {
     if (!authConfigured()) throw new UserAuthError(503, "AUTH_NOT_CONFIGURED", "Tính năng đăng nhập chưa được cấu hình.");

@@ -492,7 +492,6 @@ export function getAdminAnalytics() {
   return adminFetch<AdminAnalyticsResponse>("/analytics");
 }
 
-
 // Market Data Pipeline & Corporate Actions Crawlers
 export type AdminCrawlerStatusItem = {
   id: string;

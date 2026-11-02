@@ -1,5 +1,10 @@
 # Current Task
 
+## Frontend Clean Code & Modular Component Extraction - 2026-11-03 (in progress)
+- User Request: Clean frontend code, extract reusable components, reduce lines of code without altering UI.
+- Branch: refactor/frontend-clean-code (branched off origin/dev).
+- Objectives: Clean empty lines, extract Admin UI modules, modularize paper trading and market workspace.
+
 ## Backend CI & Unit Test Failure Resolution - 2026-11-02 (completed)
 - **User Request**: "looix tesst backend" (Lỗi test backend trên CI).
 - **Root Cause & Fixes Implemented**:

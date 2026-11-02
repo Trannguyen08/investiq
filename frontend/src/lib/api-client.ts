@@ -323,7 +323,6 @@ export function getMarketDailyDigest(): Promise<DailyDigestEnvelope> {
   return requestJson<DailyDigestEnvelope>("/v1/market/daily-digest", 60);
 }
 
-
 export function getMarketDividendCalendar(limit = 30): Promise<DividendCalendarEnvelope> {
   return requestJson<DividendCalendarEnvelope>(`/v1/market/dividends/calendar?limit=${limit}`, 60);
 }
