@@ -225,7 +225,7 @@ def me(
     return _user(_service(repository).current_user(_bearer(authorization)))
 
 
-@router.post("/logout", status_code=204)
+@router.post("/logout", status_code=204, response_model=None)
 def logout(
     response: Response,
     repository: Annotated[SqlUserRepository, Depends(get_user_repository)],
@@ -270,7 +270,7 @@ def verify_reset(
     )
 
 
-@router.post("/password-reset/complete", status_code=204)
+@router.post("/password-reset/complete", status_code=204, response_model=None)
 def complete_reset(
     body: PasswordResetCompleteRequest,
     request: Request,

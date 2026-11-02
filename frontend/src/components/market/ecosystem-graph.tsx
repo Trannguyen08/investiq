@@ -6,7 +6,7 @@ import { getMarketEcosystemDetail, getMarketEcosystems } from "@/lib/api-client"
 import { formatMoney, formatPercent, changeTone } from "@/components/market/formatters";
 import type { EcosystemDetailData, EcosystemNode, EcosystemSummary } from "@/types/market";
 
-// Brand styling definitions for the 6 conglomerates
+// Brand styling definitions for the 6 conglomerates (Clean & Unified Theme)
 const CONGLOMERATE_THEMES: Record<
   string,
   {
@@ -22,61 +22,61 @@ const CONGLOMERATE_THEMES: Record<
 > = {
   vingroup: {
     accent: "#38bdf8",
-    badgeBg: "rgba(56, 189, 248, 0.14)",
-    gradient: "linear-gradient(135deg, rgba(14, 116, 144, 0.28), rgba(30, 58, 138, 0.38))",
-    haloColor: "rgba(56, 189, 248, 0.3)",
+    badgeBg: "rgba(56, 189, 248, 0.12)",
+    gradient: "linear-gradient(135deg, rgba(14, 38, 70, 0.85), rgba(9, 23, 44, 0.95))",
+    haloColor: "rgba(56, 189, 248, 0.25)",
     monogram: "VIC",
-    icon: "🏢",
+    icon: "",
     parentName: "Tập đoàn Vingroup",
     sectorLabel: "Bất động sản · Xe điện · Bán lẻ",
   },
   "masan-techcombank": {
-    accent: "#f59e0b",
-    badgeBg: "rgba(245, 158, 11, 0.14)",
-    gradient: "linear-gradient(135deg, rgba(220, 38, 38, 0.28), rgba(217, 119, 6, 0.34))",
-    haloColor: "rgba(245, 158, 11, 0.3)",
+    accent: "#38bdf8",
+    badgeBg: "rgba(56, 189, 248, 0.12)",
+    gradient: "linear-gradient(135deg, rgba(14, 38, 70, 0.85), rgba(9, 23, 44, 0.95))",
+    haloColor: "rgba(56, 189, 248, 0.25)",
     monogram: "MSN",
-    icon: "🛒",
+    icon: "",
     parentName: "Masan Group & TCB",
     sectorLabel: "Hàng tiêu dùng · Bán lẻ · Tài chính số",
   },
   hoaphat: {
-    accent: "#10b981",
-    badgeBg: "rgba(16, 185, 129, 0.14)",
-    gradient: "linear-gradient(135deg, rgba(5, 150, 105, 0.28), rgba(13, 148, 136, 0.34))",
-    haloColor: "rgba(16, 185, 129, 0.3)",
+    accent: "#38bdf8",
+    badgeBg: "rgba(56, 189, 248, 0.12)",
+    gradient: "linear-gradient(135deg, rgba(14, 38, 70, 0.85), rgba(9, 23, 44, 0.95))",
+    haloColor: "rgba(56, 189, 248, 0.25)",
     monogram: "HPG",
-    icon: "🏗️",
+    icon: "",
     parentName: "Tập đoàn Hòa Phát",
     sectorLabel: "Thép · Công nghiệp nặng · Logistics cảng biển",
   },
   fpt: {
-    accent: "#818cf8",
-    badgeBg: "rgba(129, 140, 248, 0.14)",
-    gradient: "linear-gradient(135deg, rgba(79, 70, 229, 0.28), rgba(147, 51, 234, 0.34))",
-    haloColor: "rgba(129, 140, 248, 0.3)",
+    accent: "#38bdf8",
+    badgeBg: "rgba(56, 189, 248, 0.12)",
+    gradient: "linear-gradient(135deg, rgba(14, 38, 70, 0.85), rgba(9, 23, 44, 0.95))",
+    haloColor: "rgba(56, 189, 248, 0.25)",
     monogram: "FPT",
-    icon: "💻",
+    icon: "",
     parentName: "Tập đoàn FPT",
     sectorLabel: "Công nghệ thông tin · Viễn thông · AI & Bán lẻ",
   },
   sovico: {
-    accent: "#fb923c",
-    badgeBg: "rgba(251, 146, 60, 0.14)",
-    gradient: "linear-gradient(135deg, rgba(225, 29, 72, 0.28), rgba(234, 88, 12, 0.34))",
-    haloColor: "rgba(251, 146, 60, 0.3)",
+    accent: "#38bdf8",
+    badgeBg: "rgba(56, 189, 248, 0.12)",
+    gradient: "linear-gradient(135deg, rgba(14, 38, 70, 0.85), rgba(9, 23, 44, 0.95))",
+    haloColor: "rgba(56, 189, 248, 0.25)",
     monogram: "VJC",
-    icon: "✈️",
+    icon: "",
     parentName: "Tập đoàn Sovico",
     sectorLabel: "Hàng không · Tài chính ngân hàng · Bất động sản nghỉ dưỡng",
   },
   "ssi-pan": {
-    accent: "#eab308",
-    badgeBg: "rgba(234, 179, 8, 0.14)",
-    gradient: "linear-gradient(135deg, rgba(202, 138, 4, 0.28), rgba(2, 132, 199, 0.34))",
-    haloColor: "rgba(234, 179, 8, 0.3)",
+    accent: "#38bdf8",
+    badgeBg: "rgba(56, 189, 248, 0.12)",
+    gradient: "linear-gradient(135deg, rgba(14, 38, 70, 0.85), rgba(9, 23, 44, 0.95))",
+    haloColor: "rgba(56, 189, 248, 0.25)",
     monogram: "SSI",
-    icon: "🌾",
+    icon: "",
     parentName: "SSI & The PAN Group",
     sectorLabel: "Chứng khoán & Quản lý quỹ · Nông nghiệp sạch",
   },
@@ -261,7 +261,7 @@ export function EcosystemGraph({
               <h2 className="eco-hero-title">{detail.name}</h2>
               <div className="eco-hero-founder-row">
                 <span className="eco-founder-badge">
-                  <span className="founder-icon">👑</span>
+
                   Lãnh đạo sáng lập: <strong>{detail.founder_name}</strong>
                 </span>
                 <Link
@@ -315,14 +315,14 @@ export function EcosystemGraph({
                 className={`eco-layout-btn ${viewLayout === "tree" ? "active" : ""}`}
                 onClick={() => setViewLayout("tree")}
               >
-                🌳 Sơ đồ Cấu trúc Phân nhánh
+                Sơ đồ Cấu trúc Phân nhánh
               </button>
               <button
                 type="button"
                 className={`eco-layout-btn ${viewLayout === "matrix" ? "active" : ""}`}
                 onClick={() => setViewLayout("matrix")}
               >
-                📊 Ma trận Thẻ Chi tiết
+                Ma trận Thẻ Chi tiết
               </button>
             </div>
 
@@ -361,7 +361,7 @@ export function EcosystemGraph({
                 <div className="eco-tree-level level-parent">
                   <div className="level-badge-wrap">
                     <span className="level-badge parent" style={{ color: theme.accent, borderColor: theme.accent }}>
-                      👑 HẠT NHÂN TẬP ĐOÀN MẸ &amp; TRUNG TÂM ĐIỀU PHỐI VỐN
+                      HẠT NHÂN TẬP ĐOÀN MẸ &amp; TRUNG TÂM ĐIỀU PHỐI VỐN
                     </span>
                   </div>
 
@@ -440,7 +440,7 @@ export function EcosystemGraph({
               <div className="eco-tree-level level-listed">
                 <div className="level-badge-wrap">
                   <span className="level-badge listed">
-                    📈 CÔNG TY THÀNH VIÊN NIÊM YẾT TRÊN SÀN CHỨNG KHOÁN ({listedNodes.length})
+                    CÔNG TY THÀNH VIÊN NIÊM YẾT TRÊN SÀN CHỨNG KHOÁN ({listedNodes.length})
                   </span>
                 </div>
 
@@ -466,7 +466,7 @@ export function EcosystemGraph({
                   <div className="eco-tree-level level-unlisted">
                     <div className="level-badge-wrap">
                       <span className="level-badge unlisted">
-                        🔒 DOANH NGHIỆP NGOÀI SÀN &amp; HỆ SINH THÁI DỊCH VỤ ({unlistedNodes.length})
+                        DOANH NGHIỆP NGOÀI SÀN &amp; HỆ SINH THÁI DỊCH VỤ ({unlistedNodes.length})
                       </span>
                     </div>
 
@@ -596,7 +596,7 @@ function NodeVisualCard({
             className="ownership-fill"
             style={{
               width: `${Math.min(100, Math.max(0, Number(node.ownership_percent) || 0))}%`,
-              background: isListed ? accentColor : "#a855f7",
+              background: isListed ? accentColor : "#38bdf8",
             }}
           />
         </div>

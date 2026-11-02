@@ -15,6 +15,9 @@ import type {
   PeopleCollection,
   SectorCollection,
   StockGrowthEnvelope,
+  DividendCalendarEnvelope,
+  FinancialStatementsEnvelope,
+  SymbolDividendsEnvelope,
 } from "@/types/market";
 import type {
   AnalystReputationItem,
@@ -131,8 +134,8 @@ class InvestIqApiError extends Error {
   }
 }
 
-async function requestJson<T>(path: string, revalidate?: number, timeoutMs?: number): Promise<T> {
-  const cacheOptions = revalidate ? { next: { revalidate } } : { cache: "no-store" as const };
+async function requestJson<T>(path: string, revalidate: number = 30, timeoutMs?: number): Promise<T> {
+  const cacheOptions = revalidate > 0 ? { next: { revalidate } } : { cache: "no-store" as const };
   const base = resolveApiBase();
   const normalizedPath = path.startsWith("/") ? path : `/${path}`;
   const response = await fetch(`${base}${normalizedPath}`, {
@@ -173,7 +176,7 @@ export function getNewsSources(timeoutMs?: number): Promise<Envelope<Source[]>> 
 }
 
 export function getMarketOverview(timeoutMs?: number): Promise<MarketOverview> {
-  return requestJson<MarketOverview>("/v1/market/overview", 5, timeoutMs);
+  return requestJson<MarketOverview>("/v1/market/overview", 30, timeoutMs);
 }
 
 function normalizeInstrumentCollection(
@@ -197,7 +200,7 @@ function normalizeInstrumentCollection(
 export async function getMarketInstruments(query: URLSearchParams): Promise<InstrumentCollection> {
   const request = async (selected: URLSearchParams) => {
     const suffix = selected.size ? `?${selected.toString()}` : "";
-    return requestJson<InstrumentCollection>(`/v1/market/instruments${suffix}`, 5);
+    return requestJson<InstrumentCollection>(`/v1/market/instruments${suffix}`, 30);
   };
   try {
     return normalizeInstrumentCollection(await request(query), query);
@@ -212,7 +215,7 @@ export async function getMarketInstruments(query: URLSearchParams): Promise<Inst
 }
 
 export function getMarketInstrument(symbol: string): Promise<InstrumentEnvelope> {
-  return requestJson<InstrumentEnvelope>(`/v1/market/instruments/${encodeURIComponent(symbol)}`, 5);
+  return requestJson<InstrumentEnvelope>(`/v1/market/instruments/${encodeURIComponent(symbol)}`, 30);
 }
 
 export function getMarketCandles(
@@ -221,7 +224,7 @@ export function getMarketCandles(
   limit: number,
 ): Promise<MarketCandles> {
   const query = new URLSearchParams({ symbol, interval, limit: String(limit) });
-  return requestJson<MarketCandles>(`/v1/market/candles?${query.toString()}`, 5);
+  return requestJson<MarketCandles>(`/v1/market/candles?${query.toString()}`, 60);
 }
 
 export function getMarketIntradayTrades(
@@ -229,15 +232,15 @@ export function getMarketIntradayTrades(
   limit = 100,
 ): Promise<MarketIntradayTrades> {
   const query = new URLSearchParams({ symbol, limit: String(limit) });
-  return requestJson<MarketIntradayTrades>(`/v1/market/intraday-trades?${query.toString()}`, 5);
+  return requestJson<MarketIntradayTrades>(`/v1/market/intraday-trades?${query.toString()}`, 15);
 }
 
 export function getMarketIndices(timeoutMs?: number): Promise<IndexCollection> {
-  return requestJson<IndexCollection>("/v1/market/indices", 5, timeoutMs);
+  return requestJson<IndexCollection>("/v1/market/indices", 30, timeoutMs);
 }
 
 export function getMarketSectors(timeoutMs?: number): Promise<SectorCollection> {
-  return requestJson<SectorCollection>("/v1/market/sectors", 5, timeoutMs);
+  return requestJson<SectorCollection>("/v1/market/sectors", 60, timeoutMs);
 }
 
 export function getMarketEvents(query = new URLSearchParams()): Promise<EventCollection> {
@@ -318,4 +321,83 @@ export function simulateDCA(payload: {
 
 export function getMarketDailyDigest(): Promise<DailyDigestEnvelope> {
   return requestJson<DailyDigestEnvelope>("/v1/market/daily-digest", 60);
+}
+
+
+export function getMarketDividendCalendar(limit = 30): Promise<DividendCalendarEnvelope> {
+  return requestJson<DividendCalendarEnvelope>(`/v1/market/dividends/calendar?limit=${limit}`, 60);
+}
+
+export function getInstrumentDividends(symbol: string): Promise<SymbolDividendsEnvelope> {
+  return requestJson<SymbolDividendsEnvelope>(`/v1/market/instruments/${encodeURIComponent(symbol)}/dividends`, 60);
+}
+
+export function getInstrumentFinancialStatements(
+  symbol: string,
+  period: "quarter" | "year" = "quarter",
+  limit = 8,
+): Promise<FinancialStatementsEnvelope> {
+  const query = new URLSearchParams({ period, limit: String(limit) });
+  return requestJson<FinancialStatementsEnvelope>(
+    `/v1/market/instruments/${encodeURIComponent(symbol)}/financial-statements?${query.toString()}`,
+    120,
+  );
+}
+
+export interface CreateEventReminderPayload {
+  email: string;
+  event_id: string;
+  symbol: string;
+  event_title: string;
+  event_date: string;
+  event_type?: string;
+  remind_days_before?: number;
+  extra_info?: Record<string, unknown>;
+}
+
+export interface EventReminderItem {
+  id: string;
+  email: string;
+  event_id: string;
+  symbol: string;
+  event_title: string;
+  event_date: string;
+  event_type: string;
+  remind_days_before: number;
+  target_date: string;
+  is_sent: boolean;
+  sent_at: string | null;
+  created_at: string;
+}
+
+export function createEventReminder(payload: CreateEventReminderPayload): Promise<{ data: EventReminderItem; message: string }> {
+  const base = resolveApiBase();
+  return fetch(`${base}/v1/market/events/reminders`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(payload),
+  }).then(async (res) => {
+    if (!res.ok) {
+      const err = await res.json().catch(() => null);
+      throw new Error(err?.detail || `Lỗi ${res.status}`);
+    }
+    return res.json();
+  });
+}
+
+export function getEventReminders(email: string): Promise<{ data: EventReminderItem[] }> {
+  return requestJson<{ data: EventReminderItem[] }>(
+    `/v1/market/events/reminders?email=${encodeURIComponent(email)}`,
+    0,
+  );
+}
+
+export function deleteEventReminder(reminderId: string): Promise<{ message: string }> {
+  const base = resolveApiBase();
+  return fetch(`${base}/v1/market/events/reminders/${encodeURIComponent(reminderId)}`, {
+    method: "DELETE",
+  }).then(async (res) => {
+    if (!res.ok) throw new Error(`Lỗi ${res.status}`);
+    return res.json();
+  });
 }

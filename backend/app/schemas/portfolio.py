@@ -172,3 +172,23 @@ class PlacePaperOrderResponse(StrictModel):
 class CancelPaperOrderResponse(StrictModel):
     order: PaperOrderResponse
     data: PaperDashboardResponse
+
+
+class PaperReportSubscriptionResponse(StrictModel):
+    user_id: str
+    email: str
+    is_active: bool
+    last_sent_at: datetime | None = None
+    created_at: datetime | None = None
+    updated_at: datetime | None = None
+
+
+class SetPaperReportSubscriptionRequest(StrictModel):
+    email: str = Field(min_length=3, max_length=255)
+    is_active: bool = True
+
+
+class SendPaperReportNowResponse(StrictModel):
+    success: bool
+    message: str
+    recipient: str

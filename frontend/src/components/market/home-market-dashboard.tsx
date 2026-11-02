@@ -8,9 +8,10 @@ import { changeTone, formatChange, formatDecimal, formatEventDate, formatMarketT
 import { mergeLiveIndex, mergeLiveInstrument } from "@/components/market/live-market";
 import { MarketStatus } from "@/components/market/market-status";
 import { DailyDigestBanner } from "@/components/market/daily-digest-banner";
+import { DividendCalendarWidget } from "@/components/market/dividend-calendar-widget";
 import { MarketStreamProvider, useMarketStreamState } from "@/hooks/use-realtime-price";
 import type { NewsSummary } from "@/lib/api-client";
-import type { MarketEvent, MarketIndex, MarketInstrument, MarketMeta, MarketOverview, MarketSector } from "@/types/market";
+import type { DividendItem, MarketEvent, MarketIndex, MarketInstrument, MarketMeta, MarketOverview, MarketSector } from "@/types/market";
 
 function marketConclusion(index: MarketIndex | undefined, advances: number, declines: number) {
   const total = advances + declines;
@@ -327,15 +328,15 @@ function HomeToolDirectory() {
   return <section className="home-tool-directory" aria-labelledby="home-tools-title"><div className="beginner-heading"><div><p className="eyebrow">KHÁM PHÁ INVESTIQ</p><h2 id="home-tools-title">Chọn công cụ theo việc bạn cần làm</h2><p>Mỗi lối đi mở đúng màn hình và giữ nguyên nhãn nguồn, độ trễ của dữ liệu.</p></div></div><div>{tools.map((tool) => <Link aria-label={tool.title} href={tool.href} key={tool.href}><span aria-hidden="true">{tool.icon}</span><strong>{tool.title}</strong><p>{tool.detail}</p><em>Mở công cụ →</em></Link>)}</div></section>;
 }
 
-export function HomeMarketDashboard({ overview, sectors, news }: { overview: MarketOverview; sectors: MarketSector[]; news: NewsSummary[] }) {
+export function HomeMarketDashboard({ overview, sectors, news, dividendEvents }: { overview: MarketOverview; sectors: MarketSector[]; news: NewsSummary[]; dividendEvents?: DividendItem[] }) {
   const symbols = [
     ...overview.data.indices.map((item) => item.symbol),
     ...overview.data.trending.slice(0, 6).map((item) => item.symbol),
   ];
-  return <MarketStreamProvider symbols={symbols}><HomeMarketContent overview={overview} sectors={sectors} news={news} /></MarketStreamProvider>;
+  return <MarketStreamProvider symbols={symbols}><HomeMarketContent overview={overview} sectors={sectors} news={news} dividendEvents={dividendEvents} /></MarketStreamProvider>;
 }
 
-function HomeMarketContent({ overview, sectors, news }: { overview: MarketOverview; sectors: MarketSector[]; news: NewsSummary[] }) {
+function HomeMarketContent({ overview, sectors, news, dividendEvents }: { overview: MarketOverview; sectors: MarketSector[]; news: NewsSummary[]; dividendEvents?: DividendItem[] }) {
   const stream = useMarketStreamState();
   const indices = overview.data.indices.map((item) => mergeLiveIndex(item, stream.items[item.symbol]));
   const instruments = overview.data.trending.map((item) => mergeLiveInstrument(item, stream.items[item.symbol]));
@@ -357,14 +358,16 @@ function HomeMarketContent({ overview, sectors, news }: { overview: MarketOvervi
 
   return (
     <main id="main-content" className="market-home beginner-home">
-      <MarketColorLegend />
+      <div className="home-top-bar flex flex-col md:flex-row md:items-center justify-between gap-2.5">
+        <MarketColorLegend />
+        <MarketStatus meta={overview.meta} source="Vnstock" />
+      </div>
       <MarketSnapshotRibbon indices={indices} />
       <DailyDigestBanner />
-      <MarketStatus meta={overview.meta} />
-      <section className="beginner-hero" aria-labelledby="today-market-title">
+      <section className="beginner-hero relative" aria-labelledby="today-market-title">
         <div className="beginner-hero-copy">
           <p className="eyebrow">HÔM NAY THỊ TRƯỜNG THẾ NÀO?</p>
-          <h1 id="today-market-title"><span aria-hidden="true">{conclusion.emoji}</span> {conclusion.title}</h1>
+          <h1 id="today-market-title">{conclusion.title}</h1>
           <p>{conclusion.detail} Số liệu được trình bày để bạn hiểu nhanh trước khi đi sâu.</p>
           {primary && <div className="hero-index-value"><span>VN-Index</span><strong>{Number(primary.value).toLocaleString("vi-VN")}</strong><em className={changeTone(primary.change_percent)}>{formatPercent(primary.change_percent)}</em></div>}
           <SentimentGauge score={sentiment} />
@@ -397,6 +400,8 @@ function HomeMarketContent({ overview, sectors, news }: { overview: MarketOvervi
       <HomeStockPulse instruments={instruments} meta={overview.meta} />
 
       <HomeLeadingSectors sectors={sectors} />
+
+      <DividendCalendarWidget initialEvents={dividendEvents} />
 
       <HomeUpcomingEvents events={overview.data.upcoming_events} meta={overview.meta} />
 

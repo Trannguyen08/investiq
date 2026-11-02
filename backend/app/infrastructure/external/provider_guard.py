@@ -49,18 +49,25 @@ class ProviderGuard:
     def __init__(self, redis: Redis | None = None) -> None:
         self._redis = redis or Redis.from_url(
             settings.redis_url,
-            socket_connect_timeout=1,
-            socket_timeout=1,
+            socket_connect_timeout=0.2,
+            socket_timeout=0.2,
             decode_responses=True,
         )
         self._lock = threading.Lock()
         self._local_requests: dict[str, deque[float]] = defaultdict(deque)
         self._local_failures: dict[str, int] = defaultdict(int)
         self._local_open_until: dict[str, float] = {}
+        self._redis_broken_until: float = 0.0
 
     def before_request(self, provider: str) -> None:
         now = int(time.time())
         bucket = now // 60
+        mono = time.monotonic()
+
+        if mono < self._redis_broken_until:
+            self._before_local(provider, float(now))
+            return
+
         try:
             result = int(
                 cast(
@@ -77,7 +84,8 @@ class ProviderGuard:
                 )
             )
         except RedisError:
-            logger.warning("Provider guard Redis unavailable; using process-local guard")
+            self._redis_broken_until = mono + 30.0
+            logger.warning("Provider guard Redis unavailable; entering 30s local guard mode")
             self._before_local(provider, float(now))
             return
         if result == -1:
@@ -86,44 +94,49 @@ class ProviderGuard:
             raise ProviderRateLimited("provider request budget is exhausted")
 
     def record_success(self, provider: str) -> None:
-        try:
-            self._redis.delete(f"news:provider:{provider}:failures")
-        except RedisError:
-            with self._lock:
-                self._local_failures.pop(provider, None)
+        mono = time.monotonic()
+        if mono >= self._redis_broken_until:
+            try:
+                self._redis.delete(f"news:provider:{provider}:failures")
+                return
+            except RedisError:
+                self._redis_broken_until = mono + 30.0
+        with self._lock:
+            self._local_failures.pop(provider, None)
 
     def record_failure(self, provider: str) -> None:
         now = int(time.time())
-        try:
-            self._redis.eval(
-                self._FAILURE_SCRIPT,
-                2,
-                f"news:provider:{provider}:failures",
-                f"news:provider:{provider}:open",
-                str(settings.news_provider_circuit_failure_threshold),
-                str(now),
-                str(settings.news_provider_circuit_open_seconds),
-            )
-        except RedisError:
-            with self._lock:
-                failures = self._local_failures[provider] + 1
-                self._local_failures[provider] = failures
-                if failures >= settings.news_provider_circuit_failure_threshold:
-                    self._local_open_until[provider] = (
-                        time.time() + settings.news_provider_circuit_open_seconds
-                    )
-                    self._local_failures[provider] = 0
+        mono = time.monotonic()
+        if mono >= self._redis_broken_until:
+            try:
+                self._redis.eval(
+                    self._FAILURE_SCRIPT,
+                    2,
+                    f"news:provider:{provider}:failures",
+                    f"news:provider:{provider}:open",
+                    str(settings.news_provider_circuit_failure_threshold),
+                    str(now),
+                    str(settings.news_provider_circuit_open_seconds),
+                )
+                return
+            except RedisError:
+                self._redis_broken_until = mono + 30.0
+        with self._lock:
+            self._local_failures[provider] += 1
+            if self._local_failures[provider] >= settings.news_provider_circuit_failure_threshold:
+                self._local_open_until[provider] = now + settings.news_provider_circuit_open_seconds
+                self._local_failures[provider] = 0
 
     def _before_local(self, provider: str, now: float) -> None:
         with self._lock:
-            if self._local_open_until.get(provider, 0) > now:
+            if self._local_open_until.get(provider, 0.0) > now:
                 raise ProviderCircuitOpen("provider circuit is temporarily open")
-            requests = self._local_requests[provider]
-            while requests and requests[0] <= now - 60:
-                requests.popleft()
-            if len(requests) >= settings.news_provider_requests_per_minute:
+            queue = self._local_requests[provider]
+            while queue and now - queue[0] >= 60.0:
+                queue.popleft()
+            if len(queue) >= settings.news_provider_requests_per_minute:
                 raise ProviderRateLimited("provider request budget is exhausted")
-            requests.append(now)
+            queue.append(now)
 
 
 @lru_cache

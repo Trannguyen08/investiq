@@ -2,6 +2,7 @@ import "server-only";
 
 import { createCipheriv, createDecipheriv, createHash, randomBytes, timingSafeEqual } from "node:crypto";
 
+import { cache } from "react";
 import { cookies } from "next/headers";
 import { createClient, type RedisClientType } from "redis";
 
@@ -35,7 +36,12 @@ const CSRF_COOKIE = "investiq_csrf";
 let redisClient: RedisClientType | undefined;
 
 type MemoryStoreEntry = { value: string; expiresAt: number };
-const memoryStore = new Map<string, MemoryStoreEntry>();
+const globalForAuth = globalThis as unknown as {
+  __investiq_memory_store__?: Map<string, MemoryStoreEntry>;
+};
+const memoryStore =
+  globalForAuth.__investiq_memory_store__ ??
+  (globalForAuth.__investiq_memory_store__ = new Map<string, MemoryStoreEntry>());
 
 function required(name: string) {
   const value = process.env[name];
@@ -52,13 +58,17 @@ function encryptionKey() {
 async function redis() {
   if (!process.env.AUTH_SESSION_REDIS_URL) return undefined;
   if (!redisClient) {
-    redisClient = createClient({ url: process.env.AUTH_SESSION_REDIS_URL, socket: { connectTimeout: 1500 } });
+    redisClient = createClient({
+      url: process.env.AUTH_SESSION_REDIS_URL,
+      socket: { connectTimeout: 1000, reconnectStrategy: () => false },
+    });
     redisClient.on("error", () => undefined);
   }
   if (!redisClient.isOpen) {
     try {
       await redisClient.connect();
     } catch {
+      redisClient = undefined;
       return undefined;
     }
   }
@@ -245,13 +255,13 @@ export async function createBrowserSession(credentials: BackendCredentials) {
   store.delete(PREAUTH_COOKIE);
 }
 
-async function loadSession() {
+const loadSession = cache(async function loadSession() {
   const raw = (await cookies()).get(SESSION_COOKIE)?.value;
   if (!raw) return null;
   const stored = await storeGet(key("session", raw));
   if (!stored) return null;
   return { raw, value: decrypt<BrowserSession>(stored) };
-}
+});
 
 async function refreshSession(raw: string, session: BrowserSession) {
   if (new Date(session.credentials.access_expires_at).getTime() > Date.now() + 15_000) return session;
@@ -283,7 +293,7 @@ async function refreshSession(raw: string, session: BrowserSession) {
   return updated;
 }
 
-export async function authenticatedSession() {
+export const authenticatedSession = cache(async function authenticatedSession() {
   const loaded = await loadSession();
   if (!loaded) throw new UserAuthError(401, "INVALID_SESSION", "Bạn chưa đăng nhập.");
   try {
@@ -294,17 +304,20 @@ export async function authenticatedSession() {
     }
     throw error;
   }
-}
+});
 
-export async function currentUser() {
+export const currentUser = cache(async function currentUser(options?: { forceFresh?: boolean }) {
   const session = await authenticatedSession();
+  if (!options?.forceFresh && session.value?.credentials?.user) {
+    return session.value.credentials.user;
+  }
   const response = await backend("/me", { headers: { Authorization: `Bearer ${session.value.credentials.access_token}` } });
   if (!response.ok) {
     if (response.status === 401) await clearBrowserSession(session.raw);
     throw new UserAuthError(response.status, "INVALID_SESSION", "Phiên đăng nhập đã hết hạn.");
   }
   return (await response.json()) as AuthUser;
-}
+});
 
 export async function clearBrowserSession(raw?: string) {
   const store = await cookies();

@@ -19,7 +19,7 @@ describe("UsersTable", () => {
   it("renders account information and empty-state copy", () => {
     render(<UsersTable users={[user]} changeUser={vi.fn(async () => undefined)} />);
 
-    expect(screen.getByRole("heading", { name: "Danh sách tài khoản" })).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "Danh sách tài khoản người dùng" })).toBeInTheDocument();
     expect(screen.getByText("linh@example.com")).toBeInTheDocument();
     expect(screen.getByText("Google")).toBeInTheDocument();
     expect(screen.getByText("Đã xác minh")).toBeInTheDocument();
@@ -40,6 +40,6 @@ describe("UsersTable", () => {
 
   it("shows an empty result message", () => {
     render(<UsersTable users={[]} changeUser={vi.fn(async () => undefined)} />);
-    expect(screen.getByText("Không tìm thấy tài khoản phù hợp.")).toBeInTheDocument();
+    expect(screen.getByText("Không tìm thấy tài khoản người dùng nào phù hợp.")).toBeInTheDocument();
   });
 });

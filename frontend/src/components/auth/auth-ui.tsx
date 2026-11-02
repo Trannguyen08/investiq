@@ -51,7 +51,16 @@ export function LoginForm({ resetSucceeded = false }: { resetSucceeded?: boolean
   const [busy, setBusy] = useState(false); const [error, setError] = useState("");
   async function submit(event: FormEvent) {
     event.preventDefault(); setBusy(true); setError("");
-    try { await post("login", { email, password }); await loadAuth(true); router.push("/?auth=login-success"); router.refresh(); }
+    try {
+      const result = (await post("login", { email, password })) as { user?: { role?: string } };
+      await loadAuth(true);
+      if (result?.user?.role === "admin") {
+        router.push("/admin");
+      } else {
+        router.push("/?auth=login-success");
+      }
+      router.refresh();
+    }
     catch (value) { setError(value instanceof Error ? value.message : "Đăng nhập thất bại."); }
     finally { setBusy(false); }
   }

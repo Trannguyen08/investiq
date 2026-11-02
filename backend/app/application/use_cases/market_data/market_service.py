@@ -377,7 +377,19 @@ class MarketService:
         }
 
     def events(self, symbol: str | None, event_type: str | None) -> dict[str, object]:
-        values = list(self._provider.events())
+        provider_events = list(self._provider.events())
+        from app.infrastructure.external.crawlers.corporate_events_crawler import (
+            get_corporate_events_crawler,
+        )
+
+        today_val = self._provider.market_time
+        today_date = today_val.date() if isinstance(today_val, datetime) else None
+
+        crawler_events = get_corporate_events_crawler().get_current_events(today_date)
+        events_dict = {item.id: item for item in crawler_events}
+        for item in provider_events:
+            events_dict[item.id] = item
+        values = list(events_dict.values())
         if symbol:
             values = [item for item in values if item.symbol == symbol.upper()]
         if event_type:

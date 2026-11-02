@@ -102,6 +102,8 @@ def _administrator(
             if settings.auth_jwt_previous_secret
             else None,
         ).verify(_bearer(authorization))
+        if claims.get("role") != "admin":
+            raise HTTPException(status_code=403, detail="Administrator role required in token")
         actor = repository.active_session_user(
             str(claims["sid"]), str(claims["sub"]), datetime.now(UTC)
         )

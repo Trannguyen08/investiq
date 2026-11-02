@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { useSearchParams } from "next/navigation";
 
 import { PaperOrderDialog, requestPaperDashboard } from "@/components/portfolio/paper-order-dialog";
 import { useAuth } from "@/hooks/use-auth";
@@ -16,7 +17,14 @@ export function StockTradeActions({
   price: string | null;
 }) {
   const auth = useAuth();
-  const [side, setSide] = useState<"buy" | "sell" | null>(null);
+  const searchParams = useSearchParams();
+  const tradeParam = searchParams?.get("trade")?.toLowerCase();
+  const qtyParam = searchParams?.get("qty");
+
+  const [side, setSide] = useState<"buy" | "sell" | null>(() =>
+    tradeParam === "buy" || tradeParam === "sell" ? tradeParam : null
+  );
+  const [targetQuantity, setTargetQuantity] = useState<number | string | undefined>(() => qtyParam || undefined);
   const [dashboard, setDashboard] = useState<PaperDashboard | null>(null);
   const [notice, setNotice] = useState("");
   const instrument = { symbol, name, price };
@@ -31,6 +39,44 @@ export function StockTradeActions({
     return () => { cancelled = true; };
   }, [auth.status]);
 
+  // Sync with searchParams
+  useEffect(() => {
+    if (tradeParam === "buy" || tradeParam === "sell") {
+      setNotice("");
+      setSide(tradeParam);
+      if (qtyParam) {
+        setTargetQuantity(qtyParam);
+      }
+    }
+  }, [tradeParam, qtyParam]);
+
+  // Listen to custom window event
+  useEffect(() => {
+    const handleOpenTrade = (e: Event) => {
+      const customEvent = e as CustomEvent<{ side: "buy" | "sell"; quantity?: number | string }>;
+      setNotice("");
+      setSide(customEvent.detail?.side || "buy");
+      if (customEvent.detail?.quantity) {
+        setTargetQuantity(customEvent.detail.quantity);
+      }
+    };
+    window.addEventListener("open-stock-trade", handleOpenTrade);
+    return () => window.removeEventListener("open-stock-trade", handleOpenTrade);
+  }, []);
+
+  const handleClose = () => {
+    setSide(null);
+    setTargetQuantity(undefined);
+    if (typeof window !== "undefined") {
+      const url = new URL(window.location.href);
+      if (url.searchParams.has("trade") || url.searchParams.has("qty")) {
+        url.searchParams.delete("trade");
+        url.searchParams.delete("qty");
+        window.history.replaceState({}, "", url.toString());
+      }
+    }
+  };
+
   return (
     <>
       <div className="stock-trade-actions" aria-label={`Giao dịch mô phỏng ${symbol}`}>
@@ -44,7 +90,8 @@ export function StockTradeActions({
         side={side ?? "buy"}
         instrument={instrument}
         dashboard={dashboard}
-        onClose={() => setSide(null)}
+        initialQuantity={targetQuantity}
+        onClose={handleClose}
         onDashboard={setDashboard}
         onSuccess={setNotice}
       />

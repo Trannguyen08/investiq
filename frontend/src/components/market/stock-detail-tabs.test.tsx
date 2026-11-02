@@ -14,7 +14,7 @@ vi.mock("next/navigation", () => ({
 }));
 
 describe("StockDetailTabs", () => {
-  it("renders 3 accessible tabs with chart tab active by default", () => {
+  it("renders 5 accessible tabs with chart tab active by default", () => {
     render(
       <StockDetailTabs
         symbol="HPG"
@@ -26,25 +26,29 @@ describe("StockDetailTabs", () => {
     );
 
     const tabs = screen.getAllByRole("tab");
-    expect(tabs).toHaveLength(4);
+    expect(tabs).toHaveLength(5);
     expect(tabs[0]).toHaveTextContent("Biểu đồ & Sổ lệnh");
-    expect(tabs[1]).toHaveTextContent("Tăng trưởng & Tài chính");
-    expect(tabs[2]).toHaveTextContent("Rủi ro BCTC & Altman Z");
-    expect(tabs[3]).toHaveTextContent("Tin tức doanh nghiệp");
-    expect(tabs[3]).toHaveTextContent("5");
+    expect(tabs[1]).toHaveTextContent("Báo cáo tài chính & Tăng trưởng");
+    expect(tabs[2]).toHaveTextContent("Lịch sử Cổ tức");
+    expect(tabs[3]).toHaveTextContent("Rủi ro BCTC & Altman Z");
+    expect(tabs[4]).toHaveTextContent("Tin tức doanh nghiệp");
+    expect(tabs[4]).toHaveTextContent("5");
 
     expect(tabs[0]).toHaveAttribute("aria-selected", "true");
     expect(tabs[1]).toHaveAttribute("aria-selected", "false");
     expect(tabs[2]).toHaveAttribute("aria-selected", "false");
     expect(tabs[3]).toHaveAttribute("aria-selected", "false");
+    expect(tabs[4]).toHaveAttribute("aria-selected", "false");
 
     const chartPanel = document.getElementById("panel-chart");
     const growthPanel = document.getElementById("panel-growth");
+    const dividendPanel = document.getElementById("panel-dividend");
     const forensicsPanel = document.getElementById("panel-forensics");
     const newsPanel = document.getElementById("panel-news");
 
     expect(chartPanel).toHaveClass("visible");
     expect(growthPanel).toHaveClass("hidden");
+    expect(dividendPanel).toHaveClass("hidden");
     expect(forensicsPanel).toHaveClass("hidden");
     expect(newsPanel).toHaveClass("hidden");
   });
@@ -60,7 +64,7 @@ describe("StockDetailTabs", () => {
       />,
     );
 
-    const growthTab = screen.getByRole("tab", { name: /Tăng trưởng & Tài chính/i });
+    const growthTab = screen.getByRole("tab", { name: /Báo cáo tài chính & Tăng trưởng/i });
     fireEvent.click(growthTab);
 
     expect(growthTab).toHaveAttribute("aria-selected", "true");
@@ -80,7 +84,6 @@ describe("StockDetailTabs", () => {
         newsCount={3}
         chartContent={<div data-testid="chart-content">Biểu đồ</div>}
         growthContent={<div data-testid="growth-content">Tăng trưởng</div>}
-        forensicsContent={<div data-testid="forensics-content">Rủi ro BCTC</div>}
         newsContent={<div data-testid="news-content">Tin tức</div>}
       />,
     );
@@ -89,6 +92,9 @@ describe("StockDetailTabs", () => {
     fireEvent.click(forensicsTab);
 
     expect(forensicsTab).toHaveAttribute("aria-selected", "true");
+    const chartTab = screen.getByRole("tab", { name: /Biểu đồ & Sổ lệnh/i });
+    expect(chartTab).toHaveAttribute("aria-selected", "false");
+
     const forensicsPanel = document.getElementById("panel-forensics");
     const chartPanel = document.getElementById("panel-chart");
     expect(forensicsPanel).toHaveClass("visible");
@@ -110,7 +116,12 @@ describe("StockDetailTabs", () => {
     fireEvent.click(newsTab);
 
     expect(newsTab).toHaveAttribute("aria-selected", "true");
+    const chartTab = screen.getByRole("tab", { name: /Biểu đồ & Sổ lệnh/i });
+    expect(chartTab).toHaveAttribute("aria-selected", "false");
+
     const newsPanel = document.getElementById("panel-news");
+    const chartPanel = document.getElementById("panel-chart");
     expect(newsPanel).toHaveClass("visible");
+    expect(chartPanel).toHaveClass("hidden");
   });
 });

@@ -1,5 +1,5 @@
-import { ScaffoldPage } from "@/components/ui/scaffold-page";
+import { redirect } from "next/navigation";
 
 export default function ContentPage() {
-  return <ScaffoldPage area="Admin" title="Content" description="Content moderation tools will be implemented here." />;
+  redirect("/admin/theses");
 }

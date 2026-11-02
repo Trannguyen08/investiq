@@ -9,12 +9,6 @@ function loadDevelopmentEnvironment() {
   } catch (error) {
     if ((error as NodeJS.ErrnoException).code !== "ENOENT") throw error;
   }
-
-  if (!process.env.AUTH_SESSION_REDIS_URL && process.env.REDIS_PASSWORD) {
-    const redisUrl = new URL("redis://127.0.0.1:6379/3");
-    redisUrl.password = process.env.REDIS_PASSWORD;
-    process.env.AUTH_SESSION_REDIS_URL = redisUrl.toString();
-  }
 }
 
 loadDevelopmentEnvironment();

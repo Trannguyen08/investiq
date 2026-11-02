@@ -3,7 +3,7 @@
 import { useSearchParams } from "next/navigation";
 import { useState, type ReactNode } from "react";
 
-export type StockTabId = "chart" | "growth" | "news" | "forensics";
+export type StockTabId = "chart" | "growth" | "dividend" | "forensics" | "news";
 
 type StockDetailTabsProps = {
   symbol: string;
@@ -11,13 +11,43 @@ type StockDetailTabsProps = {
   newsCount?: number;
   chartContent: ReactNode;
   growthContent: ReactNode;
+  dividendContent?: ReactNode;
   newsContent: ReactNode;
   forensicsContent?: ReactNode;
 };
 
 function resolveTab(tabParam: string | null | undefined): StockTabId {
-  if (tabParam === "growth" || tabParam === "news" || tabParam === "chart" || tabParam === "forensics") {
-    return tabParam;
+  if (!tabParam) return "chart";
+  const normalized = tabParam.toLowerCase().trim();
+  if (
+    normalized === "growth" ||
+    normalized === "financials" ||
+    normalized === "financial" ||
+    normalized === "bctc" ||
+    normalized === "statements"
+  ) {
+    return "growth";
+  }
+  if (
+    normalized === "dividend" ||
+    normalized === "dividends" ||
+    normalized === "co-tuc"
+  ) {
+    return "dividend";
+  }
+  if (
+    normalized === "forensics" ||
+    normalized === "altman" ||
+    normalized === "rui-ro" ||
+    normalized === "warning"
+  ) {
+    return "forensics";
+  }
+  if (
+    normalized === "news" ||
+    normalized === "tin-tuc"
+  ) {
+    return "news";
   }
   return "chart";
 }
@@ -28,15 +58,23 @@ export function StockDetailTabs({
   newsCount = 0,
   chartContent,
   growthContent,
+  dividendContent,
   newsContent,
   forensicsContent,
 }: StockDetailTabsProps) {
   const searchParams = useSearchParams();
   const queryTab = searchParams.get("tab");
 
-  const [selectedTab, setSelectedTab] = useState<StockTabId | null>(null);
+  const [selectedTab, setSelectedTab] = useState<StockTabId>(() =>
+    resolveTab(queryTab || initialTab)
+  );
 
-  const activeTab = selectedTab ?? resolveTab(queryTab || initialTab);
+  // Sync state whenever URL search param 'tab' changes
+  if (queryTab && resolveTab(queryTab) !== selectedTab) {
+    setSelectedTab(resolveTab(queryTab));
+  }
+
+  const activeTab = selectedTab;
 
   const handleSelectTab = (tabId: StockTabId) => {
     setSelectedTab(tabId);
@@ -58,8 +96,13 @@ export function StockDetailTabs({
     },
     {
       id: "growth",
-      label: "Tăng trưởng & Tài chính",
-      badge: "Mới",
+      label: "Báo cáo tài chính & Tăng trưởng",
+      badge: "BCTC",
+    },
+    {
+      id: "dividend",
+      label: "Lịch sử Cổ tức",
+      badge: "Real",
     },
     {
       id: "forensics",
@@ -74,10 +117,10 @@ export function StockDetailTabs({
   ];
 
   return (
-    <div className="stock-detail-tabs-container">
+    <div className="stock-detail-tabs-container w-full my-4">
       {/* Tab Navigation */}
       <nav
-        className="stock-tabs-nav"
+        className="stock-tabs-nav flex items-center gap-1.5 sm:gap-2 overflow-x-auto border-b border-slate-800 pb-2.5 mb-5 scrollbar-none"
         role="tablist"
         aria-label={`Các danh mục thông tin về cổ phiếu ${symbol}`}
       >
@@ -90,18 +133,28 @@ export function StockDetailTabs({
               id={`tab-${tab.id}`}
               aria-selected={isSelected}
               aria-controls={`panel-${tab.id}`}
-              className={`stock-tab-button ${isSelected ? "active" : ""}`}
+              className={`stock-tab-button group relative flex items-center gap-2 px-3.5 sm:px-4 py-2 sm:py-2.5 rounded-xl text-xs sm:text-sm font-semibold transition-all duration-200 cursor-pointer whitespace-nowrap ${
+                isSelected
+                  ? "active bg-sky-500/15 text-sky-300 border border-sky-500/35 shadow-sm shadow-sky-950/50"
+                  : "text-slate-400 hover:text-slate-200 hover:bg-slate-800/60 border border-transparent"
+              }`}
               onClick={() => handleSelectTab(tab.id)}
               type="button"
             >
               <span className="tab-label">{tab.label}</span>
               {tab.count !== undefined && tab.count > 0 && (
-                <span className="tab-count-badge" aria-label={`${tab.count} bài tin`}>
+                <span
+                  className="tab-count-badge inline-flex items-center justify-center px-1.5 py-0.5 text-[10px] font-bold rounded-full bg-slate-800 text-slate-300 border border-slate-700"
+                  aria-label={`${tab.count} bài tin`}
+                >
                   {tab.count}
                 </span>
               )}
               {tab.badge && (
-                <span className="tab-new-badge" aria-hidden="true">
+                <span
+                  className="tab-new-badge inline-flex items-center text-[10px] font-extrabold px-1.5 py-0.5 rounded tracking-wide uppercase bg-emerald-500/15 text-emerald-400 border border-emerald-500/30"
+                  aria-hidden="true"
+                >
                   {tab.badge}
                 </span>
               )}
@@ -116,7 +169,7 @@ export function StockDetailTabs({
           id="panel-chart"
           role="tabpanel"
           aria-labelledby="tab-chart"
-          className={`tab-panel ${activeTab === "chart" ? "visible" : "hidden"}`}
+          className={`tab-panel ${activeTab === "chart" ? "visible block" : "hidden"}`}
         >
           {chartContent}
         </div>
@@ -125,16 +178,25 @@ export function StockDetailTabs({
           id="panel-growth"
           role="tabpanel"
           aria-labelledby="tab-growth"
-          className={`tab-panel ${activeTab === "growth" ? "visible" : "hidden"}`}
+          className={`tab-panel ${activeTab === "growth" ? "visible block" : "hidden"}`}
         >
           {growthContent}
+        </div>
+
+        <div
+          id="panel-dividend"
+          role="tabpanel"
+          aria-labelledby="tab-dividend"
+          className={`tab-panel ${activeTab === "dividend" ? "visible block" : "hidden"}`}
+        >
+          {dividendContent}
         </div>
 
         <div
           id="panel-forensics"
           role="tabpanel"
           aria-labelledby="tab-forensics"
-          className={`tab-panel ${activeTab === "forensics" ? "visible" : "hidden"}`}
+          className={`tab-panel ${activeTab === "forensics" ? "visible block" : "hidden"}`}
         >
           {forensicsContent}
         </div>
@@ -143,7 +205,7 @@ export function StockDetailTabs({
           id="panel-news"
           role="tabpanel"
           aria-labelledby="tab-news"
-          className={`tab-panel ${activeTab === "news" ? "visible" : "hidden"}`}
+          className={`tab-panel ${activeTab === "news" ? "visible block" : "hidden"}`}
         >
           {newsContent}
         </div>

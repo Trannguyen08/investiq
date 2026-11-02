@@ -177,7 +177,7 @@ export function PersonDetailModal({
         {person.net_worth_external && (
           <div className="person-modal-section">
             <h3 className="section-title">
-              <span className="title-icon">🏛</span> Tài sản ngoài sàn &amp; Doanh nghiệp liên quan
+              Tài sản ngoài sàn &amp; Doanh nghiệp liên quan
             </h3>
             <div className="section-content-box">
               <p className="external-text">{person.net_worth_external}</p>
@@ -189,7 +189,7 @@ export function PersonDetailModal({
         {person.bio && (
           <div className="person-modal-section">
             <h3 className="section-title">
-              <span className="title-icon">💼</span> Dấu ấn lãnh đạo &amp; Tiểu sử
+              Dấu ấn lãnh đạo &amp; Tiểu sử
             </h3>
             <div className="section-content-box bio">
               <p className="bio-text">{person.bio}</p>
@@ -200,7 +200,7 @@ export function PersonDetailModal({
         {/* Holding stocks & Fast navigation */}
         <div className="person-modal-section">
           <h3 className="section-title">
-            <span className="title-icon">📈</span> Cổ phiếu trực tiếp gắn liền với hồ sơ
+            Cổ phiếu trực tiếp gắn liền với hồ sơ
           </h3>
           <div className="modal-stocks-row">
             {person.symbols.length > 0 ? (

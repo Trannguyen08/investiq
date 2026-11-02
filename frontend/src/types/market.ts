@@ -440,3 +440,83 @@ export type DailyDigestEnvelope = {
   data: DailyDigestData;
   meta: MarketMeta;
 };
+
+
+export type DividendItem = {
+  id: string;
+  symbol: string;
+  event_date: string;
+  ex_date: string | null;
+  record_date: string | null;
+  payout_date: string | null;
+  type: "cash" | "stock" | "bonus" | "issuance" | "other" | string;
+  ratio: string | null;
+  cash_value: number | null;
+  title: string;
+  source: string;
+};
+
+export type DividendSummary = {
+  symbol: string;
+  dividend_yield_percent: number | null;
+  frequency: string;
+  latest_event_date: string | null;
+  latest_payout_ratio: string | null;
+  primary_type: string;
+  total_events: number;
+};
+
+export type SymbolDividendsData = {
+  symbol: string;
+  summary: DividendSummary;
+  events: DividendItem[];
+};
+
+export type SymbolDividendsEnvelope = {
+  data: SymbolDividendsData;
+  meta: MarketMeta;
+};
+
+export type DividendCalendarData = {
+  total: number;
+  events: DividendItem[];
+};
+
+export type DividendCalendarEnvelope = {
+  data: DividendCalendarData;
+  meta: MarketMeta;
+};
+
+export type FinancialChartItem = {
+  period: string;
+  revenue_billion: number | null;
+  gross_profit_billion: number | null;
+  net_profit_billion: number | null;
+  gross_margin_percent: number | null;
+  net_margin_percent: number | null;
+  total_assets_billion: number | null;
+  total_debt_billion: number | null;
+  equity_billion: number | null;
+};
+
+export type FinancialMetricItem = {
+  code: string;
+  name: string;
+  values: Array<number | null>;
+};
+
+export type FinancialStatementsData = {
+  symbol: string;
+  period_type: "quarter" | "year" | string;
+  periods: string[];
+  charts: FinancialChartItem[];
+  income_statement: FinancialMetricItem[];
+  balance_sheet: FinancialMetricItem[];
+  cash_flow: FinancialMetricItem[];
+  source: string;
+};
+
+export type FinancialStatementsEnvelope = {
+  data: FinancialStatementsData;
+  meta: MarketMeta;
+};
