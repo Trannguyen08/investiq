@@ -311,51 +311,60 @@ def market_dividend_calendar(
 def instrument_dividends(symbol: str, response: Response) -> dict[str, object]:
     _public_headers(response)
     normalized = symbol.upper()
-    from app.infrastructure.external.crawlers.dividend_crawler import get_dividend_crawler
 
-    crawler = get_dividend_crawler()
-    events = crawler.get_symbol_dividends(normalized)
+    def _loader() -> dict[str, object]:
+        from app.infrastructure.external.crawlers.dividend_crawler import get_dividend_crawler
 
-    # Calculate summary metrics
-    current_inst = None
-    try:
-        current_inst = _service().instrument(normalized)
-    except Exception:
+        crawler = get_dividend_crawler()
+        events = crawler.get_symbol_dividends(normalized)
+
+        # Calculate summary metrics
         current_inst = None
-    price_val = None
-    if isinstance(current_inst, dict):
-        raw_data = current_inst.get("data")
-        if isinstance(raw_data, dict):
-            try:
-                price_val = float(raw_data.get("price") or 0)
-            except Exception:
-                price_val = None
+        try:
+            current_inst = _service().instrument(normalized)
+        except Exception:
+            current_inst = None
+        price_val = None
+        if isinstance(current_inst, dict):
+            raw_data = current_inst.get("data")
+            if isinstance(raw_data, dict):
+                try:
+                    price_val = float(raw_data.get("price") or 0)
+                except Exception:
+                    price_val = None
 
-    latest_event = events[0] if events else None
-    cash_events = [e for e in events if e.get("type") == "cash" and e.get("cash_value")]
-    total_cash_recent = sum(float(e["cash_value"]) for e in cash_events[:2]) if cash_events else 0
-    yield_pct = None
-    if price_val and total_cash_recent:
-        denom = price_val * 1000 if price_val < 1000 else price_val
-        yield_pct = round((total_cash_recent / denom) * 100, 2)
+        latest_event = events[0] if events else None
+        cash_events = [e for e in events if e.get("type") == "cash" and e.get("cash_value")]
+        total_cash_recent = sum(float(e["cash_value"]) for e in cash_events[:2]) if cash_events else 0
+        yield_pct = None
+        if price_val and total_cash_recent:
+            denom = price_val * 1000 if price_val < 1000 else price_val
+            yield_pct = round((total_cash_recent / denom) * 100, 2)
 
-    summary = {
-        "symbol": normalized,
-        "dividend_yield_percent": yield_pct,
-        "frequency": "Hàng năm" if len(events) >= 1 else "Không thường niên",
-        "latest_event_date": latest_event.get("event_date") if latest_event else None,
-        "latest_payout_ratio": latest_event.get("ratio") if latest_event else None,
-        "primary_type": latest_event.get("type") if latest_event else "cash",
-        "total_events": len(events),
-    }
-    return {
-        "data": {
+        summary = {
             "symbol": normalized,
-            "summary": summary,
-            "events": events,
-        },
-        "meta": _safe_meta(),
-    }
+            "dividend_yield_percent": yield_pct,
+            "frequency": "Hàng năm" if len(events) >= 1 else "Không thường niên",
+            "latest_event_date": latest_event.get("event_date") if latest_event else None,
+            "latest_payout_ratio": latest_event.get("ratio") if latest_event else None,
+            "primary_type": latest_event.get("type") if latest_event else "cash",
+            "total_events": len(events),
+        }
+        return {
+            "data": {
+                "symbol": normalized,
+                "summary": summary,
+                "events": events,
+            },
+            "meta": _safe_meta(),
+        }
+
+    return _cached(
+        "symbol_dividends",
+        {"symbol": normalized},
+        _loader,
+        get_market_read_cache(),
+    )
 
 
 @router.get(
@@ -369,16 +378,25 @@ def instrument_financial_statements(
 ) -> dict[str, object]:
     _public_headers(response)
     normalized = symbol.upper()
-    from app.infrastructure.external.crawlers.financial_statements_crawler import (
-        get_financial_statements_crawler,
-    )
 
-    crawler = get_financial_statements_crawler()
-    statements = crawler.get_financial_statements(normalized, period_type=period, limit=limit)
-    return {
-        "data": statements,
-        "meta": _safe_meta(),
-    }
+    def _loader() -> dict[str, object]:
+        from app.infrastructure.external.crawlers.financial_statements_crawler import (
+            get_financial_statements_crawler,
+        )
+
+        crawler = get_financial_statements_crawler()
+        statements = crawler.get_financial_statements(normalized, period_type=period, limit=limit)
+        return {
+            "data": statements,
+            "meta": _safe_meta(),
+        }
+
+    return _cached(
+        "symbol_financial_statements",
+        {"symbol": normalized, "period": period, "limit": limit},
+        _loader,
+        get_market_read_cache(),
+    )
 
 
 @router.get("/indices", response_model=IndicesResponse)
@@ -575,7 +593,12 @@ def person(person_id: str, response: Response) -> dict[str, object]:
 def forensics(symbol: str, response: Response) -> dict[str, object]:
     _public_headers(response)
     service = _service()
-    value = service.forensics(symbol)
+    value = _cached(
+        "forensics",
+        {"symbol": symbol.upper()},
+        lambda: service.forensics(symbol),
+        get_market_read_cache(),
+    )
     if value is None:
         raise HTTPException(status_code=404, detail="Instrument not found")
     return value

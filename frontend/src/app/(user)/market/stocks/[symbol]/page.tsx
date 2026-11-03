@@ -66,17 +66,17 @@ export default async function StockDetailPage({
   const initialTab = typeof query.tab === "string" ? query.tab : "chart";
   const selected = rangeConfig[range];
 
-  const instrumentPromise = getMarketInstrument(symbol, 4000).then(
+  const instrumentPromise = getMarketInstrument(symbol, 2500).then(
     (value) => ({ status: "fulfilled" as const, value }),
     () => ({ status: "rejected" as const }),
   );
-  const candlesPromise = getMarketCandles(symbol, selected.interval, selected.limit, 4000).catch(() => null);
-  const intradayPromise = getMarketIntradayTrades(symbol, 100, 3000).catch(() => null);
-  const growthPromise = getMarketGrowth(symbol, 3000).catch(() => null);
-  const forensicsPromise = getMarketForensics(symbol, 3000).catch(() => null);
-  const dividendsPromise = getInstrumentDividends(symbol, 3000).catch(() => null);
-  const fsQuarterPromise = getInstrumentFinancialStatements(symbol, "quarter", 6, 3000).catch(() => null);
-  const fsYearPromise = getInstrumentFinancialStatements(symbol, "year", 4, 3000).catch(() => null);
+  const candlesPromise = getMarketCandles(symbol, selected.interval, selected.limit, 2500).catch(() => null);
+  const intradayPromise = getMarketIntradayTrades(symbol, 100, 1500).catch(() => null);
+  const growthPromise = getMarketGrowth(symbol, 1500).catch(() => null);
+  const forensicsPromise = getMarketForensics(symbol, 1500).catch(() => null);
+  const dividendsPromise = getInstrumentDividends(symbol, 1500).catch(() => null);
+  const fsQuarterPromise = getInstrumentFinancialStatements(symbol, "quarter", 6, 1500).catch(() => null);
+  const fsYearPromise = getInstrumentFinancialStatements(symbol, "year", 4, 1500).catch(() => null);
 
   const [
     instrumentResult,
@@ -102,7 +102,7 @@ export default async function StockDetailPage({
   const envelope: InstrumentEnvelope = instrumentResult.value;
   const item = envelope.data;
 
-  const relatedNews = await getRelatedStockNews(item.exchange, item.symbol, 6, 1200).catch(() => null);
+  const relatedNews = await getRelatedStockNews(item.exchange, item.symbol, 6, 1000).catch(() => null);
 
   // Fallback for growth overview
   const capBillions = item.market_cap ? (parseFloat(item.market_cap) / 1e9).toFixed(0) : "1,000";
@@ -213,7 +213,7 @@ export default async function StockDetailPage({
           <div className="absolute top-4 right-4 sm:top-6 sm:right-8">
             <MarketStatus meta={envelope.meta} />
           </div>
-          <div className="flex flex-col gap-1.5 pt-2 sm:pt-0">
+          <div className="flex flex-col gap-1.5 pt-2 sm:pt-0 max-w-2xl">
             <p className="eyebrow text-xs font-bold text-sky-400 uppercase tracking-wider m-0">
               {item.exchange} · {item.is_vn30 ? "THÀNH PHẦN VN30" : "CỔ PHIẾU"}
             </p>
@@ -230,7 +230,7 @@ export default async function StockDetailPage({
               <DCASimulatorButton symbol={symbol} />
             </div>
           </div>
-          <StockLivePrice item={item} />
+          <div className="shrink-0"><StockLivePrice item={item} /></div>
         </header>
 
         {/* 5 Main Tabs: Biểu đồ & Sổ lệnh | BCTC & Tăng trưởng | Lịch sử Cổ tức | Rủi ro BCTC | Tin tức */}

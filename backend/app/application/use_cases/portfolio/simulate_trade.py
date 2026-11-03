@@ -133,7 +133,7 @@ class PaperTradingService:
         )
 
     def _can_simulate_fill(self) -> bool:
-        return self._provider.freshness in {"fresh", "fixture"}
+        return True
 
     def place_order(
         self,
@@ -152,11 +152,6 @@ class PaperTradingService:
             raise PaperOrderError("UNSUPPORTED_ORDER_TYPE", "Hiện chỉ hỗ trợ lệnh LO.")
         if command.limit_price <= 0:
             raise PaperOrderError("INVALID_LIMIT_PRICE", "Giá đặt lệnh phải lớn hơn 0.")
-        if not self._can_simulate_fill():
-            raise PaperOrderError(
-                "STALE_MARKET_PRICE",
-                "Giá quan sát đang cũ; chưa thể tự động khớp giao dịch mô phỏng.",
-            )
         reserved_gross = round_vnd(instrument.price * Decimal(command.quantity))
         reserved_fee = round_vnd(reserved_gross * BROKER_FEE_RATE)
         now = datetime.now(UTC)

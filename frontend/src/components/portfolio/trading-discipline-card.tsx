@@ -111,11 +111,117 @@ interface Props {
 }
 
 export function TradingDisciplineCard({ initialMetrics, dashboard }: Props) {
+  const hasActivity = Boolean(
+    initialMetrics ||
+    (dashboard && ((dashboard.trades && dashboard.trades.length > 0) || (dashboard.holdings && dashboard.holdings.length > 0)))
+  );
+
   const metrics = useMemo(() => {
     if (initialMetrics) return initialMetrics;
     if (dashboard) return computeDisciplineFromDashboard(dashboard);
     return null;
   }, [initialMetrics, dashboard]);
+
+  if (!hasActivity) {
+    return (
+      <div
+        className="trading-discipline-card"
+        style={{
+          background: "#0b1f33",
+          border: "1px solid #1e3f5d",
+          borderRadius: "0.75rem",
+          padding: "1.25rem",
+          display: "flex",
+          flexDirection: "column",
+          gap: "1rem",
+          color: "#ffffff",
+        }}
+      >
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: "0.5rem" }}>
+          <div>
+            <div style={{ fontSize: "0.75rem", color: "#94a3b8", fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.05em" }}>
+              HỆ THỐNG ĐÁNH GIÁ HÀNH VI ĐẦU TƯ
+            </div>
+            <div style={{ fontSize: "1.2rem", fontWeight: 800, color: "#ffffff", marginTop: "0.15rem" }}>
+              Chỉ số Kỷ luật Giao dịch
+            </div>
+          </div>
+
+          <div style={{ textAlign: "right" }}>
+            <span
+              style={{
+                display: "inline-block",
+                padding: "0.25rem 0.75rem",
+                borderRadius: "1rem",
+                fontSize: "0.8rem",
+                fontWeight: 700,
+                background: "rgba(148, 163, 184, 0.15)",
+                color: "#94a3b8",
+                border: "1px solid #475569",
+              }}
+            >
+              Chưa có dữ liệu giao dịch
+            </span>
+          </div>
+        </div>
+
+        {/* 4 Indicators Grid */}
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(130px, 1fr))", gap: "0.75rem" }}>
+          <div style={{ background: "#06101d", padding: "0.75rem", borderRadius: "0.5rem", border: "1px solid #142a42" }}>
+            <div style={{ fontSize: "0.7rem", color: "#94a3b8" }}>Kỷ luật cắt lỗ (-7%)</div>
+            <div style={{ fontSize: "1.1rem", fontWeight: 700, color: "#94a3b8", marginTop: "0.2rem" }}>
+              -- / 100
+            </div>
+            <div style={{ fontSize: "0.68rem", color: "#64748b", marginTop: "0.15rem" }}>Chưa có vị thế</div>
+          </div>
+
+          <div style={{ background: "#06101d", padding: "0.75rem", borderRadius: "0.5rem", border: "1px solid #142a42" }}>
+            <div style={{ fontSize: "0.7rem", color: "#94a3b8" }}>Đa dạng hóa danh mục</div>
+            <div style={{ fontSize: "1.1rem", fontWeight: 700, color: "#94a3b8", marginTop: "0.2rem" }}>
+              -- / 100
+            </div>
+            <div style={{ fontSize: "0.68rem", color: "#64748b", marginTop: "0.15rem" }}>Chưa giải ngân</div>
+          </div>
+
+          <div style={{ background: "#06101d", padding: "0.75rem", borderRadius: "0.5rem", border: "1px solid #142a42" }}>
+            <div style={{ fontSize: "0.7rem", color: "#94a3b8" }}>Quản trị tiền mặt</div>
+            <div style={{ fontSize: "1.1rem", fontWeight: 700, color: "#94a3b8", marginTop: "0.2rem" }}>
+              -- / 100
+            </div>
+            <div style={{ fontSize: "0.68rem", color: "#64748b", marginTop: "0.15rem" }}>100% tiền mặt</div>
+          </div>
+
+          <div style={{ background: "#06101d", padding: "0.75rem", borderRadius: "0.5rem", border: "1px solid #142a42" }}>
+            <div style={{ fontSize: "0.7rem", color: "#94a3b8" }}>Kiểm soát nhịp độ</div>
+            <div style={{ fontSize: "1.1rem", fontWeight: 700, color: "#94a3b8", marginTop: "0.2rem" }}>
+              -- / 100
+            </div>
+            <div style={{ fontSize: "0.68rem", color: "#64748b", marginTop: "0.15rem" }}>Chờ lệnh đầu tiên</div>
+          </div>
+        </div>
+
+        {/* Guidance Notice */}
+        <div style={{ color: "#94a3b8", fontSize: "0.82rem", lineHeight: 1.5, background: "rgba(6, 16, 29, 0.6)", padding: "0.6rem 0.75rem", borderRadius: "0.375rem", border: "1px solid #142a42" }}>
+          Tài khoản chưa phát sinh giao dịch. Hãy thực hiện lệnh mua/bán mô phỏng đầu tiên tại bảng cổ phiếu bên dưới để hệ thống bắt đầu đo lường 4 chỉ số kỷ luật của bạn.
+        </div>
+
+        {/* Link to Readiness Report */}
+        <div style={{ display: "flex", justifyContent: "flex-end", borderTop: "1px solid #142a42", paddingTop: "0.75rem" }}>
+          <Link
+            href="/learn/readiness"
+            style={{
+              fontSize: "0.8rem",
+              color: "#38bdf8",
+              fontWeight: 600,
+              textDecoration: "none",
+            }}
+          >
+            Xem Báo cáo Đánh giá Mức độ Sẵn sàng Đầu tư &rarr;
+          </Link>
+        </div>
+      </div>
+    );
+  }
 
   if (!metrics) {
     return null;

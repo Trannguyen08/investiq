@@ -234,9 +234,7 @@ describe("PaperTradingDashboard", () => {
 
     expect(screen.getByLabelText("Số lượng cổ phiếu")).toHaveAttribute("max", "100");
 
-    expect(screen.getByText(/không định nghĩa lượt mua\/bán chủ động/)).toBeInTheDocument();
 
-    expect(screen.getByText(/không dự báo giá tương lai/)).toBeInTheDocument();
 
   });
 

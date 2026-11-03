@@ -83,7 +83,6 @@ export function StockTradeActions({
         <button type="button" aria-label={`Mua ${symbol}`} onClick={() => { setNotice(""); setSide("buy"); }}>Mua</button>
         {holding && holding.available_quantity > 0 && <button type="button" className="sell" aria-label={`Bán ${symbol}`} onClick={() => { setNotice(""); setSide("sell"); }}>Bán</button>}
       </div>
-      <p className="stock-trade-session-note">Lệnh luyện tập vẫn tự động khớp theo giá quan sát mới nhất khi thị trường thật đóng cửa, kể cả cuối tuần.</p>
       {notice && <p className="paper-trade-toast" role="status">{notice}</p>}
       <PaperOrderDialog
         open={side !== null}

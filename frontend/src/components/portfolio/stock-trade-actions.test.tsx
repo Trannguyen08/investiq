@@ -91,7 +91,6 @@ describe("StockTradeActions", () => {
     render(<StockTradeActions symbol="FPT" name="CTCP FPT" price="102000" />);
 
     await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(1));
-    expect(screen.getByText(/kể cả cuối tuần/)).toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: "Mua FPT" }));
     const confirm = screen.getByRole("button", { name: "Xác nhận mua" });
     expect(confirm).toBeEnabled();
