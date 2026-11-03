@@ -17,10 +17,12 @@ from fastapi.responses import JSONResponse
 from redis.asyncio import Redis
 
 from app.api.v1.admin import router as news_admin_router
+from app.api.v1.admin_assessment import router as admin_assessment_router
 from app.api.v1.admin_learning import router as admin_learning_router
 from app.api.v1.admin_ops import router as admin_ops_router
 from app.api.v1.admin_users import router as admin_users_router
 from app.api.v1.ai_chat import router as ai_chat_router
+from app.api.v1.assessment import router as assessment_router
 from app.api.v1.auth import router as auth_router
 from app.api.v1.learning import router as learning_router
 from app.api.v1.market_data import (
@@ -233,6 +235,8 @@ app.include_router(public_portfolio_router)
 app.include_router(thesis_router)
 app.include_router(learning_router)
 app.include_router(admin_learning_router)
+app.include_router(assessment_router)
+app.include_router(admin_assessment_router)
 
 
 def _request_id(request: Request) -> str:
@@ -246,6 +250,7 @@ def _private_error_headers(request: Request) -> dict[str, str]:
         "/api/v1/watchlists",
         "/api/v1/paper-portfolio",
         "/api/v1/admin/learning",
+        "/api/v1/admin/assessment",
     )
     return {"Cache-Control": "no-store"} if request.url.path.startswith(private_prefixes) else {}
 

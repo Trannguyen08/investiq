@@ -27,6 +27,7 @@ const navGroups: NavGroup[] = [
     items: [
       { href: "/admin/users", label: "Quản lý người dùng", count: null },
       { href: "/admin/learning", label: "Khóa học & Kiến thức", count: null },
+      { href: "/admin/assessment", label: "Đánh giá & Khảo sát", count: null },
       { href: "/admin/theses", label: "Theses & Khuyến nghị", count: null },
       { href: "/admin/portfolios", label: "Paper Trading & Lệnh", count: null },
       { href: "/admin/market", label: "Mã cổ phiếu & Thị trường", count: null },

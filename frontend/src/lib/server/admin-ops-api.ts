@@ -1,3 +1,4 @@
+import type { AdminAssessmentPage, AdminAssessmentStats, AssessmentQuestion, InvestorPersona } from "@/types/assessment";
 import "server-only";
 
 import { redirect } from "next/navigation";
@@ -602,4 +603,74 @@ export function toggleAdminLearningTopicStatus(topicId: string, status: "publish
       body: JSON.stringify({ status }),
     }
   );
+}
+
+
+export function getAdminAssessmentStats() {
+  return adminFetch<AdminAssessmentStats>("/assessment/stats");
+}
+
+export function getAdminAssessmentSubmissions(params?: {
+  page?: number;
+  limit?: number;
+  personaCode?: string;
+  readinessLevel?: string;
+}) {
+  const query = new URLSearchParams();
+  if (params?.page) query.set("page", String(params.page));
+  if (params?.limit) query.set("limit", String(params.limit));
+  if (params?.personaCode) query.set("persona_code", params.personaCode);
+  if (params?.readinessLevel) query.set("readiness_level", params.readinessLevel);
+  const qs = query.toString();
+  return adminFetch<AdminAssessmentPage>(`/assessment/submissions${qs ? `?${qs}` : ""}`);
+}
+
+export function getAdminAssessmentQuestions() {
+  return adminFetch<AssessmentQuestion[]>("/assessment/questions");
+}
+
+export function createAdminAssessmentQuestion(payload: Record<string, unknown>) {
+  return adminFetch<AssessmentQuestion>("/assessment/questions", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(payload),
+  });
+}
+
+export function updateAdminAssessmentQuestion(questionId: string, payload: Record<string, unknown>) {
+  return adminFetch<AssessmentQuestion>(`/assessment/questions/${encodeURIComponent(questionId)}`, {
+    method: "PUT",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(payload),
+  });
+}
+
+export function deleteAdminAssessmentQuestion(questionId: string) {
+  return adminFetch<{ status: string; message: string }>(
+    `/assessment/questions/${encodeURIComponent(questionId)}`,
+    { method: "DELETE" }
+  );
+}
+
+export function toggleAdminAssessmentQuestionStatus(questionId: string, status: "published" | "draft") {
+  return adminFetch<{ status: string; new_status: string }>(
+    `/assessment/questions/${encodeURIComponent(questionId)}/status`,
+    {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ status }),
+    }
+  );
+}
+
+export function getAdminPersonas() {
+  return adminFetch<InvestorPersona[]>("/assessment/personas");
+}
+
+export function updateAdminPersona(code: string, payload: Record<string, unknown>) {
+  return adminFetch<InvestorPersona>(`/assessment/personas/${encodeURIComponent(code)}`, {
+    method: "PUT",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(payload),
+  });
 }

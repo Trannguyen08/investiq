@@ -383,6 +383,49 @@ export function LearningJourney({
         </aside>
       </section>
 
+      {/* Banner Khảo sát Định hướng & Mức độ Sẵn sàng */}
+      <section
+        style={{
+          background: "linear-gradient(135deg, rgba(6, 16, 29, 0.95), rgba(11, 31, 51, 0.95))",
+          border: "1px solid #1e3f5d",
+          borderRadius: "0.85rem",
+          padding: "1.25rem 1.5rem",
+          margin: "1.5rem 0",
+          display: "flex",
+          justifyContent: "space-between",
+          alignItems: "center",
+          flexWrap: "wrap",
+          gap: "1rem",
+        }}
+      >
+        <div style={{ maxWidth: "620px" }}>
+          <p style={{ fontSize: "0.75rem", fontWeight: 700, color: "#38bdf8", textTransform: "uppercase", letterSpacing: "0.05em", margin: 0 }}>
+            TỰ ĐÁNH GIÁ NĂNG LỰC
+          </p>
+          <h2 style={{ fontSize: "1.2rem", fontWeight: 800, color: "#ffffff", margin: "0.25rem 0" }}>
+            Bạn có phù hợp để theo đuổi chứng khoán hay không?
+          </h2>
+          <p style={{ fontSize: "0.85rem", color: "#94a3b8", margin: 0, lineHeight: 1.5 }}>
+            Làm bài trắc nghiệm 10 câu hỏi để xác định hình mẫu đầu tư phù hợp nhất (Tích sản DCA, Giá trị, hay Lướt sóng) và nhận chẩn đoán khách quan xem mình đã sẵn sàng nạp tiền thật hay chưa.
+          </p>
+        </div>
+        <Link
+          href="/learn/readiness"
+          style={{
+            padding: "0.65rem 1.25rem",
+            background: "#38bdf8",
+            color: "#06101d",
+            borderRadius: "0.5rem",
+            fontWeight: 700,
+            fontSize: "0.85rem",
+            textDecoration: "none",
+            whiteSpace: "nowrap",
+          }}
+        >
+          Làm bài trắc nghiệm định hướng &rarr;
+        </Link>
+      </section>
+
       {/* Leveled Navigation Ribbon (Từ Dễ tới Khó) */}
       <section
         style={{

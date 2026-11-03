@@ -3,6 +3,31 @@
 Record durable decisions in reverse chronological order. Do not record routine implementation
 details.
 
+## 2026-11-03 — Investor Persona Discovery, Risk Assessment, Trading Discipline & Readiness Evaluation Architecture
+
+- **Status:** Accepted and implemented on `feature/investor-readiness-assessment`
+- **Context:** Beginners often jump into the Vietnamese stock market with money without understanding their aptitude, psychological endurance, risk tolerance, or trading discipline, leading to avoidable capital losses and premature disillusionment. The user required a dedicated subsystem to assess whether beginners are cut out for investing/trading, what persona fits them (DCA Accumulator, Value & Growth, Swing Trader, or Conservative/Fund Prospect), an automated trading discipline score derived from paper trading behavior, a holistic Investor Readiness Report, and an administrative console to manage questions, personas, and view learner survey results.
+- **Decision:**
+  1. *Relational Storage & Schema Design (`0023_investor_readiness_assessment.sql`)*:
+     - `investor_personas`: Code, title, tagline, description, strengths, weaknesses, recommended strategy, asset allocation (`{stocks, gold, savings}`), ideal time per week, suitable instruments.
+     - `assessment_questions`: 10 situational and psychological survey questions with option-level risk weights and persona weights.
+     - `user_readiness_assessments`: Tracks user and guest evaluations, 3 pillar scores (Knowledge, Risk/Mindset, Discipline), overall readiness score (0-100), and verdict labels.
+  2. *Behavioral Discipline Scoring Engine*:
+     - Synchronously analyzes the user's paper trading dashboard (`holdings`, `cash`, `trades`) across 4 core discipline pillars:
+       + Cut-loss compliance (-7% threshold) (30%)
+       + Portfolio diversification (avoiding single-stock >40% concentration) (25%)
+       + Cash buffer management (10-35% cash reserve) (25%)
+       + Emotional pacing (limiting impulsive overtrading) (20%)
+     - Computes an overall Discipline Score (0-100) and displays a behavioral badge in `/portfolio`.
+  3. *Holistic Readiness Verdict & Diagnostic Report (`/learn/readiness`)*:
+     - Weighted composite: Knowledge (35%) + Mindset/Risk (30%) + Discipline (35%).
+     - Categorizes users into 4 readiness tiers (`Nhà đầu tư Bản lĩnh`, `Sẵn sàng Khởi đầu có Kiểm soát`, `Cần Rèn luyện Thêm`, `Chưa Sẵn sàng Đầu tư Thật`) with an explicit verdict on whether they should trade real money.
+  4. *Admin Management Workspace (`/admin/assessment`)*:
+     - 4 KPI aggregate cards (total submissions, average score, ready percentage, top persona).
+     - Full CRUD for assessment questions with options and weight configurations.
+     - Editable Persona archetypes and a searchable user submission audit table.
+- **Consequences:** Directly fulfills the platform's core mission as an educational incubator and pre-market filter, saving beginners from costly mistakes before putting real money on the line.
+
 ## 2026-11-03 — Stock Basics Learning Platform, Leveled Curriculum & Admin Management Architecture
 
 - **Status:** Accepted and implemented on `feature/remake-stock-basics`

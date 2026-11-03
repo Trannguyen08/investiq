@@ -26,6 +26,7 @@ import type {
 import { ProfitLossDialog } from "./paper-pnl-dialog";
 import { PaperDailyReportSection } from "./paper-daily-report-card";
 import { PaperSocialVisibilitySection } from "./paper-social-card";
+import { TradingDisciplineCard } from "./trading-discipline-card";
 
 const moneyFormat = new Intl.NumberFormat("vi-VN", {
   style: "currency",
@@ -419,6 +420,8 @@ export function PaperTradingDashboard({
           </button>
         </article>
       </section>
+
+      <TradingDisciplineCard dashboard={dashboard} />
 
       {error && <p className="paper-inline-message error" role="alert">{error}</p>}
       {notice && <p className="paper-trade-toast" role="status">{notice}</p>}

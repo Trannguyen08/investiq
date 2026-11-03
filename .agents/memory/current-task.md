@@ -1,5 +1,49 @@
 # Current Task
 
+## Investor Persona Discovery, Risk Assessment, Trading Discipline & Readiness Evaluation - 2026-11-03 (completed)
+- **User Request**: "SƠ LƯỢC LẠI DỰ ÁN CỦA TÔI MỤC ĐÍCH ĐỂ CÁC NGƯỜI MỚI TÌM HIỂU VỀ CHỨNG KHOÁN CÓ THỂ SỬ DỤNG ĐỂ BIẾT MÌNH CÓ KHẢ NĂNG TIẾP TỤC THEO ĐUỔI NGÀNH NGHỀ NÀY HAY K VẬY THÌ HIỆN TẠI DỰ ÁN ĐÃ ĐÁP ỨNG ĐƯỢC NHỮNG GÌ CHO USER MỚI VÀ NHỮNG GÌ CHƯA ĐÁP ỨNG ĐƯỢC" -> "CHUYỂN NHÁNH VÀ LÀM CÁC TÍNH NĂNG ĐỀ XUẤT, NẾU ADMIN CẦN QUẢN LÝ CÁC THÔNG TIN ĐÓ THÌ XÂY LUÔN PHẦN QUẢN LÝ ĐÓ BÊN ADMIN"
+- **Branch**: `feature/investor-readiness-assessment`
+- **Core Results**:
+  1. **Database Migration & Seed Data (`0023_investor_readiness_assessment.sql`)**:
+     - Bảng `investor_personas`: Seed sẵn 4 nhóm hình mẫu nhà đầu tư chuẩn mực:
+       * `dca_accumulator`: Nhà đầu tư Tích sản Dài hạn (DCA).
+       * `value_growth`: Nhà đầu tư Giá trị & Tăng trưởng (FA).
+       * `active_swing`: Nhà giao dịch Chủ động & Lướt sóng (Swing Trader).
+       * `conservative_fund`: Người Thận trọng / Phù hợp Quỹ Mở & Tiết kiệm.
+     - Bảng `assessment_questions`: Seed 10 câu hỏi trắc nghiệm tâm lý & tình huống tài chính thực tế kèm trọng số điểm rủi ro và điểm persona.
+     - Bảng `user_readiness_assessments`: Lưu trữ kết quả chẩn đoán mức độ sẵn sàng của người dùng và khách.
+  2. **Kiến trúc Backend Clean Architecture**:
+     - Domain Entities & Schemas: `InvestorPersona`, `AssessmentQuestion`, `DisciplineMetrics`, `ReadinessEvaluation`, `SubmitAssessmentRequest`, `AdminQuestionCreateRequest`, v.v.
+     - Repository `SqlAssessmentRepository`: Kết nối PostgreSQL pool kèm in-memory fallback đầy đủ cho 4 Personas và 10 Questions, tính toán điểm rủi ro, phân loại Persona và xác định mức độ sẵn sàng.
+     - Public API (`/api/v1/assessment`):
+       * `GET /questions`: 10 câu hỏi trắc nghiệm đã xuất bản.
+       * `GET /personas` & `GET /personas/{code}`: Danh sách và chi tiết các Persona.
+       * `POST /evaluate`: Nộp bài khảo sát và nhận bản chẩn đoán mức độ sẵn sàng.
+       * `GET /latest`: Xem kết quả đánh giá gần nhất.
+       * `GET /discipline`: Lấy chỉ số kỷ luật giao dịch thực tế từ tài khoản Paper Trading.
+     - Admin API (`/api/v1/admin/assessment`):
+       * `GET /stats`: Thống kê tổng số lượt, điểm sẵn sàng TB, tỷ lệ đủ điều kiện đầu tư thật, và phân bổ Persona.
+       * `GET /submissions`: Danh sách bài nộp có phân trang và lọc theo Persona / Mức độ sẵn sàng.
+       * `GET/POST/PUT/DELETE/PATCH /questions`: Toàn bộ CRUD ngân hàng câu hỏi trắc nghiệm.
+       * `GET/PUT /personas`: Quản lý chiến lược và phân bổ tài sản của các nhóm Persona.
+  3. **Giao diện Người dùng Khám phá Năng lực (`/learn/readiness` & `/portfolio`)**:
+     - `InvestorAssessmentWizard`: Trắc nghiệm 10 câu hỏi tương tác mượt mà, thanh tiến độ, lựa chọn rõ ràng.
+     - `ReadinessReportCard`: Báo cáo đánh giá mức độ sẵn sàng toàn diện với 3 trụ cột (Kiến thức 35%, Tâm lý rủi ro 30%, Kỷ luật 35%), phân tích chiến lược, biểu đồ phân bổ tài sản 3 màu (Cổ phiếu, Vàng, Tiết kiệm), và kết luận rõ ràng: "Có nên đầu tư tiền thật ngay lúc này hay không?".
+     - `TradingDisciplineCard`: Tích hợp trực tiếp vào trang Paper Trading (`/portfolio`), đánh giá tự động 4 trụ cột hành vi: Kỷ luật cắt lỗ (-7%), Đa dạng hóa danh mục, Quản trị tiền mặt dự phòng, và Kiểm soát nhịp độ cảm xúc.
+     - Banner định hướng nổi bật trên trang `/learn`.
+  4. **Bảng Quản trị Khảo sát & Đánh giá cho Admin (`/admin/assessment`)**:
+     - Thêm mục "Đánh giá & Khảo sát" vào Admin Sidebar.
+     - 4 Thẻ KPI tổng quan: Tổng lượt khảo sát, Điểm sẵn sàng TB, Tỷ lệ Đủ điều kiện đầu tư thật, Nhóm Persona phổ biến nhất.
+     - 3 Tab điều khiển: Ngân hàng câu hỏi trắc nghiệm (với Modal thêm mới, chỉnh sửa, đổi trạng thái), Hồ sơ Nhóm Persona (chỉnh sửa chiến lược), và Lịch sử bài làm của người dùng.
+- **Verification**:
+  - `check-pr.ps1` Quality Gate: 5/5 bước xanh 100%.
+  - Vitest: 41/41 test files passed (151/151 tests passed 100%).
+  - Backend Pytest: 142/142 tests passed 100%.
+  - TypeScript Typecheck (`tsc --noEmit`): 0 errors.
+  - ESLint (`npm run lint`): 0 errors, 0 warnings.
+  - Backend Mypy & Ruff: 0 errors trong 43 source files (đã xử lý triệt để các type error trong redis_client.py:38, financial_statements_crawler.py:821, và dividend_crawler.py:148,392).
+
+
 ## Remake Stock Basics Learning Platform & Admin Management - 2026-11-03 (completed)
 - **User Request**: "TÔI NGHĨ NÊN REMAKE LẠI TRANG CHỨNG KHOÁN CĂN BẢN: KHẢ NĂNG SẼ LIST RA CÁC MỤC KIẾN THỨC TỪ DỄ TỚI KHÓ, CÁC MỤC SẼ BAO GỒM LÝ THUEYETS VÀ VÍ DỤ MINH HỌA TRONG THỰC TẾ, CÓ THỂ THÊM CÁC BÀI TEST CHO USER HIỂU RÕ HƠN. CÁC DATA KIẾN THỨC SẼ ĐƯỢC LƯU TRÊN DB VÀ CŨNG SẼ ĐƯỢC ADMIN QUẢN LÝ. CHUYỂN NHÁNH VÀ BẮT ĐẦU CODE"
 - **Branch**: `feature/remake-stock-basics`

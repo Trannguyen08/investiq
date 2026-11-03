@@ -815,10 +815,13 @@ class FinancialStatementsCrawler:
             metrics_list: list[dict[str, Any]], possible_codes: list[str]
         ) -> list[float | None]:
             for m in metrics_list:
-                code_lower = m.get("code", "").lower()
-                name_lower = m.get("name", "").lower()
+                code_lower = str(m.get("code", "")).lower()
+                name_lower = str(m.get("name", "")).lower()
                 if any(k.lower() == code_lower or k.lower() in name_lower for k in possible_codes):
-                    return m.get("values", [])
+                    raw_vals = m.get("values", [])
+                    if isinstance(raw_vals, list):
+                        return [float(v) if v is not None else None for v in raw_vals]
+                    return []
             return [None] * len(periods)
 
         inc_metrics = inc.get("metrics", [])

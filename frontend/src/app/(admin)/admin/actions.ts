@@ -26,6 +26,11 @@ import {
   updateAdminLearningTopic,
   updateAdminMarketInstrument,
   updateAdminThesis,
+  createAdminAssessmentQuestion,
+  updateAdminAssessmentQuestion,
+  deleteAdminAssessmentQuestion,
+  toggleAdminAssessmentQuestionStatus,
+  updateAdminPersona,
 } from "@/lib/server/admin-ops-api";
 import { updateAdminUser } from "@/lib/server/admin-user-api";
 
@@ -329,5 +334,146 @@ export async function toggleLearningTopicStatusAction(formData: FormData) {
       throw error;
     }
     redirect(`/admin/learning?error=${message(error instanceof Error ? error.message : "Không thể chuyển trạng thái bài học")}`);
+  }
+}
+
+
+export async function createAssessmentQuestionAction(formData: FormData) {
+  await requireAdminSession();
+  try {
+    const prompt = stringField(formData, "prompt");
+    const category = stringField(formData, "category");
+    const subtext = stringField(formData, "subtext");
+    const sortOrder = parseInt(stringField(formData, "sort_order") || "1", 10);
+    const optionsRaw = stringField(formData, "options_json");
+    const status = (stringField(formData, "status") || "published") as "published" | "draft";
+
+    let options = [];
+    try {
+      options = JSON.parse(optionsRaw);
+    } catch {
+      throw new Error("Dữ liệu các lựa chọn không đúng định dạng JSON");
+    }
+
+    await createAdminAssessmentQuestion({
+      prompt,
+      category,
+      subtext: subtext || null,
+      sort_order: sortOrder,
+      options,
+      status,
+    });
+    revalidatePath("/admin/assessment");
+    redirect("/admin/assessment?notice=Đã tạo câu hỏi trắc nghiệm thành công");
+  } catch (error) {
+    if (error instanceof Error && (error.message === "NEXT_REDIRECT" || ("digest" in error && String((error as { digest?: string }).digest).startsWith("NEXT_REDIRECT")))) {
+      throw error;
+    }
+    redirect(`/admin/assessment?error=${message(error instanceof Error ? error.message : "Không thể tạo câu hỏi")}`);
+  }
+}
+
+export async function updateAssessmentQuestionAction(formData: FormData) {
+  await requireAdminSession();
+  try {
+    const questionId = stringField(formData, "question_id");
+    const prompt = stringField(formData, "prompt");
+    const category = stringField(formData, "category");
+    const subtext = stringField(formData, "subtext");
+    const sortOrder = parseInt(stringField(formData, "sort_order") || "1", 10);
+    const optionsRaw = stringField(formData, "options_json");
+    const status = (stringField(formData, "status") || "published") as "published" | "draft";
+
+    let options = [];
+    try {
+      options = JSON.parse(optionsRaw);
+    } catch {
+      throw new Error("Dữ liệu các lựa chọn không đúng định dạng JSON");
+    }
+
+    await updateAdminAssessmentQuestion(questionId, {
+      prompt,
+      category,
+      subtext: subtext || null,
+      sort_order: sortOrder,
+      options,
+      status,
+    });
+    revalidatePath("/admin/assessment");
+    redirect("/admin/assessment?notice=Đã cập nhật câu hỏi thành công");
+  } catch (error) {
+    if (error instanceof Error && (error.message === "NEXT_REDIRECT" || ("digest" in error && String((error as { digest?: string }).digest).startsWith("NEXT_REDIRECT")))) {
+      throw error;
+    }
+    redirect(`/admin/assessment?error=${message(error instanceof Error ? error.message : "Không thể cập nhật câu hỏi")}`);
+  }
+}
+
+export async function deleteAssessmentQuestionAction(formData: FormData) {
+  await requireAdminSession();
+  try {
+    const questionId = stringField(formData, "question_id");
+    await deleteAdminAssessmentQuestion(questionId);
+    revalidatePath("/admin/assessment");
+    redirect("/admin/assessment?notice=Đã xóa câu hỏi thành công");
+  } catch (error) {
+    if (error instanceof Error && (error.message === "NEXT_REDIRECT" || ("digest" in error && String((error as { digest?: string }).digest).startsWith("NEXT_REDIRECT")))) {
+      throw error;
+    }
+    redirect(`/admin/assessment?error=${message(error instanceof Error ? error.message : "Không thể xóa câu hỏi")}`);
+  }
+}
+
+export async function toggleAssessmentQuestionStatusAction(formData: FormData) {
+  await requireAdminSession();
+  try {
+    const questionId = stringField(formData, "question_id");
+    const newStatus = stringField(formData, "status") as "published" | "draft";
+    await toggleAdminAssessmentQuestionStatus(questionId, newStatus);
+    revalidatePath("/admin/assessment");
+    redirect(`/admin/assessment?notice=${message(`Đã chuyển trạng thái câu hỏi sang ${newStatus === "published" ? "Đã xuất bản" : "Bản nháp"}`)}`);
+  } catch (error) {
+    if (error instanceof Error && (error.message === "NEXT_REDIRECT" || ("digest" in error && String((error as { digest?: string }).digest).startsWith("NEXT_REDIRECT")))) {
+      throw error;
+    }
+    redirect(`/admin/assessment?error=${message(error instanceof Error ? error.message : "Không thể đổi trạng thái")}`);
+  }
+}
+
+export async function updatePersonaAction(formData: FormData) {
+  await requireAdminSession();
+  try {
+    const code = stringField(formData, "code");
+    const title = stringField(formData, "title");
+    const tagline = stringField(formData, "tagline");
+    const description = stringField(formData, "description");
+    const strategy = stringField(formData, "recommended_strategy");
+    const idealHours = parseInt(stringField(formData, "ideal_time_hours_per_week") || "3", 10);
+
+    const payload: Record<string, unknown> = {
+      title,
+      tagline,
+      description,
+      recommended_strategy: strategy,
+      ideal_time_hours_per_week: idealHours,
+    };
+
+    const allocationRaw = stringField(formData, "asset_allocation_json");
+    if (allocationRaw) {
+      try {
+        payload.asset_allocation = JSON.parse(allocationRaw);
+      } catch {
+        // ignore allocation parse error
+      }
+    }
+
+    await updateAdminPersona(code, payload);
+    revalidatePath("/admin/assessment");
+    redirect("/admin/assessment?notice=Đã cập nhật thông tin Persona thành công");
+  } catch (error) {
+    if (error instanceof Error && (error.message === "NEXT_REDIRECT" || ("digest" in error && String((error as { digest?: string }).digest).startsWith("NEXT_REDIRECT")))) {
+      throw error;
+    }
+    redirect(`/admin/assessment?error=${message(error instanceof Error ? error.message : "Không thể cập nhật Persona")}`);
   }
 }
