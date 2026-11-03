@@ -226,25 +226,27 @@ export async function getMarketInstruments(query: URLSearchParams): Promise<Inst
   }
 }
 
-export function getMarketInstrument(symbol: string): Promise<InstrumentEnvelope> {
-  return requestJson<InstrumentEnvelope>(`/v1/market/instruments/${encodeURIComponent(symbol)}`, 30);
+export function getMarketInstrument(symbol: string, timeoutMs = 4000): Promise<InstrumentEnvelope> {
+  return requestJson<InstrumentEnvelope>(`/v1/market/instruments/${encodeURIComponent(symbol)}`, 30, timeoutMs);
 }
 
 export function getMarketCandles(
   symbol: string,
   interval: "1d" | "1h" | "30m" | "5m",
   limit: number,
+  timeoutMs = 4000,
 ): Promise<MarketCandles> {
   const query = new URLSearchParams({ symbol, interval, limit: String(limit) });
-  return requestJson<MarketCandles>(`/v1/market/candles?${query.toString()}`, 60);
+  return requestJson<MarketCandles>(`/v1/market/candles?${query.toString()}`, 60, timeoutMs);
 }
 
 export function getMarketIntradayTrades(
   symbol: string,
   limit = 100,
+  timeoutMs = 3000,
 ): Promise<MarketIntradayTrades> {
   const query = new URLSearchParams({ symbol, limit: String(limit) });
-  return requestJson<MarketIntradayTrades>(`/v1/market/intraday-trades?${query.toString()}`, 15);
+  return requestJson<MarketIntradayTrades>(`/v1/market/intraday-trades?${query.toString()}`, 15, timeoutMs);
 }
 
 export function getMarketIndices(timeoutMs?: number): Promise<IndexCollection> {
@@ -268,10 +270,11 @@ export function getMarketPeople(query?: string, sector?: string): Promise<People
   return requestJson<PeopleCollection>(`/v1/market/people${suffix}`, 5);
 }
 
-export function getMarketGrowth(symbol: string): Promise<StockGrowthEnvelope> {
+export function getMarketGrowth(symbol: string, timeoutMs = 3000): Promise<StockGrowthEnvelope> {
   return requestJson<StockGrowthEnvelope>(
     `/v1/market/instruments/${encodeURIComponent(symbol)}/growth`,
     60,
+    timeoutMs,
   );
 }
 
@@ -299,10 +302,11 @@ export function getPublicPortfolioDetail(
   );
 }
 
-export function getMarketForensics(symbol: string): Promise<FinancialForensicsEnvelope> {
+export function getMarketForensics(symbol: string, timeoutMs = 3000): Promise<FinancialForensicsEnvelope> {
   return requestJson<FinancialForensicsEnvelope>(
     `/v1/market/instruments/${encodeURIComponent(symbol)}/forensics`,
     60,
+    timeoutMs,
   );
 }
 
@@ -339,19 +343,21 @@ export function getMarketDividendCalendar(limit = 30): Promise<DividendCalendarE
   return requestJson<DividendCalendarEnvelope>(`/v1/market/dividends/calendar?limit=${limit}`, 60);
 }
 
-export function getInstrumentDividends(symbol: string): Promise<SymbolDividendsEnvelope> {
-  return requestJson<SymbolDividendsEnvelope>(`/v1/market/instruments/${encodeURIComponent(symbol)}/dividends`, 60);
+export function getInstrumentDividends(symbol: string, timeoutMs = 3000): Promise<SymbolDividendsEnvelope> {
+  return requestJson<SymbolDividendsEnvelope>(`/v1/market/instruments/${encodeURIComponent(symbol)}/dividends`, 60, timeoutMs);
 }
 
 export function getInstrumentFinancialStatements(
   symbol: string,
   period: "quarter" | "year" = "quarter",
   limit = 8,
+  timeoutMs = 3000,
 ): Promise<FinancialStatementsEnvelope> {
   const query = new URLSearchParams({ period, limit: String(limit) });
   return requestJson<FinancialStatementsEnvelope>(
     `/v1/market/instruments/${encodeURIComponent(symbol)}/financial-statements?${query.toString()}`,
     120,
+    timeoutMs,
   );
 }
 
