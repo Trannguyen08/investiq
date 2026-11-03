@@ -30,7 +30,8 @@ class NewsReadCache:
 
     def key(self, filters: dict[str, object]) -> str | None:
         try:
-            version = self._client.get(f"{self._namespace}:version") or "0"
+            raw_version = self._client.get(f"{self._namespace}:version") or "0"
+            version = raw_version.decode("utf-8") if isinstance(raw_version, bytes) else str(raw_version)
         except RedisError:
             logger.warning("News read cache unavailable")
             return None

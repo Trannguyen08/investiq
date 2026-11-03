@@ -2,6 +2,7 @@ import Link from "next/link";
 import { getAdminPortfolios, getAdminPortfolioDetail } from "@/lib/server/admin-ops-api";
 import { PortfoliosTable } from "@/components/admin/portfolios-table";
 import { IconSearch, IconReset } from "@/components/admin/admin-icons";
+import { AdminAlertMessages, AdminPaginationBar, isNextRedirect } from "@/components/admin/admin-page-controls";
 
 type SearchParams = Promise<{
   q?: string;
@@ -28,17 +29,8 @@ export default async function AdminPortfoliosPage({
       page,
     });
   } catch (err) {
-    if (
-      err instanceof Error &&
-      (err.message === "NEXT_REDIRECT" ||
-        ("digest" in err && String((err as { digest?: string }).digest).startsWith("NEXT_REDIRECT")))
-    ) {
-      throw err;
-    }
-    errorMsg =
-      err instanceof Error
-        ? err.message
-        : "Không thể tải danh sách tài khoản Paper Trading.";
+    if (isNextRedirect(err)) throw err;
+    errorMsg = err instanceof Error ? err.message : "Không thể tải danh sách tài khoản Paper Trading.";
   }
 
   if (errorMsg || !result) {
@@ -57,8 +49,6 @@ export default async function AdminPortfoliosPage({
     );
   }
 
-  const prevPageUrl = pageQueryUrl(params, Math.max(1, page - 1));
-  const nextPageUrl = pageQueryUrl(params, Math.min(result.total_pages, page + 1));
   const hasFilters = Boolean(q);
 
   async function loadDetailAction(id: string) {
@@ -82,16 +72,7 @@ export default async function AdminPortfoliosPage({
         </div>
       </div>
 
-      {params.notice && (
-        <p className="admin-alert success" role="status">
-          {params.notice}
-        </p>
-      )}
-      {params.error && (
-        <p className="admin-alert error" role="alert">
-          {params.error}
-        </p>
-      )}
+      <AdminAlertMessages notice={params.notice} error={params.error} />
 
       {/* COMPACT FILTER BAR */}
       <form
@@ -123,53 +104,16 @@ export default async function AdminPortfoliosPage({
         loadDetail={loadDetailAction}
       />
 
-      {/* PAGINATION BAR */}
-      <nav
-        className="admin-pagination-bar"
-        aria-label="Phân trang danh mục"
-        style={{ borderRadius: "0.5rem" }}
-      >
-        <span>
-          Đang xem trang <strong>{result.page}</strong> / {result.total_pages} (Tổng {result.total} danh mục)
-        </span>
-        <div className="admin-pagination-controls">
-          {page > 1 ? (
-            <Link className="admin-btn-detail" href={prevPageUrl}>
-              Trang trước
-            </Link>
-          ) : (
-            <button
-              type="button"
-              className="admin-btn-detail"
-              disabled
-              style={{ opacity: 0.5, cursor: "not-allowed" }}
-            >
-              Trang trước
-            </button>
-          )}
-          {page < result.total_pages ? (
-            <Link className="admin-btn-detail" href={nextPageUrl}>
-              Trang sau
-            </Link>
-          ) : (
-            <button
-              type="button"
-              className="admin-btn-detail"
-              disabled
-              style={{ opacity: 0.5, cursor: "not-allowed" }}
-            >
-              Trang sau
-            </button>
-          )}
-        </div>
-      </nav>
+      <AdminPaginationBar
+        page={result.page}
+        totalPages={result.total_pages}
+        totalItems={result.total}
+        itemLabel="danh mục"
+        basePath="/admin/portfolios"
+        params={{ q }}
+        ariaLabel="Phân trang danh mục"
+        variant="buttons"
+      />
     </div>
   );
-}
-
-function pageQueryUrl(params: Awaited<SearchParams>, targetPage: number) {
-  const query = new URLSearchParams();
-  if (params.q) query.set("q", params.q);
-  query.set("page", String(targetPage));
-  return `/admin/portfolios?${query.toString()}`;
 }

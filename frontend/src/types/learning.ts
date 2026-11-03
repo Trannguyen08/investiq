@@ -34,9 +34,55 @@ export type LearningPracticeAction = {
   description: string;
 };
 
+export type LearningLevel = "beginner" | "intermediate" | "advanced";
+
+export type PracticalExample = {
+  title: string;
+  ticker?: string | null;
+  scenario: string;
+  analysis: string;
+  key_takeaway: string;
+};
+
+export type LearningTopicSummary = {
+  id: string;
+  slug: string;
+  level: LearningLevel;
+  stage: number;
+  sort_order: number;
+  title: string;
+  eyebrow: string;
+  summary: string;
+  estimated_minutes: number;
+  quiz_count: number;
+  status: string;
+  updated_at: string;
+};
+
+export type LearningTopicDetail = {
+  id: string;
+  slug: string;
+  level: LearningLevel;
+  stage: number;
+  sort_order: number;
+  title: string;
+  eyebrow: string;
+  summary: string;
+  estimated_minutes: number;
+  theory_content: string;
+  practical_example: PracticalExample;
+  quizzes: LessonQuizQuestion[];
+  glossary: LessonGlossaryTerm[];
+  practice_action: LearningPracticeAction;
+  status: string;
+  created_at: string;
+  updated_at: string;
+};
+
 export type StockBasicsLesson = {
   slug: string;
   stage: number;
+  level?: LearningLevel;
   title: string;
   eyebrow: string;
   estimatedMinutes: number;
@@ -47,6 +93,7 @@ export type StockBasicsLesson = {
     title: string;
     steps: string[];
   };
+  practicalExample?: PracticalExample;
   misconception: string;
   glossary: LessonGlossaryTerm[];
   quiz: LessonQuizQuestion[];
@@ -75,4 +122,17 @@ export type LearningMarketExample = {
   timezone: string;
   freshness: "fresh" | "stale" | "fixture";
   delayClass: string;
+};
+
+export type QuizSubmissionResult = {
+  score: number;
+  total: number;
+  percentage: number;
+  passed: boolean;
+  details: {
+    question_id: string;
+    selected_option_id: string;
+    correct: boolean;
+    feedback: string;
+  }[];
 };

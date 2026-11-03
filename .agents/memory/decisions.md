@@ -3,6 +3,51 @@
 Record durable decisions in reverse chronological order. Do not record routine implementation
 details.
 
+## 2026-11-03 — Investor Persona Discovery, Risk Assessment, Trading Discipline & Readiness Evaluation Architecture
+
+- **Status:** Accepted and implemented on `feature/investor-readiness-assessment`
+- **Context:** Beginners often jump into the Vietnamese stock market with money without understanding their aptitude, psychological endurance, risk tolerance, or trading discipline, leading to avoidable capital losses and premature disillusionment. The user required a dedicated subsystem to assess whether beginners are cut out for investing/trading, what persona fits them (DCA Accumulator, Value & Growth, Swing Trader, or Conservative/Fund Prospect), an automated trading discipline score derived from paper trading behavior, a holistic Investor Readiness Report, and an administrative console to manage questions, personas, and view learner survey results.
+- **Decision:**
+  1. *Relational Storage & Schema Design (`0023_investor_readiness_assessment.sql`)*:
+     - `investor_personas`: Code, title, tagline, description, strengths, weaknesses, recommended strategy, asset allocation (`{stocks, gold, savings}`), ideal time per week, suitable instruments.
+     - `assessment_questions`: 10 situational and psychological survey questions with option-level risk weights and persona weights.
+     - `user_readiness_assessments`: Tracks user and guest evaluations, 3 pillar scores (Knowledge, Risk/Mindset, Discipline), overall readiness score (0-100), and verdict labels.
+  2. *Behavioral Discipline Scoring Engine*:
+     - Synchronously analyzes the user's paper trading dashboard (`holdings`, `cash`, `trades`) across 4 core discipline pillars:
+       + Cut-loss compliance (-7% threshold) (30%)
+       + Portfolio diversification (avoiding single-stock >40% concentration) (25%)
+       + Cash buffer management (10-35% cash reserve) (25%)
+       + Emotional pacing (limiting impulsive overtrading) (20%)
+     - Computes an overall Discipline Score (0-100) and displays a behavioral badge in `/portfolio`.
+  3. *Holistic Readiness Verdict & Diagnostic Report (`/learn/readiness`)*:
+     - Weighted composite: Knowledge (35%) + Mindset/Risk (30%) + Discipline (35%).
+     - Categorizes users into 4 readiness tiers (`Nhà đầu tư Bản lĩnh`, `Sẵn sàng Khởi đầu có Kiểm soát`, `Cần Rèn luyện Thêm`, `Chưa Sẵn sàng Đầu tư Thật`) with an explicit verdict on whether they should trade real money.
+  4. *Admin Management Workspace (`/admin/assessment`)*:
+     - 4 KPI aggregate cards (total submissions, average score, ready percentage, top persona).
+     - Full CRUD for assessment questions with options and weight configurations.
+     - Editable Persona archetypes and a searchable user submission audit table.
+- **Consequences:** Directly fulfills the platform's core mission as an educational incubator and pre-market filter, saving beginners from costly mistakes before putting real money on the line.
+
+## 2026-11-03 — Stock Basics Learning Platform, Leveled Curriculum & Admin Management Architecture
+
+- **Status:** Accepted and implemented on `feature/remake-stock-basics`
+- **Context:** The previous stock basics lesson view was hardcoded on the frontend with static content, limited practical context, and no ability for administrators to manage, curate, or publish lessons dynamically. The user required a leveled curriculum (Beginner / Intermediate / Advanced) with theory, real-world Vietnamese market examples (ticker-anchored scenarios, analysis, key takeaways), and interactive test quizzes with instant feedback, all stored in PostgreSQL and fully manageable via the Admin Console.
+- **Decision:**
+  1. *Relational Database Schema & In-Memory Fallback*:
+     - Created `learning_topics` table in PostgreSQL (`0022_learning_platform.sql`) supporting `slug`, `level` (`beginner`, `intermediate`, `advanced`), `stage`, `sort_order`, `title`, `eyebrow`, `summary`, `estimated_minutes`, `theory_content` (Markdown), `practical_example` (JSONB), `quizzes` (JSONB), `glossary` (JSONB), `practice_action` (JSONB), and `status` (`published`, `draft`).
+     - Implemented `SqlLearningRepository` with resilient PostgreSQL pool connection and automatic in-memory curated fallback so the application and CI test suites run seamlessly without an active database.
+  2. *Clean Domain & REST API Separation*:
+     - Clean separation of public learning API (`/api/v1/learning/...`) and admin management API (`/api/v1/admin/learning/...`).
+     - Automated quiz submission and grading endpoint (`POST /api/v1/learning/topics/{slug}/submit-quiz`) providing question-by-question explanations without leaking answers prematurely.
+     - Role-gated admin endpoints with full CRUD, search, level/status filters, and immediate status toggling.
+  3. *Admin Management Experience (`/admin/learning`)*:
+     - Integrated into Admin Console sidebar navigation ("Khóa học & Kiến thức").
+     - 5 KPI summary cards, tabular data management, detail inspection modal, multi-tab create/edit modal form (Thông tin cơ bản, Ví dụ thực tế, Bài kiểm tra trắc nghiệm), and safe deletion.
+  4. *Learner Journey UX (`/learn`)*:
+     - Leveled learning roadmap with level filtering, progress calculation, live VN-Index context, interactive quiz cards with instant feedback, and real-market examples.
+     - Adheres strictly to Vietnamese language conventions, accessibility requirements, and the zero-leading-icon UI rule.
+- **Consequences:** Transitions InvestIQ education from a static frontend mockup into a database-backed learning management system (LMS) with admin control and interactive learner feedback.
+
 ## 2026-11-01 — Quantitative Financial AI Assistant & Multi-Factor Interactive Radar Architecture
 
 - **Status:** Accepted and implemented on `feature/AI`

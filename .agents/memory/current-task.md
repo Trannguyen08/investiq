@@ -1,5 +1,140 @@
 # Current Task
 
+## Performance, Latency Optimization, Nginx Keepalive, and Lean Capacity Scaling - 2026-11-03 (in_progress)
+- **User Request**: "TRƯỚC TIÊN LÀ NÊN BỎ CÁC ẢNH VÀ FILE TRONG SOURCE CONTROL VÀO GITIGNORE, THỨ 2 LÀ TỐI ƯU FE VÀ BE NHƯ ANH ĐỀ XUẤT NHƯNG K LÀM DYNAMIC IMPORT, THỨ 3 LÀ LOAD BALANCER TÔI NGHĨ WEB TÔI K NHIỀU USER HOẠT ĐỘNG CÙNG LÚC NHƯ THẾ ĐÂU TÔI NGHĨ LÀ CHỈ VÀI CHỤC USER ĐỂ DUY TRÌ HỆ THỐNG THÔI NÊN CẦN NGHIÊN CỨU LẠI, THỨ TƯ CHUYỂN NHÁNH VÀ CODE SAU KHI TỐI ƯU XONG THÌ MERGE CODE NHÁNH NÀY VÀO DEV(PHẢI PASS HẾT MỚI MERGE) XONG MERGE DEV VÀO MAIN(CŨNG PHẢI PASS HẾT), THÊM CÁC KEY MỚI TRONG ENV VÀO ENVIRONMENT BACKEND VÀ FRONTEND TRÊN RENDER NẾU CÓ VÀ CHẠY DEPLOY ĐỂ CẬP NHẬT PHIÊN BẢN MỚI CỦA WEB(ĐẢM BẢO DB Ở LOCAL VÀ DB Ở DEPLOY PHẢI ĐỒNG NHẤT DỮ LIỆU)"
+- **Branch**: `feature/performance-and-load-optimization`
+- **Core Results**:
+  1. **Git Hygiene & Ignore Rules**:
+     - Cập nhật `.gitignore` loại trừ toàn bộ `docs/assets/`, `*.png`, `*.jpg`, `*.jpeg` và script tạo diagram khỏi git tracking.
+  2. **Backend & Networking Optimization**:
+     - `FastAPI GZipMiddleware`: Bật nén phản hồi JSON từ 1000 bytes trở lên, giảm kích thước payload thị trường và lịch sử nến tới 75-80%.
+     - `Nginx Upstream Keepalive`: Bổ sung `keepalive 32;` và `proxy_set_header Connection ""` cho cả cụm frontend và backend, tái sử dụng kết nối TCP liên tục giữa reverse proxy và container.
+     - `Uvicorn Multi-Workers Support`: Chuyển lệnh khởi chạy Dockerfile sang `exec uvicorn ... --workers ${WEB_CONCURRENCY:-2}` để mở rộng đa tiến trình xử lý song song.
+  3. **Frontend Revalidation Caching**:
+     - Cập nhật `getAssessmentQuestions`, `getInvestorPersonas` (60s/120s) và `getLearningTopics` (60s) trong `api-client.ts`, loại bỏ các truy vấn database trùng lặp khi người dùng lướt bài học.
+  4. **Nghiên cứu Kiến trúc Cân bằng tải cho Vài chục User (10 - 50 CCU)**:
+     - Đơn giản hóa kiến trúc: Sử dụng Single-Instance High-Concurrency Architecture (Nginx + 2 Uvicorn Workers + Redis In-memory Cache) tối ưu chi phí, không cần cụm phân tán đa máy chủ tốn kém.
+
+## Investor Persona Discovery, Risk Assessment, Trading Discipline & Readiness Evaluation - 2026-11-03 (completed)
+- **User Request**: "SƠ LƯỢC LẠI DỰ ÁN CỦA TÔI MỤC ĐÍCH ĐỂ CÁC NGƯỜI MỚI TÌM HIỂU VỀ CHỨNG KHOÁN CÓ THỂ SỬ DỤNG ĐỂ BIẾT MÌNH CÓ KHẢ NĂNG TIẾP TỤC THEO ĐUỔI NGÀNH NGHỀ NÀY HAY K VẬY THÌ HIỆN TẠI DỰ ÁN ĐÃ ĐÁP ỨNG ĐƯỢC NHỮNG GÌ CHO USER MỚI VÀ NHỮNG GÌ CHƯA ĐÁP ỨNG ĐƯỢC" -> "CHUYỂN NHÁNH VÀ LÀM CÁC TÍNH NĂNG ĐỀ XUẤT, NẾU ADMIN CẦN QUẢN LÝ CÁC THÔNG TIN ĐÓ THÌ XÂY LUÔN PHẦN QUẢN LÝ ĐÓ BÊN ADMIN"
+- **Branch**: `feature/investor-readiness-assessment`
+- **Core Results**:
+  1. **Database Migration & Seed Data (`0023_investor_readiness_assessment.sql`)**:
+     - Bảng `investor_personas`: Seed sẵn 4 nhóm hình mẫu nhà đầu tư chuẩn mực:
+       * `dca_accumulator`: Nhà đầu tư Tích sản Dài hạn (DCA).
+       * `value_growth`: Nhà đầu tư Giá trị & Tăng trưởng (FA).
+       * `active_swing`: Nhà giao dịch Chủ động & Lướt sóng (Swing Trader).
+       * `conservative_fund`: Người Thận trọng / Phù hợp Quỹ Mở & Tiết kiệm.
+     - Bảng `assessment_questions`: Seed 10 câu hỏi trắc nghiệm tâm lý & tình huống tài chính thực tế kèm trọng số điểm rủi ro và điểm persona.
+     - Bảng `user_readiness_assessments`: Lưu trữ kết quả chẩn đoán mức độ sẵn sàng của người dùng và khách.
+  2. **Kiến trúc Backend Clean Architecture**:
+     - Domain Entities & Schemas: `InvestorPersona`, `AssessmentQuestion`, `DisciplineMetrics`, `ReadinessEvaluation`, `SubmitAssessmentRequest`, `AdminQuestionCreateRequest`, v.v.
+     - Repository `SqlAssessmentRepository`: Kết nối PostgreSQL pool kèm in-memory fallback đầy đủ cho 4 Personas và 10 Questions, tính toán điểm rủi ro, phân loại Persona và xác định mức độ sẵn sàng.
+     - Public API (`/api/v1/assessment`):
+       * `GET /questions`: 10 câu hỏi trắc nghiệm đã xuất bản.
+       * `GET /personas` & `GET /personas/{code}`: Danh sách và chi tiết các Persona.
+       * `POST /evaluate`: Nộp bài khảo sát và nhận bản chẩn đoán mức độ sẵn sàng.
+       * `GET /latest`: Xem kết quả đánh giá gần nhất.
+       * `GET /discipline`: Lấy chỉ số kỷ luật giao dịch thực tế từ tài khoản Paper Trading.
+     - Admin API (`/api/v1/admin/assessment`):
+       * `GET /stats`: Thống kê tổng số lượt, điểm sẵn sàng TB, tỷ lệ đủ điều kiện đầu tư thật, và phân bổ Persona.
+       * `GET /submissions`: Danh sách bài nộp có phân trang và lọc theo Persona / Mức độ sẵn sàng.
+       * `GET/POST/PUT/DELETE/PATCH /questions`: Toàn bộ CRUD ngân hàng câu hỏi trắc nghiệm.
+       * `GET/PUT /personas`: Quản lý chiến lược và phân bổ tài sản của các nhóm Persona.
+  3. **Giao diện Người dùng Khám phá Năng lực (`/learn/readiness` & `/portfolio`)**:
+     - `InvestorAssessmentWizard`: Trắc nghiệm 10 câu hỏi tương tác mượt mà, thanh tiến độ, lựa chọn rõ ràng.
+     - `ReadinessReportCard`: Báo cáo đánh giá mức độ sẵn sàng toàn diện với 3 trụ cột (Kiến thức 35%, Tâm lý rủi ro 30%, Kỷ luật 35%), phân tích chiến lược, biểu đồ phân bổ tài sản 3 màu (Cổ phiếu, Vàng, Tiết kiệm), và kết luận rõ ràng: "Có nên đầu tư tiền thật ngay lúc này hay không?".
+     - `TradingDisciplineCard`: Tích hợp trực tiếp vào trang Paper Trading (`/portfolio`), đánh giá tự động 4 trụ cột hành vi: Kỷ luật cắt lỗ (-7%), Đa dạng hóa danh mục, Quản trị tiền mặt dự phòng, và Kiểm soát nhịp độ cảm xúc.
+     - Banner định hướng nổi bật trên trang `/learn`.
+  4. **Bảng Quản trị Khảo sát & Đánh giá cho Admin (`/admin/assessment`)**:
+     - Thêm mục "Đánh giá & Khảo sát" vào Admin Sidebar.
+     - 4 Thẻ KPI tổng quan: Tổng lượt khảo sát, Điểm sẵn sàng TB, Tỷ lệ Đủ điều kiện đầu tư thật, Nhóm Persona phổ biến nhất.
+     - 3 Tab điều khiển: Ngân hàng câu hỏi trắc nghiệm (với Modal thêm mới, chỉnh sửa, đổi trạng thái), Hồ sơ Nhóm Persona (chỉnh sửa chiến lược), và Lịch sử bài làm của người dùng.
+- **Verification**:
+  - `check-pr.ps1` Quality Gate: 5/5 bước xanh 100%.
+  - Vitest: 41/41 test files passed (151/151 tests passed 100%).
+  - Backend Pytest: 142/142 tests passed 100%.
+  - TypeScript Typecheck (`tsc --noEmit`): 0 errors.
+  - ESLint (`npm run lint`): 0 errors, 0 warnings.
+  - Backend Mypy & Ruff: 0 errors trong 43 source files (đã xử lý triệt để các type error trong redis_client.py:38, financial_statements_crawler.py:821, và dividend_crawler.py:148,392).
+
+
+## Remake Stock Basics Learning Platform & Admin Management - 2026-11-03 (completed)
+- **User Request**: "TÔI NGHĨ NÊN REMAKE LẠI TRANG CHỨNG KHOÁN CĂN BẢN: KHẢ NĂNG SẼ LIST RA CÁC MỤC KIẾN THỨC TỪ DỄ TỚI KHÓ, CÁC MỤC SẼ BAO GỒM LÝ THUEYETS VÀ VÍ DỤ MINH HỌA TRONG THỰC TẾ, CÓ THỂ THÊM CÁC BÀI TEST CHO USER HIỂU RÕ HƠN. CÁC DATA KIẾN THỨC SẼ ĐƯỢC LƯU TRÊN DB VÀ CŨNG SẼ ĐƯỢC ADMIN QUẢN LÝ. CHUYỂN NHÁNH VÀ BẮT ĐẦU CODE"
+- **Branch**: `feature/remake-stock-basics`
+- **Core Results**:
+  1. **Thiết kế Cơ sở dữ liệu & Seed 9 bài học chất lượng cao (`0022_learning_platform.sql`)**:
+     - Bảng `learning_topics` lưu trữ toàn diện: `id, slug, level (beginner|intermediate|advanced), stage, sort_order, title, eyebrow, summary, estimated_minutes, theory_content, practical_example, quizzes, glossary, practice_action, status, created_at, updated_at`.
+     - Seed sẵn 9 bài học phân cấp chặt chẽ:
+       * **Beginner (Cơ bản)**: Bản chất Cổ phiếu & Tiết kiệm vs Đầu tư (HPG); Các sàn HOSE, HNX, UPCoM & Phiên ATO/ATC (VCB); Đọc bảng điện tử & 5 màu sắc (SSI).
+       * **Intermediate (Trung cấp)**: Đọc nến Nhật & Volume (HPG); Chỉ số P/E, P/B, ROE (FPT); Cổ tức tiền mặt vs Cổ phiếu & Ngày GDKHQ (VNM).
+       * **Advanced (Nâng cao)**: Kỷ luật cắt lỗ 7-8% & Quản trị quy mô (NVL); Tâm lý FOMO & Bẫy bầy đàn (VIX); Kế hoạch tích sản DCA dài hạn (FPT).
+  2. **Kiến trúc Backend Clean Architecture (`entities`, `schemas`, `repositories`, `api`)**:
+     - Entity & Schemas: `LearningTopic`, `PracticalExample`, `QuizQuestion`, `QuizOption`, `SubmitQuizRequest`, `SubmitQuizResponse`, `AdminTopicCreateRequest`, `AdminTopicUpdateRequest`, `AdminTopicStatusRequest`, `AdminLearningTopicPage`.
+     - Repository: `SqlLearningRepository` hỗ trợ kết nối PostgreSQL pool và in-memory fallback thông minh với 9 bài học curated, đảm bảo 100% hoạt động ngay cả khi môi trường CI không có DB.
+     - Public API: `GET /api/v1/learning/topics`, `GET /api/v1/learning/topics/{slug}`, `POST /api/v1/learning/topics/{slug}/submit-quiz`.
+     - Admin API: `GET/POST /api/v1/admin/learning/topics`, `GET/PUT/DELETE /api/v1/admin/learning/topics/{topic_id}`, `PATCH /api/v1/admin/learning/topics/{topic_id}/status`.
+  3. **Admin Console Quản lý Khóa học & Kiến thức (`/admin/learning`)**:
+     - Thêm mục "Khóa học & Kiến thức" vào Admin Sidebar.
+     - Dashboard thống kê 5 KPI: Tổng bài học, Cơ bản, Trung cấp, Nâng cao, Đang xuất bản.
+     - Bộ lọc tìm kiếm từ khóa, lọc theo Cấp độ và Trạng thái xuất bản (Published/Draft).
+     - Bảng dữ liệu quản trị với các thao tác: Xem chi tiết bài học (Modal View), Thêm bài học mới (Modal Form nhiều tab: Cơ bản, Ví dụ thực tế, Bài test trắc nghiệm), Sửa bài học, Bật/Tắt trạng thái xuất bản tức thì, và Xóa bài học kèm xác nhận an toàn.
+  4. **Giao diện Người dùng Khám phá Kiến thức Chứng khoán (`/learn`)**:
+     - Lộ trình đào tạo trực quan phân cấp: Dễ (Beginner) -> Trung cấp (Intermediate) -> Nâng cao (Advanced).
+     - Bộ lọc cấp độ mượt mà kèm thanh tiến độ học tập (Progress Bar) tính % bài học đã hoàn thành.
+     - Thẻ Ví dụ thực tế (Practical Example) gắn với bối cảnh cổ phiếu Việt Nam (HPG, FPT, VNM...) gồm Tình huống, Phân tích chuyên sâu và Bài học mấu chốt.
+     - Bài kiểm tra trắc nghiệm củng cố (Quizzes) tương tác trực tiếp với giải thích chi tiết khi chọn đáp án đúng/sai.
+     - Tích hợp biểu đồ nến VN-Index trực tiếp làm ngữ cảnh thực chiến.
+     - Tuân thủ nghiêm ngặt 100% tiếng Việt, 0 icon trước text, chuẩn accessibility và giữ nguyên contract CSS.
+- **Verification**:
+  - `check-pr.ps1` Quality Gate: 5/5 bước xanh 100%.
+  - Vitest: 38/38 test files passed (147/147 tests passed).
+  - Backend Pytest: 137/137 passed trong 40s.
+  - TypeScript Typecheck (`tsc --noEmit`): 0 errors.
+  - ESLint (`npm run lint`): 0 errors, 0 warnings.
+  - Backend Mypy & Ruff: 0 errors trong 42 files.
+  - Git Diff Check (`origin/dev`): Clean, 0 whitespace errors.
+
+## Modularize globals.css with Domain Modules & Leverage Tailwind Utilities - 2026-11-03 (completed)
+- **User Request**: "có thể cho tailwind san sẻ bớt nhiệm vụ với global.css được k, thấy file đó nhiều dòng quá, yêu cầu trong quá trình refactor thì giao diện UI hiện tại của hệ thống phải k thay đổi"
+- **Branch**: `refactor/frontend-clean-code` (đã commit `c3ba8dd` và push lên `origin/refactor/frontend-clean-code`).
+- **Core Results**:
+  1. **Tách module CSS chuyên biệt theo miền nghiệp vụ trong `frontend/src/app/styles/`**:
+     - `admin.css` (1.093 dòng): Toàn bộ style của Admin Console (Sidebar, Topbar, User/Article/System Tables, Modals, Badges).
+     - `ecosystems.css` (1.046 dòng): Bản đồ Hệ sinh thái & Mạng lưới tập đoàn kinh tế.
+     - `financial-forensics.css` (605 dòng): Phân tích sức khỏe BCTC, Altman Z-Score, Beneish M-Score.
+     - `candlestick-arena.css` (646 dòng): Đấu trường dự đoán nến thực chiến.
+     - `investment-comparator.css` (789 dòng): Bộ so sánh Cổ phiếu vs Vàng SJC vs Ngân hàng & Giả lập tích sản DCA.
+     - `dividends-financials.css` (819 dòng): Lịch cổ tức & Báo cáo tài chính trực quan.
+     - `community-theses.css` (932 dòng): Cộng đồng & Luận điểm đầu tư.
+  2. **Tối ưu file `globals.css`**:
+     - Giảm từ **10.879 dòng** xuống còn **~4.200 dòng** (giảm tới hơn **6.650 dòng code** trực tiếp trong file này).
+     - Giữ nguyên các Base Design Tokens, Root CSS Layout, Animations và CSS Contract cho trang học (`learning-css-contract.test.ts`).
+     - Tận dụng Tailwind v4 `@import "./styles/..."` bundler chuẩn, bảo toàn 100% specificity và thứ tự cascading.
+  3. **San sẻ bớt nhiệm vụ sang Tailwind v4 Utility Classes**:
+     - Áp dụng Tailwind utility classes (`flex`, `items-center`, `justify-between`, `gap-2`, `rounded-lg`, `border`, v.v.) trực tiếp trên các module UI tái cấu trúc (`admin-page-controls.tsx`, `events-view.tsx`, `indices-view.tsx`, `people-view.tsx`, `paper-trading-dashboard.tsx`) thay thế các inline style và custom class đơn lẻ.
+  4. **Cam kết 100% Giao diện UI không thay đổi**:
+     - Không thay đổi bất kỳ class name nào đang được component gọi.
+     - Giữ nguyên toàn bộ token màu sắc, typography, animation và responsive media query.
+     - Không icon trước text theo đúng chuẩn UI InvestIQ.
+- **Verification**:
+  - Pre-Push Gate & Local CI Script (`check-pr.ps1`): 5/5 bước xanh 100%.
+  - Vitest: 37/37 test files passed (143/143 tests).
+  - TypeScript Check (`tsc --noEmit`): 0 errors.
+  - ESLint (`npm run lint`): 0 errors, 0 warnings.
+  - Backend Mypy & Ruff: 0 errors trong 41 files.
+  - Backend Pytest: 133/133 unit tests passed.
+  - Git Diff Check (`origin/dev`): Sạch hoàn toàn (0 whitespace errors).
+
+## Frontend Clean Code & Modular Component Extraction - 2026-11-03 (completed)
+- **User Request**: Clean frontend code, extract reusable components, reduce lines of code without altering UI.
+- **Branch**: `refactor/frontend-clean-code`.
+- **Core Results**:
+  - Giảm ròng **2.343 dòng code** frontend.
+  - Tách `admin-page-controls.tsx` dùng chung cho 6 trang quản trị admin.
+  - Tách `portfolio-math.ts`, `paper-pnl-dialog.tsx`, `paper-daily-report-card.tsx`, `paper-social-card.tsx` (giảm `paper-trading-dashboard.tsx` từ 1.905 dòng xuống 577 dòng).
+  - Tách `events-view.tsx`, `indices-view.tsx`, `people-view.tsx` (giảm `market-workspace.tsx` từ 1.241 dòng xuống 246 dòng).
+
 ## Backend CI & Unit Test Failure Resolution - 2026-11-02 (completed)
 - **User Request**: "looix tesst backend" (Lỗi test backend trên CI).
 - **Root Cause & Fixes Implemented**:

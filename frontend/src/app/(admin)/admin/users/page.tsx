@@ -1,10 +1,10 @@
 import Link from "next/link";
-
 import { changeAdminUser } from "@/app/(admin)/admin/actions";
 import { UsersTable } from "@/components/admin/users-table";
 import { currentUser, UserAuthError } from "@/lib/server/user-auth";
 import { getAdminUsers } from "@/lib/server/admin-user-api";
 import { IconSearch, IconReset } from "@/components/admin/admin-icons";
+import { AdminAlertMessages, isNextRedirect } from "@/components/admin/admin-page-controls";
 
 type SearchParams = Promise<{
   q?: string;
@@ -26,6 +26,7 @@ export default async function AdminUsersPage({
   try {
     account = await currentUser();
   } catch (error) {
+    if (isNextRedirect(error)) throw error;
     authError =
       error instanceof UserAuthError
         ? "Hãy đăng nhập bằng tài khoản quản trị để tiếp tục."
@@ -57,43 +58,43 @@ export default async function AdminUsersPage({
       ? params.status
       : "";
   const q = (params.q ?? "").slice(0, 120);
-  const cursor =
-    params.cursor && params.cursor.length <= 512 ? params.cursor : undefined;
+  const cursor = params.cursor ?? "";
 
-  let result: Awaited<ReturnType<typeof getAdminUsers>> | null = null;
-  let loadError: string | null = null;
+  let result = null;
+  let listError: string | null = null;
   try {
     result = await getAdminUsers({
-      q,
-      role,
-      status: accountStatus,
+      q: q || undefined,
+      role: role || undefined,
+      status: accountStatus || undefined,
+      cursor: cursor || undefined,
       limit: 20,
-      cursor,
     });
   } catch (error) {
-    loadError =
-      error instanceof Error
-        ? error.message
+    if (isNextRedirect(error)) throw error;
+    listError =
+      error instanceof UserAuthError
+        ? "Phiên quản trị đã hết hạn."
         : "Không thể tải danh sách tài khoản.";
   }
 
-  if (loadError || !result) {
+  if (listError || !result) {
     return (
       <div>
         <div className="admin-view-header">
           <div>
-            <h1>Quản lý tài khoản</h1>
-            <p>Tìm kiếm, cập nhật vai trò và trạng thái truy cập của người dùng.</p>
+            <h1>Người dùng</h1>
+            <p>Quản lý vai trò và trạng thái kích hoạt của từng tài khoản.</p>
           </div>
         </div>
         <p className="admin-alert error" role="alert">
-          {loadError ?? "Không thể tải danh sách tài khoản."}
+          {listError ?? "Không thể tải danh sách tài khoản."}
         </p>
       </div>
     );
   }
 
-  const pages = Math.max(1, Math.ceil(result.total / result.limit));
+  const pages = Math.max(1, Math.ceil(result.total / Math.max(1, result.limit)));
   const previousUrl = pageUrl(params, result.previous_cursor);
   const nextUrl = pageUrl(params, result.next_cursor);
   const hasFilters = Boolean(q || role || accountStatus);
@@ -102,28 +103,15 @@ export default async function AdminUsersPage({
     <div>
       <div className="admin-view-header">
         <div>
-          <h1>Quản lý người dùng</h1>
-          <p>
-            Tìm kiếm, phân quyền tài khoản và kiểm soát quyền truy cập hệ thống.
-          </p>
+          <h1>Người dùng</h1>
+          <p>Quản lý vai trò và trạng thái kích hoạt của từng tài khoản.</p>
         </div>
-        <div style={{ display: "flex", gap: "1rem" }}>
-          <span className="admin-badge admin" style={{ fontSize: "0.82rem", padding: "0.4rem 0.8rem" }}>
-            Tổng: {result.total} người dùng
-          </span>
-        </div>
+        <span className="admin-badge admin" style={{ fontSize: "0.82rem", padding: "0.4rem 0.8rem" }}>
+          Tổng: {result.total} tài khoản
+        </span>
       </div>
 
-      {params.notice && (
-        <p className="admin-alert success" role="status">
-          {params.notice}
-        </p>
-      )}
-      {params.error && (
-        <p className="admin-alert error" role="alert">
-          {params.error}
-        </p>
-      )}
+      <AdminAlertMessages notice={params.notice} error={params.error} />
 
       {/* STREAMLINED FILTER BAR */}
       <form className="admin-filter-bar-compact" action="/admin/users" method="get">
@@ -187,14 +175,7 @@ export default async function AdminUsersPage({
   );
 }
 
-function pageUrl(
-  params: {
-    q?: string;
-    role?: string;
-    status?: string;
-  },
-  cursor?: string | null
-) {
+function pageUrl(params: { q?: string; role?: string; status?: string }, cursor?: string | null) {
   const query = new URLSearchParams();
   if (params.q) query.set("q", params.q);
   if (params.role) query.set("role", params.role);

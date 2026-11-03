@@ -25,6 +25,18 @@ import type {
   PublicPortfolioDetailData,
   SocialLeaderboardItem,
 } from "@/types/thesis";
+import type {
+  LearningTopicDetail,
+  LearningTopicSummary,
+  QuizSubmissionResult,
+} from "@/types/learning";
+import type {
+  AssessmentQuestion,
+  DisciplineMetrics,
+  InvestorPersona,
+  ReadinessEvaluation,
+  SubmitAssessmentPayload,
+} from "@/types/assessment";
 import { resolveApiBase } from "@/lib/api-base";
 
 export type Source = {
@@ -323,7 +335,6 @@ export function getMarketDailyDigest(): Promise<DailyDigestEnvelope> {
   return requestJson<DailyDigestEnvelope>("/v1/market/daily-digest", 60);
 }
 
-
 export function getMarketDividendCalendar(limit = 30): Promise<DividendCalendarEnvelope> {
   return requestJson<DividendCalendarEnvelope>(`/v1/market/dividends/calendar?limit=${limit}`, 60);
 }
@@ -385,6 +396,46 @@ export function createEventReminder(payload: CreateEventReminderPayload): Promis
   });
 }
 
+export function getAssessmentQuestions(): Promise<AssessmentQuestion[]> {
+  return requestJson<AssessmentQuestion[]>("/v1/assessment/questions", 60);
+}
+
+export function getInvestorPersonas(): Promise<InvestorPersona[]> {
+  return requestJson<InvestorPersona[]>("/v1/assessment/personas", 120);
+}
+
+export function getInvestorPersonaByCode(code: string): Promise<InvestorPersona> {
+  return requestJson<InvestorPersona>(`/v1/assessment/personas/${encodeURIComponent(code)}`, 120);
+}
+
+export function submitAssessment(
+  payload: SubmitAssessmentPayload,
+): Promise<ReadinessEvaluation> {
+  const base = resolveApiBase();
+  return fetch(`${base}/v1/assessment/evaluate`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(payload),
+  }).then(async (res) => {
+    if (!res.ok) {
+      const err = await res.json().catch(() => null);
+      throw new Error(err?.detail || `Lỗi ${res.status}`);
+    }
+    return res.json();
+  });
+}
+
+export function getLatestAssessment(
+  guestIdentifier?: string,
+): Promise<ReadinessEvaluation | null> {
+  const qs = guestIdentifier ? `?guest_identifier=${encodeURIComponent(guestIdentifier)}` : "";
+  return requestJson<ReadinessEvaluation | null>(`/v1/assessment/latest${qs}`, 0);
+}
+
+export function getDisciplineMetrics(): Promise<DisciplineMetrics> {
+  return requestJson<DisciplineMetrics>("/v1/assessment/discipline", 0);
+}
+
 export function getEventReminders(email: string): Promise<{ data: EventReminderItem[] }> {
   return requestJson<{ data: EventReminderItem[] }>(
     `/v1/market/events/reminders?email=${encodeURIComponent(email)}`,
@@ -398,6 +449,41 @@ export function deleteEventReminder(reminderId: string): Promise<{ message: stri
     method: "DELETE",
   }).then(async (res) => {
     if (!res.ok) throw new Error(`Lỗi ${res.status}`);
+    return res.json();
+  });
+}
+
+export function getLearningTopics(level?: string, full?: false): Promise<LearningTopicSummary[]>;
+export function getLearningTopics(level?: string, full?: true): Promise<LearningTopicDetail[]>;
+export function getLearningTopics(
+  level?: string,
+  full: boolean = false,
+): Promise<LearningTopicSummary[] | LearningTopicDetail[]> {
+  const params = new URLSearchParams();
+  if (level) params.set("level", level);
+  if (full) params.set("full", "true");
+  const qs = params.toString();
+  return requestJson<any>(`/v1/learning/topics${qs ? `?${qs}` : ""}`, 60);
+}
+
+export function getLearningTopicBySlug(slug: string): Promise<LearningTopicDetail> {
+  return requestJson<LearningTopicDetail>(`/v1/learning/topics/${encodeURIComponent(slug)}`, 60);
+}
+
+export function submitLessonQuiz(
+  slug: string,
+  answers: Record<string, string>,
+): Promise<QuizSubmissionResult> {
+  const base = resolveApiBase();
+  return fetch(`${base}/v1/learning/topics/${encodeURIComponent(slug)}/submit-quiz`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ answers }),
+  }).then(async (res) => {
+    if (!res.ok) {
+      const err = await res.json().catch(() => null);
+      throw new Error(err?.detail || `Lỗi ${res.status}`);
+    }
     return res.json();
   });
 }

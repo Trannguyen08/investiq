@@ -1,9 +1,11 @@
+import type { AdminAssessmentPage, AdminAssessmentStats, AssessmentQuestion, InvestorPersona } from "@/types/assessment";
 import "server-only";
 
 import { redirect } from "next/navigation";
 
 import { resolveApiBase } from "@/lib/api-base";
 import { authenticatedSession } from "@/lib/server/user-auth";
+import type { LearningTopicDetail } from "@/types/learning";
 
 export type UserGrowthPoint = {
   date: string;
@@ -492,7 +494,6 @@ export function getAdminAnalytics() {
   return adminFetch<AdminAnalyticsResponse>("/analytics");
 }
 
-
 // Market Data Pipeline & Corporate Actions Crawlers
 export type AdminCrawlerStatusItem = {
   id: string;
@@ -538,4 +539,138 @@ export function clearAdminMarketDataCache() {
     "/market-data-pipeline/clear-cache",
     { method: "POST" }
   );
+}
+
+// Learning Management
+export type AdminLearningTopicPage = {
+  items: LearningTopicDetail[];
+  total: number;
+  page: number;
+  limit: number;
+  total_pages: number;
+};
+
+export function getAdminLearningTopics(params?: {
+  q?: string;
+  level?: string;
+  status?: string;
+  page?: number;
+  limit?: number;
+}) {
+  const query = new URLSearchParams();
+  if (params?.q) query.set("q", params.q);
+  if (params?.level) query.set("level", params.level);
+  if (params?.status) query.set("status", params.status);
+  if (params?.page) query.set("page", String(params.page));
+  if (params?.limit) query.set("limit", String(params.limit));
+  const qs = query.toString();
+  return adminFetch<AdminLearningTopicPage>(`/learning/topics${qs ? `?${qs}` : ""}`);
+}
+
+export function getAdminLearningTopicDetail(topicId: string) {
+  return adminFetch<LearningTopicDetail>(`/learning/topics/${encodeURIComponent(topicId)}`);
+}
+
+export function createAdminLearningTopic(payload: Record<string, unknown>) {
+  return adminFetch<LearningTopicDetail>("/learning/topics", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(payload),
+  });
+}
+
+export function updateAdminLearningTopic(topicId: string, payload: Record<string, unknown>) {
+  return adminFetch<LearningTopicDetail>(`/learning/topics/${encodeURIComponent(topicId)}`, {
+    method: "PUT",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(payload),
+  });
+}
+
+export function deleteAdminLearningTopic(topicId: string) {
+  return adminFetch<{ status: string; message: string }>(
+    `/learning/topics/${encodeURIComponent(topicId)}`,
+    { method: "DELETE" }
+  );
+}
+
+export function toggleAdminLearningTopicStatus(topicId: string, status: "published" | "draft") {
+  return adminFetch<{ status: string; new_status: string }>(
+    `/learning/topics/${encodeURIComponent(topicId)}/status`,
+    {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ status }),
+    }
+  );
+}
+
+
+export function getAdminAssessmentStats() {
+  return adminFetch<AdminAssessmentStats>("/assessment/stats");
+}
+
+export function getAdminAssessmentSubmissions(params?: {
+  page?: number;
+  limit?: number;
+  personaCode?: string;
+  readinessLevel?: string;
+}) {
+  const query = new URLSearchParams();
+  if (params?.page) query.set("page", String(params.page));
+  if (params?.limit) query.set("limit", String(params.limit));
+  if (params?.personaCode) query.set("persona_code", params.personaCode);
+  if (params?.readinessLevel) query.set("readiness_level", params.readinessLevel);
+  const qs = query.toString();
+  return adminFetch<AdminAssessmentPage>(`/assessment/submissions${qs ? `?${qs}` : ""}`);
+}
+
+export function getAdminAssessmentQuestions() {
+  return adminFetch<AssessmentQuestion[]>("/assessment/questions");
+}
+
+export function createAdminAssessmentQuestion(payload: Record<string, unknown>) {
+  return adminFetch<AssessmentQuestion>("/assessment/questions", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(payload),
+  });
+}
+
+export function updateAdminAssessmentQuestion(questionId: string, payload: Record<string, unknown>) {
+  return adminFetch<AssessmentQuestion>(`/assessment/questions/${encodeURIComponent(questionId)}`, {
+    method: "PUT",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(payload),
+  });
+}
+
+export function deleteAdminAssessmentQuestion(questionId: string) {
+  return adminFetch<{ status: string; message: string }>(
+    `/assessment/questions/${encodeURIComponent(questionId)}`,
+    { method: "DELETE" }
+  );
+}
+
+export function toggleAdminAssessmentQuestionStatus(questionId: string, status: "published" | "draft") {
+  return adminFetch<{ status: string; new_status: string }>(
+    `/assessment/questions/${encodeURIComponent(questionId)}/status`,
+    {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ status }),
+    }
+  );
+}
+
+export function getAdminPersonas() {
+  return adminFetch<InvestorPersona[]>("/assessment/personas");
+}
+
+export function updateAdminPersona(code: string, payload: Record<string, unknown>) {
+  return adminFetch<InvestorPersona>(`/assessment/personas/${encodeURIComponent(code)}`, {
+    method: "PUT",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(payload),
+  });
 }

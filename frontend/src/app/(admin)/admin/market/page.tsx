@@ -2,6 +2,7 @@ import Link from "next/link";
 import { getAdminMarketInstruments } from "@/lib/server/admin-ops-api";
 import { MarketInstrumentsTable } from "@/components/admin/market-instruments-table";
 import { IconSearch, IconReset } from "@/components/admin/admin-icons";
+import { AdminAlertMessages, AdminPaginationBar, isNextRedirect } from "@/components/admin/admin-page-controls";
 
 type SearchParams = Promise<{
   symbol?: string;
@@ -12,19 +13,6 @@ type SearchParams = Promise<{
   notice?: string;
   error?: string;
 }>;
-
-function pageQueryUrl(
-  params: { symbol?: string; exchange?: string; status?: string; sector?: string },
-  targetPage: number
-) {
-  const q = new URLSearchParams();
-  if (params.symbol) q.set("symbol", params.symbol);
-  if (params.exchange) q.set("exchange", params.exchange);
-  if (params.sector) q.set("sector", params.sector);
-  if (params.status) q.set("status", params.status);
-  q.set("page", String(targetPage));
-  return `/admin/market?${q.toString()}`;
-}
 
 export default async function AdminMarketPage({
   searchParams,
@@ -48,17 +36,8 @@ export default async function AdminMarketPage({
       page,
     });
   } catch (err) {
-    if (
-      err instanceof Error &&
-      (err.message === "NEXT_REDIRECT" ||
-        ("digest" in err && String((err as { digest?: string }).digest).startsWith("NEXT_REDIRECT")))
-    ) {
-      throw err;
-    }
-    errorMsg =
-      err instanceof Error
-        ? err.message
-        : "Không thể tải danh sách mã cổ phiếu thị trường.";
+    if (isNextRedirect(err)) throw err;
+    errorMsg = err instanceof Error ? err.message : "Không thể tải danh mục cổ phiếu.";
   }
 
   if (errorMsg || !result) {
@@ -66,52 +45,38 @@ export default async function AdminMarketPage({
       <div>
         <div className="admin-view-header">
           <div>
-            <h1>Mã cổ phiếu & Thị trường</h1>
+            <h1>Quản trị Cổ phiếu & Thị trường</h1>
             <p>
-              Quản trị danh mục cổ phiếu niêm yết, theo dõi biên độ giá và điều phối quyền giao dịch Paper Trading.
+              Giám sát trạng thái niêm yết, sàn giao dịch và công cụ kiểm soát rủi ro thị trường.
             </p>
           </div>
         </div>
         <p className="admin-alert error" role="alert">
-          {errorMsg ?? "Không thể tải danh sách mã cổ phiếu."}
+          {errorMsg ?? "Không thể tải danh sách cổ phiếu."}
         </p>
       </div>
     );
   }
 
-  const prevPageUrl = pageQueryUrl(params, Math.max(1, page - 1));
-  const nextPageUrl = pageQueryUrl(params, Math.min(result.total_pages, page + 1));
   const hasFilters = Boolean(symbol || exchange || status);
 
   return (
     <div>
       <div className="admin-view-header">
         <div>
-          <h1>Mã cổ phiếu & Thị trường</h1>
+          <h1>Quản trị Cổ phiếu & Thị trường</h1>
           <p>
-            Quản trị danh mục cổ phiếu niêm yết, theo dõi biên độ giá và điều phối quyền giao dịch Paper Trading.
+            Giám sát trạng thái niêm yết, sàn giao dịch và công cụ kiểm soát rủi ro thị trường.
           </p>
         </div>
-        <div style={{ display: "flex", gap: "0.6rem" }}>
+        <div style={{ display: "flex", gap: "1rem" }}>
           <span className="admin-badge admin" style={{ fontSize: "0.82rem", padding: "0.4rem 0.8rem" }}>
             Tổng: {result.total} mã cổ phiếu
-          </span>
-          <span className="admin-badge active" style={{ fontSize: "0.82rem", padding: "0.4rem 0.8rem" }}>
-            Khớp: {(result.total_matched_value_vnd / 1_000_000_000).toFixed(1)} Tỷ VND
           </span>
         </div>
       </div>
 
-      {params.notice && (
-        <p className="admin-alert success" role="status">
-          {params.notice}
-        </p>
-      )}
-      {params.error && (
-        <p className="admin-alert error" role="alert">
-          {params.error}
-        </p>
-      )}
+      <AdminAlertMessages notice={params.notice} error={params.error} />
 
       {/* COMPACT FILTER BAR */}
       <form
@@ -156,38 +121,15 @@ export default async function AdminMarketPage({
 
       <MarketInstrumentsTable instruments={result.items} />
 
-      {/* PAGINATION BAR */}
-      <nav
-        className="admin-pagination-bar"
-        aria-label="Phân trang danh mục cổ phiếu"
-        style={{
-          display: "flex",
-          justifyContent: "space-between",
-          alignItems: "center",
-          marginTop: "1.25rem",
-        }}
-      >
-        <div style={{ fontSize: "0.85rem", color: "#64748b" }}>
-          Hiển thị trang <strong>{result.page}</strong> / <strong>{result.total_pages}</strong> (Tổng cộng {result.total} mã)
-        </div>
-        <div style={{ display: "flex", gap: "0.5rem" }}>
-          {page > 1 ? (
-            <Link className="admin-page-link" href={prevPageUrl}>
-              ← Trang trước
-            </Link>
-          ) : (
-            <span className="admin-page-link disabled">← Trang trước</span>
-          )}
-
-          {page < result.total_pages ? (
-            <Link className="admin-page-link" href={nextPageUrl}>
-              Trang sau →
-            </Link>
-          ) : (
-            <span className="admin-page-link disabled">Trang sau →</span>
-          )}
-        </div>
-      </nav>
+      <AdminPaginationBar
+        page={result.page}
+        totalPages={result.total_pages}
+        totalItems={result.total}
+        itemLabel="mã"
+        basePath="/admin/market"
+        params={{ symbol, exchange, status }}
+        ariaLabel="Phân trang danh mục cổ phiếu"
+      />
     </div>
   );
 }

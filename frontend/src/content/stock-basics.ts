@@ -25,6 +25,7 @@ export const stockBasicsLessons: StockBasicsLesson[] = [
   {
     slug: "saving-or-investing",
     stage: 0,
+    level: "beginner",
     title: "Tiết kiệm hay đầu tư?",
     eyebrow: "BÀI 1 · NỀN TẢNG",
     estimatedMinutes: 5,
@@ -51,6 +52,13 @@ export const stockBasicsLessons: StockBasicsLesson[] = [
         "Khoản tiền có mục đích bắt buộc, vì vậy khả năng sử dụng đúng hạn quan trọng hơn kỳ vọng sinh lời.",
         "Kết luận: không mặc định dùng khoản tiền này để mua cổ phiếu; chỉ cân nhắc đầu tư bằng phần vốn không ảnh hưởng mục tiêu gần.",
       ],
+    },
+    practicalExample: {
+      title: "Khoản tích lũy 100 triệu của anh Nam",
+      ticker: "HPG",
+      scenario: "Anh Nam vừa tiết kiệm được 100 triệu đồng. Trong đó, 40 triệu chắc chắn cần thanh toán học phí đại học sau 3 tháng nữa, và 60 triệu còn lại là tiền nhàn rỗi dự kiến tích lũy dài hạn.",
+      analysis: "Nếu anh Nam mang toàn bộ 100 triệu đi mua cổ phiếu lướt sóng, rủi ro gặp phải nhịp điều chỉnh giảm 10-15% đúng lúc đến hạn đóng học phí sẽ buộc anh Nam phải cắt lỗ bán đáy trong cay đắng. Quyết định đúng đắn là gửi 40 triệu vào sổ tiết kiệm kỳ hạn ngắn để bảo toàn nguyên vẹn dòng tiền, và dùng 60 triệu nhàn rỗi giải ngân từng phần vào các cổ phiếu đầu ngành như HPG hoặc VCB.",
+      key_takeaway: "Mục tiêu tài chính và thời hạn cần tiền luôn phải đi trước việc chọn mã cổ phiếu.",
     },
     misconception: "“Giá đã tăng nhiều ngày nên ngày mai sẽ tiếp tục tăng” không phải là một cam kết lợi nhuận. Diễn biến vừa xảy ra không xóa rủi ro của khoản đầu tư.",
     glossary: [
@@ -89,6 +97,7 @@ export const stockBasicsLessons: StockBasicsLesson[] = [
   {
     slug: "read-a-candle",
     stage: 2,
+    level: "beginner",
     title: "Đọc một cây nến",
     eyebrow: "BÀI 2 · DỮ LIỆU GIÁ",
     estimatedMinutes: 8,
@@ -115,6 +124,13 @@ export const stockBasicsLessons: StockBasicsLesson[] = [
         "Đọc open và close để biết hướng trong chính khoảng nến; đọc high và low để biết biên độ.",
         "Đọc khối lượng rồi so với nhiều nến trước. Không biến một cây nến thành dự báo cho phiên kế tiếp.",
       ],
+    },
+    practicalExample: {
+      title: "Cây nến Rút chân tại mã HPG quanh vùng hỗ trợ",
+      ticker: "HPG",
+      scenario: "Trong phiên thị trường chung hoảng loạn, HPG bị bán tháo về mức giá sàn 25.000đ. Tuy nhiên đến đầu phiên chiều, dòng tiền lớn nhập cuộc với khối lượng khớp hơn 60 triệu cổ phiếu, đẩy giá đóng cửa vọt lên 27.200đ.",
+      analysis: "Cây nến ngày hôm đó kết thúc với một bóng nến dưới (râu dưới) cực dài và khối lượng cao kỷ lục. Đây là mô hình nến Rút chân (Hammer) kinh điển, báo hiệu lực cầu hấp thụ hết lượng hàng bán tháo và đánh dấu đáy ngắn hạn của cổ phiếu.",
+      key_takeaway: "Râu nến dưới dài kết hợp với thanh khoản lớn là tín hiệu từ chối giảm giá rất đáng tin cậy.",
     },
     misconception: "Nến xanh chỉ nói close cao hơn open trong chính khoảng nến. Nó không chứng minh doanh nghiệp tốt hơn, không bảo đảm phiên sau tăng và không thay thế việc xem giá tham chiếu.",
     glossary: [
@@ -157,5 +173,5 @@ export function sourcesForLesson(lesson: StockBasicsLesson): LearningSource[] {
     result[source.id] = source;
     return result;
   }, {});
-  return lesson.sourceIds.map((id) => byId[id]).filter((source): source is LearningSource => Boolean(source));
+  return (lesson.sourceIds || []).map((id) => byId[id]).filter((source): source is LearningSource => Boolean(source));
 }

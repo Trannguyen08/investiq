@@ -2,6 +2,7 @@ import Link from "next/link";
 import { getAdminAlerts } from "@/lib/server/admin-ops-api";
 import { AlertsTable } from "@/components/admin/alerts-table";
 import { IconSearch, IconReset } from "@/components/admin/admin-icons";
+import { AdminAlertMessages, AdminPaginationBar, isNextRedirect } from "@/components/admin/admin-page-controls";
 
 type SearchParams = Promise<{
   severity?: string;
@@ -11,18 +12,6 @@ type SearchParams = Promise<{
   notice?: string;
   error?: string;
 }>;
-
-function pageQueryUrl(
-  params: { severity?: string; status?: string; category?: string },
-  targetPage: number
-) {
-  const q = new URLSearchParams();
-  if (params.severity) q.set("severity", params.severity);
-  if (params.status) q.set("status", params.status);
-  if (params.category) q.set("category", params.category);
-  q.set("page", String(targetPage));
-  return `/admin/alerts?${q.toString()}`;
-}
 
 export default async function AdminAlertsPage({
   searchParams,
@@ -44,17 +33,8 @@ export default async function AdminAlertsPage({
       page,
     });
   } catch (err) {
-    if (
-      err instanceof Error &&
-      (err.message === "NEXT_REDIRECT" ||
-        ("digest" in err && String((err as { digest?: string }).digest).startsWith("NEXT_REDIRECT")))
-    ) {
-      throw err;
-    }
-    errorMsg =
-      err instanceof Error
-        ? err.message
-        : "Không thể tải danh sách cảnh báo rủi ro.";
+    if (isNextRedirect(err)) throw err;
+    errorMsg = err instanceof Error ? err.message : "Không thể tải danh sách cảnh báo rủi ro.";
   }
 
   if (errorMsg || !result) {
@@ -75,8 +55,6 @@ export default async function AdminAlertsPage({
     );
   }
 
-  const prevPageUrl = pageQueryUrl(params, Math.max(1, page - 1));
-  const nextPageUrl = pageQueryUrl(params, Math.min(result.total_pages, page + 1));
   const hasFilters = Boolean(severity || status);
 
   return (
@@ -110,16 +88,7 @@ export default async function AdminAlertsPage({
         </div>
       </div>
 
-      {params.notice && (
-        <p className="admin-alert success" role="status">
-          {params.notice}
-        </p>
-      )}
-      {params.error && (
-        <p className="admin-alert error" role="alert">
-          {params.error}
-        </p>
-      )}
+      <AdminAlertMessages notice={params.notice} error={params.error} />
 
       {/* COMPACT FILTER BAR */}
       <form
@@ -156,38 +125,15 @@ export default async function AdminAlertsPage({
 
       <AlertsTable alerts={result.items} />
 
-      {/* PAGINATION BAR */}
-      <nav
-        className="admin-pagination-bar"
-        aria-label="Phân trang cảnh báo"
-        style={{
-          display: "flex",
-          justifyContent: "space-between",
-          alignItems: "center",
-          marginTop: "1.25rem",
-        }}
-      >
-        <div style={{ fontSize: "0.85rem", color: "#64748b" }}>
-          Hiển thị trang <strong>{result.page}</strong> / <strong>{result.total_pages}</strong> (Tổng cộng {result.total} cảnh báo)
-        </div>
-        <div style={{ display: "flex", gap: "0.5rem" }}>
-          {page > 1 ? (
-            <Link className="admin-page-link" href={prevPageUrl}>
-              ← Trang trước
-            </Link>
-          ) : (
-            <span className="admin-page-link disabled">← Trang trước</span>
-          )}
-
-          {page < result.total_pages ? (
-            <Link className="admin-page-link" href={nextPageUrl}>
-              Trang sau →
-            </Link>
-          ) : (
-            <span className="admin-page-link disabled">Trang sau →</span>
-          )}
-        </div>
-      </nav>
+      <AdminPaginationBar
+        page={result.page}
+        totalPages={result.total_pages}
+        totalItems={result.total}
+        itemLabel="cảnh báo"
+        basePath="/admin/alerts"
+        params={{ severity, status }}
+        ariaLabel="Phân trang cảnh báo"
+      />
     </div>
   );
 }

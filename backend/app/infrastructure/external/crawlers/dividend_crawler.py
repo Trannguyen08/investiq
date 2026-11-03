@@ -145,7 +145,7 @@ def _classify_dividend(text: str) -> tuple[str, str, Decimal | None]:
 
 
 # Verified upcoming corporate dividend events in the future (from Nov 2026 onwards)
-_UPCOMING_FUTURE_DIVIDENDS = [
+_UPCOMING_FUTURE_DIVIDENDS: list[dict[str, Any]] = [
     {
         "id": "FPT-2026-11-12-div",
         "symbol": "FPT",
