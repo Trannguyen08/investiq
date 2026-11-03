@@ -1,21 +1,24 @@
 # Current Task
 
-## Readiness Theme Consistency, Stock Detail Header Wrap Prevention, Order Error Resolution & Portfolio Block Removals - 2026-11-03 (in-progress)
+## Readiness Theme Consistency, Stock Detail Header Wrap Prevention, Order Error Resolution & Portfolio Block Removals - 2026-11-03 (completed)
 - **User Request**:
   1. Fix màu nền không khớp toàn hệ thống ở `/learn/readiness`: chuyển từ màu trắng sáng sang dark mode `#06111f` đồng bộ.
   2. Xác nhận và đảm bảo xóa 2 khối ở trang danh mục: Khối "Cảnh báo học tập / Đang khởi sắc" và Khối "Tin tức thị trường tích cực".
   3. Xóa dòng text "Lệnh luyện tập vẫn tự động khớp theo giá quan sát mới nhất khi thị trường thật đóng cửa, kể cả cuối tuần." ở trang chi tiết cổ phiếu để khỏi bị lỗi giá xuống dòng.
   4. Fix layout header trang chi tiết cổ phiếu với `sm:flex-nowrap` và `flex-1` để khung giá không bao giờ bị rớt dòng khi xuất hiện thêm nút Bán.
   5. Đảm bảo lỗi "Giá quan sát đang cũ" ở modal đặt lệnh trang danh mục được giải quyết triệt để và đồng bộ với trang chi tiết.
-  6. Tuân thủ nghiêm ngặt quy trình Git: làm việc trên nhánh fix riêng, chạy Quality Gate pass 100%, merge vào `dev` rồi merge vào `main`.
-- **Branch**: `fix/readiness-theme-portfolio-order-and-cleanups`
+  6. Tuân thủ nghiêm ngặt quy trình Git: làm việc trên nhánh fix riêng `fix/readiness-theme-portfolio-order-and-cleanups`, chạy Quality Gate pass 100%, merge vào `dev` rồi merge vào `main`.
+- **Branch**: `fix/readiness-theme-portfolio-order-and-cleanups` (merged to `dev` and `main`, commit `9c9e8d6`).
 - **Changes**:
   - `frontend/src/app/(user)/learn/readiness/page.tsx`: Gán `<main id="main-content" className="learn-page readiness-page">`.
   - `frontend/src/app/globals.css`: Bổ sung `html:has(.readiness-page)`, `body:has(.readiness-page)` và style `.readiness-page` dark mode `#06111f`.
   - `frontend/src/app/(user)/market/stocks/[symbol]/page.tsx`: Thêm `sm:flex-nowrap` vào `.stock-detail-hero` và `flex-1` cho container bên trái.
   - `frontend/src/components/portfolio/paper-order-dialog.tsx`: Hỗ trợ đọc cả `detail` và `error.message` từ API response.
+  - `frontend/src/components/portfolio/paper-trading-dashboard.tsx`: Xóa sạch 2 khối Cảnh báo học tập / Đang khởi sắc và Tin tức tích cực.
+  - `frontend/src/components/portfolio/stock-trade-actions.tsx`: Xóa sạch dòng note về lệnh luyện tập cuối tuần.
 - **Verification**:
   - Quality Gate `./scripts/check-pr.ps1`: 6/6 passed (ESLint, TSC Typecheck, Vitest 152/152 passed, Ruff, Mypy, Pytest 142/142 passed).
+  - Pre-push hooks passed 100% trên cả 3 lần push (nhánh fix, nhánh `dev` và nhánh `main`).
 
 ## Auth Cold Start Resilience, UI Error Display & Keep-Alive Ping - 2026-11-03 (completed)
 - **Branch**: `fix/auth-cold-start-retry-and-keepalive` (merged to `dev` and `main`).
