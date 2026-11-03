@@ -6,7 +6,7 @@ import asyncio
 import json
 from decimal import Decimal
 from functools import lru_cache
-from typing import Annotated, Literal
+from typing import Annotated, Any, Literal
 from uuid import UUID, uuid4
 
 from fastapi import (
@@ -34,13 +34,23 @@ from app.infrastructure.db.repositories.sql_watchlist_repository import (
 )
 from app.infrastructure.db.session import get_pool
 from app.infrastructure.external.market_fixture_provider import FixtureMarketProvider
-from app.infrastructure.external.tcbs_market_provider import TcbsConfig, TcbsMarketProvider
 from app.infrastructure.external.vnstock_market_provider import VnstockConfig, VnstockMarketProvider
 from app.schemas.market import (
     AddWatchlistItemRequest,
     CandlesResponse,
     CreateWatchlistRequest,
+    DailyDigestEnvelope,
+    DCASimulatorEnvelope,
+    DCASimulatorRequest,
+    DividendCalendarEnvelope,
+    EcosystemDetailEnvelope,
+    EcosystemsResponse,
+    EventReminderActionResponse,
+    EventReminderCreateRequest,
+    EventReminderListEnvelope,
     EventsResponse,
+    FinancialForensicsEnvelope,
+    FinancialStatementsEnvelope,
     IndexEnvelope,
     IndicesResponse,
     InstrumentEnvelope,
@@ -50,6 +60,8 @@ from app.schemas.market import (
     PeopleResponse,
     PersonEnvelope,
     SectorsResponse,
+    StockGrowthEnvelope,
+    SymbolDividendsEnvelope,
     WatchlistResponse,
     WatchlistsResponse,
 )
@@ -67,29 +79,6 @@ watchlist_router = APIRouter(
 def _provider() -> IMarketProvider:
     if settings.market_data_mode == "fixture":
         return FixtureMarketProvider()
-    if settings.market_data_mode == "tcbs":
-        settings.require_tcbs_configuration()
-        return TcbsMarketProvider(
-            TcbsConfig(
-                api_base_url=settings.tcbs_api_base_url,
-                ws_url=settings.tcbs_ws_url,
-                api_key=(
-                    settings.tcbs_api_key.get_secret_value() if settings.tcbs_api_key else None
-                ),
-                otp=settings.tcbs_otp.get_secret_value() if settings.tcbs_otp else None,
-                access_token=(
-                    settings.tcbs_access_token.get_secret_value()
-                    if settings.tcbs_access_token
-                    else None
-                ),
-                request_timeout_seconds=settings.tcbs_request_timeout_seconds,
-                quote_refresh_seconds=settings.tcbs_quote_refresh_seconds,
-                security_refresh_seconds=settings.tcbs_security_refresh_seconds,
-                retry_attempts=settings.tcbs_http_retry_attempts,
-                circuit_failure_threshold=settings.tcbs_circuit_failure_threshold,
-                circuit_open_seconds=settings.tcbs_circuit_open_seconds,
-            )
-        )
     if settings.market_data_mode == "vnstock":
         return VnstockMarketProvider(
             VnstockConfig(
@@ -113,20 +102,15 @@ def get_market_provider() -> IMarketProvider:
 
 
 async def start_market_provider() -> None:
-    if settings.market_data_mode not in {"tcbs", "vnstock"}:
+    if settings.market_data_mode != "vnstock":
         return
     provider = _provider()
-    if isinstance(provider, TcbsMarketProvider):
-        await provider.start()
     if isinstance(provider, VnstockMarketProvider):
         asyncio.create_task(asyncio.to_thread(provider.indices))
 
 
 async def close_market_provider() -> None:
-    if settings.market_data_mode == "tcbs":
-        provider = _provider()
-        if isinstance(provider, TcbsMarketProvider):
-            await provider.close()
+    pass
 
 
 def _service() -> MarketService:
@@ -134,6 +118,15 @@ def _service() -> MarketService:
         return MarketService(_provider())
     except RuntimeError as exc:
         raise HTTPException(status_code=503, detail=str(exc)) from exc
+
+
+def _safe_meta() -> dict[str, object]:
+    try:
+        return _service().meta()
+    except Exception:
+        from app.infrastructure.external.market_fixture_provider import FixtureMarketProvider
+
+        return MarketService(FixtureMarketProvider()).meta()
 
 
 def _watchlists() -> SqlWatchlistRepository:
@@ -198,9 +191,7 @@ def instruments(
     direction: Literal["asc", "desc"] = "desc",
     min_change: Annotated[Decimal | None, Query(ge=-100, le=100)] = None,
     max_change: Annotated[Decimal | None, Query(ge=-100, le=100)] = None,
-    min_matched_value_billion: Annotated[
-        Decimal | None, Query(ge=0, le=1_000_000_000)
-    ] = None,
+    min_matched_value_billion: Annotated[Decimal | None, Query(ge=0, le=1_000_000_000)] = None,
     min_market_cap_billion: Annotated[Decimal | None, Query(ge=0, le=1_000_000_000)] = None,
     min_volume_ratio: Annotated[Decimal | None, Query(ge=0, le=1000)] = None,
     vn30: bool = False,
@@ -282,6 +273,114 @@ def instrument(symbol: str, response: Response) -> dict[str, object]:
     return value
 
 
+@router.get("/instruments/{symbol}/growth", response_model=StockGrowthEnvelope)
+def stock_growth(symbol: str, response: Response) -> dict[str, object]:
+    _public_headers(response)
+    normalized = symbol.upper()
+    value = _cached(
+        "growth",
+        {"symbol": normalized},
+        lambda: _service().growth(normalized),
+        get_market_read_cache(),
+    )
+    if value is None:
+        raise HTTPException(status_code=404, detail="Stock growth data not found")
+    return value
+
+
+@router.get("/dividends/calendar", response_model=DividendCalendarEnvelope)
+def market_dividend_calendar(
+    response: Response,
+    limit: Annotated[int, Query(ge=1, le=100)] = 30,
+) -> dict[str, object]:
+    _public_headers(response)
+    from app.infrastructure.external.crawlers.dividend_crawler import get_dividend_crawler
+
+    crawler = get_dividend_crawler()
+    events = crawler.get_market_calendar(limit=limit)
+    return {
+        "data": {
+            "total": len(events),
+            "events": events,
+        },
+        "meta": _safe_meta(),
+    }
+
+
+@router.get("/instruments/{symbol}/dividends", response_model=SymbolDividendsEnvelope)
+def instrument_dividends(symbol: str, response: Response) -> dict[str, object]:
+    _public_headers(response)
+    normalized = symbol.upper()
+    from app.infrastructure.external.crawlers.dividend_crawler import get_dividend_crawler
+
+    crawler = get_dividend_crawler()
+    events = crawler.get_symbol_dividends(normalized)
+
+    # Calculate summary metrics
+    current_inst = None
+    try:
+        current_inst = _service().instrument(normalized)
+    except Exception:
+        current_inst = None
+    price_val = None
+    if isinstance(current_inst, dict):
+        raw_data = current_inst.get("data")
+        if isinstance(raw_data, dict):
+            try:
+                price_val = float(raw_data.get("price") or 0)
+            except Exception:
+                price_val = None
+
+    latest_event = events[0] if events else None
+    cash_events = [e for e in events if e.get("type") == "cash" and e.get("cash_value")]
+    total_cash_recent = sum(float(e["cash_value"]) for e in cash_events[:2]) if cash_events else 0
+    yield_pct = None
+    if price_val and total_cash_recent:
+        denom = price_val * 1000 if price_val < 1000 else price_val
+        yield_pct = round((total_cash_recent / denom) * 100, 2)
+
+    summary = {
+        "symbol": normalized,
+        "dividend_yield_percent": yield_pct,
+        "frequency": "Hàng năm" if len(events) >= 1 else "Không thường niên",
+        "latest_event_date": latest_event.get("event_date") if latest_event else None,
+        "latest_payout_ratio": latest_event.get("ratio") if latest_event else None,
+        "primary_type": latest_event.get("type") if latest_event else "cash",
+        "total_events": len(events),
+    }
+    return {
+        "data": {
+            "symbol": normalized,
+            "summary": summary,
+            "events": events,
+        },
+        "meta": _safe_meta(),
+    }
+
+
+@router.get(
+    "/instruments/{symbol}/financial-statements", response_model=FinancialStatementsEnvelope
+)
+def instrument_financial_statements(
+    symbol: str,
+    response: Response,
+    period: Annotated[Literal["quarter", "year"], Query()] = "quarter",
+    limit: Annotated[int, Query(ge=1, le=12)] = 8,
+) -> dict[str, object]:
+    _public_headers(response)
+    normalized = symbol.upper()
+    from app.infrastructure.external.crawlers.financial_statements_crawler import (
+        get_financial_statements_crawler,
+    )
+
+    crawler = get_financial_statements_crawler()
+    statements = crawler.get_financial_statements(normalized, period_type=period, limit=limit)
+    return {
+        "data": statements,
+        "meta": _safe_meta(),
+    }
+
+
 @router.get("/indices", response_model=IndicesResponse)
 def indices(response: Response) -> dict[str, object]:
     _public_headers(response)
@@ -321,6 +420,116 @@ def intraday_trades(
     return _service().intraday_trades(symbol, limit)
 
 
+@router.post("/events/reminders", response_model=EventReminderActionResponse)
+def create_event_reminder(payload: EventReminderCreateRequest) -> dict[str, Any]:
+    from app.infrastructure.db.repositories.sql_event_reminder_repository import (
+        get_event_reminder_repository,
+    )
+
+    repo = get_event_reminder_repository()
+    created = repo.create(
+        email=payload.email,
+        event_id=payload.event_id,
+        symbol=payload.symbol,
+        event_title=payload.event_title,
+        event_type=payload.event_type,
+        event_at=payload.event_at,
+        days_before=payload.days_before,
+    )
+    return {
+        "success": True,
+        "message": f"Đã bật nhắc nhở cho sự kiện {payload.symbol}. Hệ thống sẽ gửi email thông báo trước sự kiện 1-2 ngày.",
+        "reminder_id": created["id"],
+    }
+
+
+@router.get("/events/reminders", response_model=EventReminderListEnvelope)
+def list_event_reminders(
+    email: Annotated[str | None, Query(max_length=255)] = None,
+) -> dict[str, Any]:
+    from app.infrastructure.db.repositories.sql_event_reminder_repository import (
+        get_event_reminder_repository,
+    )
+
+    repo = get_event_reminder_repository()
+    items = repo.list(email=email)
+    return {
+        "data": items,
+        "meta": _safe_meta(),
+    }
+
+
+@router.delete("/events/reminders/{reminder_id}", response_model=EventReminderActionResponse)
+def delete_event_reminder(reminder_id: str) -> dict[str, Any]:
+    from app.infrastructure.db.repositories.sql_event_reminder_repository import (
+        get_event_reminder_repository,
+    )
+
+    repo = get_event_reminder_repository()
+    repo.delete(reminder_id)
+    return {
+        "success": True,
+        "message": "Đã hủy nhắc nhở thành công",
+        "reminder_id": reminder_id,
+    }
+
+
+@router.post(
+    "/events/reminders/{reminder_id}/test-send", response_model=EventReminderActionResponse
+)
+def test_send_reminder(reminder_id: str) -> dict[str, Any]:
+    from app.infrastructure.db.repositories.sql_event_reminder_repository import (
+        get_event_reminder_repository,
+    )
+    from app.infrastructure.external.notifications.event_reminder_email import (
+        send_event_reminder_email,
+    )
+
+    repo = get_event_reminder_repository()
+    items = repo.list()
+    target = next((i for i in items if str(i.get("id")) == str(reminder_id)), None)
+    if not target:
+        raise HTTPException(status_code=404, detail="Không tìm thấy lịch nhắc nhở này")
+
+    success, msg = send_event_reminder_email(
+        to_email=target["email"],
+        symbol=target["symbol"],
+        event_title=target["event_title"],
+        event_type=target["event_type"],
+        event_date_str=target["event_at"].strftime("%d/%m/%Y")
+        if hasattr(target["event_at"], "strftime")
+        else str(target["event_at"]),
+        days_left=target.get("days_before", 1),
+    )
+    return {
+        "success": success,
+        "message": msg,
+        "reminder_id": reminder_id,
+    }
+
+
+@router.post("/events/reminders/quick-test", response_model=EventReminderActionResponse)
+def quick_test_reminder(payload: EventReminderCreateRequest) -> dict[str, Any]:
+    from app.infrastructure.external.notifications.event_reminder_email import (
+        send_event_reminder_email,
+    )
+
+    success, msg = send_event_reminder_email(
+        to_email=payload.email,
+        symbol=payload.symbol,
+        event_title=payload.event_title,
+        event_type=payload.event_type,
+        event_date_str=payload.event_at.strftime("%d/%m/%Y")
+        if hasattr(payload.event_at, "strftime")
+        else str(payload.event_at),
+        days_left=payload.days_before,
+    )
+    return {
+        "success": success,
+        "message": msg,
+    }
+
+
 @router.get("/events", response_model=EventsResponse)
 def events(
     response: Response,
@@ -338,9 +547,19 @@ def events(
 
 
 @router.get("/people", response_model=PeopleResponse)
-def people(response: Response) -> dict[str, object]:
+def people(
+    response: Response,
+    q: str | None = None,
+    sector: str | None = None,
+) -> dict[str, object]:
     _public_headers(response)
-    return _cached("people", {}, _service().people, get_market_read_cache())
+    service = _service()
+    return _cached(
+        "people",
+        {"q": q or "", "sector": sector or ""},
+        lambda: service.people(query=q, sector=sector),
+        get_market_read_cache(),
+    )
 
 
 @router.get("/people/{person_id}", response_model=PersonEnvelope)
@@ -350,6 +569,52 @@ def person(person_id: str, response: Response) -> dict[str, object]:
     if value is None:
         raise HTTPException(status_code=404, detail="Person not found")
     return value
+
+
+@router.get("/instruments/{symbol}/forensics", response_model=FinancialForensicsEnvelope)
+def forensics(symbol: str, response: Response) -> dict[str, object]:
+    _public_headers(response)
+    service = _service()
+    value = service.forensics(symbol)
+    if value is None:
+        raise HTTPException(status_code=404, detail="Instrument not found")
+    return value
+
+
+@router.get("/ecosystems", response_model=EcosystemsResponse)
+def ecosystems(response: Response) -> dict[str, object]:
+    _public_headers(response)
+    service = _service()
+    return _cached("ecosystems", {}, service.ecosystems, get_market_read_cache())
+
+
+@router.get("/ecosystems/{ecosystem_id}", response_model=EcosystemDetailEnvelope)
+def ecosystem_detail(ecosystem_id: str, response: Response) -> dict[str, object]:
+    _public_headers(response)
+    service = _service()
+    value = service.ecosystem(ecosystem_id)
+    if value is None:
+        raise HTTPException(status_code=404, detail="Ecosystem not found")
+    return value
+
+
+@router.post("/simulator/dca", response_model=DCASimulatorEnvelope)
+def simulate_dca_endpoint(req: DCASimulatorRequest, response: Response) -> dict[str, object]:
+    _public_headers(response)
+    service = _service()
+    return service.simulate_dca(
+        symbol=req.symbol,
+        monthly_amount=req.monthly_amount,
+        duration_years=req.duration_years,
+        annual_savings_rate=req.savings_rate,
+    )
+
+
+@router.get("/daily-digest", response_model=DailyDigestEnvelope)
+def daily_digest(response: Response) -> dict[str, object]:
+    _public_headers(response)
+    service = _service()
+    return _cached("daily_digest", {}, service.daily_digest, get_market_read_cache())
 
 
 @watchlist_router.get("", response_model=WatchlistsResponse)
@@ -374,7 +639,11 @@ def create_watchlist(
         raise HTTPException(status_code=409, detail=str(exc)) from exc
 
 
-@watchlist_router.delete("/{watchlist_id}", status_code=status.HTTP_204_NO_CONTENT)
+@watchlist_router.delete(
+    "/{watchlist_id}",
+    status_code=status.HTTP_204_NO_CONTENT,
+    response_model=None,
+)
 def delete_watchlist(
     watchlist_id: UUID,
     response: Response,
@@ -385,7 +654,11 @@ def delete_watchlist(
         raise HTTPException(status_code=404, detail="Watchlist not found")
 
 
-@watchlist_router.post("/{watchlist_id}/items", status_code=status.HTTP_204_NO_CONTENT)
+@watchlist_router.post(
+    "/{watchlist_id}/items",
+    status_code=status.HTTP_204_NO_CONTENT,
+    response_model=None,
+)
 def add_watchlist_item(
     watchlist_id: UUID,
     body: AddWatchlistItemRequest,
@@ -413,7 +686,11 @@ def add_watchlist_item(
         raise HTTPException(status_code=404, detail=str(exc)) from exc
 
 
-@watchlist_router.delete("/{watchlist_id}/items/{symbol}", status_code=status.HTTP_204_NO_CONTENT)
+@watchlist_router.delete(
+    "/{watchlist_id}/items/{symbol}",
+    status_code=status.HTTP_204_NO_CONTENT,
+    response_model=None,
+)
 def remove_watchlist_item(
     watchlist_id: UUID,
     symbol: str,

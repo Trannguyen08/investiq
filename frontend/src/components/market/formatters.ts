@@ -72,13 +72,16 @@ export function formatMarketTime(value: string) {
   }).format(new Date(value));
 }
 
+const VIETNAMESE_WEEKDAYS = ["CN", "Thứ 2", "Thứ 3", "Thứ 4", "Thứ 5", "Thứ 6", "Thứ 7"];
+
 export function formatEventDate(value: string) {
-  return new Intl.DateTimeFormat("vi-VN", {
-    timeZone: "Asia/Ho_Chi_Minh",
-    weekday: "short",
-    day: "2-digit",
-    month: "2-digit",
-    year: "numeric",
-  }).format(new Date(value));
+  const date = new Date(value);
+  const utc = date.getTime() + date.getTimezoneOffset() * 60000;
+  const vnDate = new Date(utc + 7 * 3600000);
+  const day = String(vnDate.getDate()).padStart(2, "0");
+  const month = String(vnDate.getMonth() + 1).padStart(2, "0");
+  const year = vnDate.getFullYear();
+  const weekday = VIETNAMESE_WEEKDAYS[vnDate.getDay()];
+  return `${weekday}, ${day}/${month}/${year}`;
 }
 

@@ -6,10 +6,12 @@ from fastapi.testclient import TestClient
 from app.api import deps
 from app.api.v1 import auth as auth_api
 from app.application.use_cases.auth.auth_service import AuthError
+from app.infrastructure.config.settings import settings
 from app.main import app
 
 
-def test_auth_api_fails_closed_when_not_configured() -> None:
+def test_auth_api_fails_closed_when_not_configured(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(settings, "auth_enabled", False)
     response = TestClient(app).post(
         "/api/v1/auth/login",
         headers={"X-BFF-Secret": "not-configured"},
@@ -20,7 +22,10 @@ def test_auth_api_fails_closed_when_not_configured() -> None:
     assert response.json()["error"]["message"] == "Authentication is not configured"
 
 
-def test_admin_user_api_fails_closed_when_auth_is_not_configured() -> None:
+def test_admin_user_api_fails_closed_when_auth_is_not_configured(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(settings, "auth_enabled", False)
     response = TestClient(app).get(
         "/api/v1/admin/users",
         headers={"X-BFF-Secret": "not-configured"},

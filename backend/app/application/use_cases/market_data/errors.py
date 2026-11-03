@@ -3,4 +3,3 @@
 
 class MarketDataUnavailable(RuntimeError):
     """Raised when the configured provider cannot serve a trustworthy snapshot."""
-

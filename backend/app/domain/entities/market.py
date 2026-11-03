@@ -128,3 +128,7 @@ class MarketPerson:
     estimated_listed_equity_value: Decimal
     daily_change_percent: Decimal
     holding_public_date: datetime
+    net_worth_total: str | None = None
+    net_worth_external: str | None = None
+    bio: str | None = None
+    avatar_url: str | None = None

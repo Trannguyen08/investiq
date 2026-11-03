@@ -1,15 +1,17 @@
-import { notFound } from "next/navigation";
+import { notFound, redirect } from "next/navigation";
 
 import {
+  EcosystemsView,
   EventsView,
   IndicesView,
   MarketShell,
   PeopleView,
-  WatchlistView,
+
 } from "@/components/market/market-workspace";
 import { StocksView } from "@/components/market/market-stocks-beginner";
 import {
   getMarketCandles,
+  getMarketEcosystems,
   getMarketEvents,
   getMarketIndices,
   getMarketInstrument,
@@ -61,6 +63,7 @@ export default async function MarketTabPage({
 }) {
   const [{ tab: requestedTab }, queryParams] = await Promise.all([params, searchParams]);
   if (!isMarketTab(requestedTab)) notFound();
+  if (requestedTab === "watchlist") redirect("/market/stocks");
   const tab = requestedTab;
   const indexCollection = await getMarketIndices();
   const symbols = indexCollection.data.map((item) => item.symbol);
@@ -101,6 +104,18 @@ export default async function MarketTabPage({
     );
   }
 
+  if (tab === "ecosystems") {
+    const ecosystemsRes = await getMarketEcosystems();
+    return (
+      <MarketShell tab={tab} meta={ecosystemsRes.meta ?? indexCollection.meta} symbols={symbols}>
+        <EcosystemsView
+          initialEcosystems={ecosystemsRes.data}
+          initialEcoId={value(queryParams, "eco") || undefined}
+        />
+      </MarketShell>
+    );
+  }
+
   const query = new URLSearchParams();
   const minimumChange = numericValue(queryParams, "min_change", -100, 100);
   const maximumChange = numericValue(queryParams, "max_change", -100, 100);
@@ -115,7 +130,7 @@ export default async function MarketTabPage({
     min_market_cap_billion: numericValue(queryParams, "min_market_cap_billion", 0, 1_000_000_000),
     min_volume_ratio: numericValue(queryParams, "min_volume_ratio", 0, 1000),
     vn30: value(queryParams, "vn30") === "true" ? "true" : "",
-    sort: selectedValue(queryParams, "sort", ["vn30", "symbol", "price", "change_percent", "volume", "matched_value", "trending", "market_cap", "volume_vs_20d"], tab === "watchlist" ? "trending" : "vn30"),
+    sort: selectedValue(queryParams, "sort", ["vn30", "symbol", "price", "change_percent", "volume", "matched_value", "trending", "market_cap", "volume_vs_20d"], "vn30"),
     direction: selectedValue(queryParams, "direction", ["asc", "desc"], "desc"),
   };
   for (const [key, selected] of Object.entries(filters)) {
@@ -123,7 +138,7 @@ export default async function MarketTabPage({
   }
   const cursor = value(queryParams, "cursor");
   if (cursor) query.set("cursor", cursor);
-  query.set("limit", tab === "watchlist" ? "100" : "15");
+  query.set("limit", "15");
   const summaryQuery = new URLSearchParams({
     sort: "matched_value",
     direction: "desc",
@@ -131,8 +146,8 @@ export default async function MarketTabPage({
   });
   const [instruments, summary, sectors] = await Promise.all([
     getMarketInstruments(query),
-    tab === "watchlist" ? Promise.resolve(null) : getMarketInstruments(summaryQuery),
-    tab === "watchlist" ? Promise.resolve(null) : getMarketSectors(),
+    getMarketInstruments(summaryQuery),
+    getMarketSectors(),
   ]);
   const liveSymbols = [
     ...symbols,
@@ -158,8 +173,8 @@ export default async function MarketTabPage({
   ]);
   return (
     <MarketShell tab={tab} meta={instruments.meta} symbols={liveSymbols}>
-      {tab === "watchlist" ? (
-        <WatchlistView instruments={instruments} />
+      {false ? (
+        null
       ) : (
         <StocksView
           collection={instruments}

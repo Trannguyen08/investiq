@@ -1,4 +1,4 @@
-export const MARKET_TABS = ["stocks", "watchlist", "indices", "events", "people"] as const;
+export const MARKET_TABS = ["stocks", "watchlist", "indices", "events", "people", "ecosystems"] as const;
 
 export type MarketTab = (typeof MARKET_TABS)[number];
 export type MarketSearchParams = Record<string, string | string[] | undefined>;

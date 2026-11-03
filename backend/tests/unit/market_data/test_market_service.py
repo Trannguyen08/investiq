@@ -142,3 +142,45 @@ def test_index_payload_keeps_the_latest_one_hundred_seventy_candles() -> None:
     assert len(candles) == 170
     assert candles[0]["timestamp"] == "2026-01-31T00:00:00Z"
     assert candles[-1]["timestamp"] == "2026-07-19T00:00:00Z"
+
+
+def test_stock_growth_returns_complete_profile_with_quarters_and_insights() -> None:
+    provider = FixtureMarketProvider()
+    service = MarketService(provider)
+    result = service.growth("FPT")
+
+    assert result is not None
+    data = cast(dict[str, Any], result["data"])
+    assert data["symbol"] == "FPT"
+    assert data["health_status"] in {"expanding", "stable", "accumulating", "cautious"}
+    assert data["health_title"]
+    assert data["health_summary"]
+    assert "tỷ" in data["market_cap"]
+    assert data["volume_growth_20d"]
+    assert len(data["quarters"]) >= 4
+    assert len(data["insights"]) == 3
+
+    q = data["quarters"][-1]
+    assert "period" in q
+    assert q["roe"] is not None
+
+
+def test_stock_growth_tier2_fallback_when_no_fundamental_rows() -> None:
+    class EmptyFundamentalsProvider(FixtureMarketProvider):
+        def fundamental_growth_rows(self, symbol: str) -> list[dict[str, object]]:
+            return []
+
+    service = MarketService(EmptyFundamentalsProvider())
+    result = service.growth("HPG")
+
+    assert result is not None
+    data = cast(dict[str, Any], result["data"])
+    assert data["symbol"] == "HPG"
+    assert len(data["quarters"]) == 4
+    assert all("Q" in q["period"] for q in data["quarters"])
+    assert len(data["insights"]) == 3
+
+
+def test_stock_growth_returns_none_for_unknown_symbol() -> None:
+    service = MarketService(FixtureMarketProvider())
+    assert service.growth("UNKNOWN_XYZ") is None

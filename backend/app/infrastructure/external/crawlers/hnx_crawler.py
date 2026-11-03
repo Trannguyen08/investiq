@@ -45,15 +45,13 @@ class HnxCrawler(BaseNewsCrawler):
         "https://www.hnx.vn/3/vi_vn/thong-tin-cong-bo-tu-to-chuc-phat-hanh.rss",
     )
     title_selectors = (".Box-TieuDe label", "title")
-    content_selectors = ()
+    content_selectors = (".divContentArticlesDetail", ".Box-Noidung", ".Box-Tomtat label")
     description_selectors = (".Box-Tomtat label",)
 
     def __init__(self, client: BoundedHttpClient | None = None) -> None:
         if client is None:
             context = ssl.create_default_context()
-            context.load_verify_locations(
-                cafile=Path(__file__).with_name("hnx_intermediate.pem")
-            )
+            context.load_verify_locations(cafile=Path(__file__).with_name("hnx_intermediate.pem"))
             client = BoundedHttpClient(self.allowed_domains, ssl_context=context)
         super().__init__(client)
 

@@ -15,8 +15,19 @@ function json(data: object, status = 200) {
   return NextResponse.json(data, { status, headers: { "Cache-Control": "no-store, max-age=0" } });
 }
 
-function googleCallbackRedirect(path: string) {
-  const callbackUri = process.env.AUTH_GOOGLE_REDIRECT_URI;
+function getGoogleRedirectUri(request?: Request): string {
+  if (process.env.AUTH_GOOGLE_REDIRECT_URI) return process.env.AUTH_GOOGLE_REDIRECT_URI;
+  if (request) {
+    const proto = request.headers.get("x-forwarded-proto") ?? "https";
+    const host = request.headers.get("x-forwarded-host") ?? request.headers.get("host");
+    if (host) return `${proto}://${host}/auth-api/google/callback`;
+    return new URL("/auth-api/google/callback", request.url).toString();
+  }
+  return "";
+}
+
+function googleCallbackRedirect(path: string, request?: Request) {
+  const callbackUri = getGoogleRedirectUri(request);
   if (!callbackUri) throw new UserAuthError(503, "GOOGLE_NOT_CONFIGURED", "Đăng nhập Google chưa được cấu hình.");
   return NextResponse.redirect(new URL(path, callbackUri));
 }
@@ -57,7 +68,7 @@ export async function GET(request: Request, context: Context) {
     if (path === "challenge") return json({ challenge: await fetchChallenge(await getOrCreatePreAuth()) });
     if (path === "google/start") {
       const clientId = process.env.AUTH_GOOGLE_CLIENT_ID;
-      const redirectUri = process.env.AUTH_GOOGLE_REDIRECT_URI;
+      const redirectUri = getGoogleRedirectUri(request);
       if (!clientId || !redirectUri) throw new UserAuthError(503, "GOOGLE_NOT_CONFIGURED", "Đăng nhập Google chưa được cấu hình.");
       const preauth = await getOrCreatePreAuth();
       const state = randomBytes(32).toString("base64url");
@@ -79,16 +90,26 @@ export async function GET(request: Request, context: Context) {
       }
       const code = url.searchParams.get("code");
       if (!code || url.searchParams.has("error")) throw new UserAuthError(401, "GOOGLE_CANCELLED", "Đăng nhập Google đã bị hủy.");
+      const redirectUri = getGoogleRedirectUri(request);
       const credentials = await backendJson<BackendCredentials>("/google/exchange", {
         code, code_verifier: preauth.value.googleVerifier, nonce: preauth.value.googleNonce,
+        redirect_uri: redirectUri,
       });
       await createBrowserSession(credentials);
-      return googleCallbackRedirect("/?auth=login-success");
+      if (credentials.user.role === "admin") {
+        try {
+          const { createAdminSession } = await import("@/lib/server/admin-auth");
+          await createAdminSession();
+        } catch {
+          // ignore
+        }
+      }
+      return googleCallbackRedirect("/?auth=login-success", request);
     }
     return json({ error: { code: "NOT_FOUND", message: "Không tìm thấy endpoint." } }, 404);
   } catch (error) {
     if ((await context.params).path.join("/") === "google/callback") {
-      return googleCallbackRedirect(`/login?error=${encodeURIComponent(error instanceof UserAuthError ? error.code : "GOOGLE_AUTH_FAILED")}`);
+      return googleCallbackRedirect(`/login?error=${encodeURIComponent(error instanceof UserAuthError ? error.code : "GOOGLE_AUTH_FAILED")}`, request);
     }
     return errorResponse(error);
   }
@@ -105,6 +126,14 @@ export async function POST(request: Request, context: Context) {
         email: data.email, password: data.password,
       });
       await createBrowserSession(credentials);
+      if (credentials.user.role === "admin") {
+        try {
+          const { createAdminSession } = await import("@/lib/server/admin-auth");
+          await createAdminSession();
+        } catch {
+          // ignore
+        }
+      }
       return json({ user: credentials.user });
     }
     if (path === "register") {
@@ -123,6 +152,14 @@ export async function POST(request: Request, context: Context) {
         pre_auth_id: preauth.value.id, challenge_id: preauth.value.challengeId, otp: data.otp,
       });
       await createBrowserSession(credentials);
+      if (credentials.user.role === "admin") {
+        try {
+          const { createAdminSession } = await import("@/lib/server/admin-auth");
+          await createAdminSession();
+        } catch {
+          // ignore
+        }
+      }
       return json({ user: credentials.user }, 201);
     }
     if (path === "resend") {

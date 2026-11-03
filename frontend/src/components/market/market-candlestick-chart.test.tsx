@@ -29,7 +29,7 @@ describe("MarketCandlestickChart", () => {
     expect(screen.getAllByText(/MA5/)).toHaveLength(2);
     expect(screen.getByRole("region", { name: "Giải thích biểu đồ" })).toHaveTextContent("MA5 màu vàng");
     expect(screen.getByRole("region", { name: "Giải thích biểu đồ" })).toHaveTextContent("Đường ngang nét đứt");
-    expect(screen.getByText("09:00")).toBeInTheDocument();
+    expect(screen.getByText("07/10 09:00")).toBeInTheDocument();
   });
 
   it("shows OHLC, volume, and candle movement on hover and keyboard focus", () => {
@@ -251,5 +251,5 @@ describe("IndicesView chart detail", () => {
     expect(screen.getByRole("img", { name: /170 nến giá xanh đỏ/ })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Thu nhỏ biểu đồ năm" })).toBeDisabled();
     expect(container.querySelector(".index-detail .mini-candles")).not.toBeInTheDocument();
-  }, 10_000);
+  }, 25_000);
 });

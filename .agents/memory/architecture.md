@@ -18,8 +18,8 @@ investiq/
 |   |-- app/
 |   |   |-- domain/           # Framework-independent enterprise rules
 |   |   |-- application/      # Use cases and ports
-|   |   |-- infrastructure/   # PostgreSQL, Redis, external, ML, security, config adapters
-|   |   |-- api/              # HTTP and WebSocket delivery modules
+|   |   |-- infrastructure/   # PostgreSQL, Redis, external crawlers/adapters, security, config
+|   |   |-- api/              # HTTP delivery modules
 |   |   |-- middleware/
 |   |   |-- workers/          # Celery app and task modules
 |   |   `-- main.py           # FastAPI composition and health endpoints

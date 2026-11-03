@@ -38,7 +38,8 @@ class VnExpressCrawler(BaseNewsCrawler):
     source_slug = "vnexpress"
     allowed_domains = ("vnexpress.net",)
     discovery_urls = ("https://vnexpress.net/rss/kinh-doanh.rss",)
-    content_selectors = ()
+    title_selectors = ("h1.title-detail", "h1")
+    content_selectors = (".fck_detail", "article.fck_detail", ".Normal")
     description_selectors = (".description",)
 
     def parse_discovery_document(self, document: str) -> tuple[str, ...]:

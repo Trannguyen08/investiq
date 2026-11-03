@@ -249,4 +249,3 @@ def test_automatic_fill_uses_observed_price_instead_of_legacy_limit(
     assert trade is not None
     assert trade.execution_price == Decimal("11000")
     assert state.cash_balance == Decimal("98898350")
-

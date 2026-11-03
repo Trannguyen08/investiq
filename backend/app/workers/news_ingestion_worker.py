@@ -9,6 +9,7 @@ from uuid import UUID, uuid4
 
 from celery import Task
 from psycopg.rows import dict_row
+from psycopg_pool import ConnectionPool
 
 from app.application.use_cases.news.analyze_sentiment import VietnameseRuleSentimentAnalyzer
 from app.application.use_cases.news.freshness import (
@@ -250,7 +251,9 @@ def dispatch_news_jobs(limit: int = 20) -> dict[str, int]:
     return {"dispatched": len(job_ids)}
 
 
-def process_ingestion_job(job_id: str, *, pool: object | None = None) -> dict[str, str | bool]:
+def process_ingestion_job(
+    job_id: str, *, pool: ConnectionPool | None = None
+) -> dict[str, str | bool]:
     db_pool = pool or get_pool()
     now = datetime.now(UTC)
     with db_pool.connection() as connection, connection.transaction():
@@ -363,7 +366,7 @@ def _finish_job(
     *,
     article_id: str | None = None,
     next_attempt_at: datetime | None = None,
-    pool: object | None = None,
+    pool: ConnectionPool | None = None,
 ) -> None:
     db_pool = pool or get_pool()
     with db_pool.connection() as connection:
@@ -473,6 +476,24 @@ def run_direct_ingestion_cycle(
     pool = get_pool()
     stats = {"discovered": 0, "ingested": 0, "deleted": 0, "skipped": 0, "failed": 0}
 
+    # Step 0: Ensure configured news sources are active with full_text storage mode
+    try:
+        with pool.connection() as connection, connection.transaction():
+            connection.execute(
+                """
+                UPDATE news_sources
+                SET status = 'active',
+                    storage_mode = 'full_text',
+                    display_mode = 'full_text',
+                    blocked_reason = NULL,
+                    updated_at = now()
+                WHERE slug = ANY(%s)
+                """,
+                (list(source_slugs),),
+            )
+    except Exception as exc:
+        logger.warning("Could not auto-activate news sources: %s", exc)
+
     # Step 1: Cleanup old articles beyond retention days (90 days)
     try:
         cleanup_res = cleanup_old_news.run(
@@ -519,4 +540,3 @@ def run_direct_ingestion_cycle(
                 logger.warning("Failed processing news job %s: %s", job_id, exc)
 
     return stats
-

@@ -88,15 +88,15 @@ def _message(payload: dict[str, str]) -> EmailMessage:
             '<p style="margin:0 0 8px;color:#475569;font-size:13px">MÃ OTP CỦA BẠN</p>'
             f'<p style="margin:0;color:#1d4ed8;font-family:Arial,sans-serif;'
             'font-size:34px;font-weight:700;letter-spacing:10px;padding-left:10px">'
-            f'{escape(otp)}</p>'
-            '</div>'
+            f"{escape(otp)}</p>"
+            "</div>"
         )
         detail = (
             '<p style="margin:0 0 8px;color:#475569;font-size:14px;line-height:1.6">'
-            'Mã có hiệu lực trong <strong>90 giây</strong> và chỉ sử dụng được một lần.</p>'
+            "Mã có hiệu lực trong <strong>90 giây</strong> và chỉ sử dụng được một lần.</p>"
             '<p style="margin:0;color:#475569;font-size:14px;line-height:1.6">'
-            'Vui lòng không chia sẻ mã này với bất kỳ ai. '
-            'Nếu bạn không yêu cầu, hãy bỏ qua email này.</p>'
+            "Vui lòng không chia sẻ mã này với bất kỳ ai. "
+            "Nếu bạn không yêu cầu, hãy bỏ qua email này.</p>"
         )
     elif template == "registration_success":
         name = payload.get("display_name", "bạn")
@@ -124,8 +124,8 @@ def _message(payload: dict[str, str]) -> EmailMessage:
         otp_block = ""
         detail = (
             '<p style="margin:0;color:#475569;font-size:14px;line-height:1.6">'
-            'Nếu bạn không thực hiện thay đổi này, vui lòng đặt lại mật khẩu '
-            'và liên hệ bộ phận hỗ trợ.</p>'
+            "Nếu bạn không thực hiện thay đổi này, vui lòng đặt lại mật khẩu "
+            "và liên hệ bộ phận hỗ trợ.</p>"
         )
 
     safe_heading = escape(heading)
@@ -139,11 +139,11 @@ def _message(payload: dict[str, str]) -> EmailMessage:
         '<p style="margin:0 0 24px;color:#1d4ed8;font-size:20px;font-weight:700">InvestIQ</p>'
         f'<h1 style="margin:0 0 12px;font-size:23px;line-height:1.35">{safe_heading}</h1>'
         f'<p style="margin:0;color:#475569;font-size:15px;line-height:1.7">{safe_intro}</p>'
-        f'{otp_block}{detail}'
+        f"{otp_block}{detail}"
         '<hr style="height:1px;margin:28px 0 16px;border:0;background:#e2e8f0">'
         '<p style="margin:0;color:#64748b;font-size:12px;line-height:1.6">'
-        'Email tự động từ InvestIQ. Vui lòng không trả lời thư này.</p>'
-        '</td></tr></table></body></html>'
+        "Email tự động từ InvestIQ. Vui lòng không trả lời thư này.</p>"
+        "</td></tr></table></body></html>"
     )
     message = EmailMessage()
     message["Subject"] = subjects[template]

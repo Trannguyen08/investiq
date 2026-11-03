@@ -97,15 +97,31 @@ flowchart TD
 | **Backend** | `APP_ENV` | `production` |
 | **Backend** | `DATABASE_URL` | Chuỗi kết nối Neon: `postgresql://user:pass@ep-xxx-pooler.ap-southeast-1.aws.neon.tech/neondb?sslmode=require` |
 | **Backend** | `SECRET_KEY` | Chuỗi ký tự ngẫu nhiên bảo mật (tối thiểu 32 ký tự) |
-| **Backend** | `NEWS_INGESTION_ENABLED` | `false` *(đối với bản học tập không chạy worker Celery)* |
-| **Backend** | `MARKET_DATA_MODE` | `fixture` *(để hiển thị dữ liệu mẫu ngay)* hoặc `disabled` |
+| **Backend** | `NEWS_INGESTION_ENABLED` | `true` *(chạy tự động crawl tin tức tài chính)* |
+| **Backend** | `MARKET_DATA_MODE` | `vnstock` *(dữ liệu thật)* hoặc `fixture` |
 | **Backend** | `PORT` | `10000` *(Render tự động inject)* |
+| **Backend** | `AUTH_ENABLED` | `true` *(bật tính năng xác thực đăng nhập)* |
+| **Backend** | `AUTH_BFF_SECRET` | Khóa bí mật giao tiếp BFF (tạo ngẫu nhiên 48 ký tự, trùng với Frontend) |
+| **Backend** | `AUTH_JWT_SECRET` | Khóa ký JWT token (tạo ngẫu nhiên 48 ký tự) |
+| **Backend** | `AUTH_OTP_HMAC_KEY` | Khóa băm OTP (tạo ngẫu nhiên 48 ký tự) |
+| **Backend** | `AUTH_PAYLOAD_ENCRYPTION_KEY` | Fernet key mã hóa payload (`python -c "import base64,secrets; print(base64.urlsafe_b64encode(secrets.token_bytes(32)).decode())"`) |
+| **Backend** | `AUTH_SESSION_ENCRYPTION_KEY` | Khóa mã hóa session 32 bytes (`python -c "import base64,secrets; print(base64.urlsafe_b64encode(secrets.token_bytes(32)).decode().rstrip('='))"`) |
+| **Backend** | `AUTH_GOOGLE_CLIENT_ID` | Client ID từ Google Cloud Console |
+| **Backend** | `AUTH_GOOGLE_CLIENT_SECRET` | Client Secret từ Google Cloud Console |
+| **Backend** | `AUTH_GOOGLE_REDIRECT_URI` | `https://<tên-frontend>.onrender.com/auth-api/google/callback` |
+| **Backend** | `REDIS_URL` *(Tùy chọn)* | URL Redis nếu dùng Upstash (`rediss://default:***@***.upstash.io:6379`) |
 | **Frontend** | `NODE_ENV` | `production` |
 | **Frontend** | `API_INTERNAL_BASE_URL` | `https://<tên-backend>.onrender.com/api` |
 | **Frontend** | `NEXT_PUBLIC_API_URL` | `/api` |
 | **Frontend** | `NEXT_PUBLIC_MARKET_WS_URL` | `wss://<tên-backend>.onrender.com/ws/v1/market` |
+| **Frontend** | `AUTH_BFF_SECRET` | Khóa bí mật giao tiếp BFF (phải trùng với Backend) |
+| **Frontend** | `AUTH_SESSION_ENCRYPTION_KEY` | Khóa mã hóa session 32 bytes (phải trùng với Backend) |
+| **Frontend** | `AUTH_GOOGLE_CLIENT_ID` | Client ID từ Google Cloud Console |
+| **Frontend** | `AUTH_GOOGLE_REDIRECT_URI` | `https://<tên-frontend>.onrender.com/auth-api/google/callback` |
+| **Frontend** | `AUTH_SESSION_REDIS_URL` *(Tùy chọn)* | URL Redis từ Upstash để lưu session phân tán giữa các lần restart |
 
 ---
+
 
 ## 3. Bước 1: Triển Khai Cơ Sở Dữ Liệu Miễn Phí (Khuyên Dùng: Neon.tech)
 
@@ -576,7 +592,36 @@ jobs:
 - **Hiện tượng**: Trình duyệt báo `Cross-Origin Request Blocked`.
 - **Xử lý**: Đảm bảo các route trong Next.js gọi thông qua BFF (`/auth-api`, `/portfolio-api`) hoặc thiết lập Next.js Rewrites trong `next.config.ts` như đã hướng dẫn ở [Mục 5.3](#53-xử-lý-cors--nextjs-rewrites-quan-trọng).
 
+#### 4. Lỗi Đăng nhập bằng Google (`redirect_uri_mismatch`, `503 AUTH_NOT_CONFIGURED` hoặc `GOOGLE_AUTH_FAILED`)
+- **Hiện tượng 1**: Bấm "Đăng nhập với Google" báo lỗi `503 Service Unavailable: Tính năng đăng nhập chưa được cấu hình.`
+  - **Nguyên nhân**: Thiếu các biến môi trường xác thực trên Frontend hoặc Backend (`AUTH_BFF_SECRET`, `AUTH_SESSION_ENCRYPTION_KEY`, `AUTH_GOOGLE_CLIENT_ID`).
+  - **Xử lý**: Điền đầy đủ các biến môi trường vào cả Frontend và Backend Web Service trên Render Dashboard.
+- **Hiện tượng 2**: Google hiển thị màn hình đỏ **Error 400: redirect_uri_mismatch**.
+  - **Nguyên nhân**: URL Redirect URI cấu hình trên Google Cloud Console không khớp tuyệt đối với URL của Frontend.
+  - **Xử lý**: Xem hướng dẫn cấu hình chuẩn xác bên dưới.
+
+##### Hướng Dẫn Cấu Hình URL Chuẩn Xác Trên Google Cloud Console:
+1. Truy cập **[Google Cloud Console](https://console.cloud.google.com/)** $\rightarrow$ Chọn đúng Project của bạn.
+2. Vào menu **APIs & Services (API & Dịch vụ)** $\rightarrow$ **Credentials (Thông tin xác thực)**.
+3. Nhấp vào tên **OAuth 2.0 Client ID** thuộc loại *Web application* mà bạn đang dùng cho InvestIQ.
+4. **Authorized JavaScript origins (Nguồn gốc JavaScript được phép)**:
+   - Thêm: `https://investiq-frontend-zd01.onrender.com` *(Thay bằng domain Frontend của bạn trên Render, **KHÔNG** có dấu gạch chéo `/` ở cuối!)*
+   - Thêm cho local (nếu muốn test ở máy): `http://localhost:3000`
+5. **Authorized redirect URIs (URI chuyển hướng được phép)**:
+   - Thêm: `https://investiq-frontend-zd01.onrender.com/auth-api/google/callback` *(BẮT BUỘC đường dẫn `/auth-api/google/callback`, **KHÔNG** dùng URL Backend, **KHÔNG** có gạch chéo ở cuối)*
+   - Thêm cho local: `http://localhost:3000/auth-api/google/callback`
+6. Nhấn **Save (Lưu)**. Lưu ý: Google có thể mất 1-5 phút để đồng bộ thông tin xác thực trên toàn cầu.
+7. Cập nhật biến môi trường trên Render:
+   - Trên **Frontend Web Service**:
+     - `AUTH_GOOGLE_CLIENT_ID`: `<Client ID từ Google Console>`
+     - `AUTH_GOOGLE_REDIRECT_URI`: `https://investiq-frontend-zd01.onrender.com/auth-api/google/callback`
+   - Trên **Backend Web Service**:
+     - `AUTH_GOOGLE_CLIENT_ID`: `<Client ID từ Google Console>`
+     - `AUTH_GOOGLE_CLIENT_SECRET`: `<Client Secret từ Google Console>`
+     - `AUTH_GOOGLE_REDIRECT_URI`: `https://investiq-frontend-zd01.onrender.com/auth-api/google/callback`
+
 ---
+
 
 ### 8.2. Các Bài Học DevOps Đúc Kết
 1. **Never Commit Secrets**: Tuyệt đối không đưa file `.env` chứa mật khẩu thật lên Git. Mọi thông tin nhạy cảm phải quản lý qua **GitHub Secrets** và **Render Environment Variables**.

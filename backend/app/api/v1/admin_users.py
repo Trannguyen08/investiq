@@ -61,6 +61,7 @@ def _encode_cursor(created_at: datetime, user_id: str, direction: str, page: int
     ).encode()
     return base64.urlsafe_b64encode(payload).decode().rstrip("=")
 
+
 router = APIRouter(
     prefix="/api/v1/admin/users",
     tags=["admin-users"],
@@ -101,6 +102,8 @@ def _administrator(
             if settings.auth_jwt_previous_secret
             else None,
         ).verify(_bearer(authorization))
+        if claims.get("role") != "admin":
+            raise HTTPException(status_code=403, detail="Administrator role required in token")
         actor = repository.active_session_user(
             str(claims["sid"]), str(claims["sub"]), datetime.now(UTC)
         )

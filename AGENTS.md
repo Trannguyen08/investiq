@@ -43,6 +43,7 @@ Always read `.agents/rules/general.md`, then load only the modules matching the 
 | Authentication, authorization, crypto, validation | `security.md` |
 | Automated tests and test infrastructure | `testing.md` |
 | Containers, CI/CD, releases, shell scripts | `devops.md` |
+| Git branches, PRs, CI/CD gates, remotes | `git.md` |
 | Packages, versions, lockfiles | `dependencies.md` |
 | Redis-backed Celery task delivery and WebSockets | `messaging.md` |
 | Celery, scheduled work, backfills | `jobs.md` |

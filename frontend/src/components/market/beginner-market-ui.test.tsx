@@ -1,9 +1,9 @@
-import { render, screen } from "@testing-library/react";
+import { fireEvent, render, screen, within } from "@testing-library/react";
 import type { ReactNode } from "react";
 import { describe, expect, it, vi } from "vitest";
 
 import { MarketColorLegend, MarketLineChart, SectorHeatmap, SentimentGauge } from "@/components/market/beginner-market-ui";
-import { DailyFeaturedNews, HomeMarketDashboard, HomeUpcomingEvents } from "@/components/market/home-market-dashboard";
+import { DailyFeaturedNews, HomeMarketDashboard, HomeStockPulse, HomeUpcomingEvents } from "@/components/market/home-market-dashboard";
 import { MarketStatus } from "@/components/market/market-status";
 import type { NewsSummary } from "@/lib/api-client";
 import type { MarketCandle, MarketIndex, MarketInstrument, MarketMeta, MarketOverview, MarketSector } from "@/types/market";
@@ -184,5 +184,44 @@ describe("beginner market UI", () => {
     expect(screen.getByRole("heading", { name: "Chưa có lịch sự kiện được nguồn cung cấp" })).toBeInTheDocument();
     expect(screen.getByText(/đang trả dữ liệu thị trường một phần/)).toBeInTheDocument();
     expect(screen.getByRole("link", { name: "Kiểm tra trang sự kiện" })).toHaveAttribute("href", "/market/events");
+  });
+
+  it("filters HomeStockPulse movers by time ranges (day, week, month, 3 months, 6 months, year)", () => {
+    const customCandles: MarketCandle[] = [
+      { timestamp: "2026-09-01T00:00:00Z", open: "80", high: "82", low: "79", close: "80", volume: "1000" },
+      { timestamp: "2026-10-01T00:00:00Z", open: "90", high: "95", low: "89", close: "92", volume: "1100" },
+      { timestamp: "2026-10-06T00:00:00Z", open: "100", high: "103", low: "99", close: "100", volume: "1200" },
+      { timestamp: "2026-10-07T00:00:00Z", open: "101", high: "106", low: "100", close: "105", volume: "1500" },
+    ];
+
+    const stockA = { ...instrument("FPT", "3.20", "500000000000"), price: "105000", candles: customCandles };
+    const stockB = { ...instrument("VNM", "-2.40", "300000000000"), price: "68000", candles: customCandles };
+
+    const { container } = render(<HomeStockPulse instruments={[stockA, stockB]} meta={marketMeta} />);
+
+    // Check dropdown select exists with all 6 options
+    const select = within(container).getByRole("combobox", { name: /mốc thời gian biến động/i });
+    expect(select).toBeInTheDocument();
+    expect(select).toHaveValue("1D");
+
+    const optionLabels = [
+      "Theo ngày (1 phiên)",
+      "Theo tuần (5 phiên)",
+      "Theo tháng (21 phiên)",
+      "Theo 3 tháng (1 quý)",
+      "Theo 6 tháng (Nửa năm)",
+      "Theo năm (1 năm)",
+    ];
+    for (const label of optionLabels) {
+      expect(within(select).getByRole("option", { name: label })).toBeInTheDocument();
+    }
+
+    // Change to "1W" (Tuần)
+    fireEvent.change(select, { target: { value: "1W" } });
+    expect(select).toHaveValue("1W");
+
+    // Change to "1M" (Tháng)
+    fireEvent.change(select, { target: { value: "1M" } });
+    expect(select).toHaveValue("1M");
   });
 });

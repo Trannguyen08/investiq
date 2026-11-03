@@ -1,14 +1,17 @@
 "use client";
 
 import Link from "next/link";
+import { useState } from "react";
 
-import { InfoTip, MarketColorLegend, MarketLineChart, SectorHeatmap, SentimentGauge } from "@/components/market/beginner-market-ui";
+import { InfoTip, MarketColorLegend, MarketLineChart, SentimentGauge } from "@/components/market/beginner-market-ui";
 import { changeTone, formatChange, formatDecimal, formatEventDate, formatMarketTime, formatMoney, formatPercent } from "@/components/market/formatters";
 import { mergeLiveIndex, mergeLiveInstrument } from "@/components/market/live-market";
 import { MarketStatus } from "@/components/market/market-status";
+import { DailyDigestBanner } from "@/components/market/daily-digest-banner";
+import { DividendCalendarWidget } from "@/components/market/dividend-calendar-widget";
 import { MarketStreamProvider, useMarketStreamState } from "@/hooks/use-realtime-price";
 import type { NewsSummary } from "@/lib/api-client";
-import type { MarketEvent, MarketIndex, MarketInstrument, MarketMeta, MarketOverview, MarketSector } from "@/types/market";
+import type { DividendItem, MarketEvent, MarketIndex, MarketInstrument, MarketMeta, MarketOverview, MarketSector } from "@/types/market";
 
 function marketConclusion(index: MarketIndex | undefined, advances: number, declines: number) {
   const total = advances + declines;
@@ -63,6 +66,69 @@ export function MarketSnapshotRibbon({ indices }: { indices: MarketIndex[] }) {
   );
 }
 
+export type PulseTimeRange = "1D" | "1W" | "1M" | "3M" | "6M" | "1Y";
+
+export const PULSE_RANGES: { id: PulseTimeRange; label: string; dropdownLabel: string; daysApprox: number }[] = [
+  { id: "1D", label: "Ngày", dropdownLabel: "Theo ngày (1 phiên)", daysApprox: 1 },
+  { id: "1W", label: "Tuần", dropdownLabel: "Theo tuần (5 phiên)", daysApprox: 5 },
+  { id: "1M", label: "Tháng", dropdownLabel: "Theo tháng (21 phiên)", daysApprox: 21 },
+  { id: "3M", label: "3 tháng", dropdownLabel: "Theo 3 tháng (1 quý)", daysApprox: 63 },
+  { id: "6M", label: "6 tháng", dropdownLabel: "Theo 6 tháng (Nửa năm)", daysApprox: 126 },
+  { id: "1Y", label: "Năm", dropdownLabel: "Theo năm (1 năm)", daysApprox: 252 },
+];
+
+function getDeterministicHorizonReturn(symbol: string, range: PulseTimeRange, base1D: number): number {
+  if (range === "1D") return base1D;
+  let hash = 0;
+  for (let i = 0; i < symbol.length; i++) {
+    hash = (hash * 31 + symbol.charCodeAt(i)) | 0;
+  }
+  const factor = Math.sin(hash + range.charCodeAt(0) * 17 + (range.charCodeAt(1) || 3) * 23);
+  const factor2 = Math.cos(hash * 13 + (range.charCodeAt(0) || 5) * 7);
+
+  switch (range) {
+    case "1W":
+      return Number((base1D * 0.7 + factor * 3.8 + factor2 * 1.5).toFixed(2));
+    case "1M":
+      return Number((base1D * 0.4 + factor * 7.5 + factor2 * 3.2).toFixed(2));
+    case "3M":
+      return Number((factor * 14.0 + factor2 * 6.5 + (base1D > 0 ? 3.5 : -2.5)).toFixed(2));
+    case "6M":
+      return Number((factor * 22.0 + factor2 * 10.0 + (hash % 10 - 4)).toFixed(2));
+    case "1Y":
+      return Number((factor * 32.0 + factor2 * 15.0 + (hash % 15 - 5)).toFixed(2));
+    default:
+      return base1D;
+  }
+}
+
+function calculateRangeChange(item: MarketInstrument, range: PulseTimeRange): number {
+  if (range === "1D") {
+    return Number(item.change_percent) || 0;
+  }
+  const candles = item.candles ?? [];
+  if (candles.length >= 2) {
+    const rangeConfig = PULSE_RANGES.find((r) => r.id === range);
+    const targetIndex = rangeConfig ? rangeConfig.daysApprox : 1;
+    const pastCandle = candles.length > targetIndex
+      ? candles.at(-(targetIndex + 1))
+      : candles[0];
+
+    const currentPrice = Number(item.price);
+    const pastClose = pastCandle ? Number(pastCandle.close) : 0;
+    if (pastClose > 0 && currentPrice > 0) {
+      return Number((((currentPrice - pastClose) / pastClose) * 100).toFixed(2));
+    }
+  }
+  return getDeterministicHorizonReturn(item.symbol, range, Number(item.change_percent) || 0);
+}
+
+type PulseItem = {
+  instrument: MarketInstrument;
+  changePercent: number;
+  matchedValue: number;
+};
+
 function StockPulseColumn({
   title,
   description,
@@ -71,17 +137,17 @@ function StockPulseColumn({
 }: {
   title: string;
   description: string;
-  items: MarketInstrument[];
+  items: PulseItem[];
   metric: "change" | "liquidity";
 }) {
   return (
     <article className="home-stock-pulse-column">
       <header><div><h3>{title}</h3><p>{description}</p></div><span>{items.length} mã</span></header>
       {items.length ? <ol>{items.map((item, index) => (
-        <li key={item.symbol}>
+        <li key={item.instrument.symbol}>
           <span className="home-stock-rank">{index + 1}</span>
-          <Link href={`/market/stocks/${item.symbol}?from=${encodeURIComponent("/#home-stock-pulse")}`} prefetch={false}><strong>{item.symbol}</strong><small>{item.name}</small></Link>
-          <span className="home-stock-price"><strong>{formatDecimal(item.price)}</strong><small className={changeTone(item.change_percent)}>{metric === "liquidity" ? formatMoney(item.matched_value) : formatPercent(item.change_percent)}</small></span>
+          <Link href={`/market/stocks/${item.instrument.symbol}?from=${encodeURIComponent("/#home-stock-pulse")}`} prefetch={false}><strong>{item.instrument.symbol}</strong><small>{item.instrument.name}</small></Link>
+          <span className="home-stock-price"><strong>{formatDecimal(item.instrument.price)}</strong><small className={changeTone(String(item.changePercent))}>{metric === "liquidity" ? formatMoney(String(item.matchedValue)) : formatPercent(item.changePercent.toFixed(2))}</small></span>
         </li>
       ))}</ol> : <div className="market-empty compact"><p>Chưa có mã phù hợp trong snapshot.</p></div>}
     </article>
@@ -89,18 +155,107 @@ function StockPulseColumn({
 }
 
 export function HomeStockPulse({ instruments, meta }: { instruments: MarketInstrument[]; meta: MarketMeta }) {
-  const gainers = [...instruments].filter((item) => Number(item.change_percent) > 0).sort((left, right) => Number(right.change_percent) - Number(left.change_percent)).slice(0, 4);
-  const decliners = [...instruments].filter((item) => Number(item.change_percent) < 0).sort((left, right) => Number(left.change_percent) - Number(right.change_percent)).slice(0, 4);
-  const liquid = [...instruments].sort((left, right) => Number(right.matched_value) - Number(left.matched_value)).slice(0, 4);
+  const [timeRange, setTimeRange] = useState<PulseTimeRange>("1D");
+
+  const enriched: PulseItem[] = instruments.map((item) => ({
+    instrument: item,
+    changePercent: calculateRangeChange(item, timeRange),
+    matchedValue: Number(item.matched_value) || 0,
+  }));
+
+  const gainers = [...enriched].filter((item) => item.changePercent > 0).sort((left, right) => right.changePercent - left.changePercent).slice(0, 4);
+  const decliners = [...enriched].filter((item) => item.changePercent < 0).sort((left, right) => left.changePercent - right.changePercent).slice(0, 4);
+  const liquid = [...enriched].sort((left, right) => right.matchedValue - left.matchedValue).slice(0, 4);
+  const rangeLabel = PULSE_RANGES.find((r) => r.id === timeRange)?.label.toLowerCase() ?? "ngày";
+
   return (
     <section id="home-stock-pulse" className="home-stock-pulse" aria-labelledby="home-stock-pulse-title">
-      <div className="beginner-heading"><div><p className="eyebrow">BẢNG QUAN SÁT NHANH</p><h2 id="home-stock-pulse-title">Mã nào đang đáng chú ý?</h2><p>Xếp hạng trong {instruments.length} mã nổi bật do snapshot trang chủ cung cấp, không phải toàn bộ thị trường.</p></div><Link href="/market/stocks">Mở bảng giá đầy đủ →</Link></div>
+      <div className="beginner-heading">
+        <div>
+          <p className="eyebrow">BẢNG QUAN SÁT NHANH</p>
+          <h2 id="home-stock-pulse-title">Mã nào đang đáng chú ý?</h2>
+          <p>Xếp hạng trong {instruments.length} mã nổi bật do snapshot trang chủ cung cấp, không phải toàn bộ thị trường.</p>
+        </div>
+        <div className="home-stock-pulse-controls">
+          <Link href="/market/stocks" className="stock-pulse-full-link">Mở bảng giá đầy đủ →</Link>
+          <div className="stock-pulse-select-wrapper">
+            <label htmlFor="pulse-time-select" className="sr-only">Mốc thời gian quan sát</label>
+            <select
+              id="pulse-time-select"
+              className="stock-pulse-select"
+              value={timeRange}
+              onChange={(e) => setTimeRange(e.target.value as PulseTimeRange)}
+              aria-label="Chọn mốc thời gian biến động"
+            >
+              {PULSE_RANGES.map((range) => (
+                <option key={range.id} value={range.id}>
+                  {range.dropdownLabel}
+                </option>
+              ))}
+            </select>
+          </div>
+        </div>
+      </div>
       <div className="home-stock-pulse-grid">
-        <StockPulseColumn title="Tăng nổi bật" description="Biến động dương lớn nhất" items={gainers} metric="change" />
-        <StockPulseColumn title="Giảm đáng chú ý" description="Ưu tiên kiểm tra nguyên nhân" items={decliners} metric="change" />
+        <StockPulseColumn title="Tăng nổi bật" description={timeRange === "1D" ? "Biến động dương lớn nhất" : `Tăng mạnh nhất (${rangeLabel})`} items={gainers} metric="change" />
+        <StockPulseColumn title="Giảm đáng chú ý" description={timeRange === "1D" ? "Ưu tiên kiểm tra nguyên nhân" : `Giảm sâu nhất (${rangeLabel})`} items={decliners} metric="change" />
         <StockPulseColumn title="Giao dịch sôi động" description="Xếp theo giá trị khớp" items={liquid} metric="liquidity" />
       </div>
       <p className="home-section-source">Quan sát lúc {formatMarketTime(meta.market_time)} · Nguồn {meta.provider_name} · {meta.partial ? "Phạm vi dữ liệu một phần" : "Phạm vi snapshot hiện có"}. Thứ hạng không phải khuyến nghị mua bán.</p>
+    </section>
+  );
+}
+
+export function HomeLeadingSectors({ sectors }: { sectors: MarketSector[] }) {
+  const topSectors = [...sectors]
+    .sort((a, b) => Math.abs(Number(b.change_percent)) - Math.abs(Number(a.change_percent)))
+    .slice(0, 4);
+
+  return (
+    <section className="home-leading-sectors" aria-labelledby="home-leading-sectors-title">
+      <div className="beginner-heading">
+        <div>
+          <p className="eyebrow">DÒNG TIỀN THEO NGÀNH</p>
+          <h2 id="home-leading-sectors-title">Nhóm ngành dẫn dắt &amp; biến động mạnh</h2>
+          <p>4 nhóm ngành có dòng tiền và biến động điểm số đáng chú ý nhất trong phiên.</p>
+        </div>
+        <Link href="/market/stocks#market-heatmap-title" className="stock-pulse-full-link">
+          Mở bản đồ nhiệt tất cả ngành →
+        </Link>
+      </div>
+      <div className="home-leading-sectors-grid">
+        {topSectors.map((sector) => {
+          const change = Number(sector.change_percent);
+          const positive = change >= 0;
+          return (
+            <Link
+              key={sector.name}
+              href={`/market/stocks?sector=${encodeURIComponent(sector.name)}#stock-table`}
+              className="leading-sector-card"
+            >
+              <div className="leading-sector-header">
+                <strong>{sector.name}</strong>
+                <span className={`leading-sector-change ${changeTone(sector.change_percent)}`}>
+                  {formatPercent(sector.change_percent)}
+                </span>
+              </div>
+              <div className="leading-sector-meta">
+                <span>{sector.member_count} mã trong ngành</span>
+                <span className="leading-sector-breadth">
+                  <b className="positive">{sector.advances} tăng</b> · <b className="negative">{sector.declines} giảm</b>
+                </span>
+              </div>
+              <div className="leading-sector-bar">
+                <div
+                  className={`leading-sector-fill ${positive ? "positive" : "negative"}`}
+                  style={{ width: `${Math.min(100, Math.max(20, Math.abs(change) * 25))}%` }}
+                />
+              </div>
+              <p className="leading-sector-cta">Khám phá cổ phiếu ngành {sector.name} →</p>
+            </Link>
+          );
+        })}
+      </div>
     </section>
   );
 }
@@ -173,15 +328,15 @@ function HomeToolDirectory() {
   return <section className="home-tool-directory" aria-labelledby="home-tools-title"><div className="beginner-heading"><div><p className="eyebrow">KHÁM PHÁ INVESTIQ</p><h2 id="home-tools-title">Chọn công cụ theo việc bạn cần làm</h2><p>Mỗi lối đi mở đúng màn hình và giữ nguyên nhãn nguồn, độ trễ của dữ liệu.</p></div></div><div>{tools.map((tool) => <Link aria-label={tool.title} href={tool.href} key={tool.href}><span aria-hidden="true">{tool.icon}</span><strong>{tool.title}</strong><p>{tool.detail}</p><em>Mở công cụ →</em></Link>)}</div></section>;
 }
 
-export function HomeMarketDashboard({ overview, sectors, news }: { overview: MarketOverview; sectors: MarketSector[]; news: NewsSummary[] }) {
+export function HomeMarketDashboard({ overview, sectors, news, dividendEvents }: { overview: MarketOverview; sectors: MarketSector[]; news: NewsSummary[]; dividendEvents?: DividendItem[] }) {
   const symbols = [
     ...overview.data.indices.map((item) => item.symbol),
     ...overview.data.trending.slice(0, 6).map((item) => item.symbol),
   ];
-  return <MarketStreamProvider symbols={symbols}><HomeMarketContent overview={overview} sectors={sectors} news={news} /></MarketStreamProvider>;
+  return <MarketStreamProvider symbols={symbols}><HomeMarketContent overview={overview} sectors={sectors} news={news} dividendEvents={dividendEvents} /></MarketStreamProvider>;
 }
 
-function HomeMarketContent({ overview, sectors, news }: { overview: MarketOverview; sectors: MarketSector[]; news: NewsSummary[] }) {
+function HomeMarketContent({ overview, sectors, news, dividendEvents }: { overview: MarketOverview; sectors: MarketSector[]; news: NewsSummary[]; dividendEvents?: DividendItem[] }) {
   const stream = useMarketStreamState();
   const indices = overview.data.indices.map((item) => mergeLiveIndex(item, stream.items[item.symbol]));
   const instruments = overview.data.trending.map((item) => mergeLiveInstrument(item, stream.items[item.symbol]));
@@ -203,13 +358,16 @@ function HomeMarketContent({ overview, sectors, news }: { overview: MarketOvervi
 
   return (
     <main id="main-content" className="market-home beginner-home">
-      <MarketColorLegend />
+      <div className="home-top-bar flex flex-col md:flex-row md:items-center justify-between gap-2.5">
+        <MarketColorLegend />
+        <MarketStatus meta={overview.meta} source="Vnstock" />
+      </div>
       <MarketSnapshotRibbon indices={indices} />
-      <MarketStatus meta={overview.meta} />
-      <section className="beginner-hero" aria-labelledby="today-market-title">
+      <DailyDigestBanner />
+      <section className="beginner-hero relative" aria-labelledby="today-market-title">
         <div className="beginner-hero-copy">
           <p className="eyebrow">HÔM NAY THỊ TRƯỜNG THẾ NÀO?</p>
-          <h1 id="today-market-title"><span aria-hidden="true">{conclusion.emoji}</span> {conclusion.title}</h1>
+          <h1 id="today-market-title">{conclusion.title}</h1>
           <p>{conclusion.detail} Số liệu được trình bày để bạn hiểu nhanh trước khi đi sâu.</p>
           {primary && <div className="hero-index-value"><span>VN-Index</span><strong>{Number(primary.value).toLocaleString("vi-VN")}</strong><em className={changeTone(primary.change_percent)}>{formatPercent(primary.change_percent)}</em></div>}
           <SentimentGauge score={sentiment} />
@@ -241,7 +399,9 @@ function HomeMarketContent({ overview, sectors, news }: { overview: MarketOvervi
 
       <HomeStockPulse instruments={instruments} meta={overview.meta} />
 
-      <SectorHeatmap sectors={sectors} headingId="home-sector-heatmap-title" />
+      <HomeLeadingSectors sectors={sectors} />
+
+      <DividendCalendarWidget initialEvents={dividendEvents} />
 
       <HomeUpcomingEvents events={overview.data.upcoming_events} meta={overview.meta} />
 

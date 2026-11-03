@@ -72,3 +72,5 @@ class PaperPortfolio:
     holdings: tuple[PaperHolding, ...]
     orders: tuple[PaperOrder, ...]
     trades: tuple[PaperTrade, ...]
+    is_public: bool = False
+    nickname: str | None = None

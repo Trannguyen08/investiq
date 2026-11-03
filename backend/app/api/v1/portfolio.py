@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from decimal import Decimal
-from typing import Annotated
+from typing import Annotated, Any
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, Header, HTTPException, Response, status
@@ -11,7 +11,10 @@ from fastapi import APIRouter, Depends, Header, HTTPException, Response, status
 from app.api.deps import authenticated_user_id, require_auth_bff
 from app.api.v1.market_data import get_market_provider
 from app.application.dto.portfolio_dto import PlacePaperOrder
-from app.application.use_cases.portfolio.simulate_trade import PaperOrderError, PaperTradingService
+from app.application.use_cases.portfolio.simulate_trade import (
+    PaperOrderError,
+    PaperTradingService,
+)
 from app.domain.entities.portfolio import PaperOrder, PaperTrade
 from app.domain.repositories.i_portfolio_repository import (
     HoldingLimitError,
@@ -20,13 +23,23 @@ from app.domain.repositories.i_portfolio_repository import (
     OrderNotCancellableError,
     PortfolioConflictError,
 )
-from app.infrastructure.db.repositories.sql_portfolio_repository import SqlPortfolioRepository
+from app.infrastructure.db.repositories.sql_portfolio_repository import (
+    SqlPortfolioRepository,
+)
 from app.infrastructure.db.session import get_pool
 from app.schemas.portfolio import (
     CancelPaperOrderResponse,
     PaperDashboardResponse,
+    PaperReportSubscriptionResponse,
     PlacePaperOrderRequest,
     PlacePaperOrderResponse,
+    SendPaperReportNowResponse,
+    SetPaperReportSubscriptionRequest,
+)
+from app.schemas.thesis import (
+    PublicPortfolioDetailResponse,
+    SetPublicVisibilityRequest,
+    SocialLeaderboardResponse,
 )
 
 router = APIRouter(
@@ -154,3 +167,139 @@ def cancel_paper_order(
     except (OrderNotCancellableError, PortfolioConflictError) as exc:
         raise HTTPException(status_code=409, detail=str(exc)) from exc
     return {"order": _order_response(order), "data": service.dashboard(user_id)}
+
+
+@router.post(
+    "/visibility",
+    response_model=PaperDashboardResponse,
+)
+def set_visibility(
+    body: SetPublicVisibilityRequest,
+    response: Response,
+    user_id: Annotated[str, Depends(authenticated_user_id)],
+    service: Annotated[PaperTradingService, Depends(get_paper_trading_service)],
+) -> dict[str, object]:
+    _private(response)
+    service.set_public_visibility(
+        user_id=user_id,
+        is_public=body.is_public,
+        nickname=body.nickname,
+    )
+    return service.dashboard(user_id)
+
+
+@router.get(
+    "/daily-report/subscription",
+    response_model=PaperReportSubscriptionResponse,
+)
+def get_daily_report_subscription(
+    response: Response,
+    user_id: Annotated[str, Depends(authenticated_user_id)],
+) -> dict[str, object]:
+    _private(response)
+    from app.infrastructure.db.repositories.sql_paper_report_repository import (
+        get_paper_report_repository,
+    )
+
+    repo = get_paper_report_repository()
+    sub = repo.get_subscription(user_id)
+    if sub:
+        return sub
+    default_email = f"user_{user_id[:8]}@investiq.vn"
+    return repo.upsert_subscription(user_id=user_id, email=default_email, is_active=True)
+
+
+@router.post(
+    "/daily-report/subscription",
+    response_model=PaperReportSubscriptionResponse,
+)
+def update_daily_report_subscription(
+    body: SetPaperReportSubscriptionRequest,
+    response: Response,
+    user_id: Annotated[str, Depends(authenticated_user_id)],
+) -> dict[str, object]:
+    _private(response)
+    from app.infrastructure.db.repositories.sql_paper_report_repository import (
+        get_paper_report_repository,
+    )
+
+    repo = get_paper_report_repository()
+    return repo.upsert_subscription(user_id=user_id, email=body.email, is_active=body.is_active)
+
+
+@router.post(
+    "/daily-report/send-now",
+    response_model=SendPaperReportNowResponse,
+)
+def send_daily_report_now(
+    response: Response,
+    user_id: Annotated[str, Depends(authenticated_user_id)],
+    service: Annotated[PaperTradingService, Depends(get_paper_trading_service)],
+) -> dict[str, object]:
+    _private(response)
+    from app.application.use_cases.portfolio.ai_portfolio_advisor import (
+        generate_ai_portfolio_review,
+    )
+    from app.infrastructure.db.repositories.sql_paper_report_repository import (
+        get_paper_report_repository,
+    )
+    from app.infrastructure.external.notifications.paper_portfolio_email import (
+        send_paper_portfolio_daily_email,
+    )
+
+    repo = get_paper_report_repository()
+    sub = repo.get_subscription(user_id)
+    target_email = (sub.get("email") if sub else None) or f"user_{user_id[:8]}@investiq.vn"
+    dashboard = service.dashboard(user_id)
+    account_raw = dashboard.get("account")
+    account_dict: dict[str, Any] = dict(account_raw) if isinstance(account_raw, dict) else {}
+    holdings_raw = dashboard.get("holdings")
+    holdings_list: list[dict[str, Any]] = list(holdings_raw) if isinstance(holdings_raw, list) else []
+    trades_raw = dashboard.get("trades")
+    trades_list: list[dict[str, Any]] | None = list(trades_raw) if isinstance(trades_raw, list) else None
+
+    ai_review = generate_ai_portfolio_review(
+        account_data=account_dict,
+        holdings_data=holdings_list,
+        trades_data=trades_list,
+    )
+
+    success, msg = send_paper_portfolio_daily_email(
+        to_email=target_email,
+        account_data=account_dict,
+        ai_review=ai_review,
+    )
+    repo.mark_sent(user_id)
+    return {
+        "success": success,
+        "message": msg,
+        "recipient": target_email,
+    }
+
+
+public_portfolio_router = APIRouter(
+    prefix="/api/v1/paper-portfolio",
+    tags=["paper-portfolio"],
+)
+
+
+@public_portfolio_router.get("/leaderboard", response_model=SocialLeaderboardResponse)
+def get_social_leaderboard(
+    service: Annotated[PaperTradingService, Depends(get_paper_trading_service)],
+    limit: int = 10,
+) -> dict[str, object]:
+    return {"data": service.get_social_leaderboard(limit=min(50, max(1, limit)))}
+
+
+@public_portfolio_router.get(
+    "/public/{portfolio_id}",
+    response_model=PublicPortfolioDetailResponse,
+)
+def get_public_portfolio(
+    portfolio_id: UUID,
+    service: Annotated[PaperTradingService, Depends(get_paper_trading_service)],
+) -> dict[str, object]:
+    result = service.get_public_portfolio_detail(str(portfolio_id))
+    if not result:
+        raise HTTPException(status_code=404, detail="Không tìm thấy danh mục công khai này.")
+    return result

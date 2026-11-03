@@ -117,34 +117,9 @@ snapshot. Vnstock is a connector to third-party sources, not a grant to redistri
 exchange data. Treat this mode as local/private evaluation until Vnstock and the original source
 confirm public display, caching, and redistribution rights in writing.
 
-The TCBS iFlash adapter is ready behind the same provider port. After TCBS confirms display/cache
-rights, use one of the following server-only credential modes:
-
-```env
-MARKET_DATA_MODE=tcbs
-MARKET_PUBLIC_CACHE_SECONDS=5
-
-# Preferred when TCBS has already issued a token:
-TCBS_ACCESS_TOKEN=replace-with-current-access-token
-
-# Or exchange a key once at startup with the current Smart OTP:
-TCBS_API_KEY=replace-with-api-key
-TCBS_OTP=replace-with-current-smart-otp
-```
-
-TCBS documents an eight-hour maximum token lifetime and no refresh token. An API key alone therefore
-cannot renew access unattended: replace `TCBS_ACCESS_TOKEN`, or supply a new one-time `TCBS_OTP` and
-restart before expiry. The backend reuses the issued token in memory, never exposes it to the browser,
-and provides bounded REST retries/circuit breaking plus one upstream index WebSocket with TCBS text
-heartbeat and reconnect. TCBS currently supplies prices, security metadata, foreign quantities,
-current-session trade history, and index streaming; Events, People, fundamentals, and multi-session
-daily candles remain empty or partial until a licensed source for those data classes is connected.
-
-The public TCBS documentation reviewed on 2026-10-07 does not provide an explicit grant to redistribute,
-cache, or display iFlash data to third-party users. Public deployment therefore remains blocked until
-TCBS confirms those rights in writing. Render is technically compatible with the long-running backend,
-worker, and outbound WebSocket; Vercel should be limited to the Next.js frontend for this topology.
-No deployment is part of the repository setup documented here.
+Market data modes supported are `vnstock`, `fixture`, and `disabled`. The system uses Vnstock
+as the primary live provider, featuring market snapshots, technical indicators, financial reports,
+and prominent business leader valuation analysis.
 
 ## Beginner paper trading
 

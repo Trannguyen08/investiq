@@ -187,9 +187,7 @@ def verify_email(
     _private(response)
     _limit(request, "verify", body.challenge_id, 10, 900)
     return _credentials(
-        _service(repository).verify_registration(
-            body.pre_auth_id, body.challenge_id, body.otp
-        )
+        _service(repository).verify_registration(body.pre_auth_id, body.challenge_id, body.otp)
     )
 
 
@@ -202,9 +200,7 @@ def login(
 ) -> CredentialsResponse:
     _private(response)
     _limit(request, "login", body.email.casefold(), 10, 900)
-    return _credentials(
-        _service(repository).login(body.email, body.password)
-    )
+    return _credentials(_service(repository).login(body.email, body.password))
 
 
 @router.post("/refresh", response_model=CredentialsResponse)
@@ -229,7 +225,7 @@ def me(
     return _user(_service(repository).current_user(_bearer(authorization)))
 
 
-@router.post("/logout", status_code=204)
+@router.post("/logout", status_code=204, response_model=None)
 def logout(
     response: Response,
     repository: Annotated[SqlUserRepository, Depends(get_user_repository)],
@@ -274,7 +270,7 @@ def verify_reset(
     )
 
 
-@router.post("/password-reset/complete", status_code=204)
+@router.post("/password-reset/complete", status_code=204, response_model=None)
 def complete_reset(
     body: PasswordResetCompleteRequest,
     request: Request,
@@ -298,13 +294,14 @@ def google_exchange(
     _private(response)
     _limit(request, "google", _client_ip(request), 10, 900)
     secret = settings.auth_google_client_secret
-    if not settings.auth_google_client_id or not secret or not settings.auth_google_redirect_uri:
+    redirect_uri = body.redirect_uri or settings.auth_google_redirect_uri
+    if not settings.auth_google_client_id or not secret or not redirect_uri:
         raise HTTPException(503, "Google authentication is not configured")
     try:
         identity = GoogleOidcClient(
             settings.auth_google_client_id,
             secret.get_secret_value(),
-            settings.auth_google_redirect_uri,
+            redirect_uri,
         ).exchange(body.code, body.code_verifier, body.nonce)
     except GoogleOidcError as exc:
         raise AuthError("GOOGLE_AUTH_FAILED", "Không thể xác minh tài khoản Google.", 401) from exc

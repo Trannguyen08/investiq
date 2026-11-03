@@ -575,3 +575,32 @@ class FixtureMarketProvider:
     def index(self, symbol: str) -> MarketIndex | None:
         normalized = symbol.upper()
         return next((item for item in self._indices if item.symbol == normalized), None)
+
+    def fundamental_growth_rows(self, symbol: str) -> list[dict[str, object]]:
+        instrument = self.instrument(symbol)
+        if instrument is None:
+            return []
+        seed = sum(ord(c) for c in symbol)
+        rows: list[dict[str, object]] = []
+        for offset in range(8):
+            year = 2024 + (offset + 2) // 4
+            quarter = ((offset + 2) % 4) + 1
+            base_roe = float(instrument.roe_percent or Decimal("14.5")) / 100.0
+            roe = max(0.05, base_roe + (offset - 3) * 0.008 + (seed % 5 - 2) * 0.004)
+            gross_margin = 0.15 + (offset % 3) * 0.015
+            net_margin = 0.08 + (offset % 4) * 0.012
+            equity = float(instrument.market_cap) * 0.6 * (1.0 + offset * 0.03)
+            rows.append(
+                {
+                    "symbol": symbol.upper(),
+                    "year": year,
+                    "quarter": quarter,
+                    "ratio_type": "RATIO_TTM",
+                    "roe": roe,
+                    "gross_margin": gross_margin,
+                    "after_tax_profit_margin": net_margin,
+                    "owners_equity": equity,
+                    "market_cap": float(instrument.market_cap),
+                }
+            )
+        return rows

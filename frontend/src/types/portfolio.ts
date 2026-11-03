@@ -14,6 +14,8 @@ export type PaperAccount = {
   total_return_percent: string | null;
   valuation_partial: boolean;
   version: number;
+  is_public?: boolean;
+  nickname?: string | null;
   created_at: string;
   updated_at: string;
 };

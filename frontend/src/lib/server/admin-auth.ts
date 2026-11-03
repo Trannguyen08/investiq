@@ -1,7 +1,10 @@
 import { createHmac, timingSafeEqual } from "node:crypto";
 
+import { cache } from "react";
 import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
+
+import { currentUser } from "@/lib/server/user-auth";
 
 const COOKIE_NAME = "investiq_admin_session";
 const SESSION_SECONDS = 8 * 60 * 60;
@@ -60,20 +63,37 @@ export async function clearAdminSession() {
   });
 }
 
-export async function hasAdminSession() {
-  if (!adminAuthConfigured()) return false;
-  const value = (await cookies()).get(COOKIE_NAME)?.value;
-  if (!value) return false;
-  const [payload, suppliedSignature] = value.split(".", 2);
-  if (!payload || !suppliedSignature || !equal(suppliedSignature, signature(payload))) return false;
-  try {
-    const parsed = JSON.parse(Buffer.from(payload, "base64url").toString()) as { expiresAt?: unknown };
-    return typeof parsed.expiresAt === "number" && parsed.expiresAt > Date.now() / 1000;
-  } catch {
-    return false;
+export const hasAdminSession = cache(async function hasAdminSession() {
+  if (adminAuthConfigured()) {
+    const value = (await cookies()).get(COOKIE_NAME)?.value;
+    if (value) {
+      const [payload, suppliedSignature] = value.split(".", 2);
+      if (payload && suppliedSignature && equal(suppliedSignature, signature(payload))) {
+        try {
+          const parsed = JSON.parse(Buffer.from(payload, "base64url").toString()) as { expiresAt?: unknown };
+          if (typeof parsed.expiresAt === "number" && parsed.expiresAt > Date.now() / 1000) {
+            return true;
+          }
+        } catch {
+          // invalid cookie JSON
+        }
+      }
+    }
   }
-}
 
-export async function requireAdminSession() {
+  // Fallback: check if the authenticated session belongs to an active administrator
+  try {
+    const user = await currentUser();
+    if (user && user.role === "admin") {
+      return true;
+    }
+  } catch {
+    // not logged in as admin
+  }
+
+  return false;
+});
+
+export const requireAdminSession = cache(async function requireAdminSession() {
   if (!(await hasAdminSession())) redirect("/admin-login");
-}
+});

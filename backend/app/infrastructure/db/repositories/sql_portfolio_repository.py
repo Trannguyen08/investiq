@@ -85,14 +85,28 @@ class SqlPortfolioRepository:
     def _order_columns(alias: str = "") -> str:
         prefix = f"{alias}." if alias else ""
         names = (
-            "idempotency_key", "side", "order_type", "status", "symbol",
-            "instrument_name", "exchange", "quantity", "filled_quantity", "limit_price",
-            "reserved_cash", "reserved_quantity", "provider", "price_at", "received_at",
-            "delay_class", "created_at", "updated_at", "expires_at", "cancelled_at",
+            "idempotency_key",
+            "side",
+            "order_type",
+            "status",
+            "symbol",
+            "instrument_name",
+            "exchange",
+            "quantity",
+            "filled_quantity",
+            "limit_price",
+            "reserved_cash",
+            "reserved_quantity",
+            "provider",
+            "price_at",
+            "received_at",
+            "delay_class",
+            "created_at",
+            "updated_at",
+            "expires_at",
+            "cancelled_at",
         )
-        return f"{prefix}id::text AS id, " + ", ".join(
-            f"{prefix}{name}" for name in names
-        )
+        return f"{prefix}id::text AS id, " + ", ".join(f"{prefix}{name}" for name in names)
 
     def get_or_create(self, user_id: str, starting_cash: Decimal) -> PaperPortfolio:
         with self._pool.connection() as connection, connection.transaction():
@@ -111,7 +125,8 @@ class SqlPortfolioRepository:
             portfolio = cursor.execute(
                 """SELECT id::text AS id, user_id::text AS user_id, currency,
                           starting_cash, cash_balance, realized_pnl, version,
-                          created_at, updated_at
+                          created_at, updated_at,
+                          COALESCE(is_public, false) AS is_public, nickname
                    FROM paper_portfolios WHERE user_id = %s""",
                 (user_id,),
             ).fetchone()
@@ -167,6 +182,8 @@ class SqlPortfolioRepository:
             ),
             orders=tuple(self._order(row) for row in orders),
             trades=tuple(self._trade(row) for row in trades),
+            is_public=bool(portfolio.get("is_public", False)),
+            nickname=str(portfolio["nickname"]) if portfolio.get("nickname") else None,
         )
 
     def execute(
@@ -208,9 +225,7 @@ class SqlPortfolioRepository:
                     or existing["symbol"] != execution.symbol
                     or int(existing["quantity"]) != execution.quantity
                 ):
-                    raise PortfolioConflictError(
-                        "Idempotency-Key đã được dùng cho một lệnh khác."
-                    )
+                    raise PortfolioConflictError("Idempotency-Key đã được dùng cho một lệnh khác.")
                 return self._trade(existing)
 
             instrument = cursor.execute(
@@ -244,9 +259,7 @@ class SqlPortfolioRepository:
                             f"Danh mục mô phỏng chỉ hỗ trợ tối đa {max_holdings} mã."
                         )
                 new_quantity = (
-                    int(holding["quantity"]) + execution.quantity
-                    if holding
-                    else execution.quantity
+                    int(holding["quantity"]) + execution.quantity if holding else execution.quantity
                 )
                 old_basis = Decimal(holding["total_cost_basis"]) if holding else Decimal()
                 new_basis = old_basis + debit
@@ -269,9 +282,7 @@ class SqlPortfolioRepository:
                 allocated_basis = round_vnd(
                     old_basis * Decimal(execution.quantity) / Decimal(old_quantity)
                 )
-                net_proceeds = (
-                    execution.gross_amount - execution.fee_amount - execution.tax_amount
-                )
+                net_proceeds = execution.gross_amount - execution.fee_amount - execution.tax_amount
                 realized_pnl = net_proceeds - allocated_basis
                 remaining_quantity = old_quantity - execution.quantity
                 if remaining_quantity == 0:
@@ -377,9 +388,7 @@ class SqlPortfolioRepository:
                     or int(existing["quantity"]) != submission.quantity
                     or Decimal(existing["limit_price"]) != submission.limit_price
                 ):
-                    raise PortfolioConflictError(
-                        "Idempotency-Key đã được dùng cho một lệnh khác."
-                    )
+                    raise PortfolioConflictError("Idempotency-Key đã được dùng cho một lệnh khác.")
                 return self._order(existing)
 
             open_count = cursor.execute(
@@ -443,17 +452,16 @@ class SqlPortfolioRepository:
                         (instrument["id"], portfolio["id"], portfolio["id"]),
                     ).fetchone()
                     assert count_row is not None
-                    if (
-                        int(count_row["total"]) >= max_holdings
-                        and not bool(count_row["already_allocated"])
+                    if int(count_row["total"]) >= max_holdings and not bool(
+                        count_row["already_allocated"]
                     ):
                         raise HoldingLimitError(
                             f"Danh mục mô phỏng chỉ hỗ trợ tối đa {max_holdings} mã."
                         )
             else:
-                available_quantity = (
-                    int(holding["quantity"]) if holding is not None else 0
-                ) - int(reserved["shares"])
+                available_quantity = (int(holding["quantity"]) if holding is not None else 0) - int(
+                    reserved["shares"]
+                )
                 if available_quantity < submission.quantity:
                     raise InsufficientSharesError(
                         "Số cổ phiếu khả dụng không đủ vì một phần đang được giữ cho lệnh bán chờ."
@@ -558,9 +566,7 @@ class SqlPortfolioRepository:
                             f"Danh mục mô phỏng chỉ hỗ trợ tối đa {max_holdings} mã."
                         )
                 new_quantity = (
-                    int(holding["quantity"]) + execution.quantity
-                    if holding
-                    else execution.quantity
+                    int(holding["quantity"]) + execution.quantity if holding else execution.quantity
                 )
                 old_basis = Decimal(holding["total_cost_basis"]) if holding else Decimal()
                 new_basis = old_basis + debit
@@ -619,13 +625,27 @@ class SqlPortfolioRepository:
                              cash_effect, realized_pnl, provider, price_at, received_at,
                              delay_class, created_at""",
                 (
-                    portfolio["id"], order["instrument_id"], order_id,
-                    execution.idempotency_key, execution.side, execution.symbol,
-                    execution.name, execution.exchange, execution.quantity,
-                    execution.execution_price, execution.gross_amount, execution.fee_rate,
-                    execution.fee_amount, execution.tax_rate, execution.tax_amount,
-                    cash_effect, realized_pnl, execution.provider, execution.price_at,
-                    execution.received_at, execution.delay_class,
+                    portfolio["id"],
+                    order["instrument_id"],
+                    order_id,
+                    execution.idempotency_key,
+                    execution.side,
+                    execution.symbol,
+                    execution.name,
+                    execution.exchange,
+                    execution.quantity,
+                    execution.execution_price,
+                    execution.gross_amount,
+                    execution.fee_rate,
+                    execution.fee_amount,
+                    execution.tax_rate,
+                    execution.tax_amount,
+                    cash_effect,
+                    realized_pnl,
+                    execution.provider,
+                    execution.price_at,
+                    execution.received_at,
+                    execution.delay_class,
                 ),
             ).fetchone()
             assert trade is not None
@@ -687,7 +707,7 @@ class SqlPortfolioRepository:
                     FROM paper_portfolios p
                     WHERE o.id = %s AND o.portfolio_id = p.id AND p.user_id = %s
                       AND o.status = 'pending' AND o.expires_at > now()
-                    RETURNING {self._order_columns('o')}""",
+                    RETURNING {self._order_columns("o")}""",
                 (order_id, user_id),
             ).fetchone()
             if row is None:
@@ -705,3 +725,106 @@ class SqlPortfolioRepository:
                 (user_id, now),
             )
             return result.rowcount
+
+    def set_public_status(
+        self, user_id: str, is_public: bool, nickname: str | None = None
+    ) -> PaperPortfolio:
+        with self._pool.connection() as connection, connection.transaction():
+            connection.execute(
+                """UPDATE paper_portfolios
+                   SET is_public = %s, nickname = %s, updated_at = now()
+                   WHERE user_id = %s""",
+                (is_public, nickname, user_id),
+            )
+        return self._load(user_id)
+
+    def get_public_leaderboard(self, limit: int = 10) -> tuple[dict[str, Any], ...]:
+        with (
+            self._pool.connection() as connection,
+            connection.cursor(row_factory=dict_row) as cursor,
+        ):
+            rows = cursor.execute(
+                """SELECT p.id::text AS portfolio_id,
+                          COALESCE(p.nickname, 'Nhà đầu tư ẩn danh') AS nickname,
+                          p.starting_cash,
+                          p.cash_balance,
+                          p.realized_pnl,
+                          ROUND(
+                              (p.realized_pnl / NULLIF(p.starting_cash, 0)) * 100, 2
+                          ) AS roi_percent,
+                          COUNT(DISTINCT h.instrument_id) AS holding_count,
+                          COUNT(DISTINCT t.id) AS total_trades,
+                          COUNT(DISTINCT CASE WHEN t.realized_pnl > 0 THEN t.id END) AS win_trades
+                   FROM paper_portfolios p
+                   LEFT JOIN paper_holdings h ON h.portfolio_id = p.id
+                   LEFT JOIN paper_trades t ON t.portfolio_id = p.id AND t.side = 'sell'
+                   WHERE p.is_public = true
+                   GROUP BY p.id, p.nickname, p.starting_cash, p.cash_balance, p.realized_pnl
+                   ORDER BY p.realized_pnl DESC, roi_percent DESC
+                   LIMIT %s""",
+                (limit,),
+            ).fetchall()
+            return tuple(dict(r) for r in rows)
+
+    def get_public_portfolio(self, portfolio_id: str) -> PaperPortfolio | None:
+        with (
+            self._pool.connection() as connection,
+            connection.cursor(row_factory=dict_row) as cursor,
+        ):
+            portfolio = cursor.execute(
+                """SELECT id::text AS id, user_id::text AS user_id, currency,
+                          starting_cash, cash_balance, realized_pnl, version,
+                          created_at, updated_at,
+                          COALESCE(is_public, false) AS is_public, nickname
+                   FROM paper_portfolios
+                   WHERE id = %s AND is_public = true""",
+                (portfolio_id,),
+            ).fetchone()
+            if portfolio is None:
+                return None
+            holdings = cursor.execute(
+                """SELECT i.symbol, i.name, i.exchange, i.sector,
+                          h.quantity, h.total_cost_basis
+                   FROM paper_holdings h
+                   JOIN market_instruments i ON i.id = h.instrument_id
+                   WHERE h.portfolio_id = %s
+                   ORDER BY h.updated_at DESC, i.symbol
+                   LIMIT 50""",
+                (portfolio["id"],),
+            ).fetchall()
+            trades = cursor.execute(
+                """SELECT id::text AS id, idempotency_key, side, symbol,
+                          instrument_name, exchange, quantity, execution_price,
+                          gross_amount, fee_rate, fee_amount, tax_rate, tax_amount,
+                          cash_effect, realized_pnl, provider, price_at, received_at,
+                          delay_class, created_at
+                   FROM paper_trades WHERE portfolio_id = %s
+                   ORDER BY created_at DESC, id DESC LIMIT 50""",
+                (portfolio["id"],),
+            ).fetchall()
+        return PaperPortfolio(
+            id=str(portfolio["id"]),
+            user_id=str(portfolio["user_id"]),
+            currency=str(portfolio["currency"]),
+            starting_cash=Decimal(portfolio["starting_cash"]),
+            cash_balance=Decimal(portfolio["cash_balance"]),
+            realized_pnl=Decimal(portfolio["realized_pnl"]),
+            version=int(portfolio["version"]),
+            created_at=portfolio["created_at"],
+            updated_at=portfolio["updated_at"],
+            holdings=tuple(
+                PaperHolding(
+                    symbol=str(row["symbol"]),
+                    name=str(row["name"]),
+                    exchange=str(row["exchange"]),
+                    sector=str(row["sector"]) if row["sector"] is not None else None,
+                    quantity=int(row["quantity"]),
+                    total_cost_basis=Decimal(row["total_cost_basis"]),
+                )
+                for row in holdings
+            ),
+            orders=(),
+            trades=tuple(self._trade(row) for row in trades),
+            is_public=True,
+            nickname=str(portfolio["nickname"]) if portfolio.get("nickname") else None,
+        )
