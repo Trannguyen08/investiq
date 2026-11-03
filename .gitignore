@@ -236,3 +236,9 @@ docs/tutorial/
 # InvestIQ local email previews and transient storage
 backend/app/storage/*
 !backend/app/storage/.gitkeep
+# Documentation assets and generated diagrams
+docs/assets/
+*.png
+*.jpg
+*.jpeg
+scripts/generate_architecture_diagrams.py

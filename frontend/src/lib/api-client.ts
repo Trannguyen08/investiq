@@ -397,15 +397,15 @@ export function createEventReminder(payload: CreateEventReminderPayload): Promis
 }
 
 export function getAssessmentQuestions(): Promise<AssessmentQuestion[]> {
-  return requestJson<AssessmentQuestion[]>("/v1/assessment/questions", 0);
+  return requestJson<AssessmentQuestion[]>("/v1/assessment/questions", 60);
 }
 
 export function getInvestorPersonas(): Promise<InvestorPersona[]> {
-  return requestJson<InvestorPersona[]>("/v1/assessment/personas", 0);
+  return requestJson<InvestorPersona[]>("/v1/assessment/personas", 120);
 }
 
 export function getInvestorPersonaByCode(code: string): Promise<InvestorPersona> {
-  return requestJson<InvestorPersona>(`/v1/assessment/personas/${encodeURIComponent(code)}`, 0);
+  return requestJson<InvestorPersona>(`/v1/assessment/personas/${encodeURIComponent(code)}`, 120);
 }
 
 export function submitAssessment(
@@ -463,11 +463,11 @@ export function getLearningTopics(
   if (level) params.set("level", level);
   if (full) params.set("full", "true");
   const qs = params.toString();
-  return requestJson<any>(`/v1/learning/topics${qs ? `?${qs}` : ""}`, 0);
+  return requestJson<any>(`/v1/learning/topics${qs ? `?${qs}` : ""}`, 60);
 }
 
 export function getLearningTopicBySlug(slug: string): Promise<LearningTopicDetail> {
-  return requestJson<LearningTopicDetail>(`/v1/learning/topics/${encodeURIComponent(slug)}`, 0);
+  return requestJson<LearningTopicDetail>(`/v1/learning/topics/${encodeURIComponent(slug)}`, 60);
 }
 
 export function submitLessonQuiz(

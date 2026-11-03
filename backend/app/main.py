@@ -13,6 +13,7 @@ import psycopg
 from fastapi import FastAPI, HTTPException, Request, status
 from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.middleware.gzip import GZipMiddleware
 from fastapi.responses import JSONResponse
 from redis.asyncio import Redis
 
@@ -221,6 +222,7 @@ app.add_middleware(
     allow_headers=["*"],
 )
 app.add_middleware(RequestLoggingMiddleware)
+app.add_middleware(GZipMiddleware, minimum_size=1000)
 app.include_router(news_router)
 app.include_router(news_admin_router)
 app.include_router(admin_users_router)
