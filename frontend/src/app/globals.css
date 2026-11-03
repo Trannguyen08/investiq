@@ -3467,15 +3467,24 @@ body:has(.article-page) .mobile-menu summary span { background: #d9e8f5; }
 .source-button:hover { background: #72e8c4; }
 .news-skeleton { background: linear-gradient(90deg, #0a1b2c, #102b40, #0a1b2c); background-size: 200% 100%; }
 
-/* Beginner stock-learning journey */
+/* Beginner stock-learning journey & readiness assessment */
 html:has(.learn-page),
-body:has(.learn-page) { background: #06111f; }
-body:has(.learn-page) .site-header { border-color: #18324a; background: rgb(6 17 31 / 94%); }
-body:has(.learn-page) .nav-link { color: #9eb2c8; }
+body:has(.learn-page),
+html:has(.readiness-page),
+body:has(.readiness-page) { background: #06111f !important; }
+body:has(.learn-page) .site-header,
+body:has(.readiness-page) .site-header { border-color: #18324a; background: rgb(6 17 31 / 94%); }
+body:has(.learn-page) .nav-link,
+body:has(.readiness-page) .nav-link { color: #9eb2c8; }
 body:has(.learn-page) .nav-link:hover,
-body:has(.learn-page) .nav-link.active { color: #f3f8fd; background: #10273d; }
-body:has(.learn-page) .account-trigger { border-color: #24425d; color: #d9e8f5; background: #0b1c2e; }
-body:has(.learn-page) .mobile-menu summary span { background: #d9e8f5; }
+body:has(.learn-page) .nav-link.active,
+body:has(.readiness-page) .nav-link:hover,
+body:has(.readiness-page) .nav-link.active { color: #f3f8fd; background: #10273d; }
+body:has(.learn-page) .account-trigger,
+body:has(.readiness-page) .account-trigger { border-color: #24425d; color: #d9e8f5; background: #0b1c2e; }
+body:has(.learn-page) .mobile-menu summary span,
+body:has(.readiness-page) .mobile-menu summary span { background: #d9e8f5; }
+.readiness-page { min-height: 100vh; background: #06111f !important; color: #d9e7f2; }
 .learn-page { display: grid; min-width: 0; gap: 1.25rem; padding-bottom: 4rem; color: #d9e7f2; }
 .learn-page .eyebrow { color: #4fd8b1; }
 .learn-hero { display: grid; grid-template-columns: minmax(0, 1.4fr) minmax(18rem, 0.6fr); overflow: hidden; border: 1px solid #23506a; border-radius: 1.25rem; background: radial-gradient(circle at 88% 12%, rgb(42 160 129 / 22%), transparent 30%), linear-gradient(145deg, #0c263b, #071624 68%); box-shadow: 0 24px 60px rgb(0 0 0 / 24%); }

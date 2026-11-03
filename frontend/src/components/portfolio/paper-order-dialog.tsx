@@ -202,14 +202,16 @@ function PaperOrderDialogContent({
           limit_price: executionPrice,
         }),
       });
-      const body = await response.json() as {
+      const body = await response.json().catch(() => null) as {
         data?: PaperDashboard;
         order?: PaperOrder;
         trade?: PaperTrade | null;
         error?: { message?: string };
-      };
-      if (!response.ok || !body.data || !body.order) {
-        throw new Error(body.error?.message ?? "Không thể đặt lệnh mô phỏng.");
+        detail?: string;
+      } | null;
+      if (!response.ok || !body?.data || !body?.order) {
+        const errorText = body?.detail ?? body?.error?.message ?? "Không thể đặt lệnh mô phỏng.";
+        throw new Error(errorText);
       }
       if (!body.trade) throw new Error("Giao dịch chưa được tự động khớp. Vui lòng tải lại dữ liệu giá và thử lại.");
       const successMessage = `${side === "buy" ? "Mua" : "Bán"} thành công: Đã tự động khớp ${body.trade.quantity} ${body.trade.symbol} tại ${money(body.trade.execution_price)}.`;

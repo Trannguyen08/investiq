@@ -209,11 +209,11 @@ export default async function StockDetailPage({
         <Link className="stock-detail-back inline-flex items-center gap-1.5 text-xs font-semibold text-slate-400 hover:text-white transition w-fit" href={returnTo}>
           ← Quay lại bảng giá
         </Link>
-        <header className="stock-detail-hero relative flex flex-wrap items-center justify-between gap-6 bg-slate-900/90 border border-slate-800 rounded-2xl p-8 sm:p-10 shadow-sm">
+        <header className="stock-detail-hero relative flex flex-wrap sm:flex-nowrap items-center justify-between gap-6 bg-slate-900/90 border border-slate-800 rounded-2xl p-8 sm:p-10 shadow-sm">
           <div className="absolute top-4 right-4 sm:top-6 sm:right-8">
             <MarketStatus meta={envelope.meta} />
           </div>
-          <div className="flex flex-col gap-1.5 pt-2 sm:pt-0 max-w-2xl">
+          <div className="flex flex-col gap-1.5 pt-2 sm:pt-0 max-w-2xl flex-1">
             <p className="eyebrow text-xs font-bold text-sky-400 uppercase tracking-wider m-0">
               {item.exchange} · {item.is_vn30 ? "THÀNH PHẦN VN30" : "CỔ PHIẾU"}
             </p>
