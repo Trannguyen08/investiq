@@ -96,12 +96,15 @@ jobs:
 
       - name: Run Forward Migrations
         working-directory: backend
-        if: env.DATABASE_URL != ''
         env:
           DATABASE_URL: ${{ secrets.DATABASE_URL || secrets.NEON_DATABASE_URL }}
         run: |
-          echo "Bắt đầu áp dụng migration lên Cloud Database..."
-          python -m app.infrastructure.db.base
+          if [ -n "$DATABASE_URL" ]; then
+            echo "Bắt đầu áp dụng migration lên Cloud Database..."
+            python -m app.infrastructure.db.base
+          else
+            echo "DATABASE_URL secret không được cấu hình trong GitHub Secrets, bỏ qua bước migration tự động."
+          fi
 
   deploy-to-render:
     name: Trigger Render Deployment
@@ -111,22 +114,38 @@ jobs:
     timeout-minutes: 10
     steps:
       - name: Trigger Backend Deploy
-        if: env.BACKEND_HOOK != ''
         env:
           BACKEND_HOOK: ${{ secrets.RENDER_BACKEND_DEPLOY_HOOK }}
+          RENDER_API_KEY: ${{ secrets.RENDER_API_KEY }}
         run: |
-          echo "Gửi tín hiệu deploy Backend tới Render..."
-          curl -f -X POST "${{ secrets.RENDER_BACKEND_DEPLOY_HOOK }}"
-          echo "Đã kích hoạt Backend Deploy thành công."
+          if [ -n "$BACKEND_HOOK" ]; then
+            echo "Gửi tín hiệu deploy Backend tới Render qua Deploy Hook..."
+            curl -f -X POST "$BACKEND_HOOK"
+            echo "Đã kích hoạt Backend Deploy thành công."
+          elif [ -n "$RENDER_API_KEY" ]; then
+            echo "Gửi tín hiệu deploy Backend tới Render qua REST API..."
+            curl -f -X POST -H "Authorization: Bearer $RENDER_API_KEY" -H "Content-Type: application/json" -d '{"clearCache":"clear"}' https://api.render.com/v1/services/srv-dbdn1s8473hc73cuqp4g/deploys
+            echo "Đã kích hoạt Backend Deploy qua REST API thành công."
+          else
+            echo "RENDER_BACKEND_DEPLOY_HOOK hoặc RENDER_API_KEY không có, Render sẽ tự động build từ commit push nhánh main."
+          fi
 
       - name: Trigger Frontend Deploy
-        if: env.FRONTEND_HOOK != ''
         env:
           FRONTEND_HOOK: ${{ secrets.RENDER_FRONTEND_DEPLOY_HOOK }}
+          RENDER_API_KEY: ${{ secrets.RENDER_API_KEY }}
         run: |
-          echo "Gửi tín hiệu deploy Frontend tới Render..."
-          curl -f -X POST "${{ secrets.RENDER_FRONTEND_DEPLOY_HOOK }}"
-          echo "Đã kích hoạt Frontend Deploy thành công."
+          if [ -n "$FRONTEND_HOOK" ]; then
+            echo "Gửi tín hiệu deploy Frontend tới Render qua Deploy Hook..."
+            curl -f -X POST "$FRONTEND_HOOK"
+            echo "Đã kích hoạt Frontend Deploy thành công."
+          elif [ -n "$RENDER_API_KEY" ]; then
+            echo "Gửi tín hiệu deploy Frontend tới Render qua REST API..."
+            curl -f -X POST -H "Authorization: Bearer $RENDER_API_KEY" -H "Content-Type: application/json" -d '{"clearCache":"clear"}' https://api.render.com/v1/services/srv-dbdn1s8473hc73cuqp40/deploys
+            echo "Đã kích hoạt Frontend Deploy qua REST API thành công."
+          else
+            echo "RENDER_FRONTEND_DEPLOY_HOOK hoặc RENDER_API_KEY không có, Render sẽ tự động build từ commit push nhánh main."
+          fi
 
       - name: Deploy Summary
         run: |
