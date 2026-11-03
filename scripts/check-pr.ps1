@@ -15,7 +15,7 @@ Write-Host "====================================================" -ForegroundCol
 $hasError = $false
 
 # 1. Kiem tra Git Diff & Khoang trang (Whitespace check against dev)
-Write-Host "`n[1/5] Kiem tra Git Diff Whitespace (git diff origin/dev --check)..." -ForegroundColor Yellow
+Write-Host "`n[1/6] Kiem tra Git Diff Whitespace (git diff origin/dev --check)..." -ForegroundColor Yellow
 try {
     $diffOutput = git diff origin/dev --check 2>&1
     if ($LASTEXITCODE -ne 0) {
@@ -30,7 +30,7 @@ try {
 }
 
 # 2. Frontend Lint
-Write-Host "`n[2/5] Kiem tra Frontend Lint (ESLint)..." -ForegroundColor Yellow
+Write-Host "`n[2/6] Kiem tra Frontend Lint (ESLint)..." -ForegroundColor Yellow
 try {
     npm --prefix frontend run lint
     if ($LASTEXITCODE -ne 0) {
@@ -45,7 +45,7 @@ try {
 }
 
 # 3. Frontend Typecheck
-Write-Host "`n[3/5] Kiem tra Frontend TypeScript Typecheck (tsc)..." -ForegroundColor Yellow
+Write-Host "`n[3/6] Kiem tra Frontend TypeScript Typecheck (tsc)..." -ForegroundColor Yellow
 try {
     npm --prefix frontend run typecheck
     if ($LASTEXITCODE -ne 0) {
@@ -59,8 +59,23 @@ try {
     $hasError = $true
 }
 
-# 4. Backend Lint & Typecheck (Ruff & Mypy)
-Write-Host "`n[4/5] Kiem tra Backend Ruff & Mypy..." -ForegroundColor Yellow
+# 4. Frontend Unit Tests (Vitest)
+Write-Host "`n[4/6] Kiem tra Frontend Unit Tests (Vitest)..." -ForegroundColor Yellow
+try {
+    npm --prefix frontend test
+    if ($LASTEXITCODE -ne 0) {
+        Write-Host "Frontend Unit Tests that bai!" -ForegroundColor Red
+        $hasError = $true
+    } else {
+        Write-Host "Frontend Unit Tests passed 100%." -ForegroundColor Green
+    }
+} catch {
+    Write-Host "Frontend Unit Tests gap ngoai le." -ForegroundColor Red
+    $hasError = $true
+}
+
+# 5. Backend Lint & Typecheck (Ruff & Mypy)
+Write-Host "`n[5/6] Kiem tra Backend Ruff & Mypy..." -ForegroundColor Yellow
 $pyPath = "$rootDir\backend\.venv313\Scripts\python.exe"
 if (-not (Test-Path $pyPath)) {
     $pyPath = "python"
@@ -93,7 +108,7 @@ try {
 }
 
 # 5. Backend Unit Tests (Cach ly moi truong nhu CI)
-Write-Host "`n[5/5] Kiem tra Backend Unit Tests (Pytest)..." -ForegroundColor Yellow
+Write-Host "`n[6/6] Kiem tra Backend Unit Tests (Pytest)..." -ForegroundColor Yellow
 try {
     Push-Location "$rootDir\backend"
     $envRenamed = $false
