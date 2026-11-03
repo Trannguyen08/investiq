@@ -25,6 +25,11 @@ import type {
   PublicPortfolioDetailData,
   SocialLeaderboardItem,
 } from "@/types/thesis";
+import type {
+  LearningTopicDetail,
+  LearningTopicSummary,
+  QuizSubmissionResult,
+} from "@/types/learning";
 import { resolveApiBase } from "@/lib/api-base";
 
 export type Source = {
@@ -397,6 +402,41 @@ export function deleteEventReminder(reminderId: string): Promise<{ message: stri
     method: "DELETE",
   }).then(async (res) => {
     if (!res.ok) throw new Error(`Lỗi ${res.status}`);
+    return res.json();
+  });
+}
+
+export function getLearningTopics(level?: string, full?: false): Promise<LearningTopicSummary[]>;
+export function getLearningTopics(level?: string, full?: true): Promise<LearningTopicDetail[]>;
+export function getLearningTopics(
+  level?: string,
+  full: boolean = false,
+): Promise<LearningTopicSummary[] | LearningTopicDetail[]> {
+  const params = new URLSearchParams();
+  if (level) params.set("level", level);
+  if (full) params.set("full", "true");
+  const qs = params.toString();
+  return requestJson<any>(`/v1/learning/topics${qs ? `?${qs}` : ""}`, 0);
+}
+
+export function getLearningTopicBySlug(slug: string): Promise<LearningTopicDetail> {
+  return requestJson<LearningTopicDetail>(`/v1/learning/topics/${encodeURIComponent(slug)}`, 0);
+}
+
+export function submitLessonQuiz(
+  slug: string,
+  answers: Record<string, string>,
+): Promise<QuizSubmissionResult> {
+  const base = resolveApiBase();
+  return fetch(`${base}/v1/learning/topics/${encodeURIComponent(slug)}/submit-quiz`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ answers }),
+  }).then(async (res) => {
+    if (!res.ok) {
+      const err = await res.json().catch(() => null);
+      throw new Error(err?.detail || `Lỗi ${res.status}`);
+    }
     return res.json();
   });
 }

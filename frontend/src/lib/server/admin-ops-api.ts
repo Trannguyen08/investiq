@@ -4,6 +4,7 @@ import { redirect } from "next/navigation";
 
 import { resolveApiBase } from "@/lib/api-base";
 import { authenticatedSession } from "@/lib/server/user-auth";
+import type { LearningTopicDetail } from "@/types/learning";
 
 export type UserGrowthPoint = {
   date: string;
@@ -536,5 +537,69 @@ export function clearAdminMarketDataCache() {
   return adminFetch<{ status: string; message: string }>(
     "/market-data-pipeline/clear-cache",
     { method: "POST" }
+  );
+}
+
+// Learning Management
+export type AdminLearningTopicPage = {
+  items: LearningTopicDetail[];
+  total: number;
+  page: number;
+  limit: number;
+  total_pages: number;
+};
+
+export function getAdminLearningTopics(params?: {
+  q?: string;
+  level?: string;
+  status?: string;
+  page?: number;
+  limit?: number;
+}) {
+  const query = new URLSearchParams();
+  if (params?.q) query.set("q", params.q);
+  if (params?.level) query.set("level", params.level);
+  if (params?.status) query.set("status", params.status);
+  if (params?.page) query.set("page", String(params.page));
+  if (params?.limit) query.set("limit", String(params.limit));
+  const qs = query.toString();
+  return adminFetch<AdminLearningTopicPage>(`/learning/topics${qs ? `?${qs}` : ""}`);
+}
+
+export function getAdminLearningTopicDetail(topicId: string) {
+  return adminFetch<LearningTopicDetail>(`/learning/topics/${encodeURIComponent(topicId)}`);
+}
+
+export function createAdminLearningTopic(payload: Record<string, unknown>) {
+  return adminFetch<LearningTopicDetail>("/learning/topics", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(payload),
+  });
+}
+
+export function updateAdminLearningTopic(topicId: string, payload: Record<string, unknown>) {
+  return adminFetch<LearningTopicDetail>(`/learning/topics/${encodeURIComponent(topicId)}`, {
+    method: "PUT",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(payload),
+  });
+}
+
+export function deleteAdminLearningTopic(topicId: string) {
+  return adminFetch<{ status: string; message: string }>(
+    `/learning/topics/${encodeURIComponent(topicId)}`,
+    { method: "DELETE" }
+  );
+}
+
+export function toggleAdminLearningTopicStatus(topicId: string, status: "published" | "draft") {
+  return adminFetch<{ status: string; new_status: string }>(
+    `/learning/topics/${encodeURIComponent(topicId)}/status`,
+    {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ status }),
+    }
   );
 }

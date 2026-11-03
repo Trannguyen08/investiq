@@ -1,5 +1,41 @@
 # Current Task
 
+## Remake Stock Basics Learning Platform & Admin Management - 2026-11-03 (completed)
+- **User Request**: "TÔI NGHĨ NÊN REMAKE LẠI TRANG CHỨNG KHOÁN CĂN BẢN: KHẢ NĂNG SẼ LIST RA CÁC MỤC KIẾN THỨC TỪ DỄ TỚI KHÓ, CÁC MỤC SẼ BAO GỒM LÝ THUEYETS VÀ VÍ DỤ MINH HỌA TRONG THỰC TẾ, CÓ THỂ THÊM CÁC BÀI TEST CHO USER HIỂU RÕ HƠN. CÁC DATA KIẾN THỨC SẼ ĐƯỢC LƯU TRÊN DB VÀ CŨNG SẼ ĐƯỢC ADMIN QUẢN LÝ. CHUYỂN NHÁNH VÀ BẮT ĐẦU CODE"
+- **Branch**: `feature/remake-stock-basics`
+- **Core Results**:
+  1. **Thiết kế Cơ sở dữ liệu & Seed 9 bài học chất lượng cao (`0022_learning_platform.sql`)**:
+     - Bảng `learning_topics` lưu trữ toàn diện: `id, slug, level (beginner|intermediate|advanced), stage, sort_order, title, eyebrow, summary, estimated_minutes, theory_content, practical_example, quizzes, glossary, practice_action, status, created_at, updated_at`.
+     - Seed sẵn 9 bài học phân cấp chặt chẽ:
+       * **Beginner (Cơ bản)**: Bản chất Cổ phiếu & Tiết kiệm vs Đầu tư (HPG); Các sàn HOSE, HNX, UPCoM & Phiên ATO/ATC (VCB); Đọc bảng điện tử & 5 màu sắc (SSI).
+       * **Intermediate (Trung cấp)**: Đọc nến Nhật & Volume (HPG); Chỉ số P/E, P/B, ROE (FPT); Cổ tức tiền mặt vs Cổ phiếu & Ngày GDKHQ (VNM).
+       * **Advanced (Nâng cao)**: Kỷ luật cắt lỗ 7-8% & Quản trị quy mô (NVL); Tâm lý FOMO & Bẫy bầy đàn (VIX); Kế hoạch tích sản DCA dài hạn (FPT).
+  2. **Kiến trúc Backend Clean Architecture (`entities`, `schemas`, `repositories`, `api`)**:
+     - Entity & Schemas: `LearningTopic`, `PracticalExample`, `QuizQuestion`, `QuizOption`, `SubmitQuizRequest`, `SubmitQuizResponse`, `AdminTopicCreateRequest`, `AdminTopicUpdateRequest`, `AdminTopicStatusRequest`, `AdminLearningTopicPage`.
+     - Repository: `SqlLearningRepository` hỗ trợ kết nối PostgreSQL pool và in-memory fallback thông minh với 9 bài học curated, đảm bảo 100% hoạt động ngay cả khi môi trường CI không có DB.
+     - Public API: `GET /api/v1/learning/topics`, `GET /api/v1/learning/topics/{slug}`, `POST /api/v1/learning/topics/{slug}/submit-quiz`.
+     - Admin API: `GET/POST /api/v1/admin/learning/topics`, `GET/PUT/DELETE /api/v1/admin/learning/topics/{topic_id}`, `PATCH /api/v1/admin/learning/topics/{topic_id}/status`.
+  3. **Admin Console Quản lý Khóa học & Kiến thức (`/admin/learning`)**:
+     - Thêm mục "Khóa học & Kiến thức" vào Admin Sidebar.
+     - Dashboard thống kê 5 KPI: Tổng bài học, Cơ bản, Trung cấp, Nâng cao, Đang xuất bản.
+     - Bộ lọc tìm kiếm từ khóa, lọc theo Cấp độ và Trạng thái xuất bản (Published/Draft).
+     - Bảng dữ liệu quản trị với các thao tác: Xem chi tiết bài học (Modal View), Thêm bài học mới (Modal Form nhiều tab: Cơ bản, Ví dụ thực tế, Bài test trắc nghiệm), Sửa bài học, Bật/Tắt trạng thái xuất bản tức thì, và Xóa bài học kèm xác nhận an toàn.
+  4. **Giao diện Người dùng Khám phá Kiến thức Chứng khoán (`/learn`)**:
+     - Lộ trình đào tạo trực quan phân cấp: Dễ (Beginner) -> Trung cấp (Intermediate) -> Nâng cao (Advanced).
+     - Bộ lọc cấp độ mượt mà kèm thanh tiến độ học tập (Progress Bar) tính % bài học đã hoàn thành.
+     - Thẻ Ví dụ thực tế (Practical Example) gắn với bối cảnh cổ phiếu Việt Nam (HPG, FPT, VNM...) gồm Tình huống, Phân tích chuyên sâu và Bài học mấu chốt.
+     - Bài kiểm tra trắc nghiệm củng cố (Quizzes) tương tác trực tiếp với giải thích chi tiết khi chọn đáp án đúng/sai.
+     - Tích hợp biểu đồ nến VN-Index trực tiếp làm ngữ cảnh thực chiến.
+     - Tuân thủ nghiêm ngặt 100% tiếng Việt, 0 icon trước text, chuẩn accessibility và giữ nguyên contract CSS.
+- **Verification**:
+  - `check-pr.ps1` Quality Gate: 5/5 bước xanh 100%.
+  - Vitest: 38/38 test files passed (147/147 tests passed).
+  - Backend Pytest: 137/137 passed trong 40s.
+  - TypeScript Typecheck (`tsc --noEmit`): 0 errors.
+  - ESLint (`npm run lint`): 0 errors, 0 warnings.
+  - Backend Mypy & Ruff: 0 errors trong 42 files.
+  - Git Diff Check (`origin/dev`): Clean, 0 whitespace errors.
+
 ## Modularize globals.css with Domain Modules & Leverage Tailwind Utilities - 2026-11-03 (completed)
 - **User Request**: "có thể cho tailwind san sẻ bớt nhiệm vụ với global.css được k, thấy file đó nhiều dòng quá, yêu cầu trong quá trình refactor thì giao diện UI hiện tại của hệ thống phải k thay đổi"
 - **Branch**: `refactor/frontend-clean-code` (đã commit `c3ba8dd` và push lên `origin/refactor/frontend-clean-code`).

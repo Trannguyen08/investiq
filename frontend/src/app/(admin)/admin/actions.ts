@@ -16,10 +16,14 @@ import {
 } from "@/lib/server/admin-news-api";
 import {
   clearAdminMarketDataCache,
+  createAdminLearningTopic,
+  deleteAdminLearningTopic,
   deleteAdminThesis,
   invalidateAdminCache,
   syncAdminDividends,
+  toggleAdminLearningTopicStatus,
   updateAdminAlert,
+  updateAdminLearningTopic,
   updateAdminMarketInstrument,
   updateAdminThesis,
 } from "@/lib/server/admin-ops-api";
@@ -261,5 +265,69 @@ export async function clearMarketDataCacheAction() {
       throw error;
     }
     redirect(`/admin/data-pipeline?error=${message(error instanceof Error ? error.message : "Không thể xóa bộ nhớ đệm")}`);
+  }
+}
+
+export async function createLearningTopicAction(formData: FormData) {
+  await requireAdminSession();
+  try {
+    const rawPayload = stringField(formData, "payload_json");
+    const payload = rawPayload ? JSON.parse(rawPayload) : {};
+    await createAdminLearningTopic(payload);
+    revalidatePath("/admin/learning");
+    redirect("/admin/learning?notice=Đã thêm bài học mới thành công");
+  } catch (error) {
+    if (error instanceof Error && (error.message === "NEXT_REDIRECT" || ("digest" in error && String((error as { digest?: string }).digest).startsWith("NEXT_REDIRECT")))) {
+      throw error;
+    }
+    redirect(`/admin/learning?error=${message(error instanceof Error ? error.message : "Không thể tạo bài học")}`);
+  }
+}
+
+export async function updateLearningTopicAction(formData: FormData) {
+  await requireAdminSession();
+  try {
+    const topicId = stringField(formData, "topic_id");
+    const rawPayload = stringField(formData, "payload_json");
+    const payload = rawPayload ? JSON.parse(rawPayload) : {};
+    await updateAdminLearningTopic(topicId, payload);
+    revalidatePath("/admin/learning");
+    redirect("/admin/learning?notice=Đã cập nhật bài học thành công");
+  } catch (error) {
+    if (error instanceof Error && (error.message === "NEXT_REDIRECT" || ("digest" in error && String((error as { digest?: string }).digest).startsWith("NEXT_REDIRECT")))) {
+      throw error;
+    }
+    redirect(`/admin/learning?error=${message(error instanceof Error ? error.message : "Không thể cập nhật bài học")}`);
+  }
+}
+
+export async function deleteLearningTopicAction(formData: FormData) {
+  await requireAdminSession();
+  try {
+    const topicId = stringField(formData, "topic_id");
+    await deleteAdminLearningTopic(topicId);
+    revalidatePath("/admin/learning");
+    redirect("/admin/learning?notice=Đã xóa bài học thành công");
+  } catch (error) {
+    if (error instanceof Error && (error.message === "NEXT_REDIRECT" || ("digest" in error && String((error as { digest?: string }).digest).startsWith("NEXT_REDIRECT")))) {
+      throw error;
+    }
+    redirect(`/admin/learning?error=${message(error instanceof Error ? error.message : "Không thể xóa bài học")}`);
+  }
+}
+
+export async function toggleLearningTopicStatusAction(formData: FormData) {
+  await requireAdminSession();
+  try {
+    const topicId = stringField(formData, "topic_id");
+    const newStatus = stringField(formData, "status") as "published" | "draft";
+    await toggleAdminLearningTopicStatus(topicId, newStatus);
+    revalidatePath("/admin/learning");
+    redirect(`/admin/learning?notice=${message(`Đã chuyển trạng thái sang ${newStatus === "published" ? "Đã xuất bản" : "Bản nháp"}`)}`);
+  } catch (error) {
+    if (error instanceof Error && (error.message === "NEXT_REDIRECT" || ("digest" in error && String((error as { digest?: string }).digest).startsWith("NEXT_REDIRECT")))) {
+      throw error;
+    }
+    redirect(`/admin/learning?error=${message(error instanceof Error ? error.message : "Không thể chuyển trạng thái bài học")}`);
   }
 }
