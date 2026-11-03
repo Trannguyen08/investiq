@@ -1,0 +1,33 @@
+name: Production Keep-Alive Ping
+
+on:
+  schedule:
+    # Run every 14 minutes to prevent Render free-tier spin down (15-minute inactivity limit)
+    - cron: "*/14 * * * *"
+  workflow_dispatch:
+
+concurrency:
+  group: keepalive-cron
+  cancel-in-progress: false
+
+jobs:
+  ping:
+    name: Ping Services
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Ping Backend Health
+        env:
+          BACKEND_URL: ${{ secrets.RENDER_BACKEND_URL || 'https://investiq-backend-xe6x.onrender.com' }}
+        run: |
+          echo "Pinging Backend healthcheck at ${BACKEND_URL}/healthz..."
+          status=$(curl -s -o /dev/null -w "%{http_code}" -m 30 "${BACKEND_URL}/healthz" || echo "failed")
+          echo "Backend response HTTP status: ${status}"
+
+      - name: Ping Frontend Health
+        env:
+          FRONTEND_URL: ${{ secrets.RENDER_FRONTEND_URL || 'https://investiq-frontend-zd01.onrender.com' }}
+        run: |
+          echo "Pinging Frontend at ${FRONTEND_URL}..."
+          status=$(curl -s -o /dev/null -w "%{http_code}" -m 30 "${FRONTEND_URL}" || echo "failed")
+          echo "Frontend response HTTP status: ${status}"

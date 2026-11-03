@@ -89,6 +89,7 @@ flowchart TD
 > [!IMPORTANT]
 > - **Spin Down (Ngủ đông)**: Trên gói Free của Render, nếu Web Service không nhận được lượt truy cập (inbound request) nào trong vòng **15 phút**, service sẽ tự động tạm ngưng để tiết kiệm tài nguyên.
 > - **Cold Start**: Lượt truy cập đầu tiên sau khi ngủ đông sẽ mất khoảng **30 - 50 giây** để hệ thống khởi động lại container. Đây là đặc tính bình thường của gói miễn phí.
+> - **Giải pháp Keep-Alive**: Dự án đã tích hợp sẵn GitHub Actions Keep-Alive (`.github/workflows/keepalive.yml`) chạy tự động mỗi 14 phút một lần để ping Backend và Frontend, giúp duy trì hệ thống luôn thức 24/7 và loại bỏ hoàn toàn độ trễ Cold Start. Bạn cũng có thể thiết lập thêm một monitor miễn phí trên [UptimeRobot.com](https://uptimerobot.com) trỏ vào `https://<tên-backend>.onrender.com/healthz` (chu kỳ 5-10 phút) để dự phòng.
 
 ### 2.4. Ma Trận Biến Môi Trường Cần Thiết
 

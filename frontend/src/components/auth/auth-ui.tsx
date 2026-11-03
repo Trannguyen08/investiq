@@ -45,10 +45,16 @@ function Notice({ error, success }: { error?: string; success?: string }) {
   return null;
 }
 
-export function LoginForm({ resetSucceeded = false }: { resetSucceeded?: boolean }) {
+export function LoginForm({
+  resetSucceeded = false,
+  initialError = "",
+}: {
+  resetSucceeded?: boolean;
+  initialError?: string;
+}) {
   const router = useRouter();
   const [email, setEmail] = useState(""); const [password, setPassword] = useState("");
-  const [busy, setBusy] = useState(false); const [error, setError] = useState("");
+  const [busy, setBusy] = useState(false); const [error, setError] = useState(initialError);
   async function submit(event: FormEvent) {
     event.preventDefault(); setBusy(true); setError("");
     try {

@@ -140,8 +140,10 @@ function decrypt<T>(value: string): T {
 
 async function backend(path: string, init: RequestInit = {}) {
   const base = resolveApiBase();
+  const signal = init.signal ?? AbortSignal.timeout(15000);
   return fetch(`${base}/v1/auth${path}`, {
     ...init,
+    signal,
     cache: "no-store",
     headers: {
       "Content-Type": "application/json",
@@ -152,12 +154,41 @@ async function backend(path: string, init: RequestInit = {}) {
 }
 
 export async function backendJson<T>(path: string, body?: object, method = "POST"): Promise<T> {
-  const response = await backend(path, { method, body: body ? JSON.stringify(body) : undefined });
-  if (!response.ok) {
-    const data = (await response.json().catch(() => ({}))) as AuthErrorBody;
-    throw new UserAuthError(response.status, data.error?.code ?? "AUTH_FAILED", data.error?.message ?? "Không thể xử lý yêu cầu.");
+  const maxAttempts = 2;
+  for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+    try {
+      const response = await backend(path, { method, body: body ? JSON.stringify(body) : undefined });
+      if (!response.ok && (response.status === 502 || response.status === 503 || response.status === 504) && attempt < maxAttempts) {
+        await new Promise((resolve) => setTimeout(resolve, 2000));
+        continue;
+      }
+      if (!response.ok) {
+        const data = (await response.json().catch(() => ({}))) as AuthErrorBody;
+        const code = data.error?.code ?? (
+          response.status === 502 || response.status === 503 || response.status === 504
+            ? "BACKEND_UNAVAILABLE"
+            : response.status === 429
+              ? "RATE_LIMIT_EXCEEDED"
+              : "AUTH_FAILED"
+        );
+        const message = data.error?.message ?? (
+          response.status === 502 || response.status === 503 || response.status === 504
+            ? "Máy chủ dịch vụ đang khởi động lại hoặc tạm thời không thể truy cập."
+            : "Không thể xử lý yêu cầu."
+        );
+        throw new UserAuthError(response.status, code, message);
+      }
+      return response.status === 204 ? (undefined as T) : ((await response.json()) as T);
+    } catch (error) {
+      if (error instanceof UserAuthError) throw error;
+      if (attempt < maxAttempts) {
+        await new Promise((resolve) => setTimeout(resolve, 2000));
+        continue;
+      }
+      throw new UserAuthError(503, "BACKEND_UNAVAILABLE", "Máy chủ dịch vụ đang khởi động lại hoặc tạm thời không thể truy cập.");
+    }
   }
-  return response.status === 204 ? (undefined as T) : ((await response.json()) as T);
+  throw new UserAuthError(503, "BACKEND_UNAVAILABLE", "Máy chủ dịch vụ đang khởi động lại hoặc tạm thời không thể truy cập.");
 }
 
 export class UserAuthError extends Error {

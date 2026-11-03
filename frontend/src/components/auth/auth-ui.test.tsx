@@ -49,6 +49,11 @@ describe("authentication forms", () => {
     expect(screen.getByRole("status").textContent).toContain("đăng nhập bằng mật khẩu mới");
   });
 
+  it("renders initial error notice when initialError is provided", () => {
+    render(<LoginForm initialError="Máy chủ dịch vụ đang khởi động lại hoặc phiên xác thực đã hết hạn. Vui lòng bấm Đăng nhập lại." />);
+    expect(screen.getByRole("alert").textContent).toContain("Máy chủ dịch vụ đang khởi động lại");
+  });
+
   it("starts password recovery with email and OTP controls in the requested order", () => {
     const { container } = render(<ForgotPasswordForm />);
     const controls = [...container.querySelectorAll("input, button")].map(
