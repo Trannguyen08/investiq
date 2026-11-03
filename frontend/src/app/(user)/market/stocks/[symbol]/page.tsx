@@ -66,17 +66,17 @@ export default async function StockDetailPage({
   const initialTab = typeof query.tab === "string" ? query.tab : "chart";
   const selected = rangeConfig[range];
 
-  const instrumentPromise = getMarketInstrument(symbol).then(
+  const instrumentPromise = getMarketInstrument(symbol, 4000).then(
     (value) => ({ status: "fulfilled" as const, value }),
     () => ({ status: "rejected" as const }),
   );
-  const candlesPromise = getMarketCandles(symbol, selected.interval, selected.limit).catch(() => null);
-  const intradayPromise = getMarketIntradayTrades(symbol, 100).catch(() => null);
-  const growthPromise = getMarketGrowth(symbol).catch(() => null);
-  const forensicsPromise = getMarketForensics(symbol).catch(() => null);
-  const dividendsPromise = getInstrumentDividends(symbol).catch(() => null);
-  const fsQuarterPromise = getInstrumentFinancialStatements(symbol, "quarter", 6).catch(() => null);
-  const fsYearPromise = getInstrumentFinancialStatements(symbol, "year", 4).catch(() => null);
+  const candlesPromise = getMarketCandles(symbol, selected.interval, selected.limit, 4000).catch(() => null);
+  const intradayPromise = getMarketIntradayTrades(symbol, 100, 3000).catch(() => null);
+  const growthPromise = getMarketGrowth(symbol, 3000).catch(() => null);
+  const forensicsPromise = getMarketForensics(symbol, 3000).catch(() => null);
+  const dividendsPromise = getInstrumentDividends(symbol, 3000).catch(() => null);
+  const fsQuarterPromise = getInstrumentFinancialStatements(symbol, "quarter", 6, 3000).catch(() => null);
+  const fsYearPromise = getInstrumentFinancialStatements(symbol, "year", 4, 3000).catch(() => null);
 
   const [
     instrumentResult,
