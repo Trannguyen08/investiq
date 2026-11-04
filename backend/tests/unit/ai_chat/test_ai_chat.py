@@ -30,6 +30,12 @@ def test_ticker_extraction() -> None:
     # Stop words should not be mistaken as tickers
     assert "CHO" not in _extract_tickers("Cho tôi xem giá")
     assert "MUA" not in _extract_tickers("Có nên mua cổ phiếu không?")
+    # Conversational phrases must not trigger ambiguous ticker TIN / HOM / TAO
+    assert _extract_tickers("cho tao tin tức hôm nay") == []
+    assert _extract_tickers("tin mới nhất") == []
+    # Explicit qualifier should still extract TIN or HOM
+    assert _extract_tickers("phân tích mã TIN") == ["TIN"]
+    assert _extract_tickers("cổ phiếu HOM thế nào") == ["HOM"]
 
 
 def test_calculate_rsi() -> None:
@@ -276,3 +282,79 @@ def test_evaluate_response_rules() -> None:
     )
     assert "external_sources_cited" in eval_missing.failed_checks
     assert eval_missing.score < 1.0
+
+
+@pytest.mark.anyio
+async def test_ai_news_intent_not_ticker_tin() -> None:
+    provider = FixtureMarketProvider()
+    service = MarketService(provider)
+    ai_service = AiFinancialService(market_service=service)
+
+    result = await ai_service.process_chat("cho tao tin tức hôm nay")
+    # Must NOT return stock analysis report for TIN
+    assert "Báo cáo phân tích chuyên sâu: TIN" not in result["content"]
+    assert "Tín Việt" not in result["content"]
+    # Must be market news summary
+    assert "Điểm tin thị trường hôm nay:" in result["content"]
+    # No stock score card widget for TIN
+    assert not any(w["type"] == "stock_score_card" for w in result["widgets"])
+
+
+@pytest.mark.anyio
+async def test_ai_news_with_news_repository() -> None:
+    from datetime import datetime
+    from unittest.mock import MagicMock
+
+    from app.domain.entities.news_article import (
+        ContentAccess,
+        ExtractionStatus,
+        NewsArticle,
+        NewsSource,
+    )
+
+    provider = FixtureMarketProvider()
+    service = MarketService(provider)
+
+    fake_source = NewsSource(
+        id="src-1",
+        slug="cafef",
+        name="CafeF",
+        base_url="https://cafef.vn",
+        status="active",
+        display_mode=ContentAccess.FULL_TEXT,
+    )
+    fake_article = NewsArticle(
+        id="art-100",
+        revision_id="rev-1",
+        source=fake_source,
+        canonical_url="https://cafef.vn/tin-100.chn",
+        title="VN-Index bứt phá mạnh mẽ phiên cuối tuần",
+        description="Thanh khoản toàn sàn đạt kỷ lục mới với lực cầu khối ngoại.",
+        content_text="Thanh khoản toàn sàn đạt kỷ lục mới...",
+        content_blocks=(),
+        authors=(),
+        published_at=datetime.now(),
+        source_updated_at=None,
+        first_seen_at=datetime.now(),
+        feed_at=datetime.now(),
+        fetched_at=datetime.now(),
+        category="Thị trường",
+        tags=("VNINDEX",),
+        assets=(),
+        mentions=(),
+        sentiment=None,
+        extraction_status=ExtractionStatus.COMPLETE,
+        content_access=ContentAccess.FULL_TEXT,
+        quality_flags=(),
+    )
+
+    mock_news_repo = MagicMock()
+    mock_news_repo.list_articles.return_value = ((fake_article,), False)
+
+    ai_service = AiFinancialService(market_service=service, news_repo=mock_news_repo)
+    result = await ai_service.process_chat("Có tin gì mới không?")
+
+    assert "Điểm tin thị trường hôm nay:" in result["content"]
+    assert "VN-Index bứt phá mạnh mẽ" in result["content"]
+    assert "CafeF" in result["content"]
+    assert any(s["url"] == "/news/art-100" for s in result["sources"])

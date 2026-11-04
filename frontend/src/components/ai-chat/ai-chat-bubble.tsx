@@ -19,7 +19,13 @@ function sanitizeText(raw: string): string {
 }
 
 /** Client-safe timestamp renderer to eliminate SSR hydration mismatches */
-function MessageTime({ timestamp }: { timestamp: string }) {
+function MessageTime({
+  timestamp,
+  isUser = false,
+}: {
+  timestamp: string;
+  isUser?: boolean;
+}) {
   const [formatted, setFormatted] = useState("");
 
   useEffect(() => {
@@ -41,7 +47,14 @@ function MessageTime({ timestamp }: { timestamp: string }) {
   if (!formatted) return null;
 
   return (
-    <span className="text-[10px] text-slate-500 block text-right mt-2 font-mono" suppressHydrationWarning>
+    <span
+      className={`text-[10px] font-mono select-none ${
+        isUser
+          ? "text-sky-100 font-semibold shrink-0 align-bottom inline-block leading-none tracking-tight ml-2"
+          : "text-slate-500 block text-right mt-2"
+      }`}
+      suppressHydrationWarning
+    >
       {formatted}
     </span>
   );
@@ -129,14 +142,11 @@ function HighlightedText({ text }: { text: string }) {
 function FormattedContent({ text }: { text: string }) {
   const sanitized = sanitizeText(text);
 
-  // If text contains continuous single-line financial reports, split into distinct lines
+  // If text contains continuous single-line financial reports, split cleanly on section boundaries
   const normalized = sanitized
     .replace(/(Báo cáo phân tích chuyên sâu:[^\n]+)/g, "$1\n\n")
     .replace(/(Đối chiếu so sánh:[^\n]+)/g, "$1\n\n")
-    .replace(/([^\n])\s*(Thị giá:)/g, "$1\n- $2")
-    .replace(/([^\n])\s*(Định giá:)/g, "$1\n- $2")
-    .replace(/([^\n])\s*(Tín hiệu kỹ thuật:|Kỹ thuật:)/g, "$1\n- $2")
-    .replace(/([^\n])\s*(Vùng hỗ trợ|Vùng giá trọng yếu:)/g, "$1\n- $2");
+    .replace(/(Điểm tin thị trường hôm nay:[^\n]+)/g, "$1\n\n");
 
   const rawBlocks = normalized.split(/\n\n+/);
 
@@ -150,7 +160,9 @@ function FormattedContent({ text }: { text: string }) {
         if (
           trimmed.startsWith("### ") ||
           trimmed.startsWith("Báo cáo phân tích chuyên sâu:") ||
-          trimmed.startsWith("Đối chiếu so sánh:")
+          trimmed.startsWith("Đối chiếu so sánh:") ||
+          trimmed.startsWith("Điểm tin thị trường hôm nay:") ||
+          trimmed.startsWith("Tin tức nổi bật hôm nay:")
         ) {
           const title = trimmed.replace(/^###\s*/, "");
           return (
@@ -169,8 +181,26 @@ function FormattedContent({ text }: { text: string }) {
         return (
           <div key={bIdx} className="space-y-1.5">
             {lines.map((line, lIdx) => {
-              const isBullet = line.startsWith("- ") || line.startsWith("• ");
-              const cleanLine = isBullet ? line.substring(2) : line;
+              const trimmedLine = line.trim();
+              // Prevent rendering empty or orphan marker rows
+              if (
+                !trimmedLine ||
+                trimmedLine === "-" ||
+                trimmedLine === "•" ||
+                trimmedLine === "*" ||
+                trimmedLine === "- -"
+              ) {
+                return null;
+              }
+
+              const isBullet =
+                trimmedLine.startsWith("- ") ||
+                trimmedLine.startsWith("• ") ||
+                trimmedLine.startsWith("* ");
+              const cleanLine = (isBullet ? trimmedLine.substring(2) : trimmedLine).trim();
+              if (!cleanLine || cleanLine === "-" || cleanLine === "•") {
+                return null;
+              }
 
               // Check if line starts with key dimension
               const hasColon = cleanLine.includes(":");
@@ -221,10 +251,14 @@ export function AiChatBubble({
 
   if (isUser) {
     return (
-      <div className="flex justify-end mb-4">
-        <div className="max-w-[85%] sm:max-w-[70%] bg-sky-600/95 text-white rounded-2xl rounded-tr-sm px-4 py-3 shadow-md text-sm leading-relaxed border border-sky-500/30">
-          <p className="m-0 whitespace-pre-wrap">{sanitizeText(message.content)}</p>
-          <MessageTime timestamp={message.created_at} />
+      <div className="flex justify-end mb-3">
+        <div className="max-w-[85%] sm:max-w-[70%] bg-gradient-to-r from-sky-600 via-sky-600 to-cyan-600 text-white rounded-2xl rounded-tr-xs px-3.5 py-1.5 sm:py-2 shadow-md shadow-sky-950/30 border border-sky-400/30">
+          <div className="flex flex-wrap items-end justify-between gap-x-2.5 gap-y-1">
+            <p className="m-0 whitespace-pre-wrap leading-relaxed text-slate-50 break-words flex-1 min-w-0 text-sm font-normal">
+              {sanitizeText(message.content)}
+            </p>
+            <MessageTime timestamp={message.created_at} isUser={true} />
+          </div>
         </div>
       </div>
     );

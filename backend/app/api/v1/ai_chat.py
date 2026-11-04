@@ -18,6 +18,7 @@ from app.application.use_cases.market_data.market_service import MarketService
 from app.infrastructure.cache.ai_chat_cache import get_ai_chat_cache
 from app.infrastructure.db.repositories.sql_ai_chat_repository import SqlAiChatRepository
 from app.infrastructure.db.repositories.sql_learning_repository import SqlLearningRepository
+from app.infrastructure.db.repositories.sql_news_repository import SqlNewsRepository
 from app.infrastructure.db.session import get_pool
 from app.schemas.ai_chat import (
     AiChatRequest,
@@ -39,9 +40,13 @@ def _get_shared_knowledge_base() -> InternalKnowledgeBase:
     global _shared_kb
     with _shared_kb_lock:
         if _shared_kb is None:
+            repo: SqlLearningRepository
             try:
-                pool = get_pool()
-                repo = SqlLearningRepository(pool)
+                from app.infrastructure.db.session import _pool
+                if _pool is not None:
+                    repo = SqlLearningRepository(_pool)
+                else:
+                    repo = SqlLearningRepository(None)
             except Exception:
                 repo = SqlLearningRepository(None)
             _shared_kb = InternalKnowledgeBase(repo)
@@ -55,9 +60,19 @@ def _ai_service() -> AiFinancialService:
         from app.infrastructure.external.market_fixture_provider import FixtureMarketProvider
 
         provider = FixtureMarketProvider()
+
+    news_repo: SqlNewsRepository | None = None
+    try:
+        from app.infrastructure.db.session import _pool
+        if _pool is not None:
+            news_repo = SqlNewsRepository(_pool)
+    except Exception:
+        news_repo = None
+
     return AiFinancialService(
         market_service=MarketService(provider),
         knowledge_base=_get_shared_knowledge_base(),
+        news_repo=news_repo,
         cache=get_ai_chat_cache(),
         metrics=_shared_metrics,
     )

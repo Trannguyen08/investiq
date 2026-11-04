@@ -26,6 +26,7 @@ from urllib.parse import parse_qs, urlparse
 
 import httpx
 
+from app.application.dto.news_dto import NewsQuery
 from app.application.interfaces.i_ai_response_cache import AiResponseCache
 from app.application.use_cases.ai_chat.ai_observability import (
     AiMetricsRegistry,
@@ -39,11 +40,20 @@ from app.application.use_cases.ai_chat.guardrails import (
 )
 from app.application.use_cases.ai_chat.knowledge_base import InternalKnowledgeBase, KnowledgeHit
 from app.application.use_cases.market_data.market_service import MarketService
+from app.domain.repositories.i_news_repository import INewsRepository
 
 logger = logging.getLogger(__name__)
 
 # Known stock tickers regex: 3 uppercase letters
 _TICKER_PATTERN = re.compile(r"\b([A-Z]{3})\b")
+
+# Regex to detect tickers with explicit financial qualifiers, e.g. "mã TIN", "cổ phiếu HOM", "(HPG)"
+_EXPLICIT_TICKER_PATTERN = re.compile(
+    r"(?:mã|cổ phiếu|cp|ck|chứng khoán|định giá|phân tích|bctc)\s+([A-Z]{3})\b|"
+    r"\b([A-Z]{3})\s+(?:tăng|giảm|trần|sàn|hôm nay|thế nào)\b|"
+    r"\(([A-Z]{3})\)",
+    re.IGNORECASE,
+)
 
 # Stop words that look like tickers but are Vietnamese words or common financial acronyms
 _NON_TICKER_WORDS = frozenset(
@@ -52,7 +62,19 @@ _NON_TICKER_WORDS = frozenset(
         "QUA", "NAY", "VAY", "NHO", "LON", "TOC", "NGU", "GAP", "DCA", "BCTC", "EPS",
         "ROE", "ROA", "USD", "VND", "VSA", "MAC", "MAI", "DAO", "SAN", "COT", "DON",
         "TUC", "TRA", "DAN", "DOC", "BAI", "THE", "KHI", "BAO", "LAI", "COI", "HOI",
-        "VON", "TIEN", "BOT", "HAY", "HOA",
+        "VON", "TIEN", "BOT", "HAY", "HOA", "LAM", "SAO", "VOI", "VAN", "GIO", "MAY",
+        "DUY", "TAM", "BAT", "DAP", "CAN", "HAI", "BOM", "CAT", "DEN", "DEP", "DOI",
+        "DOT", "GAY", "GHE", "HAT", "HEM", "HEN", "HOC", "HON", "HOP", "KEP", "KHO",
+        "KYC", "LAN", "LAO", "LAP", "LAT", "LEP", "LOA", "LOT", "LUA", "LUN", "LUY",
+        "MEO", "MUI", "MUN", "NEO", "NGA", "NGO", "NHA", "NHU", "NIT", "NON", "NUT",
+        "ONG", "QUE", "QUI", "RAO", "ROT", "RUA", "RUT", "SAP", "SAT", "SAY", "SEN",
+        "SET", "SOI", "SON", "SOT", "SUA", "SUC", "SUY", "TAI", "TAN", "TAP", "TAT",
+        "TAY", "THA", "THO", "THU", "TIA", "TIE", "TIT", "TOA", "TON", "TRE", "TRI",
+        "TRO", "TRU", "TUI", "TUT", "TUY", "UOC", "VIU", "VUI", "VUN", "XAM", "XAP",
+        "XAU", "XAY", "XOA", "XOI", "XOM", "XON", "XOP", "XOT", "XUC",
+        # Common conversational Vietnamese words:
+        "TIN", "HOM", "TAO", "DAY", "TOP", "MUC", "GOI", "MOI", "DAT", "LEN", "XEP",
+        "LOI", "MAT", "TIM", "CAU", "CHON", "MO", "SUN", "TOI",
     }
 )
 
@@ -64,6 +86,7 @@ AiIntent = Literal[
     "comparison",
     "stock_analysis",
     "market_overview",
+    "news",
     "knowledge",
     "external",
     "general",
@@ -73,6 +96,7 @@ _CACHE_TTL_SECONDS: dict[AiIntent, int] = {
     "comparison": 60,
     "stock_analysis": 60,
     "market_overview": 60,
+    "news": 120,
     "knowledge": 6 * 3600,
     "external": 30 * 60,
     "general": 6 * 3600,
@@ -88,6 +112,16 @@ def normalize_question(message: str) -> str:
 
 def _extract_tickers(text: str) -> list[str]:
     found: list[str] = []
+    # 1. Explicitly qualified tickers (e.g. "mã TIN", "cổ phiếu HOM", "(HPG)") take precedence
+    for match in _EXPLICIT_TICKER_PATTERN.finditer(text):
+        for group_idx in (1, 2, 3):
+            token = match.group(group_idx)
+            if token:
+                token_upper = token.upper()
+                if token_upper not in found:
+                    found.append(token_upper)
+
+    # 2. General uppercase 3-letter tokens, excluding common conversational stop words
     upper_text = text.upper()
     for match in _TICKER_PATTERN.finditer(upper_text):
         token = match.group(1)
@@ -149,11 +183,13 @@ class AiFinancialService:
         self,
         market_service: MarketService,
         knowledge_base: InternalKnowledgeBase | None = None,
+        news_repo: INewsRepository | None = None,
         cache: AiResponseCache | None = None,
         metrics: AiMetricsRegistry | None = None,
     ) -> None:
         self._market = market_service
         self._knowledge = knowledge_base
+        self._news_repo = news_repo
         self._cache = cache
         self._metrics = metrics or AiMetricsRegistry()
 
@@ -225,74 +261,113 @@ class AiFinancialService:
         is_gold_bank = False
         is_forensics = False
         is_market_general = False
+        is_news = False
         with trace.step("intent_detection") as i_step:
             tickers = _extract_tickers(user_message)
             query_lower = user_message.lower()
+            query_folded = fold_text(user_message)
+
+            is_news = any(
+                kw in query_folded
+                for kw in [
+                    "tin tuc", "tin moi", "ban tin", "tin nong", "diem tin",
+                    "tin thi truong", "tin chung khoan", "bao chi", "co tin gi",
+                    "tin hom nay", "tin trong ngay", "thoi su", "tong hop tin",
+                    "doc bao", "tin tuc moi", "tin dau tu", "tin tuc tai chinh",
+                    "cho tao tin", "cho toi tin", "cho xin tin", "co gi moi",
+                ]
+            )
 
             is_comparison = (
-                any(kw in query_lower for kw in ["so sánh", "hay là", "vs", "hơn", "chọn mã nào"])
+                not is_news
+                and any(kw in query_lower for kw in ["so sánh", "hay là", "vs", "hơn", "chọn mã nào"])
                 and len(tickers) >= 2
             )
             is_gold_bank = any(
                 kw in query_lower for kw in ["vàng", "ngân hàng", "tiết kiệm", "gửi tiền"]
             )
-            is_forensics = any(
-                kw in query_lower
-                for kw in [
-                    "gian lận",
-                    "bẫy",
-                    "báo cáo tài chính",
-                    "bctc",
-                    "nợ",
-                    "phải thu",
-                    "phá sản",
-                    "sức khỏe",
-                    "z-score",
-                    "altman",
-                ]
+            is_forensics = (
+                not is_news
+                and any(
+                    kw in query_lower
+                    for kw in [
+                        "gian lận",
+                        "bẫy",
+                        "báo cáo tài chính",
+                        "bctc",
+                        "nợ",
+                        "phải thu",
+                        "phá sản",
+                        "sức khỏe",
+                        "z-score",
+                        "altman",
+                    ]
+                )
             )
-            is_market_general = any(
-                kw in query_lower
-                for kw in ["thị trường", "vnindex", "vn-index", "hôm nay", "toàn sàn", "ngành nào"]
+            is_market_general = (
+                not is_news
+                and any(
+                    kw in query_lower
+                    for kw in ["thị trường", "vnindex", "vn-index", "toàn sàn", "ngành nào"]
+                )
             )
             i_step.mark(
                 "ok",
                 passed=True,
-                note=f"tickers={len(tickers)} comparison={is_comparison} forensics={is_forensics} market={is_market_general}",
+                note=f"tickers={len(tickers)} news={is_news} comparison={is_comparison} forensics={is_forensics} market={is_market_general}",
             )
 
-        # Step 4: Internal data retrieval (market quotes, candles, forensics)
+        # Step 4: Internal data retrieval (market quotes, candles, forensics, or news)
         stock_data: dict[str, Any] = {}
+        news_articles: list[dict[str, Any]] = []
         with trace.step("internal_data_retrieval") as d_step:
-            for ticker in tickers[:3]:
-                try:
-                    inst = self._market.instrument(ticker, include_fundamentals=True)
-                    if inst:
-                        candle_res = self._market.candles(ticker, interval="1d", limit=60)
-                        candle_list = candle_res.get("data", []) if isinstance(candle_res, dict) else []
-                        closes = [
-                            float(c["close"])
-                            for c in candle_list
-                            if isinstance(c, dict) and "close" in c
-                        ]
-                        forensics_res = self._market.forensics(ticker)
-                        forensics = (
-                            forensics_res.get("data", {}) if isinstance(forensics_res, dict) else {}
-                        )
-                        stock_data[ticker] = {
-                            "instrument": inst,
-                            "candles_count": len(candle_list),
-                            "closes": closes,
-                            "forensics": forensics,
-                        }
-                except Exception as exc:
-                    logger.warning("Failed to fetch internal data for %s: %s", ticker, exc)
-            d_step.mark("ok", passed=True, note=f"resolved={len(stock_data)}")
+            if is_news:
+                if self._news_repo:
+                    try:
+                        query_symbols = tuple(tickers) if tickers else ()
+                        articles, _ = self._news_repo.list_articles(NewsQuery(limit=5, symbols=query_symbols))
+                        for a in articles:
+                            news_articles.append({
+                                "id": a.id,
+                                "title": a.title,
+                                "summary": a.description or (a.content_text[:180] + "..." if a.content_text else ""),
+                                "url": f"/news/{a.id}",
+                                "source": a.source.name if a.source else "InvestIQ",
+                                "published_at": a.published_at.strftime("%H:%M %d/%m/%Y") if a.published_at else "",
+                            })
+                    except Exception as exc:
+                        logger.warning("Failed to fetch internal news: %s", exc)
+                d_step.mark("ok", passed=True, note=f"news_count={len(news_articles)}")
+            else:
+                for ticker in tickers[:3]:
+                    try:
+                        inst = self._market.instrument(ticker, include_fundamentals=True)
+                        if inst:
+                            candle_res = self._market.candles(ticker, interval="1d", limit=60)
+                            candle_list = candle_res.get("data", []) if isinstance(candle_res, dict) else []
+                            closes = [
+                                float(c["close"])
+                                for c in candle_list
+                                if isinstance(c, dict) and "close" in c
+                            ]
+                            forensics_res = self._market.forensics(ticker)
+                            forensics = (
+                                forensics_res.get("data", {}) if isinstance(forensics_res, dict) else {}
+                            )
+                            stock_data[ticker] = {
+                                "instrument": inst,
+                                "candles_count": len(candle_list),
+                                "closes": closes,
+                                "forensics": forensics,
+                            }
+                    except Exception as exc:
+                        logger.warning("Failed to fetch internal data for %s: %s", ticker, exc)
+                d_step.mark("ok", passed=True, note=f"resolved={len(stock_data)}")
 
         # Step 5: Knowledge retrieval (curated internal educational content & glossary)
         knowledge_hits: list[KnowledgeHit] = []
         with trace.step("knowledge_retrieval") as k_step:
-            if self._knowledge and not stock_data and not is_market_general:
+            if self._knowledge and not stock_data and not is_market_general and not is_news:
                 knowledge_hits = self._knowledge.search(user_message, limit=2)
                 k_step.mark("ok", passed=True, note=f"hits={len(knowledge_hits)}")
             else:
@@ -301,7 +376,10 @@ class AiFinancialService:
         # Step 6: External search (crawled web data fallback ONLY if internal data/knowledge empty)
         external_snippets: list[dict[str, str]] = []
         with trace.step("external_search") as s_step:
-            if not stock_data and not is_market_general and not knowledge_hits:
+            if is_news and not news_articles:
+                external_snippets = await self._search_external_info(f"tin tức tài chính chứng khoán hôm nay {user_message}")
+                s_step.mark("ok", passed=True, note=f"news_snippets={len(external_snippets)}")
+            elif not stock_data and not is_market_general and not is_news and not knowledge_hits:
                 external_snippets = await self._search_external_info(user_message)
                 s_step.mark("ok", passed=True, note=f"snippets={len(external_snippets)}")
             else:
@@ -309,7 +387,9 @@ class AiFinancialService:
 
         # Step 7: Response generation
         intent: AiIntent = "general"
-        if is_comparison or len(stock_data) >= 2:
+        if is_news:
+            intent = "news"
+        elif is_comparison or len(stock_data) >= 2:
             intent = "comparison"
         elif len(stock_data) == 1:
             intent = "stock_analysis"
@@ -325,12 +405,14 @@ class AiFinancialService:
                 user_message=user_message,
                 tickers=tickers,
                 stock_data=stock_data,
+                news_articles=news_articles,
                 knowledge_hits=knowledge_hits,
                 external_snippets=external_snippets,
                 is_comparison=is_comparison,
                 is_gold_bank=is_gold_bank,
                 is_forensics=is_forensics,
                 is_market_general=is_market_general,
+                is_news=is_news,
             )
             gen_step.mark("ok", passed=True, note=f"intent={intent}")
 
@@ -443,6 +525,8 @@ class AiFinancialService:
         is_gold_bank: bool,
         is_forensics: bool,
         is_market_general: bool,
+        is_news: bool = False,
+        news_articles: list[dict[str, Any]] | None = None,
     ) -> dict[str, Any]:
         """Synthesize in-depth analysis and format rich interactive widgets."""
         widgets: list[dict[str, Any]] = []
@@ -450,8 +534,66 @@ class AiFinancialService:
         text_parts: list[str] = []
         sources: list[dict[str, str]] = []
 
+        # Case 0: Financial and market news
+        if is_news:
+            target_stock = tickers[0] if tickers else ""
+            heading = f"Điểm tin chứng khoán {target_stock} hôm nay:" if target_stock else "Điểm tin thị trường hôm nay:"
+            text_parts.append(heading)
+
+            if news_articles:
+                text_parts.append(
+                    "Tổng hợp các thông tin tài chính và sự kiện thị trường mới nhất cập nhật trên hệ thống InvestIQ:"
+                )
+                for item in news_articles[:5]:
+                    time_info = f" | {item['published_at']}" if item.get("published_at") else ""
+                    summary = f" {item['summary']}" if item.get("summary") else ""
+                    text_parts.append(
+                        f"- **{item['title']}**:{summary} (Nguồn: {item.get('source', 'InvestIQ')}{time_info})"
+                    )
+                    sources.append({
+                        "kind": "internal",
+                        "title": item["title"],
+                        "url": item.get("url") or "/news",
+                    })
+            elif external_snippets:
+                text_parts.append(
+                    "Điểm tin thị trường và doanh nghiệp tổng hợp từ các cơ quan báo chí tài chính uy tín:"
+                )
+                for item in external_snippets[:4]:
+                    text_parts.append(f"- **{item['title']}**: {item['snippet']}")
+                    sources.append({
+                        "kind": "external",
+                        "title": item["title"],
+                        "url": item["url"],
+                    })
+            else:
+                text_parts.append(
+                    "Hiện tại chưa ghi nhận sự kiện tin tức tài chính đột biến mới trong phiên giao dịch hôm nay. "
+                    "Bạn có thể xem bảng giá trực tiếp hoặc khám phá các bài viết phân tích chuyên sâu tại trang Tin tức."
+                )
+
+            suggested_actions.extend(
+                [
+                    {
+                        "label": "Xem toàn bộ tin tức",
+                        "action_type": "NAVIGATE",
+                        "url": "/news",
+                    },
+                    {
+                        "label": "Nhịp đập thị trường hôm nay",
+                        "action_type": "SEND_PROMPT",
+                        "prompt": "Thị trường hôm nay thế nào?",
+                    },
+                    {
+                        "label": "Bảng giá trực tiếp",
+                        "action_type": "NAVIGATE",
+                        "url": "/market/stocks",
+                    },
+                ]
+            )
+
         # Case 1: Comparison between stocks or multi-asset
-        if (is_comparison or (len(tickers) >= 2 and not is_forensics)) and len(stock_data) >= 2:
+        elif (is_comparison or (len(tickers) >= 2 and not is_forensics)) and len(stock_data) >= 2:
             t1, t2 = list(stock_data.keys())[:2]
             d1, d2 = stock_data[t1], stock_data[t2]
             inst1, inst2 = d1["instrument"], d2["instrument"]

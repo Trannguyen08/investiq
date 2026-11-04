@@ -1,6 +1,6 @@
 # Current Task
 
-## AI Assistant Security Guardrails, Knowledge RAG, Cache, Citations & Observability - 2026-11-04 (in progress)
+## AI Assistant Security Guardrails, News Intent Resolution, User Bubble Polish & Observability - 2026-11-04 (completed)
 - **User Request**:
   1. Chuyển nhánh `fix/AI`.
   2. Không cho AI trả lời các yêu cầu về data mật trong hệ thống (tokens, secrets, credentials, db connection strings, passwords, private user emails/balances).
@@ -9,24 +9,37 @@
   5. Ưu tiên học thuộc dữ liệu nội bộ không mật của hệ thống để response tốt hơn (RAG: published learning topics và stock glossary).
   6. Nếu crawl bên ngoài thì BẮT BUỘC ghi nguồn trong response (kèm link URL).
   7. Thêm giám sát và eval cho từng bước AI làm (per-step tracing, online rule-based evaluation, metrics endpoint).
+  8. Pull toàn bộ code từ nhánh `fix/UI` về `fix/AI` (bao gồm bỏ bảng preview portfolio khi chưa đăng nhập, fix lệch giá community, pagination cổ tức...).
+  9. Chỉnh sửa bong bóng tin nhắn user trong AI chat: màu gradient đẹp mắt, thời gian gửi rõ ràng, chiều cao gọn gàng.
+  10. Sửa triệt để lỗi phân tích yêu cầu sai: khi user gõ "cho tao tin tức hôm nay", AI không được nhận chữ "TIN" thành mã cổ phiếu TIN để phân tích cổ phiếu; nhận diện đúng intent tin tức (`news`), trả về "Điểm tin thị trường hôm nay:" kèm nguồn trích dẫn rõ ràng; loại bỏ hoàn toàn các hàng lỗi chỉ có dấu `• -` rỗng.
+  11. Commit và push DUY NHẤT trên nhánh `fix/AI`, tuyệt đối không merge vào `dev` hay `main`.
 - **Branch**: `fix/AI`
 - **Changes**:
-  - `backend/app/application/interfaces/i_ai_response_cache.py`: Interface protocol cho shared response cache.
-  - `backend/app/application/interfaces/i_knowledge_source.py`: Interface protocol cho public knowledge retrieval.
-  - `backend/app/application/use_cases/ai_chat/guardrails.py`: Input guardrails phân loại 4 nhóm vi phạm (`secret_exfiltration`, `system_modification`, `private_user_data`, `prompt_injection`) và regex `redact_sensitive_output` cho output.
-  - `backend/app/application/use_cases/ai_chat/knowledge_base.py`: In-memory `InternalKnowledgeBase` index published topics & glossary với Vietnamese keyword/alias matching.
-  - `backend/app/application/use_cases/ai_chat/ai_observability.py`: `AiTrace` trace 11 bước, `evaluate_response` online evaluation, `AiMetricsRegistry` telemetry.
-  - `backend/app/infrastructure/cache/ai_chat_cache.py`: Redis-backed cache kết hợp local in-memory fallback.
-  - `backend/app/application/use_cases/ai_chat/ai_financial_service.py`: Tích hợp 11 bước: guardrails, cache lookup, intent detection, internal data retrieval, knowledge retrieval, external search fallback, response generation, citation check, output redaction, evaluation, cache store.
-  - `backend/app/schemas/ai_chat.py`: Bổ sung `AiSource`, `AiEvaluationResponse`, `AiMetricsResponse`.
-  - `backend/app/api/v1/ai_chat.py`: Kết nối shared knowledge base, cache, metrics, bổ sung endpoint `GET /api/v1/ai/metrics`.
-  - `backend/tests/unit/ai_chat/test_ai_chat.py`: 16 unit tests kiểm tra toàn diện guardrails, redaction, cache hit, knowledge priority, external citations, eval rules.
-  - `backend/tests/integration/api/test_ai_chat_api.py`: 4 integration tests kiểm tra guest chat, guardrail block, general prompt, metrics endpoint.
-  - `frontend/src/types/ai-chat.ts`: Bổ sung `AiSource`, `AiEvaluation`, `is_cached`.
-  - `frontend/src/components/ai-chat/ai-chat-bubble.tsx`: Hiển thị badge cache (`⚡ Phản hồi từ cache`), badge Eval, và interactive citation links `[InvestIQ]` / `[Web ↗]`.
+  - `backend/app/application/use_cases/ai_chat/ai_financial_service.py`:
+    - Mở rộng danh sách stop words tiếng Việt `_NON_TICKER_WORDS` gồm các từ giao tiếp hàng ngày: `TIN`, `HOM`, `TAO`, `DAY`, `TOP`, `MUC`, `GOI`, `MOI`, `DAT`, `LEN`, `XEP`, `LOI`, `MAT`, `TIM`, `CAU`, `CHON`, `MO`...
+    - Thêm cơ chế tiền tố tường minh `_EXPLICIT_TICKER_PATTERN`: các từ trùng với stop word tiếng Việt (như `TIN`, `HOM`) chỉ được nhận diện là ticker khi có từ chỉ định tài chính (`mã TIN`, `cổ phiếu TIN`, `cp TIN`, `phân tích TIN`, `(TIN)`).
+    - Bổ sung intent `news` trong `AiIntent` với TTL cache 120s.
+    - Nhận diện `is_news` khi câu hỏi chứa từ khóa tin tức ("tin tức", "tin mới", "bản tin", "điểm tin", "cho tao tin tức hôm nay"...).
+    - Tích hợp `INewsRepository` lấy tin tức thực tế từ hệ thống InvestIQ (`SqlNewsRepository`) hoặc fallback DuckDuckGo.
+    - Tạo cấu trúc phản hồi "Điểm tin thị trường hôm nay:" chuyên nghiệp, liệt kê các tiêu đề tin, tóm tắt và trích dẫn nguồn cụ thể.
+  - `backend/app/api/v1/ai_chat.py`:
+    - Tích hợp `SqlNewsRepository` với cơ chế non-blocking pool `_pool is not None` giúp test runtime không bị timeout.
+  - `frontend/src/components/ai-chat/ai-chat-bubble.tsx`:
+    - Cập nhật bong bóng tin nhắn user: nền gradient `bg-gradient-to-r from-sky-600 via-sky-600 to-cyan-600`, chiều cao padding gọn gàng `px-3.5 py-1.5 sm:py-2`, thời gian gửi `text-sky-100 font-semibold text-[10px]` sáng rõ rệt.
+    - Loại bỏ các regex replace gây sinh dòng lẻ `-`, bổ sung bộ lọc triệt tiêu hoàn toàn các dòng rỗng hoặc chỉ có dấu bullet `• -`.
+  - `frontend/src/components/ai-chat/ai-chat-bubble.test.tsx`:
+    - Thêm 2 unit tests kiểm tra giao diện user bubble, tiêu đề điểm tin thị trường và bộ lọc chặn dòng bullet rỗng.
+  - `backend/tests/unit/ai_chat/test_ai_chat.py`:
+    - Thêm unit tests: `test_ai_news_intent_not_ticker_tin`, `test_ai_news_with_news_repository`, và kiểm tra ticker extraction stop words.
 - **Verification**:
-  - Quality Gate `./scripts/check-pr.ps1`: 6/6 passed (ESLint, TSC Typecheck, Vitest 152/152 passed, Ruff, Mypy, Pytest 153/153 passed).
-  - Integration tests `test_ai_chat_api.py` 4/4 passed.
+  - Quality Gate `./scripts/check-pr.ps1`: 6/6 passed 100%.
+  - Frontend Lint (ESLint): Passed 0 lỗi.
+  - Frontend Typecheck (tsc): Passed 0 lỗi.
+  - Frontend Unit Tests (Vitest): 179/179 passed 100% (46 test suites).
+  - Backend Lint (Ruff): Passed 0 lỗi.
+  - Backend Typecheck (Mypy): Passed 0 lỗi (43 source files).
+  - Backend Unit Tests (Pytest): 155/155 passed 100%.
+  - Backend Integration Tests (`test_ai_chat_api.py`): 4/4 passed 100%.
 
 ## Readiness Theme Consistency, Stock Detail Header Wrap Prevention, Order Error Resolution & Portfolio Block Removals - 2026-11-03 (completed)
 - **Branch**: `fix/readiness-theme-portfolio-order-and-cleanups` (merged to `dev` and `main`, commit `9c9e8d6`).
