@@ -1,6 +1,40 @@
 # Current Task
 
-## Remove Unauth Market Preview Table from Portfolio & Fix Community Price Alignment / Badge Wrapping - 2026-11-04 (in progress)
+## Dividend Calendar Pagination, Nearest-Date Sorting & Official Source Link - 2026-11-04 (completed)
+- **User Request**:
+  1. Thêm phân trang cho lịch chia cổ tức trong trang chủ (`/`), xếp theo gần thời điểm hiện tại nhất.
+  2. Khi click vào lịch thì có thể link tới nguồn thông tin đó.
+  3. Làm việc và commit/push DUY NHẤT trên nhánh `fix/UI`, **tuyệt đối không merge vào `dev` hay `main`**.
+  4. Vượt qua 100% kiểm thử (Lint, Typecheck, Unit Tests, Quality Gate `./scripts/check-pr.ps1`).
+- **Branch**: `fix/UI` (committed `aa6eb53` and pushed only to `fix/UI`, strictly not merged to `dev` or `main`).
+- **Changes**:
+  - `backend/app/schemas/market.py` & `backend/app/infrastructure/external/crawlers/dividend_crawler.py`:
+    - Bổ sung trường `source_url: str | None = None` vào schema `DividendItem`.
+    - Gán URL nguồn công bố thông tin chính thức tương ứng cho các sự kiện cổ tức (CafeF / Vietstock / Sở giao dịch).
+  - `frontend/src/types/market.ts`:
+    - Cập nhật kiểu `DividendItem` với `source_url?: string | null;`.
+  - `frontend/src/app/(user)/page.tsx`:
+    - Tăng số lượng sự kiện fetch `getMarketDividendCalendar(40)` để hỗ trợ dữ liệu phong phú hơn cho phân trang.
+  - `frontend/src/components/market/dividend-calendar-widget.tsx`:
+    - Tích hợp component `Pagination` đồng bộ với hệ thống (`pageSize = 6`, 2 hàng x 3 cột cân xứng hoàn hảo).
+    - Thêm thuật toán sắp xếp `sortedEvents` theo gần thời điểm hiện tại nhất (`ex_date || event_date` so với ngày hiện tại: sự kiện sắp diễn ra gần nhất đứng đầu, các sự kiện quá khứ vừa mới diễn ra xếp sau).
+    - Tự động reset về trang 1 khi thay đổi bộ lọc phân loại hoặc từ khóa tìm kiếm.
+    - Cập nhật trải nghiệm click:
+      - Toàn bộ thẻ card có `cursor-pointer`, khi click vào vùng trống sẽ mở nguồn thông tin trong tab mới hoặc chuyển hướng.
+      - Tiêu đề sự kiện (`event.title`) là link trực tiếp dẫn tới nguồn thông tin với hiệu ứng hover và gạch chân.
+      - Chân thẻ hiển thị liên kết nguồn tin `Nguồn: {event.source} ↗` và nút `Nguồn tin ↗`.
+      - Các tương tác con ("Nhắc nhở", badge mã cổ phiếu) có `e.stopPropagation()` độc lập an toàn.
+  - `frontend/src/components/market/dividend-calendar-widget.test.tsx`:
+    - Thêm các unit test kiểm tra sắp xếp theo ngày gần hiện tại nhất, hỗ trợ phân trang > 6 items, và liên kết nguồn thông tin.
+- **Verification**:
+  - Quality Gate `./scripts/check-pr.ps1`: Passed 100% (6/6 steps).
+  - Frontend Lint (ESLint): Passed 0 lỗi.
+  - Frontend TypeScript Typecheck (tsc): Passed 0 lỗi.
+  - Frontend Unit Tests (Vitest): 177/177 passed (45 test files).
+  - Backend Ruff & Mypy: Passed 0 lỗi.
+  - Backend Pytest: 142/142 passed 100%.
+
+## Remove Unauth Market Preview Table from Portfolio & Fix Community Price Alignment / Badge Wrapping - 2026-11-04 (completed)
 - **User Request**:
   1. Bỏ bảng "Cổ phiếu sẵn sàng giao dịch" khỏi trang danh mục (`/portfolio`) khi chưa đăng nhập.
   2. Chỉnh lại style trang cộng đồng (`/community`), khắc phục hiện tượng lệch giá (nhãn căn trái, giá căn phải; bỏ dấu hai chấm rườm rà; căn trái đồng bộ; phân biệt màu sắc giá vào/hiện tại/mục tiêu/cắt lỗ; chống rớt dòng tag "Tăng giá", "Kỳ hạn 3T"; chuẩn hóa hiển thị outcome ROI).
