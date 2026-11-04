@@ -23,11 +23,11 @@ export function HeaderSearch() {
     >
       <div className="relative flex items-center w-36 sm:w-44 lg:w-56 focus-within:w-44 sm:focus-within:w-52 lg:focus-within:w-60 transition-all duration-200">
         <input
-          type="search"
+          type="text"
           value={query}
           onChange={(e) => setQuery(e.target.value)}
           placeholder="Tìm mã hoặc từ khóa..."
-          className="w-full h-8 pl-8 pr-7 bg-slate-900/90 hover:bg-slate-900 text-slate-100 placeholder-slate-400 text-xs rounded-lg border border-slate-700/80 focus:border-sky-500 focus:outline-none transition shadow-inner"
+          className="w-full h-8 pl-8 pr-7 bg-slate-900/90 hover:bg-slate-900 text-slate-100 placeholder-slate-400 text-xs rounded-lg border border-slate-700/80 focus:border-sky-500 focus:outline-none focus:ring-0 focus-visible:outline-none focus-visible:ring-0 transition shadow-inner [&::-webkit-search-cancel-button]:hidden [&::-webkit-search-decoration]:hidden"
         />
         <button
           type="submit"

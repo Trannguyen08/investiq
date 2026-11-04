@@ -6,8 +6,6 @@ import { useEffect, useMemo, useState } from "react";
 import { changeTone, formatMoney, formatPercent } from "@/components/market/formatters";
 import type { MarketInstrument, MarketSector } from "@/types/market";
 
-type SizeMetric = "market_cap" | "matched_value";
-
 type TreemapRect<T> = {
   item: T;
   x: number;
@@ -173,7 +171,6 @@ export function StockTreemapHeatmap({
     onSectorChange?.(sec);
   };
 
-  const [sizeMetric, setSizeMetric] = useState<SizeMetric>("market_cap");
   const [hoveredSymbol, setHoveredSymbol] = useState<string | null>(null);
 
   // Cache sector instruments loaded from API
@@ -234,16 +231,13 @@ export function StockTreemapHeatmap({
     return fromSnapshot;
   }, [instruments, selectedSector, sectorCache]);
 
-  // Compute treemap rectangles with balanced dynamic weights
+  // Compute treemap rectangles with weights based on absolute percentage movement
   const treemapRects = useMemo(() => {
     if (!activeStockList.length) return [];
 
     const rawWeights = activeStockList.map((item) => {
-      let weight = Number(item[sizeMetric]);
-      if (!weight || weight <= 0) {
-        weight = sizeMetric === "market_cap" ? 5_000_000_000_000 : 5_000_000_000;
-      }
-      return weight;
+      const absChange = Math.abs(Number(item.change_percent) || 0);
+      return Math.max(absChange, 0.25);
     });
 
     const balancedWeights = balanceDynamicWeights(rawWeights, 24, 2.5);
@@ -254,7 +248,7 @@ export function StockTreemapHeatmap({
     }));
 
     return computeSquarifiedTreemap(rawItems, 1000, 560);
-  }, [activeStockList, sizeMetric]);
+  }, [activeStockList]);
 
   const hoveredItem = hoveredSymbol
     ? activeStockList.find((i) => i.symbol === hoveredSymbol) ?? instruments.find((i) => i.symbol === hoveredSymbol)
@@ -262,7 +256,7 @@ export function StockTreemapHeatmap({
 
   return (
     <div className="stock-treemap-heatmap flex flex-col gap-3">
-      {/* Controls Bar: Selector & Size Metric */}
+      {/* Controls Bar: Selector & Notice */}
       <div className="treemap-controls flex flex-wrap items-center justify-between gap-3 text-xs bg-slate-950/70 p-3 rounded-xl border border-slate-800">
         <div className="flex flex-wrap items-center gap-2.5">
           <label htmlFor="treemap-sector-select" className="text-slate-400 font-semibold shrink-0">
@@ -281,39 +275,11 @@ export function StockTreemapHeatmap({
               </option>
             ))}
           </select>
-
-          <span className="text-slate-600 hidden sm:inline">|</span>
-
-          {/* Size Metric: Vốn hóa vs GTGD */}
-          <div className="inline-flex rounded-lg bg-slate-900 p-0.5 border border-slate-800">
-            <button
-              type="button"
-              onClick={() => setSizeMetric("market_cap")}
-              className={`px-3 py-1 rounded-md font-semibold transition cursor-pointer ${
-                sizeMetric === "market_cap"
-                  ? "bg-sky-600 text-white shadow-sm"
-                  : "text-slate-400 hover:text-white"
-              }`}
-            >
-              Vốn hóa
-            </button>
-            <button
-              type="button"
-              onClick={() => setSizeMetric("matched_value")}
-              className={`px-3 py-1 rounded-md font-semibold transition cursor-pointer ${
-                sizeMetric === "matched_value"
-                  ? "bg-sky-600 text-white shadow-sm"
-                  : "text-slate-400 hover:text-white"
-              }`}
-            >
-              GTGD
-            </button>
-          </div>
         </div>
 
-        {/* Indicator that data is daily change */}
+        {/* Indicator that tile size is by |% change| */}
         <span className="text-[11px] text-slate-400 italic">
-          Biến động trong ngày (%) · Tối đa 20 mã tiêu biểu
+          Độ to khối theo |% biến động| · Tối đa 20 mã tiêu biểu
         </span>
       </div>
 
@@ -375,11 +341,6 @@ export function StockTreemapHeatmap({
                 >
                   {formatPercent(item.change_percent)}
                 </span>
-                {!isSmall && (
-                  <span className="text-[10px] opacity-85 mt-0.5 hidden sm:inline drop-shadow-sm truncate max-w-full">
-                    {Number(item.price).toLocaleString("vi-VN")} đ
-                  </span>
-                )}
               </Link>
             );
           })

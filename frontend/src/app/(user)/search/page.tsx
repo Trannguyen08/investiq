@@ -1,11 +1,20 @@
 "use client";
 
 import Link from "next/link";
-import { useSearchParams, useRouter } from "next/navigation";
-import { Suspense, useEffect, useState, type FormEvent } from "react";
+import { useSearchParams } from "next/navigation";
+import { Suspense, useEffect, useState } from "react";
 
 import { useAuth } from "@/hooks/use-auth";
 import { PaperOrderDialog } from "@/components/portfolio/paper-order-dialog";
+import {
+  changeTone,
+  formatChange,
+  formatCompact,
+  formatMoney,
+  formatPercent,
+  formatRatioPair,
+  priceTone,
+} from "@/components/market/formatters";
 import type { PaperDashboard } from "@/types/portfolio";
 
 export const dynamic = "force-dynamic";
@@ -15,6 +24,12 @@ type Timeframe = "day" | "week" | "month" | "year";
 type StockReport = {
   label: string;
   change_percent: string;
+  trend_label?: string;
+  high_price?: string;
+  low_price?: string;
+  amplitude?: string;
+  volume_label?: string;
+  risk_reward?: string;
   summary: string;
 };
 
@@ -22,12 +37,23 @@ type StockData = {
   symbol: string;
   name: string;
   exchange: string;
+  sector?: string;
   price: string;
   reference_price: string;
+  ceiling_price?: string;
+  floor_price?: string;
+  open_price?: string;
+  high_price?: string;
+  low_price?: string;
   change: string;
   change_percent: string;
   volume: string;
   matched_value: string;
+  foreign_net_value?: string;
+  market_cap?: string;
+  pe?: string | null;
+  pb?: string | null;
+  is_vn30?: boolean;
   reports: Record<Timeframe, StockReport>;
   news: Array<{
     id: string;
@@ -50,15 +76,10 @@ type SearchResponse =
   | { type: "general"; query: string; results: GeneralResult[] }
   | { type: "empty"; message: string };
 
-const SUGGESTED_TICKERS = ["SSI", "HPG", "FPT", "VCB", "MBB", "VNM", "MWG", "VHM", "VIX", "VND"];
-
 function SearchContent() {
   const searchParams = useSearchParams();
-  const router = useRouter();
-  const initialQ = searchParams.get("q") ?? "";
+  const currentQuery = searchParams.get("q")?.trim() ?? "";
 
-  const [inputVal, setInputVal] = useState(initialQ);
-  const [currentQuery, setCurrentQuery] = useState(initialQ);
   const [loading, setLoading] = useState(false);
   const [response, setResponse] = useState<SearchResponse | null>(null);
   const [selectedTimeframe, setSelectedTimeframe] = useState<Timeframe>("day");
@@ -70,13 +91,6 @@ function SearchContent() {
     side: "buy" | "sell";
     instrument: { symbol: string; name: string; price: string } | null;
   }>({ open: false, side: "buy", instrument: null });
-
-  // Sync with searchParams
-  useEffect(() => {
-    const q = searchParams.get("q") ?? "";
-    setInputVal(q);
-    setCurrentQuery(q);
-  }, [searchParams]);
 
   // Load portfolio dashboard to check holding status for Buy/Sell button
   useEffect(() => {
@@ -92,8 +106,7 @@ function SearchContent() {
 
   // Fetch search results
   useEffect(() => {
-    const trimmed = currentQuery.trim();
-    if (!trimmed) {
+    if (!currentQuery) {
       setResponse(null);
       setLoading(false);
       return;
@@ -102,7 +115,7 @@ function SearchContent() {
     setLoading(true);
     let cancelled = false;
 
-    fetch(`/search-api?q=${encodeURIComponent(trimmed)}`)
+    fetch(`/search-api?q=${encodeURIComponent(currentQuery)}`)
       .then((res) => (res.ok ? res.json() : null))
       .then((data: SearchResponse | null) => {
         if (cancelled) return;
@@ -126,129 +139,77 @@ function SearchContent() {
     };
   }, [currentQuery]);
 
-  function handleSearchSubmit(e: FormEvent) {
-    e.preventDefault();
-    const trimmed = inputVal.trim();
-    if (!trimmed) return;
-    router.push(`/search?q=${encodeURIComponent(trimmed)}`);
-  }
-
-  function handleSelectTicker(ticker: string) {
-    setInputVal(ticker);
-    router.push(`/search?q=${encodeURIComponent(ticker)}`);
-  }
-
   const isHolding = response?.type === "stock" && Boolean(
     dashboard?.holdings?.some((h) => h.symbol === response.stock.symbol)
   );
 
   return (
-    <div className="search-page min-h-screen bg-[#06111f] text-slate-100 py-8 px-4 sm:px-6 lg:px-8">
-      <div className="max-w-4xl mx-auto space-y-6">
-        {/* Search header & input */}
-        <div className="bg-slate-900/90 border border-slate-800 rounded-2xl p-6 shadow-xl">
-          <h1 className="text-xl sm:text-2xl font-black text-white tracking-tight mb-2">
-            Tìm kiếm &amp; Tra cứu thông tin
-          </h1>
-          <p className="text-xs sm:text-sm text-slate-400 mb-4">
-            Nhập mã cổ phiếu (ví dụ: SSI, HPG, FPT) để xem báo cáo đa khung thời gian và đặt lệnh, hoặc từ khóa để tra cứu bài học, tin tức và tính năng.
-          </p>
-
-          <form onSubmit={handleSearchSubmit} className="flex gap-2">
-            <div className="relative flex-1">
-              <input
-                type="search"
-                value={inputVal}
-                onChange={(e) => setInputVal(e.target.value)}
-                placeholder="Nhập mã cổ phiếu hoặc từ khóa..."
-                className="w-full h-11 pl-10 pr-10 bg-slate-950 text-white placeholder-slate-400 text-sm rounded-xl border border-slate-700/80 focus:border-sky-500 focus:outline-none transition shadow-inner"
-                autoFocus
-              />
-              <span className="absolute left-3 top-3.5 text-slate-400" aria-hidden="true">
-                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 1114 0z" />
-                </svg>
-              </span>
-              {inputVal && (
-                <button
-                  type="button"
-                  onClick={() => setInputVal("")}
-                  className="absolute right-3 top-3 text-slate-400 hover:text-white text-sm"
-                  aria-label="Xóa từ khóa"
-                >
-                  ✕
-                </button>
+    <div className="search-page min-h-screen bg-[#06111f] text-slate-100 py-6 px-4 sm:px-6 lg:px-8">
+      <div className="w-full max-w-7xl mx-auto space-y-6">
+        {/* Breadcrumb & Query Header - Removed giant search input block per user request */}
+        <div className="flex flex-wrap items-center justify-between gap-3 pb-3 border-b border-slate-800">
+          <div>
+            <p className="text-[11px] font-bold text-sky-400 uppercase tracking-wider mb-1">
+              KẾT QUẢ TÌM KIẾM &amp; TRA CỨU
+            </p>
+            <h1 className="text-xl sm:text-2xl font-black text-white m-0 tracking-tight">
+              {currentQuery ? (
+                <>Từ khóa: <span className="text-sky-400">&ldquo;{currentQuery}&rdquo;</span></>
+              ) : (
+                "Tra cứu thông tin"
               )}
-            </div>
-            <button
-              type="submit"
-              className="px-5 h-11 bg-sky-600 hover:bg-sky-500 text-white font-bold text-sm rounded-xl transition shadow-md shadow-sky-600/20 cursor-pointer shrink-0"
-            >
-              Tìm kiếm
-            </button>
-          </form>
-
-          {/* Suggested tickers */}
-          <div className="flex flex-wrap items-center gap-1.5 mt-4 pt-3 border-t border-slate-800/80">
-            <span className="text-xs text-slate-400 mr-1">Gợi ý nhanh:</span>
-            {SUGGESTED_TICKERS.map((ticker) => (
-              <button
-                key={ticker}
-                type="button"
-                onClick={() => handleSelectTicker(ticker)}
-                className={`text-xs px-2.5 py-1 rounded-lg font-semibold transition cursor-pointer border ${
-                  currentQuery.toUpperCase() === ticker
-                    ? "bg-sky-600/20 border-sky-500 text-sky-400"
-                    : "bg-slate-800/60 border-slate-700 text-slate-300 hover:text-white hover:bg-slate-700/80"
-                }`}
-              >
-                {ticker}
-              </button>
-            ))}
+            </h1>
           </div>
+          <Link
+            href="/market/stocks"
+            className="text-xs font-semibold text-slate-400 hover:text-white inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-slate-900 border border-slate-800 transition"
+          >
+            ← Bảng giá thị trường
+          </Link>
         </div>
 
         {/* Results area */}
         {loading ? (
-          <div className="bg-slate-900/90 border border-slate-800 rounded-2xl p-12 text-center text-slate-400 shadow-xl">
+          <div className="bg-slate-900/90 border border-slate-800 rounded-2xl p-16 text-center text-slate-400 shadow-xl">
             <div className="inline-block w-8 h-8 border-2 border-sky-500 border-t-transparent rounded-full animate-spin mb-3" />
-            <p className="text-sm font-medium">Đang tra cứu dữ liệu cho &quot;{currentQuery}&quot;...</p>
+            <p className="text-sm font-medium">Đang nạp dữ liệu cho &ldquo;{currentQuery}&rdquo;...</p>
           </div>
         ) : !currentQuery ? (
-          <div className="bg-slate-900/90 border border-slate-800 rounded-2xl p-12 text-center text-slate-400 shadow-xl">
-            <p className="text-sm">Vui lòng nhập từ khóa hoặc chọn một mã cổ phiếu gợi ý ở trên để bắt đầu tra cứu.</p>
+          <div className="bg-slate-900/90 border border-slate-800 rounded-2xl p-16 text-center text-slate-400 shadow-xl">
+            <p className="text-sm">Vui lòng nhập mã cổ phiếu hoặc từ khóa trên thanh tìm kiếm của Header để tra cứu.</p>
           </div>
         ) : response?.type === "stock" ? (
           <div className="space-y-6">
-            {/* Stock header summary card */}
+            {/* Stock Header & Timeframe Report Section */}
             <div className="bg-slate-900/90 border border-slate-800 rounded-2xl p-6 shadow-xl">
-              <div className="flex flex-wrap items-center justify-between gap-4 pb-4 border-b border-slate-800">
+              <div className="flex flex-wrap items-center justify-between gap-4 pb-5 border-b border-slate-800">
                 <div className="flex items-center gap-3">
-                  <span className="px-3 py-1 bg-sky-950 border border-sky-800 text-sky-400 font-extrabold text-base rounded-xl">
+                  <span className="px-3.5 py-1.5 bg-sky-950 border border-sky-800 text-sky-400 font-black text-lg rounded-xl tracking-wide">
                     {response.stock.symbol}
                   </span>
                   <div>
-                    <h2 className="text-base sm:text-lg font-bold text-white m-0">
+                    <h2 className="text-lg sm:text-xl font-bold text-white m-0">
                       {response.stock.name}
                     </h2>
                     <span className="text-xs text-slate-400">
-                      Sàn: {response.stock.exchange}
+                      Sàn: {response.stock.exchange} · Ngành: {response.stock.sector || "Chứng khoán"}
                     </span>
                   </div>
                 </div>
                 <Link
                   href={`/market/stocks/${response.stock.symbol}`}
-                  className="text-xs font-semibold text-sky-400 hover:text-sky-300 inline-flex items-center gap-1 transition"
+                  className="text-xs font-bold text-sky-400 hover:text-sky-300 inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-sky-950/60 border border-sky-800/80 transition"
                 >
-                  Xem chi tiết biểu đồ nến &amp; BCTC →
+                  Mở biểu đồ nến &amp; BCTC chi tiết →
                 </Link>
               </div>
 
-              {/* Timeframe reports */}
+              {/* Timeframe reports with expanded analysis & metrics */}
               <div className="mt-5">
-                <div className="flex flex-wrap items-center justify-between gap-3 mb-3">
-                  <span className="text-xs font-bold text-slate-400 tracking-wider uppercase">
-                    Báo cáo theo khung thời gian
+                <div className="flex flex-wrap items-center justify-between gap-3 mb-3.5">
+                  <span className="text-xs font-bold text-slate-300 tracking-wider uppercase flex items-center gap-2">
+                    <span className="w-2 h-2 rounded-full bg-sky-400 inline-block" />
+                    Báo cáo hiệu suất theo khung thời gian
                   </span>
                   <div className="inline-flex rounded-lg bg-slate-950 p-1 border border-slate-800">
                     {(["day", "week", "month", "year"] as const).map((tf) => (
@@ -256,7 +217,7 @@ function SearchContent() {
                         key={tf}
                         type="button"
                         onClick={() => setSelectedTimeframe(tf)}
-                        className={`px-3 py-1 text-xs font-bold rounded-md transition cursor-pointer ${
+                        className={`px-3.5 py-1.5 text-xs font-bold rounded-md transition cursor-pointer ${
                           selectedTimeframe === tf
                             ? "bg-sky-600 text-white shadow-sm"
                             : "text-slate-400 hover:text-white"
@@ -268,80 +229,220 @@ function SearchContent() {
                   </div>
                 </div>
 
-                <div className="p-4 rounded-xl bg-slate-950/80 border border-slate-800/80 flex items-start gap-3">
-                  <span
-                    className={`px-2.5 py-1 rounded-lg text-xs font-extrabold shrink-0 ${
-                      Number(response.stock.reports[selectedTimeframe].change_percent) >= 0
-                        ? "bg-emerald-950/80 text-emerald-400 border border-emerald-800/80"
-                        : "bg-rose-950/80 text-rose-400 border border-rose-800/80"
-                    }`}
-                  >
-                    {Number(response.stock.reports[selectedTimeframe].change_percent) >= 0 ? "+" : ""}
-                    {response.stock.reports[selectedTimeframe].change_percent}%
-                  </span>
-                  <p className="text-xs sm:text-sm text-slate-300 m-0 leading-relaxed">
-                    {response.stock.reports[selectedTimeframe].summary}
-                  </p>
-                </div>
-              </div>
-
-              {/* 1-row transaction info table */}
-              <div className="mt-6 pt-5 border-t border-slate-800">
-                <h3 className="text-xs font-bold text-slate-400 tracking-wider uppercase mb-3">
-                  Thông tin giao dịch &amp; Đặt lệnh nhanh
-                </h3>
-                <div className="overflow-x-auto rounded-xl border border-slate-800 bg-slate-950/60">
-                  <table className="w-full text-xs text-left">
-                    <thead className="bg-slate-900/80 text-slate-400 uppercase tracking-wider font-semibold border-b border-slate-800">
-                      <tr>
-                        <th className="py-2.5 px-4">Giá khớp</th>
-                        <th className="py-2.5 px-4">Khối lượng</th>
-                        <th className="py-2.5 px-4">Tăng / Giảm</th>
-                        <th className="py-2.5 px-4 text-right">Thao tác</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      <tr className="hover:bg-slate-900/40">
-                        <td className="py-3 px-4 font-bold text-white text-sm">
-                          {Number(response.stock.price).toLocaleString("vi-VN")} đ
-                        </td>
-                        <td className="py-3 px-4 text-slate-300 font-medium">
-                          {Number(response.stock.volume).toLocaleString("vi-VN")} CP
-                        </td>
-                        <td
-                          className={`py-3 px-4 font-bold ${
-                            Number(response.stock.change) >= 0 ? "text-emerald-400" : "text-rose-400"
+                {/* Report Content Card with Rich Metrics */}
+                {response.stock.reports[selectedTimeframe] && (
+                  <div className="rounded-xl bg-slate-950/80 border border-slate-800 p-5 space-y-4">
+                    {/* Top row: Change badge, trend tag & risk/reward assessment */}
+                    <div className="flex flex-wrap items-center justify-between gap-3">
+                      <div className="flex flex-wrap items-center gap-2.5">
+                        <span
+                          className={`px-3 py-1 rounded-lg text-sm font-black tracking-tight ${
+                            Number(response.stock.reports[selectedTimeframe].change_percent.replace("%", "").replace("+", "")) >= 0
+                              ? "bg-emerald-950 text-emerald-400 border border-emerald-800"
+                              : "bg-rose-950 text-rose-400 border border-rose-800"
                           }`}
                         >
-                          {Number(response.stock.change) >= 0 ? "+" : ""}
-                          {Number(response.stock.change).toLocaleString("vi-VN")} (
-                          {Number(response.stock.change_percent) >= 0 ? "+" : ""}
-                          {response.stock.change_percent}%)
+                          {Number(response.stock.reports[selectedTimeframe].change_percent.replace("%", "").replace("+", "")) >= 0 ? "+" : ""}
+                          {response.stock.reports[selectedTimeframe].change_percent}
+                        </span>
+                        {response.stock.reports[selectedTimeframe].trend_label && (
+                          <span className="px-2.5 py-1 rounded-lg text-xs font-bold bg-slate-900 border border-slate-700 text-sky-300">
+                            {response.stock.reports[selectedTimeframe].trend_label}
+                          </span>
+                        )}
+                      </div>
+                      {response.stock.reports[selectedTimeframe].risk_reward && (
+                        <span className="text-xs font-semibold text-slate-400 bg-slate-900/60 px-3 py-1 rounded-lg border border-slate-800">
+                          {response.stock.reports[selectedTimeframe].risk_reward}
+                        </span>
+                      )}
+                    </div>
+
+                    {/* Detailed text narrative */}
+                    <p className="text-xs sm:text-sm text-slate-300 m-0 leading-relaxed">
+                      {response.stock.reports[selectedTimeframe].summary}
+                    </p>
+
+                    {/* 4 Quantitative KPI measurement cards */}
+                    <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5 pt-2 border-t border-slate-900">
+                      <div className="bg-slate-900/70 p-2.5 rounded-lg border border-slate-850">
+                        <span className="text-[11px] text-slate-400 block mb-0.5">Đỉnh · Đáy kỳ</span>
+                        <strong className="text-xs sm:text-sm font-bold text-white">
+                          {response.stock.reports[selectedTimeframe].high_price || "—"} / {response.stock.reports[selectedTimeframe].low_price || "—"}
+                        </strong>
+                      </div>
+                      <div className="bg-slate-900/70 p-2.5 rounded-lg border border-slate-850">
+                        <span className="text-[11px] text-slate-400 block mb-0.5">Biên độ dao động</span>
+                        <strong className="text-xs sm:text-sm font-bold text-amber-300">
+                          {response.stock.reports[selectedTimeframe].amplitude || "—"}
+                        </strong>
+                      </div>
+                      <div className="bg-slate-900/70 p-2.5 rounded-lg border border-slate-850">
+                        <span className="text-[11px] text-slate-400 block mb-0.5">Thanh khoản</span>
+                        <strong className="text-xs sm:text-sm font-bold text-slate-200">
+                          {response.stock.reports[selectedTimeframe].volume_label || formatCompact(response.stock.volume)}
+                        </strong>
+                      </div>
+                      <div className="bg-slate-900/70 p-2.5 rounded-lg border border-slate-850">
+                        <span className="text-[11px] text-slate-400 block mb-0.5">Định giá P/E · P/B</span>
+                        <strong className="text-xs sm:text-sm font-bold text-sky-400">
+                          {formatRatioPair(response.stock.pe, response.stock.pb, false)}
+                        </strong>
+                      </div>
+                    </div>
+                  </div>
+                )}
+              </div>
+
+              {/* 1-row transaction info table exactly formatted like Image 4 */}
+              <div className="mt-7 pt-5 border-t border-slate-800">
+                <div className="flex items-center justify-between mb-3">
+                  <h3 className="text-xs font-bold text-slate-300 tracking-wider uppercase flex items-center gap-2">
+                    <span className="w-2 h-2 rounded-full bg-emerald-400 inline-block" />
+                    Thông tin giao dịch &amp; Đặt lệnh nhanh
+                  </h3>
+                  <span className="text-[11px] text-slate-400">
+                    Bấm &ldquo;Mua&rdquo; hoặc &ldquo;Bán&rdquo; để mở cửa sổ đặt lệnh ảo
+                  </span>
+                </div>
+
+                <div className="overflow-x-auto rounded-xl border border-slate-800 bg-slate-950/80 shadow-md">
+                  <table className="market-table simple-stock-table advanced w-full text-left border-collapse text-xs sm:text-sm">
+                    <thead>
+                      <tr className="bg-slate-950/90 border-b border-slate-800 text-slate-400 uppercase tracking-wider text-[11px]">
+                        <th className="py-3 px-3 font-semibold">Mã &amp; công ty</th>
+                        <th className="py-3 px-3 font-semibold">Giá</th>
+                        <th className="py-3 px-3 font-semibold">% hôm nay</th>
+                        <th className="py-3 px-3 font-semibold">Mở · Cao · Thấp</th>
+                        <th className="py-3 px-3 font-semibold">Khối lượng</th>
+                        <th className="py-3 px-3 font-semibold">GTGD</th>
+                        <th className="py-3 px-3 font-semibold">Khối ngoại</th>
+                        <th className="py-3 px-3 font-semibold">Vốn hóa</th>
+                        <th className="py-3 px-3 font-semibold">P/E / P/B</th>
+                        <th className="py-3 px-3 font-semibold text-right">Thao tác</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-slate-800/60">
+                      <tr className="hover:bg-slate-900/50 transition">
+                        {/* 1. Mã & Công ty */}
+                        <td className="stock-identity py-2.5 px-3">
+                          <div className="flex items-center gap-1.5">
+                            <Link
+                              href={`/market/stocks/${response.stock.symbol}`}
+                              className="font-extrabold text-white text-sm hover:text-sky-400 no-underline"
+                            >
+                              {response.stock.symbol}
+                            </Link>
+                            {response.stock.is_vn30 && (
+                              <span className="vn30-badge text-[10px] font-extrabold px-1.5 py-0.2 rounded bg-amber-500/15 text-amber-400 border border-amber-500/30">
+                                VN30
+                              </span>
+                            )}
+                          </div>
+                          <span className="text-slate-300 block truncate max-w-[180px] sm:max-w-[220px] text-xs">
+                            {response.stock.name}
+                          </span>
+                          <small className="text-slate-500 text-[10px] block">
+                            {response.stock.exchange} · {response.stock.sector || "Chứng khoán"}
+                          </small>
                         </td>
-                        <td className="py-3 px-4 text-right">
-                          <button
-                            type="button"
-                            onClick={() => {
-                              if (response?.type === "stock") {
+
+                        {/* 2. Giá */}
+                        <td className="py-2.5 px-3 whitespace-nowrap">
+                          <strong className={`font-bold block ${priceTone(response.stock.price, response.stock.reference_price, response.stock.ceiling_price || "", response.stock.floor_price || "")}`}>
+                            {formatChange(response.stock.price)}
+                          </strong>
+                          <small className="price-reference text-slate-500 text-[10px] block">
+                            TC {formatChange(response.stock.reference_price)}
+                          </small>
+                        </td>
+
+                        {/* 3. % Hôm nay */}
+                        <td className={`py-2.5 px-3 whitespace-nowrap ${changeTone(response.stock.change_percent)}`}>
+                          <strong className="font-bold block">{formatPercent(response.stock.change_percent)}</strong>
+                          <small className="text-[10px] opacity-80 block">{formatChange(response.stock.change)}</small>
+                        </td>
+
+                        {/* 4. Mở · Cao · Thấp */}
+                        <td className="py-2.5 px-3 whitespace-nowrap text-slate-400">
+                          <span className={priceTone(response.stock.open_price || response.stock.price, response.stock.reference_price, response.stock.ceiling_price || "", response.stock.floor_price || "")}>
+                            {formatChange(response.stock.open_price || response.stock.price)}
+                          </span>
+                          {" · "}
+                          <span className={priceTone(response.stock.high_price || response.stock.price, response.stock.reference_price, response.stock.ceiling_price || "", response.stock.floor_price || "")}>
+                            {formatChange(response.stock.high_price || response.stock.price)}
+                          </span>
+                          {" · "}
+                          <span className={priceTone(response.stock.low_price || response.stock.price, response.stock.reference_price, response.stock.ceiling_price || "", response.stock.floor_price || "")}>
+                            {formatChange(response.stock.low_price || response.stock.price)}
+                          </span>
+                        </td>
+
+                        {/* 5. Khối lượng */}
+                        <td className="py-2.5 px-3 whitespace-nowrap font-medium text-slate-200">
+                          {formatCompact(response.stock.volume)}
+                        </td>
+
+                        {/* 6. GTGD */}
+                        <td className="py-2.5 px-3 whitespace-nowrap font-medium text-slate-200">
+                          {formatMoney(response.stock.matched_value)}
+                        </td>
+
+                        {/* 7. Khối ngoại */}
+                        <td className={`py-2.5 px-3 whitespace-nowrap font-medium ${changeTone(response.stock.foreign_net_value || "0")}`}>
+                          {formatMoney(response.stock.foreign_net_value || "0")}
+                        </td>
+
+                        {/* 8. Vốn hóa */}
+                        <td className="py-2.5 px-3 whitespace-nowrap font-medium text-slate-200">
+                          {formatMoney(response.stock.market_cap || "0")}
+                        </td>
+
+                        {/* 9. P/E / P/B */}
+                        <td className="fundamental-ratios py-2.5 px-3 whitespace-nowrap text-slate-300 font-medium">
+                          {formatRatioPair(response.stock.pe, response.stock.pb, false)}
+                        </td>
+
+                        {/* 10. Thao tác: Mua / Bán(nếu đã mua) */}
+                        <td className="py-2.5 px-3 text-right whitespace-nowrap">
+                          <div className="inline-flex items-center gap-1.5 justify-end">
+                            <button
+                              type="button"
+                              onClick={() => {
                                 setOrderModal({
                                   open: true,
-                                  side: isHolding ? "sell" : "buy",
+                                  side: "buy",
                                   instrument: {
                                     symbol: response.stock.symbol,
                                     name: response.stock.name,
                                     price: response.stock.price,
                                   },
                                 });
-                              }
-                            }}
-                            className={`px-4 py-1.5 rounded-lg text-xs font-bold transition shadow-sm cursor-pointer ${
-                              isHolding
-                                ? "bg-rose-600 hover:bg-rose-500 text-white shadow-rose-600/20"
-                                : "bg-emerald-600 hover:bg-emerald-500 text-white shadow-emerald-600/20"
-                            }`}
-                          >
-                            {isHolding ? "Bán" : "Mua"}
-                          </button>
+                              }}
+                              className="px-3 py-1.5 rounded-lg text-xs font-bold transition shadow-sm cursor-pointer bg-emerald-600 hover:bg-emerald-500 text-white shadow-emerald-600/20"
+                            >
+                              Mua
+                            </button>
+                            {isHolding && (
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  setOrderModal({
+                                    open: true,
+                                    side: "sell",
+                                    instrument: {
+                                      symbol: response.stock.symbol,
+                                      name: response.stock.name,
+                                      price: response.stock.price,
+                                    },
+                                  });
+                                }}
+                                className="px-3 py-1.5 rounded-lg text-xs font-bold transition shadow-sm cursor-pointer bg-rose-600 hover:bg-rose-500 text-white shadow-rose-600/20"
+                              >
+                                Bán
+                              </button>
+                            )}
+                          </div>
                         </td>
                       </tr>
                     </tbody>
@@ -352,22 +453,23 @@ function SearchContent() {
 
             {/* Related news block */}
             <div className="bg-slate-900/90 border border-slate-800 rounded-2xl p-6 shadow-xl">
-              <h3 className="text-xs font-bold text-slate-400 tracking-wider uppercase mb-4">
+              <h3 className="text-xs font-bold text-slate-400 tracking-wider uppercase mb-4 flex items-center gap-2">
+                <span className="w-2 h-2 rounded-full bg-sky-400 inline-block" />
                 Tin tức liên quan đến {response.stock.symbol}
               </h3>
               {response.stock.news.length ? (
-                <div className="space-y-2.5">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                   {response.stock.news.map((item) => (
                     <article
                       key={item.id}
-                      className="p-3.5 rounded-xl bg-slate-950/70 border border-slate-800/80 hover:border-slate-700 transition"
+                      className="p-3.5 rounded-xl bg-slate-950/70 border border-slate-800/80 hover:border-slate-700 transition flex flex-col justify-between"
                     >
-                      <h4 className="text-xs sm:text-sm font-semibold text-slate-200 hover:text-sky-400 mb-1 leading-snug">
+                      <h4 className="text-xs sm:text-sm font-semibold text-slate-200 hover:text-sky-400 mb-2 leading-snug">
                         <Link href={`/news/${item.id}`} prefetch={false}>
                           {item.title}
                         </Link>
                       </h4>
-                      <div className="flex items-center gap-2 text-[11px] text-slate-400">
+                      <div className="flex items-center gap-2 text-[11px] text-slate-400 pt-2 border-t border-slate-900">
                         <span>Nguồn: {item.source}</span>
                         <span>•</span>
                         <span>{item.published_at}</span>
@@ -401,28 +503,30 @@ function SearchContent() {
             <h2 className="text-base font-bold text-white pb-3 border-b border-slate-800">
               Kết quả tìm kiếm phù hợp ({response.results.length})
             </h2>
-            <div className="space-y-3">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
               {response.results.map((res, index) => (
                 <article
                   key={index}
-                  className="p-4 rounded-xl bg-slate-950/70 border border-slate-800/80 hover:border-slate-700 transition"
+                  className="p-4 rounded-xl bg-slate-950/70 border border-slate-800/80 hover:border-slate-700 transition flex flex-col justify-between"
                 >
-                  <div className="flex items-center gap-2 mb-1.5">
-                    <span className="px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-wider bg-sky-950 text-sky-400 border border-sky-800">
-                      {res.category}
-                    </span>
+                  <div>
+                    <div className="flex items-center gap-2 mb-1.5">
+                      <span className="px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-wider bg-sky-950 text-sky-400 border border-sky-800">
+                        {res.category}
+                      </span>
+                    </div>
+                    <h3 className="text-sm font-bold text-white mb-1">
+                      <Link href={res.url} className="hover:text-sky-400 transition">
+                        {res.title}
+                      </Link>
+                    </h3>
+                    <p className="text-xs text-slate-300 leading-relaxed mb-3">
+                      {res.snippet}
+                    </p>
                   </div>
-                  <h3 className="text-sm font-bold text-white mb-1">
-                    <Link href={res.url} className="hover:text-sky-400 transition">
-                      {res.title}
-                    </Link>
-                  </h3>
-                  <p className="text-xs text-slate-300 leading-relaxed mb-2">
-                    {res.snippet}
-                  </p>
                   <Link
                     href={res.url}
-                    className="text-xs font-semibold text-sky-400 hover:text-sky-300 inline-flex items-center gap-1"
+                    className="text-xs font-semibold text-sky-400 hover:text-sky-300 inline-flex items-center gap-1 self-start"
                   >
                     Truy cập ngay →
                   </Link>
@@ -431,26 +535,14 @@ function SearchContent() {
             </div>
           </div>
         ) : (
-          <div className="bg-slate-900/90 border border-slate-800 rounded-2xl p-10 text-center shadow-xl">
+          <div className="bg-slate-900/90 border border-slate-800 rounded-2xl p-12 text-center shadow-xl">
             <span className="text-4xl block mb-3" aria-hidden="true">🔍</span>
             <h2 className="text-base sm:text-lg font-bold text-white mb-2">
               Không tìm thấy thông tin
             </h2>
-            <p className="text-xs sm:text-sm text-slate-400 max-w-md mx-auto mb-5 leading-relaxed">
-              Không tìm thấy mã cổ phiếu, bài học hay nội dung nào khớp với từ khóa &quot;{currentQuery}&quot;. Vui lòng kiểm tra lại chính tả hoặc thử một mã cổ phiếu khác.
+            <p className="text-xs sm:text-sm text-slate-400 max-w-md mx-auto leading-relaxed">
+              Không tìm thấy mã cổ phiếu, bài học hay nội dung nào khớp với từ khóa &ldquo;{currentQuery}&rdquo;. Vui lòng kiểm tra lại chính tả hoặc thử tìm một mã khác trên thanh tìm kiếm header.
             </p>
-            <div className="flex flex-wrap justify-center gap-2">
-              {SUGGESTED_TICKERS.slice(0, 6).map((ticker) => (
-                <button
-                  key={ticker}
-                  type="button"
-                  onClick={() => handleSelectTicker(ticker)}
-                  className="text-xs px-3 py-1.5 rounded-lg bg-slate-800 border border-slate-700 text-slate-200 hover:text-white hover:bg-slate-700 transition cursor-pointer"
-                >
-                  Tra cứu {ticker}
-                </button>
-              ))}
-            </div>
           </div>
         )}
       </div>

@@ -125,9 +125,7 @@ describe("StockTreemapHeatmap", () => {
     render(<StockTreemapHeatmap instruments={instruments} sectors={sectors} />);
 
     expect(screen.getByLabelText(/Ngành:/)).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "Vốn hóa" })).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "GTGD" })).toBeInTheDocument();
-    expect(screen.getByText(/Biến động trong ngày/)).toBeInTheDocument();
+    expect(screen.getByText(/Độ to khối theo \|% biến động\|/)).toBeInTheDocument();
 
     // Default "Toàn bộ thị trường" shows top representative stocks
     expect(screen.getByText("VCB")).toBeInTheDocument();
@@ -148,15 +146,11 @@ describe("StockTreemapHeatmap", () => {
     expect(screen.queryByText("HPG")).not.toBeInTheDocument();
   });
 
-  it("toggles size metric between market cap and matched value", () => {
+  it("displays stock ticker and change percent without price text", () => {
     render(<StockTreemapHeatmap instruments={instruments} sectors={sectors} />);
 
-    const gtgdButton = screen.getByRole("button", { name: "GTGD" });
-    fireEvent.click(gtgdButton);
-    expect(gtgdButton).toHaveClass("bg-sky-600");
-
-    const capButton = screen.getByRole("button", { name: "Vốn hóa" });
-    fireEvent.click(capButton);
-    expect(capButton).toHaveClass("bg-sky-600");
+    expect(screen.getByText("SSI")).toBeInTheDocument();
+    expect(screen.getByText("+6,27%")).toBeInTheDocument();
+    expect(screen.queryByText(/20\.350 đ/)).not.toBeInTheDocument();
   });
 });

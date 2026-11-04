@@ -65,15 +65,9 @@ describe("SectorTreemapHeatmap", () => {
     expect(screen.getByText(/Mở bảng giá →/i)).toBeInTheDocument();
   });
 
-  it("allows toggling size metric between market cap and matched value", () => {
+  it("sizes sector tiles based on absolute percentage movement", () => {
     render(<SectorTreemapHeatmap sectors={sectors} />);
 
-    const gtgdBtn = screen.getByRole("button", { name: "GTGD" });
-    fireEvent.click(gtgdBtn);
-    expect(gtgdBtn).toHaveClass("bg-sky-600");
-
-    const capBtn = screen.getByRole("button", { name: "Vốn hóa" });
-    fireEvent.click(capBtn);
-    expect(capBtn).toHaveClass("bg-sky-600");
+    expect(screen.getByText(/Độ to khối theo \|% biến động\|/i)).toBeInTheDocument();
   });
 });

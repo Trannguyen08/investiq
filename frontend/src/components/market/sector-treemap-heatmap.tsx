@@ -7,8 +7,6 @@ import { changeTone, formatMoney, formatPercent } from "@/components/market/form
 import { balanceDynamicWeights, computeSquarifiedTreemap } from "@/components/market/stock-treemap-heatmap";
 import type { MarketSector } from "@/types/market";
 
-type SectorSizeMetric = "market_cap" | "matched_value";
-
 export function SectorTreemapHeatmap({
   sectors,
   headingId = "sector-treemap-title",
@@ -18,19 +16,15 @@ export function SectorTreemapHeatmap({
   headingId?: string;
   onSelectSector?: (sectorName: string) => void;
 }) {
-  const [sizeMetric, setSizeMetric] = useState<SectorSizeMetric>("market_cap");
   const [hoveredSectorName, setHoveredSectorName] = useState<string | null>(null);
 
-  // Compute treemap rectangles for all sectors with balanced dynamic weights
+  // Compute treemap rectangles for all sectors with weights based on absolute percentage movement
   const treemapRects = useMemo(() => {
     if (!sectors.length) return [];
 
     const rawWeights = sectors.map((sector) => {
-      let weight = Number(sector[sizeMetric]);
-      if (!weight || weight <= 0) {
-        weight = sizeMetric === "market_cap" ? 10_000_000_000_000 : 100_000_000_000;
-      }
-      return weight;
+      const absChange = Math.abs(Number(sector.change_percent) || 0);
+      return Math.max(absChange, 0.25);
     });
 
     const balancedWeights = balanceDynamicWeights(rawWeights, 20, 2.5);
@@ -41,7 +35,7 @@ export function SectorTreemapHeatmap({
     }));
 
     return computeSquarifiedTreemap(rawItems, 1000, 560);
-  }, [sectors, sizeMetric]);
+  }, [sectors]);
 
   const hoveredSector = hoveredSectorName
     ? sectors.find((s) => s.name === hoveredSectorName) ?? null
@@ -55,39 +49,11 @@ export function SectorTreemapHeatmap({
           <span className="text-slate-300 font-bold shrink-0">
             Biến động các ngành ({sectors.length} ngành)
           </span>
-
-          <span className="text-slate-600 hidden sm:inline">|</span>
-
-          {/* Size Metric Toggle: Vốn hóa vs GTGD */}
-          <div className="inline-flex rounded-lg bg-slate-900 p-0.5 border border-slate-800">
-            <button
-              type="button"
-              onClick={() => setSizeMetric("market_cap")}
-              className={`px-3 py-1 rounded-md font-semibold transition cursor-pointer ${
-                sizeMetric === "market_cap"
-                  ? "bg-sky-600 text-white shadow-sm"
-                  : "text-slate-400 hover:text-white"
-              }`}
-            >
-              Vốn hóa
-            </button>
-            <button
-              type="button"
-              onClick={() => setSizeMetric("matched_value")}
-              className={`px-3 py-1 rounded-md font-semibold transition cursor-pointer ${
-                sizeMetric === "matched_value"
-                  ? "bg-sky-600 text-white shadow-sm"
-                  : "text-slate-400 hover:text-white"
-              }`}
-            >
-              GTGD
-            </button>
-          </div>
         </div>
 
         {/* Daily Change Notice */}
         <span className="text-[11px] text-slate-400 italic">
-          Biến động trong ngày (%) · Bấm vào ngành để lọc
+          Độ to khối theo |% biến động| · Bấm vào ngành để lọc
         </span>
       </div>
 
@@ -156,20 +122,6 @@ export function SectorTreemapHeatmap({
                     }`}
                   >
                     {formatPercent(item.change_percent)}
-                  </span>
-                )}
-
-                {isBig && (
-                  <div className="flex items-center gap-1.5 mt-1 text-[11px] opacity-90 drop-shadow-sm">
-                    <span className="font-semibold">{item.member_count} mã</span>
-                    <span>·</span>
-                    <span>GTGD {formatMoney(item.matched_value)}</span>
-                  </div>
-                )}
-
-                {!isBig && !isSmall && !isTiny && (
-                  <span className="text-[10px] opacity-80 mt-0.5 drop-shadow-sm">
-                    {item.member_count} mã
                   </span>
                 )}
               </button>
