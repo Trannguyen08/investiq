@@ -7,6 +7,7 @@ import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
 
 import { useAuth } from "@/hooks/use-auth";
+import { HeaderSearch } from "@/components/layout/header-search";
 
 export const userNavigationLinks = [
   ["/", "Tổng quan"],
@@ -213,6 +214,7 @@ export function UserHeader() {
             })}
           </nav>
           <div className="flex-1" />
+          <HeaderSearch />
           <AccountMenu />
           <AdminPortalShortcut />
           <MobileMenu />

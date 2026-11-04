@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { type FormEvent, type RefObject, useEffect, useRef, useState } from "react";
+import { type FormEvent, type RefObject, useEffect, useMemo, useRef, useState } from "react";
 
 import { InfoTip, MarketColorLegend, MarketLineChart, SectorHeatmap } from "@/components/market/beginner-market-ui";
 import {
@@ -381,11 +381,34 @@ export function StocksView({
   const [comparisonOpen, setComparisonOpen] = useState(comparisonSymbols.length >= 2);
   const activeAdvancedFilterCount = [filters.min_change, filters.max_change, filters.min_matched_value_billion, filters.min_market_cap_billion, filters.min_volume_ratio, filters.vn30].filter(Boolean).length;
   const [advancedFilterOpen, setAdvancedFilterOpen] = useState(activeAdvancedFilterCount > 0);
+  const [searchQuery, setSearchQuery] = useState(filters.q || "");
   const rows = collection.data.map((item) => mergeLiveInstrument(item, stream.items[item.symbol]));
-  const fundamentalsBySymbol = useVisibleFundamentals(
-    rows.filter((item) => item.pe === null || item.pb === null).map((item) => item.symbol),
-  );
   const universe = summary.data.map((item) => mergeLiveInstrument(item, stream.items[item.symbol]));
+
+  const displayedRows = useMemo(() => {
+    const q = searchQuery.trim().toLowerCase();
+    if (!q) return rows;
+    const pool = universe.length > rows.length ? universe : rows;
+    return pool.filter((item) =>
+      item.symbol.toLowerCase().includes(q) ||
+      item.name.toLowerCase().includes(q)
+    );
+  }, [rows, universe, searchQuery]);
+
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      if (searchQuery !== (filters.q || "")) {
+        const nextUrl = hrefWith(filters, { q: searchQuery.trim(), cursor: null });
+        router.replace(nextUrl, { scroll: false });
+      }
+    }, 350);
+    return () => clearTimeout(timer);
+  }, [searchQuery, filters, router]);
+
+  const fundamentalsBySymbol = useVisibleFundamentals(
+    displayedRows.filter((item) => item.pe === null || item.pb === null).map((item) => item.symbol),
+  );
+
   const sectorFlows = [...sectors.data].sort((left, right) => Number(right.market_cap) - Number(left.market_cap));
   const chosen = [...rows, ...universe].find((item) => item.symbol === selected);
   const marketCount = sectors.data.reduce((sum, sector) => sum + sector.member_count, 0);
@@ -551,15 +574,29 @@ export function StocksView({
         </div>
 
         {/* Filter Form */}
-        <form className="stock-filter bg-slate-950/70 border border-slate-800 rounded-xl p-4 mb-4 flex flex-wrap gap-3 items-end text-xs" action="/market/stocks">
+        <div className="stock-filter bg-slate-950/70 border border-slate-800 rounded-xl p-4 mb-4 flex flex-wrap gap-3 items-end text-xs">
           {filters.sector && <input type="hidden" name="sector" value={filters.sector} />}
           <label className="flex flex-col gap-1 text-slate-400 font-medium min-w-[160px] flex-1">
             Tìm mã hoặc công ty
-            <input name="q" defaultValue={filters.q} placeholder="Ví dụ: FPT, Hòa Phát" className="bg-slate-900 border border-slate-700 rounded-lg px-3 py-1.5 text-white placeholder-slate-500 text-xs focus:outline-none focus:border-sky-500" />
+            <input
+              name="q"
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              placeholder="Gõ mã hoặc tên công ty để lọc ngay (ví dụ: FPT, SSI, MBB)"
+              className="bg-slate-900 border border-slate-700 rounded-lg px-3 py-1.5 text-white placeholder-slate-500 text-xs focus:outline-none focus:border-sky-500"
+            />
           </label>
           <label className="flex flex-col gap-1 text-slate-400 font-medium min-w-[110px]">
             Sàn
-            <select name="exchange" defaultValue={filters.exchange} className="bg-slate-900 border border-slate-700 rounded-lg px-2.5 py-1.5 text-white text-xs focus:outline-none focus:border-sky-500">
+            <select
+              name="exchange"
+              defaultValue={filters.exchange}
+              onChange={(e) => {
+                const nextUrl = hrefWith(filters, { exchange: e.target.value, cursor: null });
+                router.push(nextUrl, { scroll: false });
+              }}
+              className="bg-slate-900 border border-slate-700 rounded-lg px-2.5 py-1.5 text-white text-xs focus:outline-none focus:border-sky-500"
+            >
               <option value="">Tất cả sàn</option>
               <option value="HOSE">HOSE</option>
               <option value="HNX">HNX</option>
@@ -568,7 +605,15 @@ export function StocksView({
           </label>
           <label className="flex flex-col gap-1 text-slate-400 font-medium min-w-[130px]">
             Sắp xếp
-            <select name="sort" defaultValue={hasVolumeBaseline ? filters.sort : filters.sort === "volume_vs_20d" ? "vn30" : filters.sort} className="bg-slate-900 border border-slate-700 rounded-lg px-2.5 py-1.5 text-white text-xs focus:outline-none focus:border-sky-500">
+            <select
+              name="sort"
+              defaultValue={hasVolumeBaseline ? filters.sort : filters.sort === "volume_vs_20d" ? "vn30" : filters.sort}
+              onChange={(e) => {
+                const nextUrl = hrefWith(filters, { sort: e.target.value, cursor: null });
+                router.push(nextUrl, { scroll: false });
+              }}
+              className="bg-slate-900 border border-slate-700 rounded-lg px-2.5 py-1.5 text-white text-xs focus:outline-none focus:border-sky-500"
+            >
               <option value="vn30">VN30 trước</option>
               <option value="symbol">Mã</option>
               <option value="change_percent">% hôm nay</option>
@@ -579,7 +624,15 @@ export function StocksView({
           </label>
           <label className="flex flex-col gap-1 text-slate-400 font-medium min-w-[100px]">
             Thứ tự
-            <select name="direction" defaultValue={filters.direction} className="bg-slate-900 border border-slate-700 rounded-lg px-2.5 py-1.5 text-white text-xs focus:outline-none focus:border-sky-500">
+            <select
+              name="direction"
+              defaultValue={filters.direction}
+              onChange={(e) => {
+                const nextUrl = hrefWith(filters, { direction: e.target.value, cursor: null });
+                router.push(nextUrl, { scroll: false });
+              }}
+              className="bg-slate-900 border border-slate-700 rounded-lg px-2.5 py-1.5 text-white text-xs focus:outline-none focus:border-sky-500"
+            >
               <option value="desc">Giảm dần</option>
               <option value="asc">Tăng dần</option>
             </select>
@@ -594,8 +647,7 @@ export function StocksView({
             Lọc nâng cao{activeAdvancedFilterCount ? <span className="bg-sky-500 text-white rounded-full px-1.5 py-0.2 text-[10px] font-bold">{activeAdvancedFilterCount}</span> : null}
           </button>
           <div className="stock-filter-actions flex items-center gap-2">
-            <button type="submit" className="px-4 py-1.5 rounded-lg bg-sky-600 hover:bg-sky-500 text-white font-bold transition cursor-pointer">Áp dụng</button>
-            <Link href="/market/stocks" prefetch={false} className="px-3 py-1.5 rounded-lg text-slate-400 hover:text-white transition">Đặt lại</Link>
+            <Link href="/market/stocks" prefetch={false} onClick={() => setSearchQuery("")} className="px-3 py-1.5 rounded-lg text-slate-400 hover:text-white transition">Đặt lại</Link>
           </div>
           {advancedFilterOpen && (
             <section id="advanced-stock-filter-panel" className="advanced-stock-filter w-full pt-3 mt-1 border-t border-slate-800" aria-label="Bộ lọc nâng cao">
@@ -616,7 +668,7 @@ export function StocksView({
               </div>
             </section>
           )}
-        </form>
+        </div>
 
         {/* Table Wrap */}
         <div className="market-table-wrap simple-stock-table-wrap overflow-x-auto rounded-xl border border-slate-800">
@@ -635,7 +687,7 @@ export function StocksView({
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-800/60">
-              {rows.map((item) => {
+              {displayedRows.map((item) => {
                 const stockDetailHref = `/market/stocks/${item.symbol}?from=${encodeURIComponent(`${hrefWith(filters, { selected: null })}#stock-table`)}`;
                 const fundamentals = fundamentalsBySymbol[item.symbol];
                 const ratiosLoading = (item.pe === null || item.pb === null) && fundamentals === undefined;
@@ -686,7 +738,7 @@ export function StocksView({
           </table>
         </div>
 
-        {!rows.length && (
+        {!displayedRows.length && (
           <div className="market-empty py-12 text-center text-slate-400">
             <h3 className="text-base font-bold text-slate-300 mb-1">Không tìm thấy cổ phiếu</h3>
             <p className="text-xs text-slate-500 m-0">Thử bỏ bớt bộ lọc hoặc tìm bằng mã khác.</p>

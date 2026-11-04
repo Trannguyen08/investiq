@@ -417,15 +417,16 @@ export function getInvestorPersonaByCode(code: string): Promise<InvestorPersona>
 export function submitAssessment(
   payload: SubmitAssessmentPayload,
 ): Promise<ReadinessEvaluation> {
-  const base = resolveApiBase();
-  return fetch(`${base}/v1/assessment/evaluate`, {
+  const isBrowser = typeof window !== "undefined";
+  const url = isBrowser ? "/assessment-api/evaluate" : `${resolveApiBase()}/v1/assessment/evaluate`;
+  return fetch(url, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(payload),
   }).then(async (res) => {
     if (!res.ok) {
       const err = await res.json().catch(() => null);
-      throw new Error(err?.detail || `Lỗi ${res.status}`);
+      throw new Error(err?.error?.message || err?.detail || `Lỗi ${res.status}`);
     }
     return res.json();
   });
@@ -435,6 +436,11 @@ export function getLatestAssessment(
   guestIdentifier?: string,
 ): Promise<ReadinessEvaluation | null> {
   const qs = guestIdentifier ? `?guest_identifier=${encodeURIComponent(guestIdentifier)}` : "";
+  if (typeof window !== "undefined") {
+    return fetch(`/assessment-api/latest${qs}`, { cache: "no-store" })
+      .then((res) => (res.ok ? res.json() : null))
+      .catch(() => null);
+  }
   return requestJson<ReadinessEvaluation | null>(`/v1/assessment/latest${qs}`, 0);
 }
 
