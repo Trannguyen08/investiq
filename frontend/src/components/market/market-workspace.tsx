@@ -20,6 +20,7 @@ import { EcosystemGraph } from "@/components/market/ecosystem-graph";
 import { MarketStreamProvider, useMarketStreamState } from "@/hooks/use-realtime-price";
 import { useVisibleFundamentals } from "@/hooks/use-visible-fundamentals";
 import { marketPath, type MarketTab } from "@/lib/market-routes";
+import { Pagination, encodeCursor } from "@/components/ui/pagination";
 import type {
   EcosystemSummary,
   InstrumentCollection,
@@ -237,21 +238,26 @@ export function StocksView({
       )}
 
       {collection.data.length > 0 && (
-        <nav className="market-pagination" aria-label="Phân trang cổ phiếu">
-          {collection.pagination.previous_cursor ? (
-            <Link href={stockPageHref(filters, collection.pagination.previous_cursor)}>← Trang trước</Link>
-          ) : (
-            <span />
-          )}
-          <strong>
-            Trang {collection.pagination.page} / {Math.max(1, collection.pagination.total_pages)}
-          </strong>
-          {collection.pagination.next_cursor ? (
-            <Link href={stockPageHref(filters, collection.pagination.next_cursor)}>Trang sau →</Link>
-          ) : (
-            <span />
-          )}
-        </nav>
+        <Pagination
+          currentPage={collection.pagination.page}
+          totalPages={Math.max(1, collection.pagination.total_pages)}
+          totalItems={collection.pagination.total_items}
+          pageSize={collection.pagination.limit || 15}
+          itemLabel="mã cổ phiếu"
+          getPageUrl={(targetPage) => {
+            const limit = collection.pagination.limit || 15;
+            let cursor: string | null = null;
+            if (targetPage === collection.pagination.page + 1 && collection.pagination.next_cursor) {
+              cursor = collection.pagination.next_cursor;
+            } else if (targetPage === collection.pagination.page - 1 && collection.pagination.previous_cursor) {
+              cursor = collection.pagination.previous_cursor;
+            } else if (targetPage > 1) {
+              cursor = encodeCursor((targetPage - 1) * limit);
+            }
+            return stockPageHref(filters, cursor);
+          }}
+          ariaLabel="Phân trang cổ phiếu"
+        />
       )}
     </section>
   );

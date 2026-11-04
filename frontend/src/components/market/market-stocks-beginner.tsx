@@ -7,6 +7,7 @@ import { type FormEvent, type RefObject, useEffect, useMemo, useRef, useState } 
 import { InfoTip, MarketColorLegend, MarketLineChart, SectorHeatmap } from "@/components/market/beginner-market-ui";
 import { SectorTreemapHeatmap } from "@/components/market/sector-treemap-heatmap";
 import { StockTreemapHeatmap } from "@/components/market/stock-treemap-heatmap";
+import { Pagination, encodeCursor } from "@/components/ui/pagination";
 import {
   changeTone,
   formatChange,
@@ -807,15 +808,26 @@ export function StocksView({
         )}
 
         {!!rows.length && (
-          <nav className="market-pagination flex items-center justify-between mt-4 pt-3 border-t border-slate-800 text-xs text-slate-400" aria-label="Phân trang cổ phiếu">
-            {collection.pagination.previous_cursor ? (
-              <Link href={`${hrefWith(filters, { cursor: collection.pagination.previous_cursor, selected: null })}#stock-table`} className="hover:text-white transition">← Trang trước</Link>
-            ) : <span />}
-            <strong className="text-slate-200 font-semibold">Trang {collection.pagination.page} / {Math.max(1, collection.pagination.total_pages)}</strong>
-            {collection.pagination.next_cursor ? (
-              <Link href={`${hrefWith(filters, { cursor: collection.pagination.next_cursor, selected: null })}#stock-table`} className="hover:text-white transition">Trang sau →</Link>
-            ) : <span />}
-          </nav>
+          <Pagination
+            currentPage={collection.pagination.page}
+            totalPages={Math.max(1, collection.pagination.total_pages)}
+            totalItems={collection.pagination.total_items}
+            pageSize={collection.pagination.limit || 15}
+            itemLabel="mã cổ phiếu"
+            getPageUrl={(targetPage) => {
+              const limit = collection.pagination.limit || 15;
+              let cursor: string | null = null;
+              if (targetPage === collection.pagination.page + 1 && collection.pagination.next_cursor) {
+                cursor = collection.pagination.next_cursor;
+              } else if (targetPage === collection.pagination.page - 1 && collection.pagination.previous_cursor) {
+                cursor = collection.pagination.previous_cursor;
+              } else if (targetPage > 1) {
+                cursor = encodeCursor((targetPage - 1) * limit);
+              }
+              return `${hrefWith(filters, { cursor, selected: null })}#stock-table`;
+            }}
+            ariaLabel="Phân trang cổ phiếu"
+          />
         )}
       </section>
 

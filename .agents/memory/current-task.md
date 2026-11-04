@@ -1,5 +1,42 @@
 # Current Task
 
+## Unified Standard Pagination Across News, Market Stocks, Dividends, and Events - 2026-11-04 (completed)
+- **User Request**:
+  1. Đồng bộ style phân trang thành 1 kiểu duy nhất trên toàn bộ các trang có phân trang: Trang tin tức (`/news`), Trang thị trường bảng mã cổ phiếu (`/market/stocks`), Trang cổ tức (`StockDividendPanel`), Trang sự kiện (`/market/events`).
+  2. Tối ưu hóa việc load dữ liệu (instant page navigation, server-side prefetching, client-side zero-latency slicing, smart 7-item windowing with ellipsis, offset cursor calculation for stocks).
+  3. Làm việc và commit/push DUY NHẤT trên nhánh `fix/UI`, **tuyệt đối không merge vào `dev` hay `main`**.
+  4. Vượt qua 100% kiểm thử (Lint, Typecheck, Unit Tests, Quality Gate `./scripts/check-pr.ps1`) và cung cấp link localhost để người dùng kiểm tra.
+- **Branch**: `fix/UI` (committed and pushed only to `fix/UI`, strictly not merged to `dev` or `main`).
+- **Changes**:
+  - `frontend/src/components/ui/pagination.tsx`:
+    - Tạo component phân trang dùng chung `Pagination` chuẩn mực theo style của Trang cổ tức (Image 2):
+      - Cột trái: `Hiển thị X - Y trong tổng số Z [tên mục]` (`startItem` - `endItem` trên `totalItems`).
+      - Cột phải: Cụm điều hướng gồm nút `← Trước`, cụm nút số trang (7 ô số tối đa theo thuật toán windowing thông minh với `...`), và nút `Sau →`.
+      - Trang hiện tại nổi bật với sắc xanh dương thương hiệu (`bg-sky-600 text-white font-bold shadow-sm`), các trang khác dạng viền xám tối (`bg-slate-950 text-slate-400 border border-slate-800 hover:text-white hover:bg-slate-900`).
+      - Hỗ trợ cả 2 chế độ:
+        - `onPageChange`: Dành cho Client State phân trang mượt mà (Cổ tức, Sự kiện) với zero-latency và smooth scroll.
+        - `getPageUrl`: Dành cho Server Components và URL-driven navigation (Tin tức, Thị trường cổ phiếu) tận dụng cơ chế `prefetch={true}` của Next.js giúp tải trước trang kế tiếp trong viewport.
+    - Tạo hàm `encodeCursor(offset: number)` tương thích 100% với backend FastAPI, cho phép bảng mã cổ phiếu nhảy thẳng đến bất kỳ trang nào (1, 2, 3, ..., 93) thay vì chỉ đi tiến/lùi 1 trang như trước.
+  - `frontend/src/components/ui/pagination.test.tsx`:
+    - Thêm 4 unit tests kiểm tra thuật toán windowing 7 ô, mã hóa offset cursor, chế độ button callback và chế độ link routing URL.
+  - `frontend/src/components/market/stock-dividend-panel.tsx`:
+    - Tích hợp component `Pagination` thay cho đoạn code phân trang inline cũ, giữ nguyên nhãn "đợt chi trả" và chuyển trang 0ms client-side.
+  - `frontend/src/components/market/events-view.tsx`:
+    - Thay thế giao diện phân trang chữ đơn giản ở giữa (Image 4) bằng `Pagination` đồng bộ chuẩn mực với nhãn "sự kiện", có đầy đủ các ô số trang và nút Trước/Sau.
+  - `frontend/src/app/(user)/news/page.tsx`:
+    - Thay thế cụm nút màu xanh lá ở giữa (Image 3) bằng `Pagination` đồng bộ với nhãn "bài viết", hiển thị đầy đủ dải mục `Hiển thị 1 - 10 trong tổng số 84 bài viết` và Next/Prev links.
+  - `frontend/src/components/market/market-stocks-beginner.tsx` (và `market-workspace.tsx`):
+    - Nâng cấp thanh phân trang 3 cột đơn điệu `Trang 1 / 93` (Image 1) thành `Pagination` đầy đủ: hiển thị `Hiển thị 1 - 15 trong tổng số 1395 mã cổ phiếu`, các nút số trang nhảy trực tiếp qua `encodeCursor((p - 1) * 15)`, neo chuẩn `#stock-table`.
+  - `frontend/src/app/globals.css`:
+    - Dọn dẹp các rule CSS cũ gây xung đột layout (`.news-pagination`, `.event-pagination`, `.market-pagination`).
+- **Verification**:
+  - Quality Gate `./scripts/check-pr.ps1`: Passed 100%.
+  - Frontend Lint (ESLint): Passed 0 lỗi.
+  - Frontend Typecheck (tsc): Passed 0 lỗi.
+  - Frontend Unit Tests (Vitest): 173/173 passed (45 test suites).
+  - Backend Lint (Ruff) & Typecheck (Mypy): Passed 0 lỗi.
+  - Backend Unit Tests (Pytest): Passed 100%.
+
 ## Full Market Aggregation for Stock Pulse & Foreign Net, Homepage Cleanup (Glossary & Tool Directory Removal) - 2026-11-04 (completed)
 - **User Request**:
   1. Bảng quan sát nhanh ("Mã nào đang đáng chú ý?") trên trang chủ phải tính toán trên **toàn bộ thị trường** chứ không chỉ lấy từ 8 mã trong snapshot trang chủ.
