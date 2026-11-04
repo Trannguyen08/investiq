@@ -151,6 +151,37 @@ export function balanceDynamicWeights(
   return pcts;
 }
 
+// Compute dynamic weights for percentage movement treemap
+// Enhances visual disparity so stocks with large movements are noticeably larger
+// than stocks with near-zero changes, while maintaining readability of ticker and %
+export function computePercentMovementWeights(rawChangePercents: number[]): number[] {
+  if (rawChangePercents.length === 0) return [];
+  if (rawChangePercents.length === 1) return [100];
+
+  const absValues = rawChangePercents.map((val) => Math.abs(Number(val) || 0));
+  const maxVal = Math.max(...absValues);
+
+  if (maxVal === 0) {
+    const uniform = 100 / absValues.length;
+    return absValues.map(() => uniform);
+  }
+
+  // Multiplier of 7.0 provides clear, dramatic contrast between large movers (e.g. 4-7%)
+  // and stationary stocks (0-0.5%), giving the largest movers ~7-8x the visual area of 0% stocks.
+  const minFloor = 1.0;
+  const multiplier = 7.0;
+
+  const weights = absValues.map((v) => minFloor + (v / maxVal) * multiplier);
+  const totalWeight = weights.reduce((sum, w) => sum + w, 0);
+
+  if (totalWeight <= 0) {
+    const uniform = 100 / absValues.length;
+    return absValues.map(() => uniform);
+  }
+
+  return weights.map((w) => (w / totalWeight) * 100);
+}
+
 export function StockTreemapHeatmap({
   instruments,
   sectors,
@@ -172,6 +203,7 @@ export function StockTreemapHeatmap({
   };
 
   const [hoveredSymbol, setHoveredSymbol] = useState<string | null>(null);
+  const [activeSymbol, setActiveSymbol] = useState<string | null>(null);
 
   // Cache sector instruments loaded from API
   const [sectorCache, setSectorCache] = useState<Record<string, MarketInstrument[]>>({});
@@ -235,12 +267,8 @@ export function StockTreemapHeatmap({
   const treemapRects = useMemo(() => {
     if (!activeStockList.length) return [];
 
-    const rawWeights = activeStockList.map((item) => {
-      const absChange = Math.abs(Number(item.change_percent) || 0);
-      return Math.max(absChange, 0.25);
-    });
-
-    const balancedWeights = balanceDynamicWeights(rawWeights, 24, 2.5);
+    const rawChanges = activeStockList.map((item) => Number(item.change_percent) || 0);
+    const balancedWeights = computePercentMovementWeights(rawChanges);
 
     const rawItems = activeStockList.map((item, idx) => ({
       item,
@@ -250,9 +278,12 @@ export function StockTreemapHeatmap({
     return computeSquarifiedTreemap(rawItems, 1000, 560);
   }, [activeStockList]);
 
-  const hoveredItem = hoveredSymbol
+  const displayItem = (hoveredSymbol
     ? activeStockList.find((i) => i.symbol === hoveredSymbol) ?? instruments.find((i) => i.symbol === hoveredSymbol)
-    : null;
+    : null)
+    ?? (activeSymbol
+      ? activeStockList.find((i) => i.symbol === activeSymbol) ?? instruments.find((i) => i.symbol === activeSymbol)
+      : null);
 
   return (
     <div className="stock-treemap-heatmap flex flex-col gap-3">
@@ -316,7 +347,10 @@ export function StockTreemapHeatmap({
                 key={item.symbol}
                 href={`/market/stocks/${item.symbol}`}
                 prefetch={false}
-                onMouseEnter={() => setHoveredSymbol(item.symbol)}
+                onMouseEnter={() => {
+                  setHoveredSymbol(item.symbol);
+                  setActiveSymbol(item.symbol);
+                }}
                 onMouseLeave={() => setHoveredSymbol(null)}
                 style={{
                   left: `${x}%`,
@@ -351,27 +385,37 @@ export function StockTreemapHeatmap({
         )}
       </div>
 
-      {/* Bottom Detail Bar on Hover */}
-      {hoveredItem && (
-        <div className="treemap-hover-bar flex flex-wrap items-center justify-between gap-3 px-3 py-2 bg-slate-900 border border-slate-800 rounded-lg text-xs animate-fadeIn">
+      {/* Bottom Detail Bar on Hover / Active */}
+      {displayItem && (
+        <div
+          onMouseEnter={() => setActiveSymbol(displayItem.symbol)}
+          className="treemap-hover-bar flex flex-wrap items-center justify-between gap-3 px-3 py-2 bg-slate-900 border border-slate-800 rounded-lg text-xs"
+        >
           <div className="flex items-center gap-2">
-            <span className="font-extrabold text-white text-sm">{hoveredItem.symbol}</span>
-            <span className="text-slate-300 font-medium truncate max-w-[200px] sm:max-w-xs">{hoveredItem.name}</span>
-            <span className="text-slate-500">({hoveredItem.sector})</span>
+            <span className="font-extrabold text-white text-sm">{displayItem.symbol}</span>
+            <span className="text-slate-300 font-medium truncate max-w-[200px] sm:max-w-xs">{displayItem.name}</span>
+            <span className="text-slate-500">({displayItem.sector})</span>
           </div>
           <div className="flex items-center gap-3">
             <span className="text-slate-400">
-              Giá: <strong className="text-white">{Number(hoveredItem.price).toLocaleString("vi-VN")} đ</strong>
+              Giá: <strong className="text-white">{Number(displayItem.price).toLocaleString("vi-VN")} đ</strong>
             </span>
-            <span className={`font-bold ${changeTone(hoveredItem.change_percent)}`}>
-              {formatPercent(hoveredItem.change_percent)}
+            <span className={`font-bold ${changeTone(displayItem.change_percent)}`}>
+              {formatPercent(displayItem.change_percent)}
             </span>
             <span className="text-slate-400 hidden sm:inline">
-              GTGD: <strong className="text-slate-200">{formatMoney(hoveredItem.matched_value)}</strong>
+              GTGD: <strong className="text-slate-200">{formatMoney(displayItem.matched_value)}</strong>
             </span>
             <span className="text-slate-400 hidden md:inline">
-              Vốn hóa: <strong className="text-slate-200">{formatMoney(hoveredItem.market_cap)}</strong>
+              Vốn hóa: <strong className="text-slate-200">{formatMoney(displayItem.market_cap)}</strong>
             </span>
+            <Link
+              href={`/market/stocks/${displayItem.symbol}`}
+              prefetch={false}
+              className="text-sky-400 hover:text-sky-200 hover:bg-sky-900/80 font-bold ml-1 inline-flex items-center gap-1 transition px-2.5 py-1 rounded-md bg-sky-950/70 border border-sky-700/80 shadow-xs"
+            >
+              Xem chi tiết →
+            </Link>
           </div>
         </div>
       )}

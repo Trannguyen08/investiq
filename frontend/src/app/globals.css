@@ -2995,20 +2995,28 @@ body:has(.market-page) .mobile-menu summary span { background: #d9e8f5; }
 .beginner-home,
 .beginner-market-page { --market-card: #0b1d2e; --market-border: #2a4c66; --market-muted: #b3c7d6; }
 .market-home .positive,
+.search-page .positive,
 .market-page .positive { color: #32e3a9 !important; }
 .market-home .negative,
+.search-page .negative,
 .market-page .negative { color: #ff6876 !important; }
 .market-page .price-up,
+.search-page .price-up,
 .paper-page .price-up { color: #32e3a9 !important; }
 .market-page .price-down,
+.search-page .price-down,
 .paper-page .price-down { color: #ff6876 !important; }
 .market-page .price-reference,
+.search-page .price-reference,
 .paper-page .price-reference { color: #e9c441 !important; }
 .market-page .price-ceiling,
+.search-page .price-ceiling,
 .paper-page .price-ceiling { color: #c878f0 !important; }
 .market-page .price-floor,
+.search-page .price-floor,
 .paper-page .price-floor { color: #55adf7 !important; }
 .market-page .price-neutral,
+.search-page .price-neutral,
 .paper-page .price-neutral { color: #dceaf5 !important; }
 .market-page .simple-stock-table td.positive > strong,
 .market-page .simple-stock-table td.positive > small,

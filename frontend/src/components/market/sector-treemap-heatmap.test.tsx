@@ -65,6 +65,18 @@ describe("SectorTreemapHeatmap", () => {
     expect(screen.getByText(/Mở bảng giá →/i)).toBeInTheDocument();
   });
 
+  it("keeps detail bar visible when mouse leaves tile to click 'Mở bảng giá →'", () => {
+    render(<SectorTreemapHeatmap sectors={sectors} />);
+
+    const bankButton = screen.getByRole("button", { name: /Ngân hàng/i });
+    fireEvent.mouseEnter(bankButton);
+    expect(screen.getByText(/Mở bảng giá →/i)).toBeInTheDocument();
+
+    // Mouse leaves tile moving towards the bottom action link
+    fireEvent.mouseLeave(bankButton);
+    expect(screen.getByText(/Mở bảng giá →/i)).toBeInTheDocument();
+  });
+
   it("sizes sector tiles based on absolute percentage movement", () => {
     render(<SectorTreemapHeatmap sectors={sectors} />);
 

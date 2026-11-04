@@ -1,7 +1,12 @@
 import { fireEvent, render, screen } from "@testing-library/react";
 import { describe, expect, it } from "vitest";
 
-import { balanceDynamicWeights, computeSquarifiedTreemap, StockTreemapHeatmap } from "@/components/market/stock-treemap-heatmap";
+import {
+  balanceDynamicWeights,
+  computePercentMovementWeights,
+  computeSquarifiedTreemap,
+  StockTreemapHeatmap,
+} from "@/components/market/stock-treemap-heatmap";
 import type { MarketInstrument, MarketSector } from "@/types/market";
 
 function sampleInstrument(
@@ -75,6 +80,28 @@ describe("balanceDynamicWeights", () => {
   it("handles edge cases gracefully", () => {
     expect(balanceDynamicWeights([])).toEqual([]);
     expect(balanceDynamicWeights([500])).toEqual([100]);
+  });
+});
+
+describe("computePercentMovementWeights", () => {
+  it("provides clear, dramatic contrast between large movers and near-zero stocks", () => {
+    // LPB (+4.61%), CTG (+3.33%), VCB (+2.43%), GAS (+0.27%), VIC (0%)
+    const raw = [4.61, 3.33, 2.43, 0.27, 0];
+    const weights = computePercentMovementWeights(raw);
+
+    expect(weights).toHaveLength(raw.length);
+    const sum = weights.reduce((a, b) => a + b, 0);
+    expect(sum).toBeCloseTo(100, 1);
+
+    // Large mover (LPB 4.61%) has substantially larger area than stationary stock (VIC 0%)
+    expect(weights[0] / weights[4]).toBeGreaterThan(6.0);
+    // 0% stock still has a legible presence
+    expect(weights[4]).toBeGreaterThan(0.5);
+  });
+
+  it("handles uniform 0% and empty arrays gracefully", () => {
+    expect(computePercentMovementWeights([])).toEqual([]);
+    expect(computePercentMovementWeights([0, 0, 0])).toEqual([100 / 3, 100 / 3, 100 / 3]);
   });
 });
 

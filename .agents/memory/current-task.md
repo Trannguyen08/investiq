@@ -1,5 +1,42 @@
 # Current Task
 
+## Treemap Visual Contrast, Tab Switch Alignment, Sticky Action Bar & Search Table Centering - 2026-11-04 (completed)
+- **User Request**:
+  1. Độ chênh lệch phần trăm phải thể hiện rõ ràng hơn, khắc phục tình trạng các khối nhìn đều như nhau mặc dù % biến động chênh nhau rất nhiều (ví dụ LPB +4.61% và GAS +0.27% hay VIC 0% trước đó có diện tích gần như ngang ngửa nhau).
+  2. Ngoại trừ cột tên công ty ("Mã & công ty"), tất cả các cột còn lại trong bảng thông tin giao dịch trang Search phải căn giữa (`text-center`).
+  3. Khắc phục lỗi khi chuyển đổi giữa 2 tab "Khối nhiệt cổ phiếu" và "Biến động các ngành" thì cụm 2 nút bị rớt xuống dòng riêng bên dưới tiêu đề (ảnh 1 vs ảnh 2).
+  4. Khắc phục lỗi khi người dùng rê chuột từ ô ngành xuống bấm link "Mở bảng giá →" thì khối detail bar bên dưới bị mất (ảnh 3).
+  5. Tiếp tục thực hiện trên nhánh `fix/UI`, **chỉ commit và push trên nhánh `fix/UI`, tuyệt đối không merge vào `dev` hay `main`**.
+  6. Chạy kiểm thử toàn diện và cung cấp các link localhost để kiểm tra lại.
+- **Branch**: `fix/UI` (committed and pushed only to `fix/UI`, strictly not merged to `dev` or `main`).
+- **Changes**:
+  - `frontend/src/components/market/market-stocks-beginner.tsx`:
+    - Thay `flex flex-wrap` bằng `flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-4`.
+    - Phần tiêu đề bên trái sử dụng `min-w-0 flex-1 pr-2 truncate`, mô tả rút gọn súc tích đồng đều giữa cả 2 tab.
+    - Cụm 2 nút tab có `shrink-0 self-start sm:self-center`, giữ nguyên vị trí cố định ở góc trên bên phải ngang hàng với tiêu đề ở cả 2 tab, triệt tiêu hoàn toàn hiện tượng bị rớt dòng.
+  - `frontend/src/components/market/sector-treemap-heatmap.tsx`:
+    - Lưu trạng thái ngành đang xem bằng `activeSectorName`. Khi người dùng rê chuột vào một ô ngành và sau đó di chuyển xuống bấm link "Mở bảng giá →", thanh detail bar không bị biến mất mà vẫn hiển thị ổn định 100%.
+    - Nút "Mở bảng giá →" được bọc style button sắc nét (`px-2.5 py-1 rounded-md bg-sky-950/70 border border-sky-700/80 text-sky-400 hover:text-sky-200 hover:bg-sky-900/80 font-bold`) dễ bấm, chuẩn xác.
+    - Đồng bộ sử dụng `computePercentMovementWeights(rawChanges)` cho Treemap biến động các ngành.
+  - `frontend/src/components/market/stock-treemap-heatmap.tsx`:
+    - Tạo hàm chuyên dụng `computePercentMovementWeights(rawChangePercents)`:
+      - Loại bỏ cơ chế nén lũy thừa 0.35 và chặn sàn `Math.max(v, 1)` vốn được thiết kế cho số liệu vốn hóa hàng trăm nghìn tỷ, nguyên nhân khiến dải biến động 0% - 5% bị nén chặt vào khoảng hẹp 1.0 - 1.7.
+      - Sử dụng hệ số phân cấp tuyến tính có kiểm soát (`minFloor = 1.0`, `multiplier = 7.0` scale theo `v / maxVal`):
+        - Mã biến động mạnh nhất (trần tím, +4.6% - +7%) có diện tích gấp 7 - 8 lần so với mã đứng giá (0%) và gấp 4 - 5 lần so với mã biến động nhẹ (0.2% - 0.5%).
+        - Mã 0% hoặc đứng giá vẫn có diện tích sàn an toàn (~1.3% - 1.8% canvas) đảm bảo hiển thị rõ ràng ticker và số liệu % mà không bị tràn hay lỗi font.
+    - Áp dụng cơ chế lưu `activeSymbol` tương tự để giữ thanh detail bar cổ phiếu luôn ổn định khi rê chuột xuống xem chi tiết.
+  - `frontend/src/components/market/stock-treemap-heatmap.test.tsx` & `sector-treemap-heatmap.test.tsx`:
+    - Bổ sung unit tests cho `computePercentMovementWeights` (> 6.0x contrast) và test case xác nhận thanh detail bar không bị biến mất khi chuột rời tile để bấm link hành động.
+  - `frontend/src/app/(user)/search/page.tsx`:
+    - Căn lề chuẩn xác theo yêu cầu: Cột `Mã & công ty` căn trái (`text-left`), toàn bộ 9 cột còn lại (`Giá`, `% hôm nay`, `Mở · Cao · Thấp`, `Khối lượng`, `GTGD`, `Khối ngoại`, `Vốn hóa`, `P/E / P/B`, `Thao tác`) đều căn giữa (`text-center` / `items-center` / `justify-center`) ở cả `<th>` và `<td>`.
+- **Verification**:
+  - Quality Gate `./scripts/check-pr.ps1`: Passed 100%.
+  - Frontend Lint (ESLint): Passed 0 lỗi.
+  - Frontend Typecheck (tsc): Passed 0 lỗi.
+  - Frontend Unit Tests (Vitest): 169/169 passed (44 test suites).
+  - Backend Lint (Ruff) & Typecheck (Mypy): Passed 0 lỗi.
+  - Backend Unit & Integration Tests (Pytest): 142/142 passed 100%.
+
 ## Treemap Absolute Movement Sizing, Header Search Input Polish & Search Results Page Revamp - 2026-11-04 (completed)
 - **User Request**:
   1. Hiển thị độ to của khối Treemap theo trị tuyệt đối % biến động (|% biến động|), các khối có biến động lớn phải có diện tích to hơn; chỉ hiển thị mã cổ phiếu kèm % biến động, không hiển thị giá hay thông tin phụ gì thêm; áp dụng tương tự cho khối biến động chung các ngành (ảnh 1).
@@ -32,6 +69,8 @@
     - Trả về đầy đủ các trường dữ liệu chứng khoán phục vụ bảng giao dịch 10 cột: `open_price`, `high_price`, `low_price`, `foreign_net_value`, `market_cap`, `pe`, `pb`, `sector`, `is_vn30`, `ceiling_price`, `floor_price`.
     - Tính toán chi tiết các chỉ số cho từng khung thời gian `day`, `week`, `month`, `year`: đỉnh/đáy kỳ, biên độ dao động %, khối lượng bình quân, nhãn xu hướng và phân tích thị trường chi tiết.
   - `frontend/src/app/(user)/search/page.tsx`:
+    - Xóa bỏ các class CSS cũ (`market-table`, `simple-stock-table`) gây ra chiều cao quá mức trên `<thead>` và khiến cột nút bấm bị tràn. Thay bằng cấu trúc bảng thuần Tailwind chuẩn với tiêu đề thấp, gọn gàng (`py-2.5 px-3.5 text-[11px] font-bold text-slate-400 bg-[#0b2136]`).
+    - Bổ sung các hàm helper màu sắc trực tiếp `getPriceColorClass`, `getChangeColorClass`, `getForeignColorClass` giúp toàn bộ số liệu giá, biến động, mức giá trần/sàn/tham chiếu và dòng tiền khối ngoại hiển thị sắc nét, chuẩn mã màu chứng khoán Việt Nam (Xanh lá / Đỏ / Vàng / Tím trần / Xanh sàn) thay vì bị màu trắng đơn điệu.
     - Xóa hoàn toàn khối thẻ tìm kiếm to đùng ở đầu trang; thay bằng thanh tiêu đề gọn gàng: `Từ khóa: "..."` kèm nút quay lại bảng giá thị trường.
     - Mở rộng vùng hiển thị sang `w-full max-w-7xl mx-auto space-y-6`, tạo cảm giác rộng rãi, thoáng và chuyên nghiệp.
     - Khối Báo cáo đa khung thời gian: Nâng cấp giao diện hiển thị % biến động nổi bật, nhãn xu hướng, đánh giá rủi ro, phân tích chi tiết và 4 thẻ KPI định lượng (Đỉnh/Đáy, Biên độ, Thanh khoản, Định giá).

@@ -4,7 +4,7 @@ import Link from "next/link";
 import { useMemo, useState } from "react";
 
 import { changeTone, formatMoney, formatPercent } from "@/components/market/formatters";
-import { balanceDynamicWeights, computeSquarifiedTreemap } from "@/components/market/stock-treemap-heatmap";
+import { computePercentMovementWeights, computeSquarifiedTreemap } from "@/components/market/stock-treemap-heatmap";
 import type { MarketSector } from "@/types/market";
 
 export function SectorTreemapHeatmap({
@@ -17,17 +17,14 @@ export function SectorTreemapHeatmap({
   onSelectSector?: (sectorName: string) => void;
 }) {
   const [hoveredSectorName, setHoveredSectorName] = useState<string | null>(null);
+  const [activeSectorName, setActiveSectorName] = useState<string | null>(null);
 
   // Compute treemap rectangles for all sectors with weights based on absolute percentage movement
   const treemapRects = useMemo(() => {
     if (!sectors.length) return [];
 
-    const rawWeights = sectors.map((sector) => {
-      const absChange = Math.abs(Number(sector.change_percent) || 0);
-      return Math.max(absChange, 0.25);
-    });
-
-    const balancedWeights = balanceDynamicWeights(rawWeights, 20, 2.5);
+    const rawChanges = sectors.map((sector) => Number(sector.change_percent) || 0);
+    const balancedWeights = computePercentMovementWeights(rawChanges);
 
     const rawItems = sectors.map((sector, idx) => ({
       item: sector,
@@ -37,9 +34,8 @@ export function SectorTreemapHeatmap({
     return computeSquarifiedTreemap(rawItems, 1000, 560);
   }, [sectors]);
 
-  const hoveredSector = hoveredSectorName
-    ? sectors.find((s) => s.name === hoveredSectorName) ?? null
-    : null;
+  const displaySector = (hoveredSectorName ? sectors.find((s) => s.name === hoveredSectorName) : null)
+    ?? (activeSectorName ? sectors.find((s) => s.name === activeSectorName) : null);
 
   return (
     <div className="sector-treemap-heatmap flex flex-col gap-3">
@@ -90,7 +86,10 @@ export function SectorTreemapHeatmap({
                 type="button"
                 key={item.name}
                 onClick={handleClick}
-                onMouseEnter={() => setHoveredSectorName(item.name)}
+                onMouseEnter={() => {
+                  setHoveredSectorName(item.name);
+                  setActiveSectorName(item.name);
+                }}
                 onMouseLeave={() => setHoveredSectorName(null)}
                 style={{
                   left: `${x}%`,
@@ -134,35 +133,38 @@ export function SectorTreemapHeatmap({
         )}
       </div>
 
-      {/* Bottom Detail Bar on Hover */}
-      {hoveredSector && (
-        <div className="treemap-hover-bar flex flex-wrap items-center justify-between gap-3 px-3.5 py-2.5 bg-slate-900 border border-slate-800 rounded-lg text-xs animate-fadeIn">
+      {/* Bottom Detail Bar on Hover / Active */}
+      {displaySector && (
+        <div
+          onMouseEnter={() => setActiveSectorName(displaySector.name)}
+          className="treemap-hover-bar flex flex-wrap items-center justify-between gap-3 px-3.5 py-2.5 bg-slate-900 border border-slate-800 rounded-lg text-xs"
+        >
           <div className="flex items-center gap-2">
-            <span className="font-extrabold text-white text-sm">{hoveredSector.name}</span>
-            <span className="text-slate-400 font-semibold">({hoveredSector.member_count} mã)</span>
+            <span className="font-extrabold text-white text-sm">{displaySector.name}</span>
+            <span className="text-slate-400 font-semibold">({displaySector.member_count} mã)</span>
           </div>
 
           <div className="flex flex-wrap items-center gap-3">
-            <span className={`font-bold ${changeTone(hoveredSector.change_percent)}`}>
-              Biến động: {formatPercent(hoveredSector.change_percent)}
+            <span className={`font-bold ${changeTone(displaySector.change_percent)}`}>
+              Biến động: {formatPercent(displaySector.change_percent)}
             </span>
             <span className="text-slate-300">
-              <span className="text-emerald-400 font-semibold">{hoveredSector.advances} tăng</span>
+              <span className="text-emerald-400 font-semibold">{displaySector.advances} tăng</span>
               {" · "}
-              <span className="text-amber-400 font-semibold">{hoveredSector.unchanged} đứng</span>
+              <span className="text-amber-400 font-semibold">{displaySector.unchanged} đứng</span>
               {" · "}
-              <span className="text-rose-400 font-semibold">{hoveredSector.declines} giảm</span>
+              <span className="text-rose-400 font-semibold">{displaySector.declines} giảm</span>
             </span>
             <span className="text-slate-400 hidden sm:inline">
-              GTGD: <strong className="text-slate-200">{formatMoney(hoveredSector.matched_value)}</strong>
+              GTGD: <strong className="text-slate-200">{formatMoney(displaySector.matched_value)}</strong>
             </span>
             <span className="text-slate-400 hidden md:inline">
-              Vốn hóa: <strong className="text-slate-200">{formatMoney(hoveredSector.market_cap)}</strong>
+              Vốn hóa: <strong className="text-slate-200">{formatMoney(displaySector.market_cap)}</strong>
             </span>
             <Link
-              href={`/market/stocks?sector=${encodeURIComponent(hoveredSector.name)}#stock-table`}
+              href={`/market/stocks?sector=${encodeURIComponent(displaySector.name)}#stock-table`}
               prefetch={false}
-              className="text-sky-400 hover:text-sky-300 font-semibold ml-1 inline-flex items-center gap-0.5 underline transition"
+              className="text-sky-400 hover:text-sky-200 hover:bg-sky-900/80 font-bold ml-1 inline-flex items-center gap-1 transition px-2.5 py-1 rounded-md bg-sky-950/70 border border-sky-700/80 shadow-xs"
             >
               Mở bảng giá →
             </Link>

@@ -76,6 +76,34 @@ type SearchResponse =
   | { type: "general"; query: string; results: GeneralResult[] }
   | { type: "empty"; message: string };
 
+function getPriceColorClass(price: string, ref: string, ceil = "", floor = ""): string {
+  const p = Number(price);
+  const r = Number(ref);
+  const c = Number(ceil);
+  const f = Number(floor);
+  if (!p || isNaN(p) || !r || isNaN(r)) return "text-slate-100";
+  if (c && p >= c) return "text-purple-400";
+  if (f && p <= f) return "text-cyan-400";
+  if (p > r) return "text-emerald-400";
+  if (p < r) return "text-rose-500";
+  return "text-amber-400";
+}
+
+function getChangeColorClass(val: string | number): string {
+  const n = Number(val);
+  if (!n || isNaN(n)) return "text-amber-400";
+  if (n > 0) return "text-emerald-400";
+  if (n < 0) return "text-rose-500";
+  return "text-amber-400";
+}
+
+function getForeignColorClass(val: string | number | undefined): string {
+  const n = Number(val || 0);
+  if (n > 0) return "text-emerald-400";
+  if (n < 0) return "text-rose-500";
+  return "text-slate-400";
+}
+
 function SearchContent() {
   const searchParams = useSearchParams();
   const currentQuery = searchParams.get("q")?.trim() ?? "";
@@ -306,106 +334,110 @@ function SearchContent() {
                   </span>
                 </div>
 
-                <div className="overflow-x-auto rounded-xl border border-slate-800 bg-slate-950/80 shadow-md">
-                  <table className="market-table simple-stock-table advanced w-full text-left border-collapse text-xs sm:text-sm">
+                <div className="overflow-x-auto rounded-xl border border-slate-800 bg-[#081726] shadow-lg">
+                  <table className="w-full text-left border-collapse text-xs sm:text-sm">
                     <thead>
-                      <tr className="bg-slate-950/90 border-b border-slate-800 text-slate-400 uppercase tracking-wider text-[11px]">
-                        <th className="py-3 px-3 font-semibold">Mã &amp; công ty</th>
-                        <th className="py-3 px-3 font-semibold">Giá</th>
-                        <th className="py-3 px-3 font-semibold">% hôm nay</th>
-                        <th className="py-3 px-3 font-semibold">Mở · Cao · Thấp</th>
-                        <th className="py-3 px-3 font-semibold">Khối lượng</th>
-                        <th className="py-3 px-3 font-semibold">GTGD</th>
-                        <th className="py-3 px-3 font-semibold">Khối ngoại</th>
-                        <th className="py-3 px-3 font-semibold">Vốn hóa</th>
-                        <th className="py-3 px-3 font-semibold">P/E / P/B</th>
-                        <th className="py-3 px-3 font-semibold text-right">Thao tác</th>
+                      <tr className="bg-[#0b2136] border-b border-slate-800 text-slate-400 text-[11px] font-bold tracking-wider uppercase">
+                        <th className="py-2.5 px-3.5 whitespace-nowrap text-left">Mã &amp; công ty</th>
+                        <th className="py-2.5 px-3 whitespace-nowrap text-center">Giá</th>
+                        <th className="py-2.5 px-3 whitespace-nowrap text-center">% hôm nay</th>
+                        <th className="py-2.5 px-3 whitespace-nowrap text-center">Mở · Cao · Thấp</th>
+                        <th className="py-2.5 px-3 whitespace-nowrap text-center">Khối lượng</th>
+                        <th className="py-2.5 px-3 whitespace-nowrap text-center">GTGD</th>
+                        <th className="py-2.5 px-3 whitespace-nowrap text-center">Khối ngoại</th>
+                        <th className="py-2.5 px-3 whitespace-nowrap text-center">Vốn hóa</th>
+                        <th className="py-2.5 px-3 whitespace-nowrap text-center">P/E / P/B</th>
+                        <th className="py-2.5 px-3.5 whitespace-nowrap text-center">Thao tác</th>
                       </tr>
                     </thead>
-                    <tbody className="divide-y divide-slate-800/60">
-                      <tr className="hover:bg-slate-900/50 transition">
-                        {/* 1. Mã & Công ty */}
-                        <td className="stock-identity py-2.5 px-3">
+                    <tbody>
+                      <tr className="hover:bg-slate-900/60 transition bg-[#081726]">
+                        {/* 1. Mã & Công ty (Căn trái) */}
+                        <td className="py-2.5 px-3.5 whitespace-nowrap text-left">
                           <div className="flex items-center gap-1.5">
                             <Link
                               href={`/market/stocks/${response.stock.symbol}`}
-                              className="font-extrabold text-white text-sm hover:text-sky-400 no-underline"
+                              className={`font-black text-sm no-underline hover:underline ${getPriceColorClass(response.stock.price, response.stock.reference_price, response.stock.ceiling_price, response.stock.floor_price)}`}
                             >
                               {response.stock.symbol}
                             </Link>
                             {response.stock.is_vn30 && (
-                              <span className="vn30-badge text-[10px] font-extrabold px-1.5 py-0.2 rounded bg-amber-500/15 text-amber-400 border border-amber-500/30">
+                              <span className="text-[10px] font-black px-1.5 py-0.2 rounded bg-emerald-500/15 text-emerald-400 border border-emerald-500/30">
                                 VN30
                               </span>
                             )}
                           </div>
-                          <span className="text-slate-300 block truncate max-w-[180px] sm:max-w-[220px] text-xs">
+                          <span className="text-slate-300 block truncate max-w-[180px] sm:max-w-[220px] text-xs mt-0.5">
                             {response.stock.name}
                           </span>
                           <small className="text-slate-500 text-[10px] block">
-                            {response.stock.exchange} · {response.stock.sector || "Chứng khoán"}
+                            {response.stock.exchange} · {response.stock.sector || "Dịch vụ tài chính"}
                           </small>
                         </td>
 
-                        {/* 2. Giá */}
-                        <td className="py-2.5 px-3 whitespace-nowrap">
-                          <strong className={`font-bold block ${priceTone(response.stock.price, response.stock.reference_price, response.stock.ceiling_price || "", response.stock.floor_price || "")}`}>
+                        {/* 2. Giá (Căn giữa) */}
+                        <td className="py-2.5 px-3 whitespace-nowrap text-center">
+                          <strong className={`font-black text-sm block leading-tight ${getPriceColorClass(response.stock.price, response.stock.reference_price, response.stock.ceiling_price, response.stock.floor_price)}`}>
                             {formatChange(response.stock.price)}
                           </strong>
-                          <small className="price-reference text-slate-500 text-[10px] block">
+                          <small className="text-amber-400 text-[10px] font-semibold block leading-tight mt-0.5">
                             TC {formatChange(response.stock.reference_price)}
                           </small>
                         </td>
 
-                        {/* 3. % Hôm nay */}
-                        <td className={`py-2.5 px-3 whitespace-nowrap ${changeTone(response.stock.change_percent)}`}>
-                          <strong className="font-bold block">{formatPercent(response.stock.change_percent)}</strong>
-                          <small className="text-[10px] opacity-80 block">{formatChange(response.stock.change)}</small>
+                        {/* 3. % Hôm nay (Căn giữa) */}
+                        <td className="py-2.5 px-3 whitespace-nowrap text-center">
+                          <strong className={`font-black text-sm block leading-tight ${getChangeColorClass(response.stock.change_percent)}`}>
+                            {formatPercent(response.stock.change_percent)}
+                          </strong>
+                          <small className={`text-[10px] font-semibold block leading-tight mt-0.5 ${getChangeColorClass(response.stock.change)}`}>
+                            {formatChange(response.stock.change)}
+                          </small>
                         </td>
 
-                        {/* 4. Mở · Cao · Thấp */}
-                        <td className="py-2.5 px-3 whitespace-nowrap text-slate-400">
-                          <span className={priceTone(response.stock.open_price || response.stock.price, response.stock.reference_price, response.stock.ceiling_price || "", response.stock.floor_price || "")}>
+                        {/* 4. Mở · Cao · Thấp (Căn giữa) */}
+                        <td className="py-2.5 px-3 whitespace-nowrap text-xs text-center">
+                          <span className={`font-semibold ${getPriceColorClass(response.stock.open_price || response.stock.price, response.stock.reference_price, response.stock.ceiling_price, response.stock.floor_price)}`}>
                             {formatChange(response.stock.open_price || response.stock.price)}
                           </span>
-                          {" · "}
-                          <span className={priceTone(response.stock.high_price || response.stock.price, response.stock.reference_price, response.stock.ceiling_price || "", response.stock.floor_price || "")}>
+                          <span className="text-slate-600"> · </span>
+                          <span className={`font-semibold ${getPriceColorClass(response.stock.high_price || response.stock.price, response.stock.reference_price, response.stock.ceiling_price, response.stock.floor_price)}`}>
                             {formatChange(response.stock.high_price || response.stock.price)}
                           </span>
-                          {" · "}
-                          <span className={priceTone(response.stock.low_price || response.stock.price, response.stock.reference_price, response.stock.ceiling_price || "", response.stock.floor_price || "")}>
+                          <span className="text-slate-600"> · </span>
+                          <span className={`font-semibold ${getPriceColorClass(response.stock.low_price || response.stock.price, response.stock.reference_price, response.stock.ceiling_price, response.stock.floor_price)}`}>
                             {formatChange(response.stock.low_price || response.stock.price)}
                           </span>
                         </td>
 
-                        {/* 5. Khối lượng */}
-                        <td className="py-2.5 px-3 whitespace-nowrap font-medium text-slate-200">
+                        {/* 5. Khối lượng (Căn giữa) */}
+                        <td className="py-2.5 px-3 whitespace-nowrap font-bold text-slate-100 text-xs text-center">
                           {formatCompact(response.stock.volume)}
                         </td>
 
-                        {/* 6. GTGD */}
-                        <td className="py-2.5 px-3 whitespace-nowrap font-medium text-slate-200">
+                        {/* 6. GTGD (Căn giữa) */}
+                        <td className="py-2.5 px-3 whitespace-nowrap font-bold text-slate-100 text-xs text-center">
                           {formatMoney(response.stock.matched_value)}
                         </td>
 
-                        {/* 7. Khối ngoại */}
-                        <td className={`py-2.5 px-3 whitespace-nowrap font-medium ${changeTone(response.stock.foreign_net_value || "0")}`}>
+                        {/* 7. Khối ngoại (Căn giữa) */}
+                        <td className={`py-2.5 px-3 whitespace-nowrap font-bold text-xs text-center ${getForeignColorClass(response.stock.foreign_net_value)}`}>
                           {formatMoney(response.stock.foreign_net_value || "0")}
                         </td>
 
-                        {/* 8. Vốn hóa */}
-                        <td className="py-2.5 px-3 whitespace-nowrap font-medium text-slate-200">
+                        {/* 8. Vốn hóa (Căn giữa) */}
+                        <td className="py-2.5 px-3 whitespace-nowrap font-bold text-slate-100 text-xs text-center">
                           {formatMoney(response.stock.market_cap || "0")}
                         </td>
 
-                        {/* 9. P/E / P/B */}
-                        <td className="fundamental-ratios py-2.5 px-3 whitespace-nowrap text-slate-300 font-medium">
+                        {/* 9. P/E / P/B (Căn giữa) */}
+                        <td className="py-2.5 px-3 whitespace-nowrap text-slate-100 font-bold text-xs text-center">
                           {formatRatioPair(response.stock.pe, response.stock.pb, false)}
                         </td>
 
-                        {/* 10. Thao tác: Mua / Bán(nếu đã mua) */}
-                        <td className="py-2.5 px-3 text-right whitespace-nowrap">
-                          <div className="inline-flex items-center gap-1.5 justify-end">
+                        {/* 10. Thao tác: Mua / Bán(nếu đã mua) (Căn giữa) */}
+                        <td className="py-2.5 px-3.5 text-center whitespace-nowrap">
+                          <div className="inline-flex items-center gap-1.5 justify-center">
                             <button
                               type="button"
                               onClick={() => {
@@ -419,7 +451,7 @@ function SearchContent() {
                                   },
                                 });
                               }}
-                              className="px-3 py-1.5 rounded-lg text-xs font-bold transition shadow-sm cursor-pointer bg-emerald-600 hover:bg-emerald-500 text-white shadow-emerald-600/20"
+                              className="px-3.5 py-1.5 rounded-lg text-xs font-black transition shadow-sm cursor-pointer bg-emerald-600 hover:bg-emerald-500 text-white shadow-emerald-950"
                             >
                               Mua
                             </button>
@@ -437,7 +469,7 @@ function SearchContent() {
                                     },
                                   });
                                 }}
-                                className="px-3 py-1.5 rounded-lg text-xs font-bold transition shadow-sm cursor-pointer bg-rose-600 hover:bg-rose-500 text-white shadow-rose-600/20"
+                                className="px-3.5 py-1.5 rounded-lg text-xs font-black transition shadow-sm cursor-pointer bg-rose-600 hover:bg-rose-500 text-white shadow-rose-950"
                               >
                                 Bán
                               </button>

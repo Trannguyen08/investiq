@@ -471,18 +471,18 @@ export function StocksView({
       <div className="market-overview-layout grid grid-cols-1 md:grid-cols-12 lg:grid-cols-12 gap-5 items-stretch">
         <div className="col-span-12 md:col-span-8 lg:col-span-9 flex flex-col">
           <section className="bg-slate-900/90 border border-slate-800 rounded-2xl p-4 sm:p-5 shadow-sm h-full flex flex-col" aria-labelledby="market-heatmap-title">
-            <div className="beginner-card-title flex flex-wrap items-center justify-between gap-3 mb-4">
-              <div>
-                <h2 id="market-heatmap-title" className="text-lg md:text-xl font-bold text-slate-100 m-0">
+            <div className="beginner-card-title flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-4">
+              <div className="min-w-0 flex-1 pr-2">
+                <h2 id="market-heatmap-title" className="text-lg md:text-xl font-bold text-slate-100 m-0 truncate">
                   {heatmapTab === "treemap" ? "Bản đồ nhiệt cổ phiếu theo ngành" : "Bản đồ nhiệt biến động các ngành"}
                 </h2>
-                <p className="text-xs text-slate-400 mt-1 m-0">
+                <p className="text-xs text-slate-400 mt-1 m-0 truncate">
                   {heatmapTab === "treemap"
-                    ? "Khối nhiệt (Treemap) thể hiện % biến động và tỷ lệ quy mô của các mã tiêu biểu."
-                    : "Khối nhiệt (Treemap) thể hiện % biến động các ngành. Bấm vào một ngành để lọc các mã cổ phiếu."}
+                    ? "Khối nhiệt (Treemap) thể hiện % biến động các mã tiêu biểu."
+                    : "Khối nhiệt (Treemap) thể hiện % biến động các ngành. Bấm để lọc."}
                 </p>
               </div>
-              <div className="inline-flex rounded-lg bg-slate-950 p-1 border border-slate-800 shrink-0">
+              <div className="inline-flex rounded-lg bg-slate-950 p-1 border border-slate-800 shrink-0 self-start sm:self-center">
                 <button
                   type="button"
                   onClick={() => setHeatmapTab("treemap")}
