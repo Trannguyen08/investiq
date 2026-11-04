@@ -29,6 +29,48 @@ async def test_ai_chat_endpoint_guest() -> None:
 
 
 @pytest.mark.anyio
+async def test_ai_chat_endpoint_dividend_intent() -> None:
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
+        response = await client.post(
+            "/api/v1/ai/chat",
+            json={"message": "cho tao lịch chia cổ tức của mbb"},
+        )
+        assert response.status_code == 200
+        body = response.json()
+        assert "conversation_id" in body
+        msg = body["message"]
+        assert msg["role"] == "assistant"
+        # Must return dividend specifics for MBB
+        assert "Lịch chia cổ tức: MBB" in msg["content"]
+        assert "Ngày GDKHQ" in msg["content"]
+        assert "Hình thức" in msg["content"]
+        # Must NOT return stock analysis technical report
+        assert "Báo cáo phân tích chuyên sâu: MBB" not in msg["content"]
+        assert not any(w["type"] == "stock_score_card" for w in msg["widgets"])
+        # Sources must link to dividend tab
+        assert any("/market/stocks/MBB#dividends" in s["url"] for s in msg["sources"])
+
+
+@pytest.mark.anyio
+async def test_ai_chat_endpoint_news_with_concatenated_typo() -> None:
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
+        response = await client.post(
+            "/api/v1/ai/chat",
+            json={"message": "cho tao tin tức chứng khoánhôm nay"},
+        )
+        assert response.status_code == 200
+        body = response.json()
+        msg = body["message"]
+        assert msg["role"] == "assistant"
+        # Must return news heading
+        assert "Điểm tin thị trường hôm nay:" in msg["content"]
+        # Must NOT return stock analysis for ticker TIN
+        assert "Báo cáo phân tích chuyên sâu: TIN" not in msg["content"]
+        assert "Tín Việt" not in msg["content"]
+        assert not any(w["type"] == "stock_score_card" for w in msg["widgets"])
+
+
+@pytest.mark.anyio
 async def test_ai_chat_endpoint_guardrail_blocked() -> None:
     async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
         response = await client.post(

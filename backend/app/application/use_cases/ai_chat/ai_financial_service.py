@@ -41,6 +41,7 @@ from app.application.use_cases.ai_chat.guardrails import (
 from app.application.use_cases.ai_chat.knowledge_base import InternalKnowledgeBase, KnowledgeHit
 from app.application.use_cases.market_data.market_service import MarketService
 from app.domain.repositories.i_news_repository import INewsRepository
+from app.infrastructure.external.crawlers.dividend_crawler import get_dividend_crawler
 
 logger = logging.getLogger(__name__)
 
@@ -84,6 +85,7 @@ _MAX_EXTERNAL_SOURCES = 3
 AiIntent = Literal[
     "blocked",
     "comparison",
+    "dividend",
     "stock_analysis",
     "market_overview",
     "news",
@@ -94,6 +96,7 @@ AiIntent = Literal[
 
 _CACHE_TTL_SECONDS: dict[AiIntent, int] = {
     "comparison": 60,
+    "dividend": 3600,
     "stock_analysis": 60,
     "market_overview": 60,
     "news": 120,
@@ -103,9 +106,41 @@ _CACHE_TTL_SECONDS: dict[AiIntent, int] = {
 }
 
 
+def normalize_user_input(text: str) -> str:
+    """Normalize user input by unsticking concatenated Vietnamese words and standardizing spacing."""
+    if not text:
+        return ""
+    replacements = [
+        ("khoánhôm", "khoán hôm"),
+        ("khoanhom", "khoan hom"),
+        ("tintức", "tin tức"),
+        ("tintuc", "tin tuc"),
+        ("cổtức", "cổ tức"),
+        ("cotuc", "co tuc"),
+        ("hômnay", "hôm nay"),
+        ("homnay", "hom nay"),
+        ("chứngkhoán", "chứng khoán"),
+        ("chungkhoan", "chung khoan"),
+        ("thịtrường", "thị trường"),
+        ("thitruong", "thi truong"),
+        ("cổphiếu", "cổ phiếu"),
+        ("cophieu", "co phieu"),
+        ("phântích", "phân tích"),
+        ("phantich", "phan tich"),
+        ("địnhgiá", "định giá"),
+        ("dinhgia", "dinh gia"),
+    ]
+    res = text
+    for wrong, right in replacements:
+        pattern = re.compile(re.escape(wrong), re.IGNORECASE)
+        res = pattern.sub(right, res)
+    return res
+
+
 def normalize_question(message: str) -> str:
     """Canonical form used as the shared cache key: folded, punctuation-free, single-spaced."""
-    folded = fold_text(message)
+    normalized_msg = normalize_user_input(message)
+    folded = fold_text(normalized_msg)
     cleaned = re.sub(r"[^a-z0-9/%\s]", " ", folded)
     return re.sub(r"\s+", " ", cleaned).strip()
 
@@ -257,17 +292,41 @@ class AiFinancialService:
 
         # Step 3: Intent detection
         tickers: list[str] = []
+        is_dividend = False
         is_comparison = False
         is_gold_bank = False
         is_forensics = False
         is_market_general = False
         is_news = False
         with trace.step("intent_detection") as i_step:
-            tickers = _extract_tickers(user_message)
-            query_lower = user_message.lower()
-            query_folded = fold_text(user_message)
+            norm_message = normalize_user_input(user_message)
+            tickers = _extract_tickers(norm_message)
+            query_lower = norm_message.lower()
+            query_folded = fold_text(norm_message)
 
-            is_news = any(
+            # Dividend intent has absolute priority when user explicitly queries dividend events or rights
+            is_dividend = any(
+                kw in query_folded
+                for kw in [
+                    "co tuc",
+                    "chia co tuc",
+                    "lich co tuc",
+                    "lich chia co tuc",
+                    "tra co tuc",
+                    "ngay chot quyen",
+                    "chot quyen",
+                    "gdkhq",
+                    "khong huong quyen",
+                    "ty le chia",
+                    "nhan co tuc",
+                    "chia thuong",
+                    "quyen mua",
+                    "tra bang tien",
+                    "tra bang co phieu",
+                ]
+            )
+
+            is_news = not is_dividend and any(
                 kw in query_folded
                 for kw in [
                     "tin tuc", "tin moi", "ban tin", "tin nong", "diem tin",
@@ -279,7 +338,8 @@ class AiFinancialService:
             )
 
             is_comparison = (
-                not is_news
+                not is_dividend
+                and not is_news
                 and any(kw in query_lower for kw in ["so sánh", "hay là", "vs", "hơn", "chọn mã nào"])
                 and len(tickers) >= 2
             )
@@ -287,7 +347,8 @@ class AiFinancialService:
                 kw in query_lower for kw in ["vàng", "ngân hàng", "tiết kiệm", "gửi tiền"]
             )
             is_forensics = (
-                not is_news
+                not is_dividend
+                and not is_news
                 and any(
                     kw in query_lower
                     for kw in [
@@ -305,7 +366,8 @@ class AiFinancialService:
                 )
             )
             is_market_general = (
-                not is_news
+                not is_dividend
+                and not is_news
                 and any(
                     kw in query_lower
                     for kw in ["thị trường", "vnindex", "vn-index", "toàn sàn", "ngành nào"]
@@ -314,14 +376,29 @@ class AiFinancialService:
             i_step.mark(
                 "ok",
                 passed=True,
-                note=f"tickers={len(tickers)} news={is_news} comparison={is_comparison} forensics={is_forensics} market={is_market_general}",
+                note=f"tickers={len(tickers)} dividend={is_dividend} news={is_news} comparison={is_comparison} forensics={is_forensics} market={is_market_general}",
             )
 
-        # Step 4: Internal data retrieval (market quotes, candles, forensics, or news)
+        # Step 4: Internal data retrieval (market quotes, candles, forensics, dividends, or news)
         stock_data: dict[str, Any] = {}
         news_articles: list[dict[str, Any]] = []
+        dividend_events: list[dict[str, Any]] = []
         with trace.step("internal_data_retrieval") as d_step:
-            if is_news:
+            if is_dividend:
+                try:
+                    crawler = get_dividend_crawler()
+                    if tickers:
+                        target_sym = tickers[0]
+                        dividend_events = crawler.get_symbol_dividends(target_sym)
+                        inst = self._market.instrument(target_sym, include_fundamentals=False)
+                        if inst:
+                            stock_data[target_sym] = {"instrument": inst}
+                    else:
+                        dividend_events = crawler.get_upcoming_dividends()
+                except Exception as exc:
+                    logger.warning("Failed to fetch internal dividends: %s", exc)
+                d_step.mark("ok", passed=True, note=f"dividend_count={len(dividend_events)}")
+            elif is_news:
                 if self._news_repo:
                     try:
                         query_symbols = tuple(tickers) if tickers else ()
@@ -367,7 +444,7 @@ class AiFinancialService:
         # Step 5: Knowledge retrieval (curated internal educational content & glossary)
         knowledge_hits: list[KnowledgeHit] = []
         with trace.step("knowledge_retrieval") as k_step:
-            if self._knowledge and not stock_data and not is_market_general and not is_news:
+            if self._knowledge and not stock_data and not is_market_general and not is_news and not is_dividend:
                 knowledge_hits = self._knowledge.search(user_message, limit=2)
                 k_step.mark("ok", passed=True, note=f"hits={len(knowledge_hits)}")
             else:
@@ -376,10 +453,18 @@ class AiFinancialService:
         # Step 6: External search (crawled web data fallback ONLY if internal data/knowledge empty)
         external_snippets: list[dict[str, str]] = []
         with trace.step("external_search") as s_step:
-            if is_news and not news_articles:
-                external_snippets = await self._search_external_info(f"tin tức tài chính chứng khoán hôm nay {user_message}")
+            if is_dividend and not dividend_events and tickers:
+                external_snippets = await self._search_external_info(f"lịch chia cổ tức {tickers[0]} mới nhất")
+                s_step.mark("ok", passed=True, note=f"dividend_snippets={len(external_snippets)}")
+            elif is_news and not news_articles:
+                search_query = (
+                    f"tin tức cổ phiếu {tickers[0]} mới nhất"
+                    if tickers
+                    else f"tin tức tài chính chứng khoán hôm nay {user_message}"
+                )
+                external_snippets = await self._search_external_info(search_query)
                 s_step.mark("ok", passed=True, note=f"news_snippets={len(external_snippets)}")
-            elif not stock_data and not is_market_general and not is_news and not knowledge_hits:
+            elif not stock_data and not is_market_general and not is_news and not is_dividend and not knowledge_hits:
                 external_snippets = await self._search_external_info(user_message)
                 s_step.mark("ok", passed=True, note=f"snippets={len(external_snippets)}")
             else:
@@ -387,7 +472,9 @@ class AiFinancialService:
 
         # Step 7: Response generation
         intent: AiIntent = "general"
-        if is_news:
+        if is_dividend:
+            intent = "dividend"
+        elif is_news:
             intent = "news"
         elif is_comparison or len(stock_data) >= 2:
             intent = "comparison"
@@ -406,6 +493,7 @@ class AiFinancialService:
                 tickers=tickers,
                 stock_data=stock_data,
                 news_articles=news_articles,
+                dividend_events=dividend_events,
                 knowledge_hits=knowledge_hits,
                 external_snippets=external_snippets,
                 is_comparison=is_comparison,
@@ -413,6 +501,7 @@ class AiFinancialService:
                 is_forensics=is_forensics,
                 is_market_general=is_market_general,
                 is_news=is_news,
+                is_dividend=is_dividend,
             )
             gen_step.mark("ok", passed=True, note=f"intent={intent}")
 
@@ -527,6 +616,8 @@ class AiFinancialService:
         is_market_general: bool,
         is_news: bool = False,
         news_articles: list[dict[str, Any]] | None = None,
+        is_dividend: bool = False,
+        dividend_events: list[dict[str, Any]] | None = None,
     ) -> dict[str, Any]:
         """Synthesize in-depth analysis and format rich interactive widgets."""
         widgets: list[dict[str, Any]] = []
@@ -534,10 +625,126 @@ class AiFinancialService:
         text_parts: list[str] = []
         sources: list[dict[str, str]] = []
 
-        # Case 0: Financial and market news
-        if is_news:
+        # Case 0: Dividend schedule and corporate rights
+        if is_dividend:
             target_stock = tickers[0] if tickers else ""
-            heading = f"Điểm tin chứng khoán {target_stock} hôm nay:" if target_stock else "Điểm tin thị trường hôm nay:"
+            inst = stock_data.get(target_stock, {}).get("instrument") if target_stock else None
+            name = _get_val(inst, "name", target_stock) if inst else (target_stock or "Thị trường")
+
+            if target_stock:
+                heading = f"Lịch chia cổ tức: {target_stock} - {name}"
+                text_parts.append(heading)
+
+                if dividend_events:
+                    text_parts.append(
+                        f"Thông tin các đợt chi trả cổ tức và quyền liên quan của {target_stock}:"
+                    )
+                    for ev in dividend_events[:5]:
+                        ex_date = ev.get("ex_date") or ev.get("event_date") or "Chưa rõ"
+                        ratio = ev.get("ratio") or ""
+                        cash_val = ev.get("cash_value")
+                        val_str = f" ({cash_val:,.0f} đ/cp)" if cash_val is not None else ""
+                        div_type = ev.get("type", "cash")
+                        type_desc = (
+                            "Tiền mặt"
+                            if div_type == "cash"
+                            else (
+                                "Cổ phiếu"
+                                if div_type == "stock"
+                                else ("Cổ phiếu thưởng" if div_type == "bonus" else "Quyền mua")
+                            )
+                        )
+                        source_str = f" (Nguồn: {ev['source']})" if ev.get("source") else ""
+
+                        text_parts.append(
+                            f"- Ngày GDKHQ: {ex_date} | Hình thức: {type_desc} | Tỷ lệ: {ratio}{val_str}{source_str}"
+                        )
+                        if ev.get("source_url"):
+                            sources.append({
+                                "kind": "internal" if ev["source_url"].startswith("/") else "external",
+                                "title": f"Nguồn công bố: {ev.get('source', target_stock)}",
+                                "url": ev["source_url"],
+                            })
+
+                    sources.append({
+                        "kind": "internal",
+                        "title": f"Lịch chia cổ tức {target_stock} (InvestIQ)",
+                        "url": f"/market/stocks/{target_stock}#dividends",
+                    })
+                else:
+                    text_parts.append(
+                        f"Hiện tại chưa ghi nhận kế hoạch chốt quyền chia cổ tức mới của {target_stock} trong thời gian tới. "
+                        f"Bạn có thể theo dõi thêm tại báo cáo tài chính và nghị quyết ĐHCĐ."
+                    )
+                    sources.append({
+                        "kind": "internal",
+                        "title": f"Bảng giá thị trường: {target_stock}",
+                        "url": f"/market/stocks/{target_stock}",
+                    })
+
+                suggested_actions.extend(
+                    [
+                        {
+                            "label": f"Xem bảng giá {target_stock}",
+                            "action_type": "NAVIGATE",
+                            "url": f"/market/stocks/{target_stock}",
+                        },
+                        {
+                            "label": "Lịch sự kiện thị trường",
+                            "action_type": "NAVIGATE",
+                            "url": "/market/events",
+                        },
+                        {
+                            "label": f"Giả lập mua 1.000 cp {target_stock}",
+                            "action_type": "TRADE_ORDER",
+                            "symbol": target_stock,
+                            "quantity": 1000,
+                        },
+                    ]
+                )
+            else:
+                heading = "Lịch chia cổ tức các doanh nghiệp sắp tới:"
+                text_parts.append(heading)
+                text_parts.append(
+                    "Tổng hợp các sự kiện chốt quyền trả cổ tức gần nhất trên thị trường chứng khoán Việt Nam:"
+                )
+                for ev in (dividend_events or [])[:6]:
+                    sym = ev.get("symbol", "")
+                    ex_date = ev.get("ex_date") or ev.get("event_date") or ""
+                    title = ev.get("title", "")
+                    source_info = f" (Nguồn: {ev['source']})" if ev.get("source") else ""
+                    text_parts.append(f"- **{sym}** (Ngày GDKHQ: {ex_date}): {title}{source_info}")
+                    if ev.get("source_url"):
+                        sources.append({
+                            "kind": "internal" if ev["source_url"].startswith("/") else "external",
+                            "title": f"Nguồn tin {sym}: {ev.get('source', 'Công bố')}",
+                            "url": ev["source_url"],
+                        })
+
+                sources.append({
+                    "kind": "internal",
+                    "title": "Lịch sự kiện & cổ tức toàn thị trường (InvestIQ)",
+                    "url": "/market/events",
+                })
+                suggested_actions.extend(
+                    [
+                        {
+                            "label": "Xem lịch sự kiện thị trường",
+                            "action_type": "NAVIGATE",
+                            "url": "/market/events",
+                        },
+                        {
+                            "label": "Bảng giá trực tiếp",
+                            "action_type": "NAVIGATE",
+                            "url": "/market/stocks",
+                        },
+                    ]
+                )
+
+        # Case 0.5: Financial and market news
+        elif is_news:
+            target_stock = tickers[0] if tickers else ""
+            heading = f"Điểm tin chứng khoán {target_stock}:" if target_stock else "Điểm tin thị trường hôm nay:"
             text_parts.append(heading)
 
             if news_articles:
@@ -755,9 +962,15 @@ class AiFinancialService:
 
             text_parts.append(f"Báo cáo phân tích chuyên sâu: {sym} - {name}")
             text_parts.append(
-                f"- Thị giá: {price:,.0f} đ ({change_p:+.2f}%) | Sàn {exchange} | Ngành {sector}\n"
-                f"- Định giá: P/E hiện tại {pe:.1f}x | P/B {pb:.1f}x | ROE {roe:.1f}%\n"
-                f"- Kỹ thuật: RSI (14) đang ở mức {rsi:.1f} | Giá {'nằm trên' if price >= ma20 else 'áp sát'} MA20 ({ma20:,.0f} đ)\n"
+                f"- Thị giá: {price:,.0f} đ ({change_p:+.2f}%) | Sàn {exchange} | Ngành {sector}"
+            )
+            text_parts.append(
+                f"- Định giá: P/E hiện tại {pe:.1f}x | P/B {pb:.1f}x | ROE {roe:.1f}%"
+            )
+            text_parts.append(
+                f"- Kỹ thuật: RSI (14) đang ở mức {rsi:.1f} | Giá {'nằm trên' if price >= ma20 else 'áp sát'} MA20 ({ma20:,.0f} đ)"
+            )
+            text_parts.append(
                 f"- Vùng giá trọng yếu: Hỗ trợ quanh {key_support:,.0f} đ | Kháng cự gần {key_resistance:,.0f} đ"
             )
 

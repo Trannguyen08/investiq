@@ -69,4 +69,35 @@ describe("AiChatBubble", () => {
       expect(text).not.toBe("- -");
     });
   });
+
+  it("renders dividend schedule heading and cleanly strips empty dot rows", () => {
+    const dividendMsg: AiMessage = {
+      id: "msg-div-1",
+      role: "assistant",
+      content:
+        "Lịch chia cổ tức: MBB - Ngân hàng TMCP Quân đội\n\n" +
+        ".\n" +
+        "- •\n" +
+        "- Ngày GDKHQ: 2026-12-10 | Hình thức: Tiền mặt | Tỷ lệ: 5% (500 đ/cp) (Nguồn: Nghị quyết HĐQT MBB)\n" +
+        "- .\n",
+      sources: [
+        {
+          kind: "internal",
+          title: "Lịch chia cổ tức MBB",
+          url: "/market/stocks/MBB#dividends",
+        },
+      ],
+      created_at: "2026-11-04T13:40:02Z",
+    };
+
+    const { container } = render(<AiChatBubble message={dividendMsg} />);
+
+    expect(screen.getByText(/Lịch chia cổ tức: MBB/)).toBeDefined();
+    expect(screen.getByText(/2026-12-10/)).toBeDefined();
+    expect(screen.getByText("Lịch chia cổ tức MBB")).toBeDefined();
+
+    // Verify no stray dots rendered as bullet text
+    const textNodes = container.textContent || "";
+    expect(textNodes).not.toContain("• -");
+  });
 });

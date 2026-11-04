@@ -1,5 +1,46 @@
 # Current Task
 
+## Dividend Intent Specialization, Vietnamese Typo Normalization, Uvicorn Hot Reload & Comprehensive API/E2E Testing - 2026-11-04 (completed)
+- **User Request**:
+  1. Người dùng phàn nàn: *"đùa à, sao vẫn y như cũ thế, nó k phân tích yêu cầu à sao response y chang nhau vậy"* kèm ảnh minh họa câu hỏi `cho tao tin tức chứng khoánhôm nay` bị trả về mã `TIN` và `cho tao lịch chia cổ tức của mbb` bị trả về báo cáo kỹ thuật rập khuôn (Thị giá, Định giá, RSI, MA20).
+  2. Bổ sung intent `dividend` (Lịch chia cổ tức): phân tích đúng câu hỏi cổ tức của mã cụ thể (ví dụ MBB) hoặc cổ tức sắp tới của toàn thị trường, trả về bảng ngày GDKHQ, hình thức tiền mặt/cổ phiếu, tỷ lệ, số tiền và link nguồn trích dẫn `/market/stocks/{symbol}#dividends`, tuyệt đối không trả về báo cáo phân tích kỹ thuật RSI/MA20 rập khuôn.
+  3. Bổ sung text normalization giải quyết các lỗi gõ phím dính chữ tiếng Việt (`khoánhôm` -> `khoán hôm`, `tintức` -> `tin tức`, `cổtức` -> `cổ tức`...).
+  4. Loại bỏ triệt để các hàng lỗi chỉ có dấu chấm `.` hoặc `• -` rác trên UI.
+  5. Restart backend daemon process `uvicorn` với cờ `--reload` để nạp mã nguồn mới nhất vào server đang phục vụ browser client.
+  6. Bổ sung API Integration Tests và E2E Tests theo yêu cầu của người dùng (`nhớ test api và test e2e`).
+  7. Commit và push DUY NHẤT trên nhánh `fix/AI`, **tuyệt đối không merge vào `dev` hay `main`**.
+- **Branch**: `fix/AI`
+- **Changes**:
+  - `backend/app/application/use_cases/ai_chat/ai_financial_service.py`:
+    - Bổ sung hàm `normalize_user_input(text)` tự động tách các cặp từ dính chữ phổ biến: `khoánhôm` -> `khoán hôm`, `tintức` -> `tin tức`, `cổtức` -> `cổ tức`, `hômnay` -> `hôm nay`, `chứngkhoán` -> `chứng khoán`...
+    - Thêm intent `dividend` vào `AiIntent` với TTL cache 3600s.
+    - Nhận diện `is_dividend` ưu tiên hàng đầu với các từ khóa tài chính: `co tuc`, `chia co tuc`, `lich co tuc`, `lich chia co tuc`, `tra co tuc`, `chot quyen`, `gdkhq`, `ty le chia`...
+    - Tích hợp `get_dividend_crawler()`: trích xuất các sự kiện cổ tức thực tế theo mã (`crawler.get_symbol_dividends(symbol)`) hoặc toàn thị trường (`crawler.get_upcoming_dividends()`).
+    - Xây dựng cấu trúc phản hồi `Lịch chia cổ tức: {symbol} - {name}` chi tiết từng đợt (Ngày GDKHQ, Hình thức Tiền mặt/Cổ phiếu, Tỷ lệ, Số tiền đ/cp, Nguồn tin công bố) và đính kèm link trích dẫn `/market/stocks/{symbol}#dividends`.
+    - Tách biệt độc lập các dòng text bullet trong `_generate_structured_response`, loại bỏ hoàn toàn các ký tự `\n` gộp gây sinh dòng lẻ.
+  - `frontend/src/components/ai-chat/ai-chat-bubble.tsx`:
+    - Thêm nhận diện các heading mới: `Lịch chia cổ tức:`, `Lịch chia cổ tức các doanh nghiệp sắp tới:`, `Điểm tin chứng khoán`.
+    - Nâng cấp bộ lọc dòng rỗng / marker rỗng với regex `/^[\s.\-•*–—]+$/`, triệt tiêu dứt điểm hiện tượng render các dòng chỉ có dấu chấm `.` hoặc `• -`.
+  - `frontend/src/components/ai-chat/ai-chat-drawer.tsx` & `frontend/src/test/setup.ts`:
+    - Thêm guard `messagesEndRef.current?.scrollIntoView?.({ behavior: "smooth" })` an toàn trong môi trường DOM test.
+    - Tạo stub `frontend/src/test/server-only-stub.ts` và cấu hình alias `vitest.config.mts` giải quyết import `server-only` cho Route Handler tests.
+  - **Tests**:
+    - `backend/tests/unit/ai_chat/test_ai_chat.py`: Thêm unit test `test_normalize_user_input`, `test_ai_news_with_concatenated_typo`, `test_ai_dividend_intent_with_symbol`, `test_ai_dividend_intent_market_upcoming` (22/22 passed).
+    - `backend/tests/integration/api/test_ai_chat_api.py`: Thêm API integration test `test_ai_chat_endpoint_dividend_intent` và `test_ai_chat_endpoint_news_with_concatenated_typo` (6/6 passed).
+    - `frontend/src/app/ai-api/[[...path]]/route.test.ts`: Thêm API BFF Route Handler integration test (2/2 passed).
+    - `frontend/src/components/ai-chat/ai-chat-drawer.test.tsx`: Thêm E2E Component user interaction test (mở drawer, nhập prompt cổ tức/tin tức, render phản hồi và sources) (2/2 passed).
+    - `frontend/src/components/ai-chat/ai-chat-bubble.test.tsx`: Thêm unit test kiểm tra heading cổ tức và chặn dấu chấm / gạch ngang rỗng (3/3 passed).
+  - Quản lý tiến trình:
+    - Hủy bỏ daemon uvicorn cũ và khởi động lại uvicorn với `--reload` trên cổng 8000.
+    - Kiểm thử live qua HTTP POST thực tế trên cổng 8000 trả về chuẩn 100% cả câu hỏi cổ tức MBB, tin tức và phân tích kỹ thuật HPG.
+- **Verification**:
+  - Quality Gate `./scripts/check-pr.ps1`: Passed 100% (6/6 steps).
+  - Frontend Lint (ESLint): Passed 0 lỗi.
+  - Frontend Typecheck (tsc): Passed 0 lỗi.
+  - Frontend Tests (Vitest): 184/184 passed 100% (48 test files).
+  - Backend Lint (Ruff) & Typecheck (Mypy): Passed 0 lỗi.
+  - Backend Tests (Pytest): 159/159 passed 100%.
+
 ## AI Assistant Security Guardrails, News Intent Resolution, User Bubble Polish & Observability - 2026-11-04 (completed)
 - **User Request**:
   1. Chuyển nhánh `fix/AI`.

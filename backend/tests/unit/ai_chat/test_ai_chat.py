@@ -6,6 +6,7 @@ from app.application.use_cases.ai_chat.ai_financial_service import (
     AiFinancialService,
     _calculate_rsi,
     _extract_tickers,
+    normalize_user_input,
 )
 from app.application.use_cases.ai_chat.ai_observability import (
     AiMetricsRegistry,
@@ -358,3 +359,53 @@ async def test_ai_news_with_news_repository() -> None:
     assert "VN-Index bứt phá mạnh mẽ" in result["content"]
     assert "CafeF" in result["content"]
     assert any(s["url"] == "/news/art-100" for s in result["sources"])
+
+
+def test_normalize_user_input() -> None:
+    assert normalize_user_input("chứng khoánhôm nay") == "chứng khoán hôm nay"
+    assert normalize_user_input("cho tao tintức hôm nay") == "cho tao tin tức hôm nay"
+    assert normalize_user_input("lịch cổtức của mbb") == "lịch cổ tức của mbb"
+
+
+@pytest.mark.anyio
+async def test_ai_news_with_concatenated_typo() -> None:
+    provider = FixtureMarketProvider()
+    service = MarketService(provider)
+    ai_service = AiFinancialService(market_service=service)
+
+    result = await ai_service.process_chat("cho tao tin tức chứng khoánhôm nay")
+    # Must NOT extract ticker TIN or mistake as stock analysis
+    assert "Báo cáo phân tích chuyên sâu: TIN" not in result["content"]
+    assert "Tín Việt" not in result["content"]
+    assert "Điểm tin thị trường hôm nay:" in result["content"]
+    assert not any(w["type"] == "stock_score_card" for w in result["widgets"])
+
+
+@pytest.mark.anyio
+async def test_ai_dividend_intent_with_symbol() -> None:
+    provider = FixtureMarketProvider()
+    service = MarketService(provider)
+    ai_service = AiFinancialService(market_service=service)
+
+    result = await ai_service.process_chat("cho tao lịch chia cổ tức của mbb")
+    # Must identify dividend intent and respond with dividend specifics
+    assert "Lịch chia cổ tức: MBB" in result["content"]
+    assert "Ngày GDKHQ" in result["content"]
+    assert "Hình thức" in result["content"]
+    # Must NOT output stock analysis technical score card template
+    assert "Báo cáo phân tích chuyên sâu: MBB" not in result["content"]
+    assert not any(w["type"] == "stock_score_card" for w in result["widgets"])
+    # Sources must contain dividend link
+    assert any("/market/stocks/MBB#dividends" in s.get("url", "") for s in result["sources"])
+
+
+@pytest.mark.anyio
+async def test_ai_dividend_intent_market_upcoming() -> None:
+    provider = FixtureMarketProvider()
+    service = MarketService(provider)
+    ai_service = AiFinancialService(market_service=service)
+
+    result = await ai_service.process_chat("Lịch chia cổ tức sắp tới thế nào?")
+    assert "Lịch chia cổ tức các doanh nghiệp sắp tới:" in result["content"]
+    assert any("/market/events" in s.get("url", "") for s in result["sources"])
+    assert not any(w["type"] == "stock_score_card" for w in result["widgets"])

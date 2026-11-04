@@ -146,6 +146,9 @@ function FormattedContent({ text }: { text: string }) {
   const normalized = sanitized
     .replace(/(Báo cáo phân tích chuyên sâu:[^\n]+)/g, "$1\n\n")
     .replace(/(Đối chiếu so sánh:[^\n]+)/g, "$1\n\n")
+    .replace(/(Lịch chia cổ tức:[^\n]+)/g, "$1\n\n")
+    .replace(/(Lịch chia cổ tức các doanh nghiệp sắp tới:[^\n]+)/g, "$1\n\n")
+    .replace(/(Điểm tin chứng khoán[^\n]+)/g, "$1\n\n")
     .replace(/(Điểm tin thị trường hôm nay:[^\n]+)/g, "$1\n\n");
 
   const rawBlocks = normalized.split(/\n\n+/);
@@ -161,7 +164,10 @@ function FormattedContent({ text }: { text: string }) {
           trimmed.startsWith("### ") ||
           trimmed.startsWith("Báo cáo phân tích chuyên sâu:") ||
           trimmed.startsWith("Đối chiếu so sánh:") ||
+          trimmed.startsWith("Lịch chia cổ tức:") ||
+          trimmed.startsWith("Lịch chia cổ tức các doanh nghiệp sắp tới:") ||
           trimmed.startsWith("Điểm tin thị trường hôm nay:") ||
+          trimmed.startsWith("Điểm tin chứng khoán") ||
           trimmed.startsWith("Tin tức nổi bật hôm nay:")
         ) {
           const title = trimmed.replace(/^###\s*/, "");
@@ -188,7 +194,8 @@ function FormattedContent({ text }: { text: string }) {
                 trimmedLine === "-" ||
                 trimmedLine === "•" ||
                 trimmedLine === "*" ||
-                trimmedLine === "- -"
+                trimmedLine === "- -" ||
+                /^[\s.\-•*–—]+$/.test(trimmedLine)
               ) {
                 return null;
               }
@@ -198,7 +205,7 @@ function FormattedContent({ text }: { text: string }) {
                 trimmedLine.startsWith("• ") ||
                 trimmedLine.startsWith("* ");
               const cleanLine = (isBullet ? trimmedLine.substring(2) : trimmedLine).trim();
-              if (!cleanLine || cleanLine === "-" || cleanLine === "•") {
+              if (!cleanLine || /^[\s.\-•*–—]+$/.test(cleanLine)) {
                 return null;
               }
 
