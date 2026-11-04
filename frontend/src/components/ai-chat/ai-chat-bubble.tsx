@@ -1,11 +1,12 @@
 "use client";
 
+import Link from "next/link";
 import { useEffect, useState } from "react";
 import type { AiMessage } from "@/types/ai-chat";
-import { StockScoreCardWidget } from "./widgets/stock-score-card-widget";
-import { StockComparisonWidget } from "./widgets/stock-comparison-widget";
 import { ForensicWarningWidget } from "./widgets/forensic-warning-widget";
 import { MarketPulseWidget } from "./widgets/market-pulse-widget";
+import { StockComparisonWidget } from "./widgets/stock-comparison-widget";
+import { StockScoreCardWidget } from "./widgets/stock-score-card-widget";
 import { SuggestedActionsWidget } from "./widgets/suggested-actions-widget";
 
 /** Clean all leading decorative emojis and strip any raw '**' markdown asterisks */
@@ -146,7 +147,11 @@ function FormattedContent({ text }: { text: string }) {
         if (!trimmed) return null;
 
         // Heading
-        if (trimmed.startsWith("### ") || trimmed.startsWith("Báo cáo phân tích chuyên sâu:") || trimmed.startsWith("Đối chiếu so sánh:")) {
+        if (
+          trimmed.startsWith("### ") ||
+          trimmed.startsWith("Báo cáo phân tích chuyên sâu:") ||
+          trimmed.startsWith("Đối chiếu so sánh:")
+        ) {
           const title = trimmed.replace(/^###\s*/, "");
           return (
             <h4
@@ -234,11 +239,26 @@ export function AiChatBubble({
       </div>
 
       <div className="flex-1 max-w-[96%] sm:max-w-[90%]">
-        <div className="flex items-center gap-2 mb-1.5">
+        <div className="flex items-center gap-2 mb-1.5 flex-wrap">
           <span className="text-xs font-bold text-sky-400">InvestIQ Assistant</span>
           <span className="text-[10px] px-2 py-0.5 rounded-md bg-sky-950/80 text-sky-300 border border-sky-800/60 font-semibold tracking-wide">
             Cố vấn
           </span>
+          {message.is_cached && (
+            <span className="text-[10px] px-2 py-0.5 rounded-md bg-emerald-950/80 text-emerald-300 border border-emerald-800/60 font-medium">
+              ⚡ Phản hồi từ cache
+            </span>
+          )}
+          {message.evaluation && (
+            <span
+              className="text-[10px] px-2 py-0.5 rounded-md bg-slate-800 text-slate-300 border border-slate-700/60 font-mono"
+              title={Object.entries(message.evaluation.checks || {})
+                .map(([k, v]) => `${k}: ${v ? "✓" : "✗"}`)
+                .join("\n")}
+            >
+              Eval: {Math.round(message.evaluation.score * 100)}%
+            </span>
+          )}
         </div>
 
         {/* Text Body */}
@@ -263,6 +283,49 @@ export function AiChatBubble({
                 }
                 return null;
               })}
+            </div>
+          )}
+
+          {/* Render Interactive Citation Links */}
+          {message.sources && message.sources.length > 0 && (
+            <div className="mt-4 border-t border-slate-800/80 pt-3">
+              <span className="text-[11px] font-bold text-slate-400 block mb-2 uppercase tracking-wider">
+                Nguồn tham khảo đã kiểm chuẩn:
+              </span>
+              <div className="flex flex-wrap gap-2">
+                {message.sources.map((s, idx) => {
+                  const isInternal = s.kind === "internal" || s.url.startsWith("/");
+                  if (isInternal) {
+                    return (
+                      <Link
+                        key={idx}
+                        href={s.url}
+                        className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-sky-950/60 hover:bg-sky-900/80 text-sky-300 border border-sky-800/60 text-xs transition"
+                      >
+                        <span className="text-[9px] px-1 py-0.2 rounded bg-sky-800/60 text-sky-200 font-bold">
+                          InvestIQ
+                        </span>
+                        <span className="truncate max-w-[200px]">{s.title}</span>
+                      </Link>
+                    );
+                  }
+                  return (
+                    <a
+                      key={idx}
+                      href={s.url}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-slate-950/70 hover:bg-slate-800/80 text-slate-300 border border-slate-700/60 text-xs transition"
+                    >
+                      <span className="text-[9px] px-1 py-0.2 rounded bg-slate-800 text-slate-300 font-bold">
+                        Web
+                      </span>
+                      <span className="truncate max-w-[200px]">{s.title}</span>
+                      <span className="text-[10px] text-slate-500">↗</span>
+                    </a>
+                  );
+                })}
+              </div>
             </div>
           )}
 

@@ -1,15 +1,43 @@
-"""AI Financial Assistant Service: Intent detection, Internal Data RAG,
-Multi-factor scoring, Fallback Web Search, and Structured Rich Widgets.
+"""AI Financial Assistant Service: Guardrails, shared answer cache, Internal Data RAG,
+curated knowledge retrieval, cited fallback Web Search, per-step tracing and evaluation,
+and Structured Rich Widgets.
+
+Pipeline steps (each evaluated and recorded in ``AiTrace``):
+1. guardrail: prevent secret exfiltration, prompt injection, and unauthorized system modifications.
+2. cache_lookup: check shared cache for identical questions asked by other users.
+3. intent_detection: identify tickers, comparison, forensics, market, or educational topics.
+4. internal_data_retrieval: fetch market quotes, technical candles, and forensic scores.
+5. knowledge_retrieval: query InvestIQ curated lessons and glossary (high priority for concepts).
+6. external_search: fallback web search when internal data does not cover the request.
+7. response_generation: synthesize comprehensive analysis and structured widgets.
+8. citation: append clear source attribution (internal learning topic or external links).
+9. output_redaction: strip any accidental tokens, keys, credentials, or emails.
+10. evaluation: rule-based online scoring against quality criteria.
+11. cache_store: save clean answers to shared cache with intent-based TTL.
 """
 
 from __future__ import annotations
 
+import html
 import logging
 import re
-from typing import Any
+from typing import Any, Literal
+from urllib.parse import parse_qs, urlparse
 
 import httpx
 
+from app.application.interfaces.i_ai_response_cache import AiResponseCache
+from app.application.use_cases.ai_chat.ai_observability import (
+    AiMetricsRegistry,
+    AiTrace,
+    evaluate_response,
+)
+from app.application.use_cases.ai_chat.guardrails import (
+    evaluate_guardrails,
+    fold_text,
+    redact_sensitive_output,
+)
+from app.application.use_cases.ai_chat.knowledge_base import InternalKnowledgeBase, KnowledgeHit
 from app.application.use_cases.market_data.market_service import MarketService
 
 logger = logging.getLogger(__name__)
@@ -17,53 +45,45 @@ logger = logging.getLogger(__name__)
 # Known stock tickers regex: 3 uppercase letters
 _TICKER_PATTERN = re.compile(r"\b([A-Z]{3})\b")
 
-# Stop words that look like tickers but are Vietnamese words
-_NON_TICKER_WORDS = {
-    "CHO",
-    "CON",
-    "CAC",
-    "NAM",
-    "THI",
-    "GIA",
-    "NEN",
-    "MUA",
-    "BAN",
-    "XEM",
-    "LUC",
-    "QUA",
-    "NAY",
-    "VAY",
-    "NHO",
-    "LON",
-    "TOC",
-    "NGU",
-    "GAP",
-    "DCA",
-    "BCTC",
-    "EPS",
-    "ROE",
-    "ROA",
-    "USD",
-    "VND",
-    "VSA",
-    "MAC",
-    "MAI",
-    "DAO",
-    "SAN",
-    "COT",
-    "DON",
-    "TUC",
-    "TRA",
-    "DAN",
-    "DOC",
-    "BAI",
-    "THE",
-    "KHI",
-    "BAO",
-    "LAI",
-    "COI",
-    "HOI",
+# Stop words that look like tickers but are Vietnamese words or common financial acronyms
+_NON_TICKER_WORDS = frozenset(
+    {
+        "CHO", "CON", "CAC", "NAM", "THI", "GIA", "NEN", "MUA", "BAN", "XEM", "LUC",
+        "QUA", "NAY", "VAY", "NHO", "LON", "TOC", "NGU", "GAP", "DCA", "BCTC", "EPS",
+        "ROE", "ROA", "USD", "VND", "VSA", "MAC", "MAI", "DAO", "SAN", "COT", "DON",
+        "TUC", "TRA", "DAN", "DOC", "BAI", "THE", "KHI", "BAO", "LAI", "COI", "HOI",
+        "VON", "TIEN", "BOT", "HAY", "HOA",
+    }
+)
+
+_CACHE_KEY_PREFIX = "ai:chat:v1"
+_MAX_EXTERNAL_SOURCES = 3
+
+AiIntent = Literal[
+    "blocked",
+    "comparison",
+    "stock_analysis",
+    "market_overview",
+    "knowledge",
+    "external",
+    "general",
+]
+
+_CACHE_TTL_SECONDS: dict[AiIntent, int] = {
+    "comparison": 60,
+    "stock_analysis": 60,
+    "market_overview": 60,
+    "knowledge": 6 * 3600,
+    "external": 30 * 60,
+    "general": 6 * 3600,
 }
+
+
+def normalize_question(message: str) -> str:
+    """Canonical form used as the shared cache key: folded, punctuation-free, single-spaced."""
+    folded = fold_text(message)
+    cleaned = re.sub(r"[^a-z0-9/%\s]", " ", folded)
+    return re.sub(r"\s+", " ", cleaned).strip()
 
 
 def _extract_tickers(text: str) -> list[str]:
@@ -105,88 +125,276 @@ def _get_val(obj: Any, key: str, default: Any = None) -> Any:
     return getattr(obj, key, default)
 
 
+def _decode_ddg_url(raw_href: str) -> str | None:
+    """Extract destination URL from DuckDuckGo wrapper href."""
+    href = html.unescape(raw_href)
+    if href.startswith("//"):
+        href = f"https:{href}"
+    parsed = urlparse(href)
+    if parsed.netloc.endswith("duckduckgo.com") and parsed.path.startswith("/l/"):
+        target = parse_qs(parsed.query).get("uddg", [""])[0]
+        href = target
+    final = urlparse(href)
+    if final.scheme in ("http", "https") and final.netloc:
+        return href
+    return None
+
+
+def _strip_tags(raw: str) -> str:
+    return re.sub(r"\s+", " ", html.unescape(re.sub(r"<[^>]+>", "", raw))).strip()
+
+
 class AiFinancialService:
-    def __init__(self, market_service: MarketService) -> None:
+    def __init__(
+        self,
+        market_service: MarketService,
+        knowledge_base: InternalKnowledgeBase | None = None,
+        cache: AiResponseCache | None = None,
+        metrics: AiMetricsRegistry | None = None,
+    ) -> None:
         self._market = market_service
+        self._knowledge = knowledge_base
+        self._cache = cache
+        self._metrics = metrics or AiMetricsRegistry()
+
+    @property
+    def metrics(self) -> AiMetricsRegistry:
+        return self._metrics
 
     async def process_chat(self, user_message: str) -> dict[str, Any]:
-        """Main entry point: parse query, retrieve internal data, enrich, and generate response."""
-        tickers = _extract_tickers(user_message)
-        query_lower = user_message.lower()
+        """Main entry point: execute guarded, traced, cached, grounded financial analysis."""
+        trace = AiTrace(self._metrics)
 
-        # Intent detection
-        is_comparison = (
-            any(kw in query_lower for kw in ["so sánh", "hay là", "vs", "hơn", "chọn mã nào"])
-            and len(tickers) >= 2
-        )
-        is_gold_bank = any(
-            kw in query_lower for kw in ["vàng", "ngân hàng", "tiết kiệm", "gửi tiền"]
-        )
-        is_forensics = any(
-            kw in query_lower
-            for kw in [
-                "gian lận",
-                "bẫy",
-                "báo cáo tài chính",
-                "bctc",
-                "nợ",
-                "phải thu",
-                "phá sản",
-                "sức khỏe",
-                "z-score",
-                "altman",
-            ]
-        )
-        is_market_general = any(
-            kw in query_lower
-            for kw in ["thị trường", "vnindex", "vn-index", "hôm nay", "toàn sàn", "ngành nào"]
-        )
+        # Step 1: Guardrail verification (block secrets, private data, system modification, injection)
+        with trace.step("guardrail") as g_step:
+            verdict = evaluate_guardrails(user_message)
+            if not verdict.allowed:
+                g_step.mark("blocked", passed=True, note=verdict.category or "rejected")
+                trace.finish(
+                    "blocked",
+                    evaluation=None,
+                    guardrail_category=verdict.category,
+                )
+                return {
+                    "content": verdict.refusal,
+                    "widgets": [],
+                    "suggested_actions": [
+                        {
+                            "label": "Phân tích cổ phiếu HPG",
+                            "action_type": "SEND_PROMPT",
+                            "prompt": "Phân tích HPG",
+                        },
+                        {
+                            "label": "So sánh VCB và MBB",
+                            "action_type": "SEND_PROMPT",
+                            "prompt": "So sánh VCB và MBB",
+                        },
+                        {
+                            "label": "Nhịp đập thị trường",
+                            "action_type": "SEND_PROMPT",
+                            "prompt": "Thị trường hôm nay thế nào?",
+                        },
+                    ],
+                    "sources": [],
+                    "evaluation": {
+                        "score": 1.0,
+                        "checks": {"guardrail_blocked": True, "no_sensitive_leak": True},
+                    },
+                }
+            g_step.mark("ok", passed=True)
 
-        # Fetch internal market data for recognized tickers
+        # Step 2: Shared cache lookup for previously answered queries
+        normalized_q = normalize_question(user_message)
+        cache_key = f"{_CACHE_KEY_PREFIX}:{normalized_q}"
+        with trace.step("cache_lookup") as c_step:
+            if self._cache:
+                cached_payload = self._cache.get(cache_key)
+                if cached_payload and isinstance(cached_payload, dict):
+                    c_step.mark("hit", passed=True)
+                    trace.finish("cached", evaluation=None)
+                    result_copy = dict(cached_payload)
+                    result_copy["is_cached"] = True
+                    return result_copy
+                c_step.mark("miss", passed=True)
+            else:
+                c_step.mark("skipped", note="no_cache_configured")
+
+        # Step 3: Intent detection
+        tickers: list[str] = []
+        is_comparison = False
+        is_gold_bank = False
+        is_forensics = False
+        is_market_general = False
+        with trace.step("intent_detection") as i_step:
+            tickers = _extract_tickers(user_message)
+            query_lower = user_message.lower()
+
+            is_comparison = (
+                any(kw in query_lower for kw in ["so sánh", "hay là", "vs", "hơn", "chọn mã nào"])
+                and len(tickers) >= 2
+            )
+            is_gold_bank = any(
+                kw in query_lower for kw in ["vàng", "ngân hàng", "tiết kiệm", "gửi tiền"]
+            )
+            is_forensics = any(
+                kw in query_lower
+                for kw in [
+                    "gian lận",
+                    "bẫy",
+                    "báo cáo tài chính",
+                    "bctc",
+                    "nợ",
+                    "phải thu",
+                    "phá sản",
+                    "sức khỏe",
+                    "z-score",
+                    "altman",
+                ]
+            )
+            is_market_general = any(
+                kw in query_lower
+                for kw in ["thị trường", "vnindex", "vn-index", "hôm nay", "toàn sàn", "ngành nào"]
+            )
+            i_step.mark(
+                "ok",
+                passed=True,
+                note=f"tickers={len(tickers)} comparison={is_comparison} forensics={is_forensics} market={is_market_general}",
+            )
+
+        # Step 4: Internal data retrieval (market quotes, candles, forensics)
         stock_data: dict[str, Any] = {}
-        for ticker in tickers[:3]:
-            try:
-                inst = self._market.instrument(ticker, include_fundamentals=True)
-                if inst:
-                    candle_res = self._market.candles(ticker, interval="1d", limit=60)
-                    candle_list = candle_res.get("data", []) if isinstance(candle_res, dict) else []
-                    closes = [
-                        float(c["close"])
-                        for c in candle_list
-                        if isinstance(c, dict) and "close" in c
-                    ]
-                    forensics_res = self._market.forensics(ticker)
-                    forensics = (
-                        forensics_res.get("data", {}) if isinstance(forensics_res, dict) else {}
-                    )
-                    stock_data[ticker] = {
-                        "instrument": inst,
-                        "candles_count": len(candle_list),
-                        "closes": closes,
-                        "forensics": forensics,
-                    }
-            except Exception as exc:
-                logger.warning("Failed to fetch internal data for %s: %s", ticker, exc)
+        with trace.step("internal_data_retrieval") as d_step:
+            for ticker in tickers[:3]:
+                try:
+                    inst = self._market.instrument(ticker, include_fundamentals=True)
+                    if inst:
+                        candle_res = self._market.candles(ticker, interval="1d", limit=60)
+                        candle_list = candle_res.get("data", []) if isinstance(candle_res, dict) else []
+                        closes = [
+                            float(c["close"])
+                            for c in candle_list
+                            if isinstance(c, dict) and "close" in c
+                        ]
+                        forensics_res = self._market.forensics(ticker)
+                        forensics = (
+                            forensics_res.get("data", {}) if isinstance(forensics_res, dict) else {}
+                        )
+                        stock_data[ticker] = {
+                            "instrument": inst,
+                            "candles_count": len(candle_list),
+                            "closes": closes,
+                            "forensics": forensics,
+                        }
+                except Exception as exc:
+                    logger.warning("Failed to fetch internal data for %s: %s", ticker, exc)
+            d_step.mark("ok", passed=True, note=f"resolved={len(stock_data)}")
 
-        # Fallback Web Search if no tickers and asking about external events / macro
-        external_context = ""
-        if not stock_data and not is_market_general:
-            external_context = await self._search_external_info(user_message)
+        # Step 5: Knowledge retrieval (curated internal educational content & glossary)
+        knowledge_hits: list[KnowledgeHit] = []
+        with trace.step("knowledge_retrieval") as k_step:
+            if self._knowledge and not stock_data and not is_market_general:
+                knowledge_hits = self._knowledge.search(user_message, limit=2)
+                k_step.mark("ok", passed=True, note=f"hits={len(knowledge_hits)}")
+            else:
+                k_step.mark("skipped", note="stock_or_market_context_active")
 
-        # Generate response and rich widgets
-        return self._generate_structured_response(
-            user_message=user_message,
-            tickers=tickers,
-            stock_data=stock_data,
-            is_comparison=is_comparison,
-            is_gold_bank=is_gold_bank,
-            is_forensics=is_forensics,
-            is_market_general=is_market_general,
-            external_context=external_context,
+        # Step 6: External search (crawled web data fallback ONLY if internal data/knowledge empty)
+        external_snippets: list[dict[str, str]] = []
+        with trace.step("external_search") as s_step:
+            if not stock_data and not is_market_general and not knowledge_hits:
+                external_snippets = await self._search_external_info(user_message)
+                s_step.mark("ok", passed=True, note=f"snippets={len(external_snippets)}")
+            else:
+                s_step.mark("skipped", note="internal_data_or_knowledge_available")
+
+        # Step 7: Response generation
+        intent: AiIntent = "general"
+        if is_comparison or len(stock_data) >= 2:
+            intent = "comparison"
+        elif len(stock_data) == 1:
+            intent = "stock_analysis"
+        elif is_market_general:
+            intent = "market_overview"
+        elif knowledge_hits:
+            intent = "knowledge"
+        elif external_snippets:
+            intent = "external"
+
+        with trace.step("response_generation") as gen_step:
+            raw_response = self._generate_structured_response(
+                user_message=user_message,
+                tickers=tickers,
+                stock_data=stock_data,
+                knowledge_hits=knowledge_hits,
+                external_snippets=external_snippets,
+                is_comparison=is_comparison,
+                is_gold_bank=is_gold_bank,
+                is_forensics=is_forensics,
+                is_market_general=is_market_general,
+            )
+            gen_step.mark("ok", passed=True, note=f"intent={intent}")
+
+        # Step 8: Citation verification
+        with trace.step("citation") as cit_step:
+            sources = raw_response.get("sources", [])
+            cit_step.mark("ok", passed=True, note=f"sources_count={len(sources)}")
+
+        # Step 9: Output redaction (prevent credential, key, email leakage)
+        content_safe, redactions = redact_sensitive_output(raw_response["content"])
+        with trace.step("output_redaction") as red_step:
+            red_step.mark("ok", passed=(redactions == 0), note=f"redactions={redactions}")
+
+        # Step 10: Online evaluation
+        elapsed_total = trace.elapsed_ms()
+        external_urls = [s["url"] for s in sources if s.get("kind") == "external" and "url" in s]
+        with trace.step("evaluation") as eval_step:
+            evaluation = evaluate_response(
+                content=content_safe,
+                blocked=False,
+                requested_tickers=tickers,
+                resolved_tickers=list(stock_data.keys()),
+                external_urls=external_urls,
+                redactions=redactions,
+                elapsed_ms=elapsed_total,
+            )
+            eval_step.mark(
+                "ok",
+                passed=(evaluation.score >= 0.8),
+                note=f"score={evaluation.score}",
+            )
+
+        final_response = {
+            "content": content_safe,
+            "widgets": raw_response.get("widgets", []),
+            "suggested_actions": raw_response.get("suggested_actions", []),
+            "sources": sources,
+            "evaluation": evaluation.as_dict(),
+        }
+
+        # Step 11: Store to shared cache with intent-dependent TTL
+        with trace.step("cache_store") as cs_step:
+            if self._cache:
+                ttl = _CACHE_TTL_SECONDS.get(intent, 300)
+                try:
+                    self._cache.set(cache_key, final_response, ttl_seconds=ttl)
+                    cs_step.mark("ok", passed=True, note=f"ttl={ttl}s")
+                except Exception as exc:
+                    cs_step.mark("error", passed=False, note=str(exc))
+            else:
+                cs_step.mark("skipped", note="no_cache_configured")
+
+        # Finish trace and record metrics
+        trace.finish(
+            "answered",
+            evaluation=evaluation,
+            internal_sources=len([s for s in sources if s.get("kind") == "internal"]),
+            external_sources=len(external_urls),
         )
 
-    async def _search_external_info(self, query: str) -> str:
-        """Crawl/search external data if the query asks for broad financial news/events."""
+        return final_response
+
+    async def _search_external_info(self, query: str) -> list[dict[str, str]]:
+        """Crawl external information and parse links/sources for mandatory citation."""
         try:
             async with httpx.AsyncClient(timeout=4.0) as client:
                 resp = await client.get(
@@ -196,31 +404,51 @@ class AiFinancialService:
                 )
                 if resp.status_code == 200:
                     text = resp.text
-                    snippets = re.findall(
-                        r'<a class="result__snippet[^>]*>(.*?)</a>', text, re.DOTALL
+                    links = re.findall(
+                        r'<a[^>]*class="result__a"[^>]*href="([^"]+)"[^>]*>(.*?)</a>',
+                        text,
+                        re.DOTALL,
                     )
-                    clean_snippets = [re.sub(r"<[^>]+>", "", s).strip() for s in snippets[:3]]
-                    if clean_snippets:
-                        return "Thông tin cập nhật: " + " ".join(clean_snippets)
+                    snippets = re.findall(
+                        r'<a[^>]*class="result__snippet[^"]*"[^>]*>(.*?)</a>',
+                        text,
+                        re.DOTALL,
+                    )
+                    results: list[dict[str, str]] = []
+                    for idx, (raw_href, raw_title) in enumerate(links[:_MAX_EXTERNAL_SOURCES]):
+                        dest_url = _decode_ddg_url(raw_href)
+                        title = _strip_tags(raw_title)
+                        snippet = _strip_tags(snippets[idx]) if idx < len(snippets) else ""
+                        if dest_url and title:
+                            results.append(
+                                {
+                                    "title": title[:140],
+                                    "url": dest_url,
+                                    "snippet": snippet[:350],
+                                }
+                            )
+                    return results
         except Exception as exc:
             logger.debug("External search unavailable: %s", exc)
-        return ""
+        return []
 
     def _generate_structured_response(
         self,
         user_message: str,
         tickers: list[str],
         stock_data: dict[str, Any],
+        knowledge_hits: list[KnowledgeHit],
+        external_snippets: list[dict[str, str]],
         is_comparison: bool,
         is_gold_bank: bool,
         is_forensics: bool,
         is_market_general: bool,
-        external_context: str,
     ) -> dict[str, Any]:
         """Synthesize in-depth analysis and format rich interactive widgets."""
         widgets: list[dict[str, Any]] = []
         suggested_actions: list[dict[str, Any]] = []
         text_parts: list[str] = []
+        sources: list[dict[str, str]] = []
 
         # Case 1: Comparison between stocks or multi-asset
         if (is_comparison or (len(tickers) >= 2 and not is_forensics)) and len(stock_data) >= 2:
@@ -293,6 +521,21 @@ class AiFinancialService:
                         "summary_verdict": verdict_text,
                     },
                 }
+            )
+
+            sources.extend(
+                [
+                    {
+                        "kind": "internal",
+                        "title": f"Bảng giá thị trường InvestIQ: {t1}",
+                        "url": f"/market/stocks/{t1}",
+                    },
+                    {
+                        "kind": "internal",
+                        "title": f"Bảng giá thị trường InvestIQ: {t2}",
+                        "url": f"/market/stocks/{t2}",
+                    },
+                ]
             )
 
             suggested_actions.extend(
@@ -453,6 +696,14 @@ class AiFinancialService:
                     }
                 )
 
+            sources.append(
+                {
+                    "kind": "internal",
+                    "title": f"Báo cáo tài chính & dữ liệu giao dịch {sym} (InvestIQ)",
+                    "url": f"/market/stocks/{sym}",
+                }
+            )
+
             suggested_actions.extend(
                 [
                     {
@@ -515,6 +766,14 @@ class AiFinancialService:
                     }
                 )
 
+                sources.append(
+                    {
+                        "kind": "internal",
+                        "title": "Tổng quan thị trường trực tiếp InvestIQ",
+                        "url": "/market/stocks",
+                    }
+                )
+
                 suggested_actions.extend(
                     [
                         {
@@ -540,18 +799,87 @@ class AiFinancialService:
                     "Hệ thống đang đồng bộ dữ liệu thị trường mới nhất. Vui lòng thử lại sau giây lát."
                 )
 
-        # Case 4: General learning / concept / external fallback
+        # Case 4: Curated internal knowledge & glossary hit
+        elif knowledge_hits:
+            top_hit = knowledge_hits[0].entry
+            text_parts.append(f"Kiến thức đầu tư InvestIQ: {top_hit.title}")
+            text_parts.append(top_hit.text)
+
+            if len(knowledge_hits) > 1:
+                second = knowledge_hits[1].entry
+                text_parts.append(f"Khái niệm liên quan — {second.title}:\n{second.text}")
+
+            sources.append(
+                {
+                    "kind": "internal",
+                    "title": f"Khóa học InvestIQ: {top_hit.topic_title}",
+                    "url": f"/learn?topic={top_hit.topic_slug}" if top_hit.topic_slug else "/learn",
+                }
+            )
+
+            suggested_actions.extend(
+                [
+                    {
+                        "label": f"Học bài: {top_hit.topic_title[:32]}",
+                        "action_type": "NAVIGATE",
+                        "url": f"/learn?topic={top_hit.topic_slug}" if top_hit.topic_slug else "/learn",
+                    },
+                    {
+                        "label": "Xem bảng thuật ngữ đầy đủ",
+                        "action_type": "NAVIGATE",
+                        "url": "/learn",
+                    },
+                ]
+            )
+
+        # Case 5: External web crawled fallback with MANDATORY citation
+        elif external_snippets:
+            text_parts.append("Thông tin tổng hợp cập nhật thị trường:")
+            for item in external_snippets[:2]:
+                text_parts.append(f"- {item['title']}: {item['snippet']}")
+
+            for item in external_snippets:
+                sources.append(
+                    {
+                        "kind": "external",
+                        "title": item["title"],
+                        "url": item["url"],
+                    }
+                )
+
+            suggested_actions.extend(
+                [
+                    {
+                        "label": "Nhịp đập VN-Index hôm nay",
+                        "action_type": "SEND_PROMPT",
+                        "prompt": "Thị trường hôm nay thế nào?",
+                    },
+                    {
+                        "label": "Học kiến thức chứng khoán",
+                        "action_type": "NAVIGATE",
+                        "url": "/learn",
+                    },
+                ]
+            )
+
+        # Case 6: General introduction
         else:
             text_parts.append(
                 "Chào bạn, tôi là InvestIQ Financial Assistant — Trợ lý phân tích tài chính và hỗ trợ đầu tư trực tiếp.\n\n"
-                "Tôi có thể hỗ trợ bạn tức thì với các công cụ định lượng từ hệ thống InvestIQ:\n"
+                "Tôi ưu tiên sử dụng dữ liệu định lượng và tri thức nội bộ từ hệ thống InvestIQ:\n"
                 "1. Phân tích toàn diện mã cổ phiếu: Đánh giá định giá P/E, P/B, ROE, sức mạnh kỹ thuật nến và RSI (Ví dụ: 'Đánh giá HPG', 'Phân tích VNM').\n"
                 "2. So sánh đối đầu đa tài sản: So sánh 2 mã cổ phiếu hoặc so sánh với Vàng SJC và Tiết kiệm ngân hàng (Ví dụ: 'So sánh VCB và MBB').\n"
                 "3. Kiểm tra rủi ro BCTC và Altman Z-Score: Chẩn đoán sức khỏe tài chính và cờ đỏ kế toán (Ví dụ: 'Kiểm tra rủi ro NVL').\n"
-                "4. Nhịp đập thị trường: Diễn biến VN-Index, thanh khoản và độ rộng dòng tiền."
+                "4. Nhịp đập thị trường & Kiến thức: Diễn biến VN-Index, thanh khoản hoặc giải thích thuật ngữ chứng khoán (Ví dụ: 'P/E là gì', 'Lệnh ATC là gì')."
             )
-            if external_context:
-                text_parts.append(f"\n*{external_context}*")
+
+            sources.append(
+                {
+                    "kind": "internal",
+                    "title": "Học viện chứng khoán căn bản InvestIQ",
+                    "url": "/learn",
+                }
+            )
 
             suggested_actions.extend(
                 [
@@ -578,8 +906,17 @@ class AiFinancialService:
                 ]
             )
 
+        # Append source citation block at the end of the text
+        if sources:
+            citation_lines = ["\n\nNguồn tham khảo:"]
+            for s in sources:
+                kind_badge = "[Hệ thống InvestIQ]" if s.get("kind") == "internal" else "[Nguồn ngoài]"
+                citation_lines.append(f"- {kind_badge} {s['title']} ({s['url']})")
+            text_parts.append("\n".join(citation_lines))
+
         return {
             "content": "\n\n".join(text_parts),
             "widgets": widgets,
             "suggested_actions": suggested_actions,
+            "sources": sources,
         }

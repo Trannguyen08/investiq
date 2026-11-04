@@ -76,6 +76,17 @@ export type AiWidget =
   | { type: "forensic_warning"; data: ForensicWarningWidgetData }
   | { type: "market_pulse"; data: MarketPulseWidgetData };
 
+export type AiSource = {
+  kind: "internal" | "external";
+  title: string;
+  url: string;
+};
+
+export type AiEvaluation = {
+  score: number;
+  checks: Record<string, boolean>;
+};
+
 export type AiMessage = {
   id: string;
   conversation_id?: string | null;
@@ -83,6 +94,9 @@ export type AiMessage = {
   content: string;
   widgets?: AiWidget[];
   suggested_actions?: SuggestedAction[];
+  sources?: AiSource[];
+  evaluation?: AiEvaluation;
+  is_cached?: boolean;
   created_at: string;
 };
 
