@@ -174,4 +174,23 @@ describe("AiChatBubble", () => {
     expect(screen.getByText("Hỗ trợ quan trọng")).toBeDefined();
     expect(screen.getByText("Kháng cự gần")).toBeDefined();
   });
+
+  it("does not split Vietnamese words like 'điểm' or 'VN30 đạt' when highlighting index numbers", () => {
+    const marketMsg: AiMessage = {
+      id: "msg-market-1",
+      role: "assistant",
+      content:
+        "Các cổ phiếu rổ VN30 hoạt động sôi nổi nhất hôm nay:\n\n" +
+        "- Chỉ số chính: VN-Index đạt 1,733.02 điểm (+1.97%) | VN30 đạt 1,862.07 điểm (+2.56%).\n",
+      created_at: "2026-11-04T13:40:02Z",
+    };
+
+    const { container } = render(<AiChatBubble message={marketMsg} />);
+
+    // "1,733.02 điểm" and "1,862.07 điểm" should be highlighted as complete badges, never split into "1,733.02 đ" + "iểm"
+    expect(screen.getByText("1,733.02 điểm")).toBeDefined();
+    expect(screen.getByText("1,862.07 điểm")).toBeDefined();
+    expect(screen.queryByText("30 đ")).toBeNull();
+    expect(container.textContent).toContain("VN30 đạt");
+  });
 });

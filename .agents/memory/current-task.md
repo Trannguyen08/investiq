@@ -1,5 +1,27 @@
 # Current Task
 
+## AI Chat Modularization (`intent_parser`, `market_snapshot`, `external_search`, `response_builder`), VN30 Active Stocks & Upcoming Events Resolution, and Regex Highlight Boundary Fix - 2026-11-04 (completed)
+- **User Request**:
+  1. **Ảnh 1 — Trả lời đúng trọng tâm câu hỏi về cổ phiếu trong rổ VN30 hoạt động sôi nổi hôm nay + Sửa lỗi highlight cắt chữ `"điểm"`, `"đạt"`**:
+     - Khi hỏi `"cho tôi một vài cổ phiếu trong vn30 hoạt động sôi nổi trong hôm nay"`, trả lời danh sách cụ thể các cổ phiếu thuộc rổ **VN30** có giá trị giao dịch và biến động sôi nổi nhất hôm nay (`"Các cổ phiếu rổ VN30 hoạt động sôi nổi nhất hôm nay:"`) thay vì trả lời chung chung nhịp đập toàn thị trường.
+     - Sửa lỗi regex highlight trên UI làm tách `"1,733.02 điểm"` thành `[1,733.02 đ] iểm` và `"VN30 đạt"` thành `VN [30 đ] ạt`.
+  2. **Ảnh 2 — Trả lời câu hỏi về các sự kiện nổi bật sắp tới**:
+     - Khi hỏi `"sắp tới có các sự kiện gì nổi bật"`, nhận diện đúng intent sự kiện thị trường & doanh nghiệp sắp tới (`"Lịch sự kiện thị trường & doanh nghiệp nổi bật sắp tới:"`), tổng hợp cả `upcoming_events` từ `MarketService.overview()` lẫn lịch chốt quyền cổ tức sắp tới từ `DividendCrawler.get_upcoming_dividends()`.
+  3. **Chia nhỏ `ai_financial_service.py` thành nhiều module chuyên biệt**:
+     - Không dồn toàn bộ logic (~1.600 dòng) vào 1 file duy nhất mà tách thành các module rõ ràng trong `backend/app/application/use_cases/ai_chat/`.
+- **Branch**: `fix/AI`
+- **Changes**:
+  - Tách `backend/app/application/use_cases/ai_chat/ai_financial_service.py` thành 5 module rõ ràng theo Clean Architecture:
+    1. `backend/app/application/use_cases/ai_chat/intent_parser.py`: Chuẩn hóa câu hỏi tiếng Việt (`normalize_user_input`, `normalize_question`), trích xuất mã cổ phiếu (`_extract_tickers`), tính chỉ báo kỹ thuật (`_calculate_rsi`), chuẩn hóa tỷ lệ cổ tức (`_clean_dividend_ratio`), và nhận diện ý định (`detect_intent`, `DetectedIntent`). Mở rộng nhận diện các câu hỏi sự kiện (`"su kien"`, `"lich su kien"`, `"sap toi co"`, `"dhcd"`) và hoạt động rổ VN30 (`"soi noi"`, `"hoat dong"`, `"ro vn30"`, `"co phieu trong"`).
+    2. `backend/app/application/use_cases/ai_chat/market_snapshot.py`: Tổng hợp dữ liệu thị trường hàng ngày (`build_daily_market_snapshot`) bao gồm chỉ số `VNINDEX`/`VN30`/`HNX`, độ rộng thị trường, `upcoming_events`, `top_movers`, `top_gainers`, `top_losers`, `top_liquidity`, `top_foreign_buy`/`sell`, `top_sectors`, và nhóm cổ phiếu rổ **VN30** (`vn30_active`, `vn30_movers`, `vn30_gainers`, `vn30_losers`).
+    3. `backend/app/application/use_cases/ai_chat/external_search.py`: Tìm kiếm web dự phòng (`search_external_info`, `decode_ddg_url`, `strip_tags`).
+    4. `backend/app/application/use_cases/ai_chat/response_builder.py`: Tổng hợp phản hồi có cấu trúc và rich widgets (`generate_structured_response` cùng các hàm chuyên biệt cho cổ tức & sự kiện, tin tức, so sánh cổ phiếu, phân tích cổ phiếu đơn lẻ, và toàn cảnh thị trường / rổ VN30).
+    5. `backend/app/application/use_cases/ai_chat/ai_financial_service.py`: Đóng vai trò pipeline orchestrator gọn gàng (~260 dòng) điều phối 11 bước (`guardrail` -> `cache_lookup` -> `intent_detection` -> `internal_data_retrieval` -> `knowledge_retrieval` -> `external_search` -> `response_generation` -> `citation` -> `output_redaction` -> `evaluation` -> `cache_store`).
+  - `frontend/src/components/ai-chat/ai-chat-bubble.tsx`:
+    - Cập nhật regex trong `HighlightedText` với negative lookbehind `(?<![A-Za-zÀ-ỹ0-9])` và negative lookahead `(?![A-Za-zÀ-ỹ0-9])`, đồng thời thêm đơn vị `điểm` trước `đ`, đảm bảo `"1,733.02 điểm"` được highlight trọn vẹn và `"VN30 đạt"` không bao giờ bị cắt thành `VN [30 đ] ạt`.
+    - Bổ sung nhận diện các heading mới (`Các cổ phiếu rổ VN30`, `Lịch sự kiện`) trong `FormattedContent`.
+  - Bổ sung Unit Tests & API Integration Tests trong `backend/tests/unit/ai_chat/test_ai_chat.py`, `backend/tests/integration/api/test_ai_chat_api.py`, và `frontend/src/components/ai-chat/ai-chat-bubble.test.tsx`.
+
 ## AI Chatbox 5-Item Urgent Polish: Deduplicate Sources, Synchronize Ratio Highlights, Remove Horizontal Scroll, Daily Market Snapshot & Compact Drawer Widget UI - 2026-11-04 (completed)
 - **User Request**:
   1. **Ảnh 1 — Xóa hiển thị trùng 2 lần nguồn tham khảo**: Hiện tại vừa hiển thị đoạn bullet `Nguồn tham khảo:` trong thân tin nhắn vừa hiển thị khối `NGUỒN THAM KHẢO ĐÃ KIỂM CHUẨN:` bên dưới, đồng thời bị lặp 5 lần cùng 1 link `Nguồn công bố: CafeF Data`.

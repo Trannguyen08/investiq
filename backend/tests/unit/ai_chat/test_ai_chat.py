@@ -475,3 +475,30 @@ async def test_ai_daily_market_top_movers() -> None:
     pulse = next(w["data"] for w in result["widgets"] if w["type"] == "market_pulse")
     # Real VN-Index from provider, not hardcoded 1250 fallback
     assert pulse["vnindex"] != 1250.0
+
+
+@pytest.mark.anyio
+async def test_ai_vn30_active_stocks() -> None:
+    provider = FixtureMarketProvider()
+    service = MarketService(provider)
+    ai_service = AiFinancialService(market_service=service)
+
+    result = await ai_service.process_chat(
+        "cho tôi một vài cổ phiếu trong vn30 hoạt động sôi nổi trong hôm nay"
+    )
+    assert "Các cổ phiếu rổ VN30 hoạt động sôi nổi nhất hôm nay:" in result["content"]
+    assert "Nhịp đập thị trường chứng khoán hôm nay:" not in result["content"]
+    assert "GTGD:" in result["content"]
+    assert any(w["type"] == "market_pulse" for w in result["widgets"])
+
+
+@pytest.mark.anyio
+async def test_ai_upcoming_market_events() -> None:
+    provider = FixtureMarketProvider()
+    service = MarketService(provider)
+    ai_service = AiFinancialService(market_service=service)
+
+    result = await ai_service.process_chat("sắp tới có các sự kiện gì nổi bật")
+    assert "Lịch sự kiện thị trường & doanh nghiệp nổi bật sắp tới:" in result["content"]
+    assert "Chào bạn, tôi là InvestIQ Financial Assistant" not in result["content"]
+    assert any("/market/events" in s.get("url", "") for s in result["sources"])

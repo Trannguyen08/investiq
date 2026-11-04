@@ -61,12 +61,12 @@ function MessageTime({
   );
 }
 
-/** Highlight numbers, percentages, colon ratios, currency, and financial ratios */
+/** Highlight numbers, percentages, colon ratios, currency, index points, and financial ratios */
 function HighlightedText({ text }: { text: string }) {
-  // Regex to match percentages (-0.94%, +1.2%, 10%), colon ratios (10:1, 100:15, 100:32, 100:3),
-  // prices (1,000 đ/cp, 21,000 đ, 125.4 tỷ đ), multiples (6.5x), indicators (RSI (14), MA20)
+  // Use negative lookbehind (?<![A-Za-zÀ-ỹ0-9]) and negative lookahead (?![A-Za-zÀ-ỹ0-9])
+  // so tokens like "VN30 đạt" or "1,733.02 điểm" are never partially split into "[30 đ] ạt" or "[1,733.02 đ] iểm".
   const regex =
-    /([+-]?\d+(?:[.,]\d+)?%|\b\d+\s*:\s*\d+(?:[.,]\d+)?\b|\d+(?:[.,]\d{3})*(?:[.,]\d+)?\s*(?:đ(?:\s*\/\s*cp)?|tỷ\s*đ|nghìn\s*tỷ\s*đồng|nghìn\s*tỷ)|\b\d+(?:\.\d+)?x\b|RSI\s*\(\d+\)|MA\d+)/g;
+    /(?<![A-Za-zÀ-ỹ0-9])([+-]?\d+(?:[.,]\d+)?%|\d+\s*:\s*\d+(?:[.,]\d+)?|\d+(?:[.,]\d{3})*(?:[.,]\d+)?\s*(?:điểm|nghìn\s*tỷ\s*đồng|nghìn\s*tỷ|tỷ\s*đồng|tỷ\s*đ|triệu\s*cp|đ\s*\/\s*cp|đ)|\d+(?:\.\d+)?x|RSI\s*\(\d+\)|MA\d+)(?![A-Za-zÀ-ỹ0-9])/g;
   const parts = text.split(regex);
 
   return (
@@ -103,8 +103,12 @@ function HighlightedText({ text }: { text: string }) {
           );
         }
 
-        // Price / Value in VND (1,000 đ/cp, 19,250 đ, 15.2 tỷ đ)
-        if (/\d+(?:[.,]\d{3})*(?:[.,]\d+)?\s*(?:đ(?:\s*\/\s*cp)?|tỷ\s*đ|nghìn\s*tỷ\s*đồng|nghìn\s*tỷ)$/.test(part)) {
+        // Price / Value in VND or Index Points (1,000 đ/cp, 19,250 đ, 15.2 tỷ đ, 1,733.02 điểm)
+        if (
+          /^\d+(?:[.,]\d{3})*(?:[.,]\d+)?\s*(?:điểm|nghìn\s*tỷ\s*đồng|nghìn\s*tỷ|tỷ\s*đồng|tỷ\s*đ|triệu\s*cp|đ\s*\/\s*cp|đ)$/.test(
+            part
+          )
+        ) {
           return (
             <span
               key={i}
@@ -165,8 +169,10 @@ function FormattedContent({
     .replace(/(Đối chiếu so sánh:[^\n]+)/g, "$1\n\n")
     .replace(/(Lịch chia cổ tức:[^\n]+)/g, "$1\n\n")
     .replace(/(Lịch chia cổ tức các doanh nghiệp sắp tới:[^\n]+)/g, "$1\n\n")
+    .replace(/(Lịch sự kiện[^\n]+:)/g, "$1\n\n")
     .replace(/(Điểm tin chứng khoán[^\n]+)/g, "$1\n\n")
     .replace(/(Điểm tin thị trường hôm nay:[^\n]+)/g, "$1\n\n")
+    .replace(/(Các cổ phiếu rổ VN30[^\n]+:)/g, "$1\n\n")
     .replace(/(Top cổ phiếu[^\n]+:)/g, "$1\n\n")
     .replace(/(Thống kê giao dịch khối ngoại hôm nay:)/g, "$1\n\n")
     .replace(/(Diễn biến các nhóm ngành dẫn dắt hôm nay:)/g, "$1\n\n")
@@ -195,9 +201,11 @@ function FormattedContent({
           trimmed.startsWith("Đối chiếu so sánh:") ||
           trimmed.startsWith("Lịch chia cổ tức:") ||
           trimmed.startsWith("Lịch chia cổ tức các doanh nghiệp sắp tới:") ||
+          trimmed.startsWith("Lịch sự kiện") ||
           trimmed.startsWith("Điểm tin thị trường hôm nay:") ||
           trimmed.startsWith("Điểm tin chứng khoán") ||
           trimmed.startsWith("Tin tức nổi bật hôm nay:") ||
+          trimmed.startsWith("Các cổ phiếu rổ VN30") ||
           trimmed.startsWith("Top cổ phiếu") ||
           trimmed.startsWith("Thống kê giao dịch khối ngoại hôm nay:") ||
           trimmed.startsWith("Diễn biến các nhóm ngành dẫn dắt hôm nay:") ||

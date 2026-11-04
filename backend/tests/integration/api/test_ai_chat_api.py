@@ -120,6 +120,26 @@ async def test_ai_chat_endpoint_daily_market_movers() -> None:
 
 
 @pytest.mark.anyio
+async def test_ai_chat_endpoint_vn30_active_and_upcoming_events() -> None:
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
+        resp_vn30 = await client.post(
+            "/api/v1/ai/chat",
+            json={"message": "cho tôi một vài cổ phiếu trong vn30 hoạt động sôi nổi trong hôm nay"},
+        )
+        assert resp_vn30.status_code == 200
+        msg_vn30 = resp_vn30.json()["message"]
+        assert "Các cổ phiếu rổ VN30 hoạt động sôi nổi nhất hôm nay:" in msg_vn30["content"]
+
+        resp_events = await client.post(
+            "/api/v1/ai/chat",
+            json={"message": "sắp tới có các sự kiện gì nổi bật"},
+        )
+        assert resp_events.status_code == 200
+        msg_events = resp_events.json()["message"]
+        assert "Lịch sự kiện thị trường & doanh nghiệp nổi bật sắp tới:" in msg_events["content"]
+
+
+@pytest.mark.anyio
 async def test_ai_metrics_endpoint() -> None:
     async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
         response = await client.get("/api/v1/ai/metrics")
