@@ -16,7 +16,7 @@
       - Hỗ trợ cả 2 chế độ:
         - `onPageChange`: Dành cho Client State phân trang mượt mà (Cổ tức, Sự kiện) với zero-latency và smooth scroll.
         - `getPageUrl`: Dành cho Server Components và URL-driven navigation (Tin tức, Thị trường cổ phiếu) tận dụng cơ chế `prefetch={true}` của Next.js giúp tải trước trang kế tiếp trong viewport.
-    - Tạo hàm `encodeCursor(offset: number)` tương thích 100% với backend FastAPI, cho phép bảng mã cổ phiếu nhảy thẳng đến bất kỳ trang nào (1, 2, 3, ..., 93) thay vì chỉ đi tiến/lùi 1 trang như trước.
+    - Tạo hàm encodeCursor(offset: number) tương thích 100% với backend FastAPI (sử dụng base64 URL-safe an toàn cho cả Node.js SSR và Turbopack client runtime, khắc phục hoàn toàn lỗi Unknown encoding: base64url).
   - `frontend/src/components/ui/pagination.test.tsx`:
     - Thêm 4 unit tests kiểm tra thuật toán windowing 7 ô, mã hóa offset cursor, chế độ button callback và chế độ link routing URL.
   - `frontend/src/components/market/stock-dividend-panel.tsx`:

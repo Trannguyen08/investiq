@@ -69,12 +69,17 @@ export function getPaginationRange(
 
 /**
  * Helper to encode offset cursor for market instruments endpoint.
+ * Safe across both Node.js SSR and Browser/Turbopack client runtimes.
  */
 export function encodeCursor(offset: number): string {
+  const jsonStr = JSON.stringify({ offset });
+  let base64 = "";
   if (typeof Buffer !== "undefined") {
-    return Buffer.from(JSON.stringify({ offset })).toString("base64url");
+    base64 = Buffer.from(jsonStr, "utf-8").toString("base64");
+  } else if (typeof btoa !== "undefined") {
+    base64 = btoa(jsonStr);
   }
-  return btoa(JSON.stringify({ offset }))
+  return base64
     .replace(/\+/g, "-")
     .replace(/\//g, "_")
     .replace(/=+$/, "");
