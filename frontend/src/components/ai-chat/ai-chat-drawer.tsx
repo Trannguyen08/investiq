@@ -214,7 +214,7 @@ export function AiChatDrawer() {
           </div>
 
           {/* Messages Scroll Area */}
-          <div className="flex-1 overflow-y-auto p-4 space-y-4">
+          <div className="flex-1 overflow-y-auto overflow-x-hidden p-3.5 sm:p-4 space-y-4">
             {messages.map((msg) => (
               <AiChatBubble
                 key={msg.id}

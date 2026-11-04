@@ -1,5 +1,34 @@
 # Current Task
 
+## AI Chatbox 5-Item Urgent Polish: Deduplicate Sources, Synchronize Ratio Highlights, Remove Horizontal Scroll, Daily Market Snapshot & Compact Drawer Widget UI - 2026-11-04 (completed)
+- **User Request**:
+  1. **Ảnh 1 — Xóa hiển thị trùng 2 lần nguồn tham khảo**: Hiện tại vừa hiển thị đoạn bullet `Nguồn tham khảo:` trong thân tin nhắn vừa hiển thị khối `NGUỒN THAM KHẢO ĐÃ KIỂM CHUẨN:` bên dưới, đồng thời bị lặp 5 lần cùng 1 link `Nguồn công bố: CafeF Data`.
+  2. **Ảnh 2 — Đồng bộ highlight cho mọi tỷ lệ & làm sạch chuỗi tỷ lệ**: Trong lịch cổ tức MBB, tỷ lệ `10%` và `1,000 đ` có highlight nhưng `10:1`, `100:15`, `100:32`, `100:3` lại không có highlight; dòng cuối bị lặp chữ `Tỷ lệ: Cổ tức bằng Tiền, tỷ lệ 100:3`.
+  3. **Ảnh 3 — Bỏ thanh scroll ngang khi ở tab nhỏ (`AiChatDrawer`)**: Xóa hoàn toàn thanh cuộn ngang màu xám ở đáy khung chat nhỏ.
+  4. **Ảnh 4 — Cho model AI học dữ liệu thị trường mỗi ngày**: Khi hỏi `"hôm nay cổ phiếu nào được biến động nhiều nhất"`, AI phải tổng hợp dữ liệu thị trường thực tế trong ngày (Top biến động mạnh nhất, Top tăng/giảm giá, Top thanh khoản, Khối ngoại, Nhóm ngành, VN-Index thực tế `1.733,02 (+1,97%)`) thay vì trả lời nhầm sang bài học lý thuyết.
+  5. **Ảnh 5 — Thiết kế lại UI của Widget trong tab nhỏ**: Sửa lỗi `StockScoreCardWidget` bị chồng chéo chữ (`10.0x2.3x 22.6%`), rớt chữ `đ`, gãy dòng `ĐÁNH GIÁ` / `TÍCH CỰC` và tràn biểu đồ Radar trong tab nhỏ `AiChatDrawer`.
+- **Branch**: `fix/AI`
+- **Changes**:
+  - `backend/app/application/use_cases/ai_chat/ai_financial_service.py`:
+    - Bổ sung hàm `_clean_dividend_ratio(raw_ratio, div_type, cash_val)` chuẩn hóa các chuỗi như `"Cổ tức bằng Tiền, tỷ lệ 100:3"` thành tỷ lệ gọn `"100:3"` và tự động suy luận mệnh giá tiền mặt `300 đ/cp`.
+    - Bổ sung phương thức `_get_daily_market_snapshot()` tổng hợp trực tiếp dữ liệu toàn thị trường trong ngày từ `MarketService` (`vnindex`, `vn30`, `hnx`, `breadth`, `top_movers`, `top_gainers`, `top_losers`, `top_liquidity`, `top_foreign_buy`, `top_foreign_sell`, `top_sectors`).
+    - Sửa lỗi đọc `self._market.overview().get("data", {})` để lấy đúng điểm số VN-Index thực tế thay vì fallback mặc định `1250.0`.
+    - Mở rộng nhận diện `is_market_general` và phân nhánh trả lời chi tiết cho các câu hỏi về cổ phiếu biến động nhiều nhất, tăng mạnh nhất, giảm mạnh nhất, thanh khoản cao nhất, khối ngoại mua/bán ròng, nhóm ngành dẫn dắt và nhịp đập thị trường.
+    - Khử trùng lặp danh sách `sources` theo `url` trước khi tạo trích dẫn và trả về.
+    - Nâng `_CACHE_KEY_PREFIX` lên `"ai:chat:v2"` để vô hiệu hóa các bản ghi cache cũ bị lỗi.
+  - `frontend/src/components/ai-chat/ai-chat-bubble.tsx`:
+    - Trong `HighlightedText`: mở rộng regex nhận diện cả tỷ lệ dạng `X:Y` (`10:1`, `100:15`, `100:32`, `100:3`) và highlight đồng bộ bằng badge màu `emerald` giống hệt tỷ lệ `%`; mở rộng regex tiền tệ bọc trọn `1,000 đ/cp`, `tỷ đ`, `nghìn tỷ`.
+    - Trong `FormattedContent`: tự động ẩn khối text `Nguồn tham khảo:` ở cuối nội dung khi đã có danh sách `sources` hiển thị dạng pill bấm được ở dưới; chuẩn hóa cụm `"Tỷ lệ: Cổ tức bằng Tiền, tỷ lệ"` thành `"Tỷ lệ: "`.
+    - Trong `AiChatBubble`: deduplicate `message.sources` theo `url` và thêm `min-w-0 max-w-full overflow-hidden break-words` chống tràn ngang.
+  - `frontend/src/components/ai-chat/ai-chat-drawer.tsx` & `frontend/src/components/ai-chat/ai-assistant-workspace.tsx`:
+    - Thêm `overflow-x-hidden` vào vùng cuộn tin nhắn để loại bỏ hoàn toàn thanh scroll ngang.
+  - `frontend/src/components/ai-chat/widgets/stock-score-card-widget.tsx` (& các widget liên quan):
+    - Thiết kế lại bố cục phân tầng dọc gọn đẹp cho cả tab nhỏ lẫn trang lớn: Header chống gãy dòng (`whitespace-nowrap` cho `Đánh giá` và `TÍCH CỰC`), hàng 3 ô `P/E` / `P/B` / `ROE` (`grid-cols-3 gap-2`), hàng 2 ô `Hỗ trợ quan trọng` / `Kháng cự gần` (`grid-cols-2 gap-2`), biểu đồ SVG Radar `viewBox="0 0 240 192"` không cắt chữ kèm 5 pill điểm số nhân tố.
+- **Verification**:
+  - Backend Tests: 32/32 AI chat unit & API integration tests passed.
+  - Frontend Tests: 8/8 AI chat component, drawer E2E & route handler tests passed.
+  - Full Quality Gate `./scripts/check-pr.ps1`: 6/6 steps passed.
+
 ## Dividend Intent Specialization, Vietnamese Typo Normalization, Uvicorn Hot Reload & Comprehensive API/E2E Testing - 2026-11-04 (completed)
 - **User Request**:
   1. Người dùng phàn nàn: *"đùa à, sao vẫn y như cũ thế, nó k phân tích yêu cầu à sao response y chang nhau vậy"* kèm ảnh minh họa câu hỏi `cho tao tin tức chứng khoánhôm nay` bị trả về mã `TIN` và `cho tao lịch chia cổ tức của mbb` bị trả về báo cáo kỹ thuật rập khuôn (Thị giá, Định giá, RSI, MA20).

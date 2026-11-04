@@ -5,6 +5,7 @@ import pytest
 from app.application.use_cases.ai_chat.ai_financial_service import (
     AiFinancialService,
     _calculate_rsi,
+    _clean_dividend_ratio,
     _extract_tickers,
     normalize_user_input,
 )
@@ -409,3 +410,68 @@ async def test_ai_dividend_intent_market_upcoming() -> None:
     assert "Lịch chia cổ tức các doanh nghiệp sắp tới:" in result["content"]
     assert any("/market/events" in s.get("url", "") for s in result["sources"])
     assert not any(w["type"] == "stock_score_card" for w in result["widgets"])
+
+
+def test_clean_dividend_ratio() -> None:
+    ratio, cash = _clean_dividend_ratio("Cổ tức bằng Tiền, tỷ lệ 100:3", "cash", None)
+    assert ratio == "100:3"
+    assert cash == 300.0
+
+    ratio2, cash2 = _clean_dividend_ratio("10%", "cash", None)
+    assert ratio2 == "10%"
+    assert cash2 == 1000.0
+
+    ratio3, cash3 = _clean_dividend_ratio("100:15", "stock", None)
+    assert ratio3 == "100:15"
+    assert cash3 is None
+
+
+@pytest.mark.anyio
+async def test_ai_dividend_deduplicates_sources() -> None:
+    provider = FixtureMarketProvider()
+    service = MarketService(provider)
+    ai_service = AiFinancialService(market_service=service)
+
+    fake_events = [
+        {
+            "symbol": "MBB",
+            "ex_date": "2026-08-11",
+            "type": "rights",
+            "ratio": "10:1",
+            "cash_value": None,
+            "source": "CafeF Data",
+            "source_url": "https://s.cafef.vn/lich-su-kien/MBB/sub.chn",
+        },
+        {
+            "symbol": "MBB",
+            "ex_date": "2025-08-13",
+            "type": "cash",
+            "ratio": "Cổ tức bằng Tiền, tỷ lệ 100:3",
+            "cash_value": None,
+            "source": "CafeF Data",
+            "source_url": "https://s.cafef.vn/lich-su-kien/MBB/sub.chn",
+        },
+    ]
+    with patch("app.application.use_cases.ai_chat.ai_financial_service.get_dividend_crawler") as mock_crawler:
+        mock_crawler.return_value.get_symbol_dividends.return_value = fake_events
+        result = await ai_service.process_chat("cho tao lịch chia cổ tức của mbb")
+
+    urls = [s["url"] for s in result["sources"]]
+    assert len(urls) == len(set(urls)), "Source URLs must be deduplicated"
+    assert "Tỷ lệ: 100:3 (300 đ/cp)" in result["content"]
+    assert "Tỷ lệ: Cổ tức bằng Tiền" not in result["content"]
+
+
+@pytest.mark.anyio
+async def test_ai_daily_market_top_movers() -> None:
+    provider = FixtureMarketProvider()
+    service = MarketService(provider)
+    ai_service = AiFinancialService(market_service=service)
+
+    result = await ai_service.process_chat("hôm nay cổ phiếu nào được biến động nhiều nhất")
+    assert "Top cổ phiếu biến động mạnh nhất hôm nay:" in result["content"]
+    assert "Bản chất Cổ phiếu & Phân biệt Tiết kiệm vs Đầu tư" not in result["content"]
+    assert any(w["type"] == "market_pulse" for w in result["widgets"])
+    pulse = next(w["data"] for w in result["widgets"] if w["type"] == "market_pulse")
+    # Real VN-Index from provider, not hardcoded 1250 fallback
+    assert pulse["vnindex"] != 1250.0

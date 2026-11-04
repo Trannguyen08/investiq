@@ -18,6 +18,7 @@ Pipeline steps (each evaluated and recorded in ``AiTrace``):
 
 from __future__ import annotations
 
+import contextlib
 import html
 import logging
 import re
@@ -73,13 +74,14 @@ _NON_TICKER_WORDS = frozenset(
         "TAY", "THA", "THO", "THU", "TIA", "TIE", "TIT", "TOA", "TON", "TRE", "TRI",
         "TRO", "TRU", "TUI", "TUT", "TUY", "UOC", "VIU", "VUI", "VUN", "XAM", "XAP",
         "XAU", "XAY", "XOA", "XOI", "XOM", "XON", "XOP", "XOT", "XUC",
-        # Common conversational Vietnamese words:
+        # Common conversational Vietnamese words & market index acronyms:
         "TIN", "HOM", "TAO", "DAY", "TOP", "MUC", "GOI", "MOI", "DAT", "LEN", "XEP",
-        "LOI", "MAT", "TIM", "CAU", "CHON", "MO", "SUN", "TOI",
+        "LOI", "MAT", "TIM", "CAU", "CHON", "MO", "SUN", "TOI", "HNX", "VNI", "UPC",
+        "GDP", "CPI", "FED", "ETF", "NAV", "RSI", "OBV", "SMA", "EMA", "ATR", "ADX",
     }
 )
 
-_CACHE_KEY_PREFIX = "ai:chat:v1"
+_CACHE_KEY_PREFIX = "ai:chat:v3"
 _MAX_EXTERNAL_SOURCES = 3
 
 AiIntent = Literal[
@@ -129,12 +131,52 @@ def normalize_user_input(text: str) -> str:
         ("phantich", "phan tich"),
         ("địnhgiá", "định giá"),
         ("dinhgia", "dinh gia"),
+        ("biếnđộng", "biến động"),
+        ("biendong", "bien dong"),
+        ("thanhkhoản", "thanh khoản"),
+        ("thanhkhoan", "thanh khoan"),
+        ("khốingoại", "khối ngoại"),
+        ("khoingoai", "khoi ngoai"),
     ]
     res = text
     for wrong, right in replacements:
         pattern = re.compile(re.escape(wrong), re.IGNORECASE)
         res = pattern.sub(right, res)
     return res
+
+
+def _clean_dividend_ratio(
+    raw_ratio: str, div_type: str, cash_val: Any
+) -> tuple[str, float | None]:
+    """Extract a clean ratio token (e.g. '10%', '100:15', '10:1', '100:3') and infer cash value if applicable."""
+    text = (raw_ratio or "").strip()
+    inferred_cash = float(cash_val) if cash_val is not None else None
+
+    # 1. Percentage pattern (e.g. 10%, 15.5%)
+    pct_match = re.search(r"(\d+(?:[.,]\d+)?)\s*%", text)
+    if pct_match:
+        pct_str = pct_match.group(1).replace(",", ".")
+        clean_r = f"{pct_str}%"
+        if div_type == "cash" and inferred_cash is None:
+            with contextlib.suppress(ValueError):
+                inferred_cash = float(pct_str) * 100.0
+        return clean_r, inferred_cash
+
+    # 2. Colon ratio pattern (e.g. 10:1, 100:15, 100:3)
+    colon_match = re.search(r"(\d+\s*:\s*\d+(?:[.,]\d+)?)", text)
+    if colon_match:
+        clean_r = re.sub(r"\s+", "", colon_match.group(1))
+        if div_type == "cash" and inferred_cash is None:
+            parts = clean_r.split(":")
+            if len(parts) == 2:
+                with contextlib.suppress(ValueError):
+                    denom = float(parts[0])
+                    numer = float(parts[1].replace(",", "."))
+                    if denom > 0:
+                        inferred_cash = (numer / denom) * 10000.0
+        return clean_r, inferred_cash
+
+    return (text or "Chưa công bố"), inferred_cash
 
 
 def normalize_question(message: str) -> str:
@@ -368,9 +410,42 @@ class AiFinancialService:
             is_market_general = (
                 not is_dividend
                 and not is_news
+                and not is_comparison
                 and any(
-                    kw in query_lower
-                    for kw in ["thị trường", "vnindex", "vn-index", "toàn sàn", "ngành nào"]
+                    kw in query_folded
+                    for kw in [
+                        "thi truong",
+                        "vnindex",
+                        "vn-index",
+                        "vn30",
+                        "hnx",
+                        "upcom",
+                        "toan san",
+                        "nhip dap",
+                        "nganh nao",
+                        "nhom nganh",
+                        "bien dong",
+                        "tang manh",
+                        "tang nhieu",
+                        "tang tran",
+                        "tim tran",
+                        "giam manh",
+                        "giam nhieu",
+                        "giam sau",
+                        "nam san",
+                        "giam san",
+                        "thanh khoan",
+                        "giao dich nhieu",
+                        "soi dong",
+                        "khoi ngoai",
+                        "mua rong",
+                        "ban rong",
+                        "co phieu nao",
+                        "ma nao",
+                        "top co phieu",
+                        "hom nay mua gi",
+                        "xu huong hom nay",
+                    ]
                 )
             )
             i_step.mark(
@@ -603,6 +678,120 @@ class AiFinancialService:
             logger.debug("External search unavailable: %s", exc)
         return []
 
+    def _get_daily_market_snapshot(self) -> dict[str, Any]:
+        """Aggregate daily market data (indices, breadth, top movers, gainers, losers, liquidity, foreign flow, sectors)."""
+        overview_raw = self._market.overview() if hasattr(self._market, "overview") else {}
+        overview_data = (
+            overview_raw.get("data", overview_raw)
+            if isinstance(overview_raw, dict)
+            else {}
+        )
+        indices = overview_data.get("indices", []) if isinstance(overview_data, dict) else []
+        breadth = overview_data.get("breadth", {}) if isinstance(overview_data, dict) else {}
+
+        vnindex = next(
+            (i for i in indices if isinstance(i, dict) and i.get("symbol") == "VNINDEX"),
+            None,
+        )
+        vn30 = next(
+            (i for i in indices if isinstance(i, dict) and i.get("symbol") == "VN30"),
+            None,
+        )
+        hnx = next(
+            (i for i in indices if isinstance(i, dict) and i.get("symbol") == "HNXINDEX"),
+            None,
+        )
+
+        raw_instruments: list[Any] = []
+        provider = getattr(self._market, "_provider", None)
+        if provider is not None and hasattr(provider, "instruments"):
+            try:
+                raw_instruments = list(provider.instruments())
+            except Exception:
+                raw_instruments = []
+        if not raw_instruments and isinstance(overview_data, dict):
+            raw_instruments = list(overview_data.get("trending", []))
+
+        items: list[dict[str, Any]] = []
+        for inst in raw_instruments:
+            sym = str(_get_val(inst, "symbol", ""))
+            if not sym:
+                continue
+            price = float(_get_val(inst, "price", 0) or 0)
+            change_pct = float(_get_val(inst, "change_percent", 0) or 0)
+            volume = float(_get_val(inst, "volume", 0) or 0)
+            matched_val = float(_get_val(inst, "matched_value", 0) or 0)
+            foreign_net = float(_get_val(inst, "foreign_net_value", 0) or 0)
+            items.append(
+                {
+                    "symbol": sym,
+                    "name": str(_get_val(inst, "name", sym)),
+                    "exchange": str(_get_val(inst, "exchange", "HOSE")),
+                    "sector": str(_get_val(inst, "sector", "")),
+                    "price": price,
+                    "change_percent": change_pct,
+                    "abs_change_percent": abs(change_pct),
+                    "volume": volume,
+                    "matched_value": matched_val,
+                    "foreign_net_value": foreign_net,
+                }
+            )
+
+        liquid_pool = [x for x in items if x["matched_value"] >= 1_000_000_000] or items
+
+        top_movers = sorted(
+            liquid_pool,
+            key=lambda x: (x["abs_change_percent"], x["matched_value"]),
+            reverse=True,
+        )[:6]
+        top_gainers = sorted(
+            [x for x in liquid_pool if x["change_percent"] > 0],
+            key=lambda x: (x["change_percent"], x["matched_value"]),
+            reverse=True,
+        )[:5]
+        top_losers = sorted(
+            [x for x in liquid_pool if x["change_percent"] < 0],
+            key=lambda x: (x["change_percent"], -x["matched_value"]),
+        )[:5]
+        top_liquidity = sorted(
+            items,
+            key=lambda x: x["matched_value"],
+            reverse=True,
+        )[:5]
+        top_foreign_buy = sorted(
+            [x for x in items if x["foreign_net_value"] > 0],
+            key=lambda x: x["foreign_net_value"],
+            reverse=True,
+        )[:5]
+        top_foreign_sell = sorted(
+            [x for x in items if x["foreign_net_value"] < 0],
+            key=lambda x: x["foreign_net_value"],
+        )[:5]
+
+        sectors_list: list[dict[str, Any]] = []
+        if hasattr(self._market, "sectors"):
+            try:
+                sec_res = self._market.sectors()
+                sec_data = sec_res.get("data", []) if isinstance(sec_res, dict) else []
+                sectors_list = list(sec_data)[:5]
+            except Exception:
+                sectors_list = []
+
+        return {
+            "vnindex": vnindex,
+            "vn30": vn30,
+            "hnx": hnx,
+            "breadth": breadth,
+            "top_movers": top_movers,
+            "top_gainers": top_gainers,
+            "top_losers": top_losers,
+            "top_liquidity": top_liquidity,
+            "top_foreign_buy": top_foreign_buy,
+            "top_foreign_sell": top_foreign_sell,
+            "top_sectors": sectors_list,
+            "total_stocks": len(items),
+        }
+
     def _generate_structured_response(
         self,
         user_message: str,
@@ -641,10 +830,13 @@ class AiFinancialService:
                     )
                     for ev in dividend_events[:5]:
                         ex_date = ev.get("ex_date") or ev.get("event_date") or "Chưa rõ"
-                        ratio = ev.get("ratio") or ""
-                        cash_val = ev.get("cash_value")
-                        val_str = f" ({cash_val:,.0f} đ/cp)" if cash_val is not None else ""
                         div_type = ev.get("type", "cash")
+                        ratio, cash_val = _clean_dividend_ratio(
+                            str(ev.get("ratio") or ""),
+                            div_type,
+                            ev.get("cash_value"),
+                        )
+                        val_str = f" ({cash_val:,.0f} đ/cp)" if cash_val is not None else ""
                         type_desc = (
                             "Tiền mặt"
                             if div_type == "cash"
@@ -1086,27 +1278,142 @@ class AiFinancialService:
                 ]
             )
 
-        # Case 3: Market overview query
+        # Case 3: Daily Market Data & Overview query
         elif is_market_general:
             try:
-                overview = self._market.overview()
-                indices = overview.get("indices", [])
-                vnindex = next((i for i in indices if i.get("symbol") == "VNINDEX"), None)
-                breadth = overview.get("breadth", {})
+                snapshot = self._get_daily_market_snapshot()
+                vnindex = snapshot["vnindex"]
+                vn30 = snapshot["vn30"]
+                breadth = snapshot["breadth"]
+                top_movers = snapshot["top_movers"]
+                top_gainers = snapshot["top_gainers"]
+                top_losers = snapshot["top_losers"]
+                top_liquidity = snapshot["top_liquidity"]
+                top_foreign_buy = snapshot["top_foreign_buy"]
+                top_foreign_sell = snapshot["top_foreign_sell"]
+                top_sectors = snapshot["top_sectors"]
 
                 vn_val = float(vnindex.get("value", 1250)) if vnindex else 1250.0
                 vn_change = float(vnindex.get("change_percent", 0.0)) if vnindex else 0.0
-                advances = breadth.get("advances", 212)
-                declines = breadth.get("declines", 479)
-                matched_val = float(breadth.get("matched_value", 15000000000000)) / 1e12
+                vn30_val = float(vn30.get("value", 1300)) if vn30 else 1300.0
+                vn30_change = float(vn30.get("change_percent", 0.0)) if vn30 else 0.0
+                advances = int(breadth.get("advances", 212) or 212)
+                declines = int(breadth.get("declines", 150) or 150)
+                unchanged = int(breadth.get("unchanged", 60) or 60)
+                matched_val = float(breadth.get("matched_value", 15000000000000) or 15000000000000) / 1e12
 
-                text_parts.append("Nhịp đập thị trường chứng khoán")
-                text_parts.append(
-                    f"- Chỉ số VN-Index: {vn_val:,.2f} điểm ({vn_change:+.2f}%).\n"
-                    f"- Độ rộng thị trường: {advances} mã tăng / {declines} mã giảm.\n"
-                    f"- Thanh khoản toàn sàn: xấp xỉ {matched_val:,.1f} nghìn tỷ đồng.\n"
-                    f"Thị trường đang trong trạng thái tích lũy phân hóa. Dòng tiền luân chuyển giữa các nhóm ngành dẫn dắt."
+                q_folded = fold_text(normalize_user_input(user_message))
+                ask_movers = any(k in q_folded for k in ["bien dong", "manh nhat", "nhieu nhat", "lon nhat"]) and not any(
+                    k in q_folded for k in ["tang manh", "giam manh", "thanh khoan", "giao dich nhieu"]
                 )
+                ask_gainers = any(
+                    k in q_folded
+                    for k in ["tang manh", "tang nhieu", "tang tran", "tim tran", "co phieu nao tang", "ma nao tang"]
+                )
+                ask_losers = any(
+                    k in q_folded
+                    for k in ["giam manh", "giam nhieu", "giam sau", "nam san", "giam san", "co phieu nao giam", "ma nao giam"]
+                )
+                ask_liquidity = any(
+                    k in q_folded for k in ["thanh khoan", "giao dich nhieu", "soi dong"]
+                )
+                ask_foreign = any(
+                    k in q_folded for k in ["khoi ngoai", "mua rong", "ban rong", "nuoc ngoai"]
+                )
+                ask_sector = any(k in q_folded for k in ["nganh nao", "nhom nganh"])
+
+                if ask_gainers and top_gainers:
+                    text_parts.append("Top cổ phiếu tăng giá mạnh nhất hôm nay:")
+                    text_parts.append(
+                        f"Trên nền VN-Index đạt {vn_val:,.2f} điểm ({vn_change:+.2f}%) với {advances} mã xanh, dưới đây là các cổ phiếu bứt phá mạnh nhất phiên hôm nay:"
+                    )
+                    for item in top_gainers[:5]:
+                        gtgd_ty = item["matched_value"] / 1e9
+                        text_parts.append(
+                            f"- **{item['symbol']}** ({item['name']} - Sàn {item['exchange']}): Giá {item['price']:,.0f} đ ({item['change_percent']:+.2f}%) | GTGD: {gtgd_ty:,.1f} tỷ đ"
+                        )
+                elif ask_losers and top_losers:
+                    text_parts.append("Top cổ phiếu giảm điểm mạnh nhất hôm nay:")
+                    text_parts.append(
+                        f"Trong bối cảnh thị trường ghi nhận {declines} mã điều chỉnh, các cổ phiếu chịu áp lực giảm điểm mạnh nhất phiên hôm nay gồm:"
+                    )
+                    for item in top_losers[:5]:
+                        gtgd_ty = item["matched_value"] / 1e9
+                        text_parts.append(
+                            f"- **{item['symbol']}** ({item['name']} - Sàn {item['exchange']}): Giá {item['price']:,.0f} đ ({item['change_percent']:+.2f}%) | GTGD: {gtgd_ty:,.1f} tỷ đ"
+                        )
+                elif ask_liquidity and top_liquidity:
+                    text_parts.append("Top cổ phiếu thanh khoản cao nhất hôm nay:")
+                    text_parts.append(
+                        f"Tổng giá trị khớp lệnh toàn thị trường đạt khoảng {matched_val:,.1f} nghìn tỷ đồng. Tâm điểm thu hút dòng tiền lớn nhất thuộc về:"
+                    )
+                    for item in top_liquidity[:5]:
+                        gtgd_ty = item["matched_value"] / 1e9
+                        vol_m = item["volume"] / 1e6
+                        text_parts.append(
+                            f"- **{item['symbol']}** ({item['name']}): GTGD đạt {gtgd_ty:,.1f} tỷ đ ({vol_m:,.2f} triệu cp) | Thị giá: {item['price']:,.0f} đ ({item['change_percent']:+.2f}%)"
+                        )
+                elif ask_foreign and (top_foreign_buy or top_foreign_sell):
+                    text_parts.append("Thống kê giao dịch khối ngoại hôm nay:")
+                    if top_foreign_buy:
+                        buy_str = ", ".join(
+                            f"**{x['symbol']}** (+{x['foreign_net_value'] / 1e9:,.1f} tỷ đ, {x['change_percent']:+.2f}%)"
+                            for x in top_foreign_buy[:4]
+                        )
+                        text_parts.append(f"- Top mua ròng mạnh nhất: {buy_str}.")
+                    if top_foreign_sell:
+                        sell_str = ", ".join(
+                            f"**{x['symbol']}** ({x['foreign_net_value'] / 1e9:,.1f} tỷ đ, {x['change_percent']:+.2f}%)"
+                            for x in top_foreign_sell[:4]
+                        )
+                        text_parts.append(f"- Top bán ròng mạnh nhất: {sell_str}.")
+                elif ask_sector and top_sectors:
+                    text_parts.append("Diễn biến các nhóm ngành dẫn dắt hôm nay:")
+                    for sec in top_sectors[:5]:
+                        sec_chg = float(sec.get("change_percent", 0) or 0)
+                        sec_val = float(sec.get("matched_value", 0) or 0) / 1e9
+                        text_parts.append(
+                            f"- **Ngành {sec.get('name')}**: Biến động {sec_chg:+.2f}% ({sec.get('advances', 0)} mã tăng / {sec.get('declines', 0)} mã giảm) | Thanh khoản: {sec_val:,.1f} tỷ đ"
+                        )
+                elif (ask_movers or "co phieu nao" in q_folded or "ma nao" in q_folded or "top co phieu" in q_folded) and top_movers:
+                    text_parts.append("Top cổ phiếu biến động mạnh nhất hôm nay:")
+                    text_parts.append(
+                        f"Dữ liệu thị trường phiên hôm nay ghi nhận VN-Index đạt {vn_val:,.2f} điểm ({vn_change:+.2f}%), với {advances} mã tăng và {declines} mã giảm. Các cổ phiếu có biên độ biến động lớn nhất trong ngày gồm:"
+                    )
+                    for item in top_movers[:5]:
+                        gtgd_ty = item["matched_value"] / 1e9
+                        direction_label = "Tăng mạnh" if item["change_percent"] >= 0 else "Giảm điểm"
+                        text_parts.append(
+                            f"- **{item['symbol']}** ({item['name']} - Sàn {item['exchange']}): Giá {item['price']:,.0f} đ ({item['change_percent']:+.2f}% — {direction_label}) | GTGD: {gtgd_ty:,.1f} tỷ đ"
+                        )
+                    if top_gainers and top_losers:
+                        g_top = top_gainers[0]
+                        l_top = top_losers[0]
+                        text_parts.append(
+                            f"- **Tâm điểm hai đầu biên độ**: Dẫn đầu chiều tăng là **{g_top['symbol']}** ({g_top['change_percent']:+.2f}%), trong khi chiều điều chỉnh mạnh nhất là **{l_top['symbol']}** ({l_top['change_percent']:+.2f}%)."
+                        )
+                else:
+                    text_parts.append("Nhịp đập thị trường chứng khoán hôm nay:")
+                    text_parts.append(
+                        f"- Chỉ số chính: VN-Index đạt {vn_val:,.2f} điểm ({vn_change:+.2f}%) | VN30 đạt {vn30_val:,.2f} điểm ({vn30_change:+.2f}%)."
+                    )
+                    text_parts.append(
+                        f"- Độ rộng thị trường: {advances} mã tăng / {declines} mã giảm / {unchanged} mã tham chiếu."
+                    )
+                    text_parts.append(
+                        f"- Thanh khoản toàn sàn: Xấp xỉ {matched_val:,.1f} nghìn tỷ đồng."
+                    )
+                    if top_gainers:
+                        gainers_inline = ", ".join(
+                            f"**{g['symbol']}** ({g['change_percent']:+.2f}%)" for g in top_gainers[:3]
+                        )
+                        text_parts.append(f"- Cổ phiếu bứt phá nổi bật: {gainers_inline}.")
+                    if top_liquidity:
+                        liq_inline = ", ".join(
+                            f"**{liq['symbol']}** ({liq['matched_value'] / 1e9:,.0f} tỷ đ)"
+                            for liq in top_liquidity[:3]
+                        )
+                        text_parts.append(f"- Tâm điểm thanh khoản: {liq_inline}.")
 
                 widgets.append(
                     {
@@ -1129,8 +1436,14 @@ class AiFinancialService:
                     }
                 )
 
+                lead_sym = top_movers[0]["symbol"] if top_movers else "HPG"
                 suggested_actions.extend(
                     [
+                        {
+                            "label": f"Phân tích {lead_sym}",
+                            "action_type": "SEND_PROMPT",
+                            "prompt": f"Phân tích {lead_sym}",
+                        },
                         {
                             "label": "Vào bảng giá trực tiếp",
                             "action_type": "NAVIGATE",
@@ -1140,11 +1453,6 @@ class AiFinancialService:
                             "label": "Xem bản đồ nhiệt ngành",
                             "action_type": "NAVIGATE",
                             "url": "/market/stocks#heatmap",
-                        },
-                        {
-                            "label": "Đấu trường dự đoán nến",
-                            "action_type": "NAVIGATE",
-                            "url": "/candlestick-prediction",
                         },
                     ]
                 )
@@ -1260,6 +1568,17 @@ class AiFinancialService:
                     },
                 ]
             )
+
+        # Deduplicate sources by URL while preserving order
+        if sources:
+            unique_sources: list[dict[str, str]] = []
+            seen_urls: set[str] = set()
+            for s in sources:
+                u = s.get("url", "")
+                if u and u not in seen_urls:
+                    seen_urls.add(u)
+                    unique_sources.append(s)
+            sources = unique_sources
 
         # Append source citation block at the end of the text
         if sources:

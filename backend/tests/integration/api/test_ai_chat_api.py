@@ -102,6 +102,24 @@ async def test_ai_chat_endpoint_general_prompt() -> None:
 
 
 @pytest.mark.anyio
+async def test_ai_chat_endpoint_daily_market_movers() -> None:
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
+        response = await client.post(
+            "/api/v1/ai/chat",
+            json={"message": "hôm nay cổ phiếu nào được biến động nhiều nhất"},
+        )
+        assert response.status_code == 200
+        body = response.json()
+        msg = body["message"]
+        assert msg["role"] == "assistant"
+        assert "Top cổ phiếu biến động mạnh nhất hôm nay:" in msg["content"]
+        assert "Bản chất Cổ phiếu" not in msg["content"]
+        assert any(w["type"] == "market_pulse" for w in msg["widgets"])
+        urls = [s["url"] for s in msg["sources"]]
+        assert len(urls) == len(set(urls))
+
+
+@pytest.mark.anyio
 async def test_ai_metrics_endpoint() -> None:
     async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
         response = await client.get("/api/v1/ai/metrics")
