@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { type FormEvent, type RefObject, useEffect, useMemo, useRef, useState } from "react";
 
 import { InfoTip, MarketColorLegend, MarketLineChart, SectorHeatmap } from "@/components/market/beginner-market-ui";
+import { SectorTreemapHeatmap } from "@/components/market/sector-treemap-heatmap";
 import { StockTreemapHeatmap } from "@/components/market/stock-treemap-heatmap";
 import {
   changeTone,
@@ -384,6 +385,7 @@ export function StocksView({
   const [advancedFilterOpen, setAdvancedFilterOpen] = useState(activeAdvancedFilterCount > 0);
   const [searchQuery, setSearchQuery] = useState(filters.q || "");
   const [heatmapTab, setHeatmapTab] = useState<"treemap" | "sectors">("treemap");
+  const [selectedTreemapSector, setSelectedTreemapSector] = useState<string>("ALL");
   const rows = collection.data.map((item) => mergeLiveInstrument(item, stream.items[item.symbol]));
   const universe = summary.data.map((item) => mergeLiveInstrument(item, stream.items[item.symbol]));
 
@@ -467,17 +469,17 @@ export function StocksView({
 
       {/* Heatmap & Quick Facts */}
       <div className="market-overview-layout grid grid-cols-1 md:grid-cols-12 lg:grid-cols-12 gap-5 items-stretch">
-        <div className="col-span-12 md:col-span-7 lg:col-span-8 flex flex-col">
-          <section className="bg-slate-900/90 border border-slate-800 rounded-2xl p-5 shadow-sm h-full flex flex-col" aria-labelledby="market-heatmap-title">
+        <div className="col-span-12 md:col-span-8 lg:col-span-9 flex flex-col">
+          <section className="bg-slate-900/90 border border-slate-800 rounded-2xl p-4 sm:p-5 shadow-sm h-full flex flex-col" aria-labelledby="market-heatmap-title">
             <div className="beginner-card-title flex flex-wrap items-center justify-between gap-3 mb-4">
               <div>
                 <h2 id="market-heatmap-title" className="text-lg md:text-xl font-bold text-slate-100 m-0">
-                  {heatmapTab === "treemap" ? "Bản đồ nhiệt cổ phiếu theo ngành" : "Ngành nào đang biến động mạnh?"}
+                  {heatmapTab === "treemap" ? "Bản đồ nhiệt cổ phiếu theo ngành" : "Bản đồ nhiệt biến động các ngành"}
                 </h2>
                 <p className="text-xs text-slate-400 mt-1 m-0">
                   {heatmapTab === "treemap"
                     ? "Khối nhiệt (Treemap) thể hiện % biến động và tỷ lệ quy mô của các mã tiêu biểu."
-                    : "Chọn một ô để mở bảng cổ phiếu đã lọc theo ngành đó."}
+                    : "Khối nhiệt (Treemap) thể hiện % biến động các ngành. Bấm vào một ngành để lọc các mã cổ phiếu."}
                 </p>
               </div>
               <div className="inline-flex rounded-lg bg-slate-950 p-1 border border-slate-800 shrink-0">
@@ -511,16 +513,25 @@ export function StocksView({
                 instruments={universe}
                 sectors={sectors.data}
                 headingId="market-heatmap-title"
+                selectedSector={selectedTreemapSector}
+                onSectorChange={setSelectedTreemapSector}
               />
             </div>
             <div className={heatmapTab === "sectors" ? "block" : "hidden"}>
-              <SectorHeatmap sectors={sectors.data} headingId="market-heatmap-title" embedded />
+              <SectorTreemapHeatmap
+                sectors={sectors.data}
+                headingId="market-heatmap-title"
+                onSelectSector={(sectorName) => {
+                  setSelectedTreemapSector(sectorName);
+                  setHeatmapTab("treemap");
+                }}
+              />
             </div>
           </section>
         </div>
-        <aside className="market-quick-facts col-span-12 md:col-span-5 lg:col-span-4 bg-slate-900/90 border border-slate-800 rounded-2xl p-5 flex flex-col gap-5 shadow-sm">
-          <article className="border-b border-slate-800 pb-4">
-            <div className="beginner-card-title flex items-center justify-between mb-2">
+        <aside className="market-quick-facts col-span-12 md:col-span-4 lg:col-span-3 bg-slate-900/90 border border-slate-800 rounded-2xl p-4 flex flex-col gap-3.5 shadow-sm justify-between">
+          <article className="border-b border-slate-800 pb-3">
+            <div className="beginner-card-title flex items-center justify-between mb-1.5">
               <h3 className="text-sm font-bold text-slate-200 m-0">Độ rộng toàn thị trường</h3>
               <InfoTip term="Độ rộng">Đếm số mã tăng, giảm và đứng giá trong toàn bộ snapshot của nguồn.</InfoTip>
             </div>
@@ -529,25 +540,25 @@ export function StocksView({
               <span className="unchanged bg-amber-400" style={{ width: `${unchanged / total * 100}%` }} />
               <span className="decline bg-rose-500" style={{ width: `${declines / total * 100}%` }} />
             </div>
-            <p className="text-xs text-slate-400 m-0">
+            <p className="text-xs text-slate-400 m-0 leading-tight">
               <b className="positive text-emerald-400 font-bold">{advances} tăng</b> · {unchanged} đứng · <b className="negative text-rose-400 font-bold">{declines} giảm</b>
             </p>
           </article>
-          <article className="border-b border-slate-800 pb-4">
-            <div className="beginner-card-title flex items-center justify-between mb-2">
+          <article className="border-b border-slate-800 pb-3">
+            <div className="beginner-card-title flex items-center justify-between mb-1.5">
               <h3 className="text-sm font-bold text-slate-200 m-0">Định giá P/E &amp; P/B sàn</h3>
               <InfoTip term="Định giá sàn">Định giá P/E và P/B trung bình của các doanh nghiệp niêm yết trong snapshot.</InfoTip>
             </div>
-            <strong className="text-base font-bold text-white block mb-1">P/E {peAvg} · P/B {pbAvg}</strong>
-            <p className="text-xs text-slate-400 m-0">Mức định giá trung bình trong snapshot của nguồn.</p>
+            <strong className="text-base font-bold text-white block mb-0.5">P/E {peAvg} · P/B {pbAvg}</strong>
+            <p className="text-xs text-slate-400 m-0 leading-tight">Mức định giá trung bình trong snapshot của nguồn.</p>
           </article>
           <article>
-            <div className="beginner-card-title flex items-center justify-between mb-2">
+            <div className="beginner-card-title flex items-center justify-between mb-1.5">
               <h3 className="text-sm font-bold text-slate-200 m-0">Thanh khoản &amp; Khối ngoại</h3>
               <InfoTip term="Dòng tiền">Tổng giá trị của {marketCount} mã trong snapshot của nguồn.</InfoTip>
             </div>
-            <strong className="text-base font-bold text-white block mb-1">{formatMoney(String(liquidity))}</strong>
-            <p className="text-xs text-slate-400 m-0">Khối ngoại: <strong className={changeTone(String(foreign))}>{foreign >= 0 ? "Mua ròng" : "Bán ròng"} {formatMoney(String(Math.abs(foreign)))}</strong></p>
+            <strong className="text-base font-bold text-white block mb-0.5">{formatMoney(String(liquidity))}</strong>
+            <p className="text-xs text-slate-400 m-0 leading-tight">Khối ngoại: <strong className={changeTone(String(foreign))}>{foreign >= 0 ? "Mua ròng" : "Bán ròng"} {formatMoney(String(Math.abs(foreign)))}</strong></p>
           </article>
         </aside>
       </div>

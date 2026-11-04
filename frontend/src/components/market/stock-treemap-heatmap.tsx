@@ -129,12 +129,22 @@ export function StockTreemapHeatmap({
   instruments,
   sectors,
   headingId = "stock-treemap-title",
+  selectedSector: propSector,
+  onSectorChange,
 }: {
   instruments: MarketInstrument[];
   sectors: MarketSector[];
   headingId?: string;
+  selectedSector?: string;
+  onSectorChange?: (sector: string) => void;
 }) {
-  const [selectedSector, setSelectedSector] = useState<string>("ALL");
+  const [internalSector, setInternalSector] = useState<string>("ALL");
+  const selectedSector = propSector !== undefined ? propSector : internalSector;
+  const setSelectedSector = (sec: string) => {
+    setInternalSector(sec);
+    onSectorChange?.(sec);
+  };
+
   const [sizeMetric, setSizeMetric] = useState<SizeMetric>("market_cap");
   const [hoveredSymbol, setHoveredSymbol] = useState<string | null>(null);
 
@@ -150,7 +160,7 @@ export function StockTreemapHeatmap({
     setLoadingSector(true);
     let cancelled = false;
 
-    fetch(`/api/v1/market/instruments?sector=${encodeURIComponent(selectedSector)}&limit=30&sort=matched_value&direction=desc`)
+    fetch(`/market-api/instruments?sector=${encodeURIComponent(selectedSector)}&limit=40&sort=matched_value&direction=desc`)
       .then((res) => (res.ok ? res.json() : null))
       .then((data: { data?: MarketInstrument[] } | null) => {
         if (cancelled) return;
@@ -272,7 +282,7 @@ export function StockTreemapHeatmap({
 
       {/* Treemap Canvas Container */}
       <div
-        className="treemap-canvas relative w-full h-[360px] sm:h-[420px] rounded-xl overflow-hidden bg-slate-950 border border-slate-800 shadow-inner select-none"
+        className="treemap-canvas relative w-full h-[380px] sm:h-[440px] md:h-[480px] rounded-xl overflow-hidden bg-slate-950 border border-slate-800 shadow-inner select-none"
         role="region"
         aria-labelledby={headingId}
       >
@@ -296,7 +306,8 @@ export function StockTreemapHeatmap({
               : "bg-[#b45309] hover:bg-[#d97706] text-amber-50 border-slate-950";
 
             const isBig = width > 11 && height > 13;
-            const isSmall = width < 5 || height < 6;
+            const isTiny = width < 4 || height < 4.5;
+            const isSmall = !isBig && (width < 6.5 || height < 7);
 
             return (
               <Link
@@ -316,15 +327,15 @@ export function StockTreemapHeatmap({
               >
                 <strong
                   className={`font-black tracking-tight leading-none drop-shadow-sm truncate max-w-full ${
-                    isSmall ? "text-[9px]" : isBig ? "text-sm sm:text-base" : "text-xs"
+                    isTiny ? "text-[8px]" : isSmall ? "text-[10px]" : isBig ? "text-sm sm:text-base" : "text-xs"
                   }`}
                 >
                   {item.symbol}
                 </strong>
-                {!isSmall && (
+                {!isTiny && (
                   <span
                     className={`font-bold tracking-tight mt-0.5 drop-shadow-sm truncate max-w-full ${
-                      isBig ? "text-xs" : "text-[10px]"
+                      isBig ? "text-xs" : "text-[9px]"
                     }`}
                   >
                     {formatPercent(item.change_percent)}
