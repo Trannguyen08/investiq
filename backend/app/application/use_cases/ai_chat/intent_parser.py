@@ -54,7 +54,7 @@ _NON_TICKER_WORDS = frozenset(
         "LOI", "MAT", "TIM", "CAU", "CHON", "MO", "SUN", "TOI", "HNX", "VNI", "UPC",
         "GDP", "CPI", "FED", "ETF", "NAV", "RSI", "OBV", "SMA", "EMA", "ATR", "ADX",
         "VAI", "XIN", "NOI", "MOT", "NAO", "CUA", "SAU", "DAU", "CAO", "TOT", "GAN",
-        "VUA", "KHA", "NHI", "LOC", "VAO", "BEN",
+        "VUA", "KHA", "NHI", "LOC", "VAO", "BEN", "KHI", "LUC", "TUC", "NHU", "CON",
     }
 )
 
