@@ -30,6 +30,14 @@ function formatVnd(value: string | number | undefined | null): string {
   return moneyFormat.format(num);
 }
 
+function formatOutcomeRoi(roi: string | number | null | undefined): string {
+  if (roi === null || roi === undefined || roi === "") return "";
+  const cleaned = String(roi).replace(/[%+()]/g, "").trim();
+  const num = Number(cleaned);
+  if (isNaN(num)) return ` (${roi})`;
+  return ` (${num > 0 ? "+" : ""}${num}%)`;
+}
+
 async function fetchCsrfToken(): Promise<string> {
   const response = await fetch("/auth-api/csrf", { cache: "no-store" });
   const body = (await response.json()) as { csrf_token?: string };
@@ -488,11 +496,11 @@ export function ThesisArena({ initialTheses = [], initialLeaderboard = [] }: The
                   <div className="thesis-status-wrap">
                     {isHitTarget ? (
                       <span className="status-badge status-hit-target">
-                        Đạt mục tiêu {thesis.outcome_roi ? `(+${thesis.outcome_roi}%)` : ""}
+                        Đạt mục tiêu{formatOutcomeRoi(thesis.outcome_roi)}
                       </span>
                     ) : isStopped ? (
                       <span className="status-badge status-stopped">
-                        Cắt lỗ {thesis.outcome_roi ? `(${thesis.outcome_roi}%)` : ""}
+                        Cắt lỗ{formatOutcomeRoi(thesis.outcome_roi)}
                       </span>
                     ) : (
                       <span className="status-badge status-active">Đang theo dõi</span>
@@ -516,20 +524,20 @@ export function ThesisArena({ initialTheses = [], initialLeaderboard = [] }: The
                 {/* Price Metrics Bar */}
                 <div className="thesis-metrics-grid">
                   <div className="metric-box">
-                    <span className="metric-lbl">Giá vào:</span>
-                    <span className="metric-val text-neutral">{formatVnd(thesis.entry_price)}</span>
+                    <span className="metric-lbl">Giá vào</span>
+                    <span className="metric-val val-entry">{formatVnd(thesis.entry_price)}</span>
                   </div>
                   <div className="metric-box">
-                    <span className="metric-lbl">Giá hiện tại:</span>
-                    <span className="metric-val text-cyan">{formatVnd(thesis.current_price)}</span>
+                    <span className="metric-lbl">Giá hiện tại</span>
+                    <span className="metric-val val-current">{formatVnd(thesis.current_price)}</span>
                   </div>
                   <div className="metric-box">
-                    <span className="metric-lbl">Mục tiêu:</span>
-                    <span className="metric-val text-emerald">{formatVnd(thesis.target_price)}</span>
+                    <span className="metric-lbl">Mục tiêu</span>
+                    <span className="metric-val val-target">{formatVnd(thesis.target_price)}</span>
                   </div>
                   <div className="metric-box">
-                    <span className="metric-lbl">Cắt lỗ:</span>
-                    <span className="metric-val text-rose">{formatVnd(thesis.stop_loss_price)}</span>
+                    <span className="metric-lbl">Cắt lỗ</span>
+                    <span className="metric-val val-stoploss">{formatVnd(thesis.stop_loss_price)}</span>
                   </div>
                 </div>
 

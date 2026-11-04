@@ -1,5 +1,23 @@
 # Current Task
 
+## Remove Unauth Market Preview Table from Portfolio & Fix Community Price Alignment / Badge Wrapping - 2026-11-04 (in progress)
+- **User Request**:
+  1. Bỏ bảng "Cổ phiếu sẵn sàng giao dịch" khỏi trang danh mục (`/portfolio`) khi chưa đăng nhập.
+  2. Chỉnh lại style trang cộng đồng (`/community`), khắc phục hiện tượng lệch giá (nhãn căn trái, giá căn phải; bỏ dấu hai chấm rườm rà; căn trái đồng bộ; phân biệt màu sắc giá vào/hiện tại/mục tiêu/cắt lỗ; chống rớt dòng tag "Tăng giá", "Kỳ hạn 3T"; chuẩn hóa hiển thị outcome ROI).
+  3. Làm việc và commit/push DUY NHẤT trên nhánh `fix/UI`, **tuyệt đối không merge vào `dev` hay `main`**.
+  4. Vượt qua 100% kiểm thử (Lint, Typecheck, Unit Tests, Quality Gate `./scripts/check-pr.ps1`).
+- **Branch**: `fix/UI` (committed and pushed only to `fix/UI`, strictly not merged to `dev` or `main`).
+- **Changes**:
+  - `frontend/src/components/portfolio/paper-trading-dashboard.tsx`:
+    - Loại bỏ hoàn toàn khối `paper-unauth-market-preview` ("Cổ phiếu sẵn sàng giao dịch") khi người dùng chưa đăng nhập, giữ giao diện giới thiệu hero và 3 feature cards gọn gàng, tinh tế.
+  - `frontend/src/components/community/thesis-arena.tsx`:
+    - Bỏ dấu hai chấm sau nhãn (`Giá vào`, `Giá hiện tại`, `Mục tiêu`, `Cắt lỗ`).
+    - Thêm hàm `formatOutcomeRoi` chuẩn hóa hiển thị ROI không bị lặp ký tự `(++23.1%%)` -> `(+23.1%)`.
+    - Gán class giá trị chuyên biệt `val-entry`, `val-current`, `val-target`, `val-stoploss`.
+  - `frontend/src/app/globals.css`:
+    - Cập nhật `.thesis-metrics-grid` và `.metric-box`: Căn lề trái (`text-align: left !important`, `align-items: flex-start`), khoảng cách cân đối, màu sắc chuẩn tài chính.
+    - Cập nhật `.thesis-stance-badge`, `.thesis-horizon-badge`, `.status-badge`: Thêm `white-space: nowrap; flex-shrink: 0;` ngăn chặn hoàn toàn hiện tượng rớt chữ thành 2 dòng.
+
 ## Unified Standard Pagination Across News, Market Stocks, Dividends, and Events - 2026-11-04 (completed)
 - **User Request**:
   1. Đồng bộ style phân trang thành 1 kiểu duy nhất trên toàn bộ các trang có phân trang: Trang tin tức (`/news`), Trang thị trường bảng mã cổ phiếu (`/market/stocks`), Trang cổ tức (`StockDividendPanel`), Trang sự kiện (`/market/events`).

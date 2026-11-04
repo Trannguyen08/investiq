@@ -337,60 +337,6 @@ export function PaperTradingDashboard({
           </article>
         </section>
 
-        {marketInstruments.length > 0 && (
-          <section className="paper-unauth-market-preview">
-            <div className="preview-header">
-              <div>
-                <p className="eyebrow">DỮ LIỆU THỊ TRƯỜNG TRỰC TIẾP</p>
-                <h2>Cổ phiếu sẵn sàng giao dịch</h2>
-              </div>
-              <span className="preview-badge">Sàn HOSE & HNX</span>
-            </div>
-            <div className="preview-table-wrap">
-              <table className="preview-table">
-                <thead>
-                  <tr>
-                    <th>Mã CP</th>
-                    <th>Tên doanh nghiệp</th>
-                    <th className="text-right">Giá quan sát</th>
-                    <th className="text-right">Biến động</th>
-                    <th className="text-right">P/E</th>
-                    <th className="text-right">P/B</th>
-                    <th className="text-center">Thao tác</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {marketInstruments.slice(0, 8).map((inst) => {
-                    const priceNum = Number(inst.price);
-                    const changePct = Number(inst.change_percent);
-                    const isUp = changePct > 0;
-                    const isDown = changePct < 0;
-
-                    return (
-                      <tr key={inst.symbol}>
-                        <td className="font-bold text-cyan">{inst.symbol}</td>
-                        <td className="text-neutral">{inst.name}</td>
-                        <td className="text-right font-mono font-bold">
-                          {priceNum ? `${priceNum.toLocaleString("vi-VN")} đ` : "—"}
-                        </td>
-                        <td className={`text-right font-mono font-bold ${isUp ? "text-emerald" : isDown ? "text-rose" : "text-neutral"}`}>
-                          {changePct ? `${isUp ? "+" : ""}${changePct.toFixed(2)}%` : "0.00%"}
-                        </td>
-                        <td className="text-right font-mono text-neutral">{inst.pe ?? "—"}</td>
-                        <td className="text-right font-mono text-neutral">{inst.pb ?? "—"}</td>
-                        <td className="text-center">
-                          <Link href="/login" className="btn-table-trade">
-                            Đặt lệnh
-                          </Link>
-                        </td>
-                      </tr>
-                    );
-                  })}
-                </tbody>
-              </table>
-            </div>
-          </section>
-        )}
       </main>
     );
   }
