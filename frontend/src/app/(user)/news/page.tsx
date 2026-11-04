@@ -47,11 +47,11 @@ export default async function NewsPage({ searchParams }: { searchParams: SearchP
     }
   }
   const popularSymbols = [...symbolCounts.entries()].sort((a, b) => b[1].count - a[1].count).slice(0, 8);
-  const pageUrl = (page: number) => {
+  const paginationUrlPattern = (() => {
     const params = new URLSearchParams(query);
-    params.set("page", String(page));
+    params.set("page", "[page]");
     return `/news?${params.toString()}`;
-  };
+  })();
   const { page, total_pages: totalPages } = result.pagination;
 
   return (
@@ -88,7 +88,7 @@ export default async function NewsPage({ searchParams }: { searchParams: SearchP
                 totalItems={result.pagination.total_items}
                 pageSize={result.pagination.page_size || 10}
                 itemLabel="bài viết"
-                getPageUrl={(p) => pageUrl(p)}
+                pageUrlPattern={paginationUrlPattern}
                 ariaLabel="Phân trang tin tức"
               />
             )}

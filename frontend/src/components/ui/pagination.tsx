@@ -9,8 +9,11 @@ export interface PaginationProps {
   totalItems: number;
   pageSize: number;
   itemLabel?: string;
-  // Link mode (for URL-driven routing, e.g. News & Market Stocks)
+  // Link mode via dynamic callback (for Client components)
   getPageUrl?: (page: number) => string;
+  // Link mode via serializable URL template (safe across Server -> Client component boundaries, e.g. News)
+  // Supports "[page]", "%page%", or "{page}" as the replacement token
+  pageUrlPattern?: string;
   // Button mode (for Client state pagination, e.g. Dividends & Events)
   onPageChange?: (page: number) => void;
   prevLabel?: string;
@@ -92,6 +95,7 @@ export function Pagination({
   pageSize,
   itemLabel = "mục",
   getPageUrl,
+  pageUrlPattern,
   onPageChange,
   prevLabel = "← Trước",
   nextLabel = "Sau →",
@@ -109,6 +113,17 @@ export function Pagination({
   const endItem = Math.min(clampedPage * pageSize, totalItems);
   const pages = getPaginationRange(clampedPage, Math.max(1, totalPages));
 
+  const isLinkMode = Boolean(pageUrlPattern || getPageUrl);
+  const resolveUrl = (pageNumber: number): string => {
+    if (pageUrlPattern) {
+      return pageUrlPattern.replace(/\[page\]|%page%|\{page\}/g, String(pageNumber));
+    }
+    if (getPageUrl) {
+      return getPageUrl(pageNumber);
+    }
+    return "#";
+  };
+
   return (
     <nav
       className={`app-pagination-bar mt-4 pt-3 border-t border-slate-800 flex flex-col sm:flex-row items-center justify-between gap-3 text-xs ${className}`}
@@ -121,10 +136,10 @@ export function Pagination({
       {totalPages > 1 && (
         <div className="flex items-center gap-1.5 flex-wrap justify-center">
           {/* Previous Button / Link */}
-          {getPageUrl ? (
+          {isLinkMode ? (
             clampedPage > 1 ? (
               <Link
-                href={getPageUrl(clampedPage - 1)}
+                href={resolveUrl(clampedPage - 1)}
                 className="px-3 py-1.5 rounded-lg bg-slate-950 border border-slate-800 text-slate-300 hover:text-white hover:border-slate-700 transition font-semibold text-xs inline-flex items-center justify-center"
                 aria-label={prevAriaLabel}
                 prefetch={true}
@@ -170,11 +185,11 @@ export function Pagination({
               const pNum = item;
               const isActive = pNum === clampedPage;
 
-              if (getPageUrl) {
+              if (isLinkMode) {
                 return (
                   <Link
                     key={pNum}
-                    href={getPageUrl(pNum)}
+                    href={resolveUrl(pNum)}
                     aria-current={isActive ? "page" : undefined}
                     aria-label={`Trang ${pNum}`}
                     className={`w-7 h-7 sm:w-8 sm:h-8 rounded-lg text-xs font-bold transition flex items-center justify-center ${
@@ -209,10 +224,10 @@ export function Pagination({
           </div>
 
           {/* Next Button / Link */}
-          {getPageUrl ? (
+          {isLinkMode ? (
             clampedPage < totalPages ? (
               <Link
-                href={getPageUrl(clampedPage + 1)}
+                href={resolveUrl(clampedPage + 1)}
                 className="px-3 py-1.5 rounded-lg bg-slate-950 border border-slate-800 text-slate-300 hover:text-white hover:border-slate-700 transition font-semibold text-xs inline-flex items-center justify-center"
                 aria-label={nextAriaLabel}
                 prefetch={true}

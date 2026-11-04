@@ -15,7 +15,7 @@
       - Trang hiện tại nổi bật với sắc xanh dương thương hiệu (`bg-sky-600 text-white font-bold shadow-sm`), các trang khác dạng viền xám tối (`bg-slate-950 text-slate-400 border border-slate-800 hover:text-white hover:bg-slate-900`).
       - Hỗ trợ cả 2 chế độ:
         - `onPageChange`: Dành cho Client State phân trang mượt mà (Cổ tức, Sự kiện) với zero-latency và smooth scroll.
-        - `getPageUrl`: Dành cho Server Components và URL-driven navigation (Tin tức, Thị trường cổ phiếu) tận dụng cơ chế `prefetch={true}` của Next.js giúp tải trước trang kế tiếp trong viewport.
+        - `pageUrlPattern` / `getPageUrl`: Dành cho Server Components (Tin tức) và Client Components (Thị trường cổ phiếu) với URL-driven navigation. Sử dụng chuỗi pattern URL an toàn serialization qua ranh giới RSC Server -> Client, khắc phục lỗi Functions cannot be passed directly to Client Components.
     - Tạo hàm encodeCursor(offset: number) tương thích 100% với backend FastAPI (sử dụng base64 URL-safe an toàn cho cả Node.js SSR và Turbopack client runtime, khắc phục hoàn toàn lỗi Unknown encoding: base64url).
   - `frontend/src/components/ui/pagination.test.tsx`:
     - Thêm 4 unit tests kiểm tra thuật toán windowing 7 ô, mã hóa offset cursor, chế độ button callback và chế độ link routing URL.
@@ -24,7 +24,7 @@
   - `frontend/src/components/market/events-view.tsx`:
     - Thay thế giao diện phân trang chữ đơn giản ở giữa (Image 4) bằng `Pagination` đồng bộ chuẩn mực với nhãn "sự kiện", có đầy đủ các ô số trang và nút Trước/Sau.
   - `frontend/src/app/(user)/news/page.tsx`:
-    - Thay thế cụm nút màu xanh lá ở giữa (Image 3) bằng `Pagination` đồng bộ với nhãn "bài viết", hiển thị đầy đủ dải mục `Hiển thị 1 - 10 trong tổng số 84 bài viết` và Next/Prev links.
+    - Thay thế cụm nút màu xanh lá ở giữa (Image 3) bằng `Pagination` đồng bộ với nhãn "bài viết", truyền `pageUrlPattern` an toàn từ Server Component.
   - `frontend/src/components/market/market-stocks-beginner.tsx` (và `market-workspace.tsx`):
     - Nâng cấp thanh phân trang 3 cột đơn điệu `Trang 1 / 93` (Image 1) thành `Pagination` đầy đủ: hiển thị `Hiển thị 1 - 15 trong tổng số 1395 mã cổ phiếu`, các nút số trang nhảy trực tiếp qua `encodeCursor((p - 1) * 15)`, neo chuẩn `#stock-table`.
   - `frontend/src/app/globals.css`:

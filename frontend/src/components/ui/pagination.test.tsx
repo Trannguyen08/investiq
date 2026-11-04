@@ -75,4 +75,26 @@ describe("Pagination component", () => {
     const page2Link = screen.getByRole("link", { name: "Trang 2" });
     expect(page2Link).toHaveAttribute("href", "/test?page=2#target");
   });
+
+  it("renders serializable pageUrlPattern safely for Server Component boundary", () => {
+    render(
+      <Pagination
+        currentPage={3}
+        totalPages={10}
+        totalItems={100}
+        pageSize={10}
+        itemLabel="bài viết"
+        pageUrlPattern="/news?limit=10&page=[page]"
+      />
+    );
+
+    const prevLink = screen.getByRole("link", { name: "Trang trước" });
+    expect(prevLink).toHaveAttribute("href", "/news?limit=10&page=2");
+
+    const nextLink = screen.getByRole("link", { name: "Trang sau →" });
+    expect(nextLink).toHaveAttribute("href", "/news?limit=10&page=4");
+
+    const page5Link = screen.getByRole("link", { name: "Trang 5" });
+    expect(page5Link).toHaveAttribute("href", "/news?limit=10&page=5");
+  });
 });
