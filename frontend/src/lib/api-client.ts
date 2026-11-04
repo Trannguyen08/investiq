@@ -209,10 +209,10 @@ function normalizeInstrumentCollection(
   };
 }
 
-export async function getMarketInstruments(query: URLSearchParams): Promise<InstrumentCollection> {
+export async function getMarketInstruments(query: URLSearchParams, revalidate: number = 30): Promise<InstrumentCollection> {
   const request = async (selected: URLSearchParams) => {
     const suffix = selected.size ? `?${selected.toString()}` : "";
-    return requestJson<InstrumentCollection>(`/v1/market/instruments${suffix}`, 30);
+    return requestJson<InstrumentCollection>(`/v1/market/instruments${suffix}`, revalidate);
   };
   try {
     return normalizeInstrumentCollection(await request(query), query);

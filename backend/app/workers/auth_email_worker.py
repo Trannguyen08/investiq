@@ -7,7 +7,7 @@ import smtplib
 import ssl
 from datetime import UTC, datetime, timedelta
 from email.message import EmailMessage
-from email.utils import format_datetime, make_msgid, parseaddr
+from email.utils import format_datetime, formataddr, make_msgid, parseaddr
 from html import escape
 from typing import Any
 
@@ -145,14 +145,25 @@ def _message(payload: dict[str, str]) -> EmailMessage:
         "Email tự động từ InvestIQ. Vui lòng không trả lời thư này.</p>"
         "</td></tr></table></body></html>"
     )
+    raw_name, raw_address = parseaddr(settings.auth_mail_from or "")
+    sender_address = raw_address if raw_address else "no-reply@investiq.vn"
+    display_name = raw_name if raw_name else "InvestIQ"
+    formatted_from = formataddr((display_name, sender_address))
+    sender_domain = sender_address.rpartition("@")[2] or "investiq.vn"
+
     message = EmailMessage()
     message["Subject"] = subjects[template]
-    message["From"] = settings.auth_mail_from
+    message["From"] = formatted_from
     message["To"] = payload["email"]
-    sender_address = parseaddr(settings.auth_mail_from or "")[1]
-    sender_domain = sender_address.rpartition("@")[2] or None
+    message["Reply-To"] = formataddr(("InvestIQ Support", sender_address))
     message["Date"] = format_datetime(datetime.now(UTC))
     message["Message-ID"] = make_msgid(domain=sender_domain)
+    message["X-Mailer"] = "InvestIQ Authentication Service 1.0"
+    message["Auto-Submitted"] = "auto-generated"
+    if template.endswith("_otp"):
+        message["Priority"] = "urgent"
+        message["Importance"] = "high"
+        message["X-Priority"] = "1"
     message.set_content(text_body)
     message.add_alternative(html_body, subtype="html")
     return message
@@ -166,7 +177,9 @@ def _send(payload: dict[str, str]) -> None:
             smtp.starttls(context=ssl.create_default_context())
         if settings.auth_smtp_username and settings.auth_smtp_password:
             smtp.login(settings.auth_smtp_username, settings.auth_smtp_password.get_secret_value())
-        smtp.send_message(_message(payload))
+        msg = _message(payload)
+        sender_address = parseaddr(settings.auth_mail_from or "")[1] or "no-reply@investiq.vn"
+        smtp.send_message(msg, from_addr=sender_address, to_addrs=[payload["email"]])
 
 
 def _finish(job_id: str, status: str, category: str | None = None) -> None:

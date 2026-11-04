@@ -7,7 +7,7 @@ import smtplib
 import ssl
 from datetime import UTC, datetime
 from email.message import EmailMessage
-from email.utils import format_datetime, make_msgid, parseaddr
+from email.utils import format_datetime, formataddr, make_msgid, parseaddr
 from html import escape
 from pathlib import Path
 from typing import Any
@@ -343,16 +343,26 @@ def send_event_reminder_email(
         try:
             message = EmailMessage()
             # Tiêu đề email bao gồm cả ngày diễn ra cụ thể để người dùng biết ngay
+            raw_name, raw_address = parseaddr(settings.auth_mail_from or "")
+            sender_address = raw_address if raw_address else "no-reply@investiq.vn"
+            display_name = raw_name if raw_name else "InvestIQ"
+            formatted_from = formataddr((display_name, sender_address))
+            sender_domain = sender_address.rpartition("@")[2] or "investiq.vn"
+
+            now_utc = datetime.now(UTC)
+
             message["Subject"] = (
                 f"[InvestIQ] Nhắc lịch sự kiện: {symbol} - {event_title} ({short_date})"
             )
-            message["From"] = settings.auth_mail_from
+            message["From"] = formatted_from
             message["To"] = to_email
-
-            sender_address = parseaddr(settings.auth_mail_from or "")[1]
-            sender_domain = sender_address.rpartition("@")[2] or None
-            message["Date"] = format_datetime(datetime.now(UTC))
+            message["Reply-To"] = formataddr(("InvestIQ Support", sender_address))
+            message["Date"] = format_datetime(now_utc)
             message["Message-ID"] = make_msgid(domain=sender_domain)
+            message["X-Mailer"] = "InvestIQ Notification Service 1.0"
+            message["Auto-Submitted"] = "auto-generated"
+            message["Precedence"] = "bulk"
+            message["List-Unsubscribe"] = f"<mailto:{sender_address}?subject=unsubscribe>"
             message.set_content(text_body)
             message.add_alternative(html_content, subtype="html")
 
@@ -364,7 +374,7 @@ def send_event_reminder_email(
                         settings.auth_smtp_username,
                         settings.auth_smtp_password.get_secret_value(),
                     )
-                smtp.send_message(message)
+                smtp.send_message(message, from_addr=sender_address, to_addrs=[to_email])
 
             logger.info("event_reminder_email_sent_smtp", extra={"to": to_email, "symbol": symbol})
             return True, "Email đã được gửi thành công qua SMTP"
