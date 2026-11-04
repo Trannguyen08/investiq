@@ -1,7 +1,7 @@
 import { fireEvent, render, screen } from "@testing-library/react";
 import { describe, expect, it } from "vitest";
 
-import { StockTreemapHeatmap } from "@/components/market/stock-treemap-heatmap";
+import { computeSquarifiedTreemap, StockTreemapHeatmap } from "@/components/market/stock-treemap-heatmap";
 import type { MarketInstrument, MarketSector } from "@/types/market";
 
 function sampleInstrument(
@@ -56,6 +56,34 @@ function sampleSector(name: string, changePercent: string, memberCount: number):
   };
 }
 
+describe("computeSquarifiedTreemap", () => {
+  it("fills the bounding box completely without gaps or overflow", () => {
+    const items = Array.from({ length: 20 }, (_, i) => ({
+      item: `STOCK_${i}`,
+      value: (20 - i) * 100,
+    }));
+    const rects = computeSquarifiedTreemap(items, 1000, 600);
+
+    expect(rects).toHaveLength(20);
+
+    let minX = 100, minY = 100, maxX = 0, maxY = 0;
+    for (const r of rects) {
+      minX = Math.min(minX, r.x);
+      minY = Math.min(minY, r.y);
+      maxX = Math.max(maxX, r.x + r.width);
+      maxY = Math.max(maxY, r.y + r.height);
+    }
+
+    expect(minX).toBeCloseTo(0, 5);
+    expect(minY).toBeCloseTo(0, 5);
+    expect(maxX).toBeCloseTo(100, 5);
+    expect(maxY).toBeCloseTo(100, 5);
+
+    const totalArea = rects.reduce((sum, r) => sum + r.width * r.height, 0);
+    expect(totalArea).toBeCloseTo(10000, 1);
+  });
+});
+
 describe("StockTreemapHeatmap", () => {
   const instruments: MarketInstrument[] = [
     sampleInstrument("VCB", "Ngân hàng TMCP Ngoại thương", "Ngân hàng", "-4.80", "89000", "500000000000000"),
@@ -77,7 +105,7 @@ describe("StockTreemapHeatmap", () => {
     expect(screen.getByLabelText(/Ngành:/)).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Vốn hóa" })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "GTGD" })).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "1D" })).toBeInTheDocument();
+    expect(screen.getByText(/Biến động trong ngày/)).toBeInTheDocument();
 
     // Default "Toàn bộ thị trường" shows top representative stocks
     expect(screen.getByText("VCB")).toBeInTheDocument();
@@ -98,15 +126,15 @@ describe("StockTreemapHeatmap", () => {
     expect(screen.queryByText("HPG")).not.toBeInTheDocument();
   });
 
-  it("toggles size metric and timeframe options", () => {
+  it("toggles size metric between market cap and matched value", () => {
     render(<StockTreemapHeatmap instruments={instruments} sectors={sectors} />);
 
     const gtgdButton = screen.getByRole("button", { name: "GTGD" });
     fireEvent.click(gtgdButton);
     expect(gtgdButton).toHaveClass("bg-sky-600");
 
-    const tf7d = screen.getByRole("button", { name: "7D" });
-    fireEvent.click(tf7d);
-    expect(tf7d).toHaveClass("text-sky-400");
+    const capButton = screen.getByRole("button", { name: "Vốn hóa" });
+    fireEvent.click(capButton);
+    expect(capButton).toHaveClass("bg-sky-600");
   });
 });

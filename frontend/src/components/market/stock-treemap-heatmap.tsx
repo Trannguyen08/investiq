@@ -1,13 +1,12 @@
 "use client";
 
 import Link from "next/link";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 
 import { changeTone, formatMoney, formatPercent } from "@/components/market/formatters";
 import type { MarketInstrument, MarketSector } from "@/types/market";
 
 type SizeMetric = "market_cap" | "matched_value";
-type HeatmapTimeframe = "1D" | "7D" | "30D" | "1Y";
 
 type TreemapRect<T> = {
   item: T;
@@ -18,7 +17,7 @@ type TreemapRect<T> = {
 };
 
 // Squarified Treemap layout algorithm (Bruls, Huizing, van Wijk)
-function computeSquarifiedTreemap<T>(
+export function computeSquarifiedTreemap<T>(
   rawItems: Array<{ item: T; value: number }>,
   width = 1000,
   height = 600
@@ -36,44 +35,6 @@ function computeSquarifiedTreemap<T>(
   }));
 
   const rects: Array<TreemapRect<T>> = [];
-
-  function layoutRow(
-    row: Array<{ data: T; area: number }>,
-    w: number,
-    h: number,
-    x: number,
-    y: number,
-    isHoriz: boolean
-  ) {
-    const rowArea = row.reduce((sum, item) => sum + item.area, 0);
-    const side = isHoriz ? h : w;
-    const rowLength = rowArea / side;
-    let offset = 0;
-
-    for (const item of row) {
-      const itemLen = item.area / rowLength;
-      if (isHoriz) {
-        rects.push({
-          item: item.data,
-          x: (x + offset) / width * 100,
-          y: y / height * 100,
-          width: itemLen / width * 100,
-          height: rowLength / height * 100,
-        });
-        offset += itemLen;
-      } else {
-        rects.push({
-          item: item.data,
-          x: x / width * 100,
-          y: (y + offset) / height * 100,
-          width: rowLength / width * 100,
-          height: itemLen / height * 100,
-        });
-        offset += itemLen;
-      }
-    }
-    return rowLength;
-  }
 
   function worst(row: Array<{ data: T; area: number }>, side: number) {
     const s2 = side * side;
@@ -96,19 +57,22 @@ function computeSquarifiedTreemap<T>(
   ) {
     if (remaining.length === 0) return;
     if (w <= 0 || h <= 0) return;
+
     if (remaining.length === 1) {
       rects.push({
         item: remaining[0].data,
-        x: x / width * 100,
-        y: y / height * 100,
-        width: w / width * 100,
-        height: h / height * 100,
+        x: (x / width) * 100,
+        y: (y / height) * 100,
+        width: (w / width) * 100,
+        height: (h / height) * 100,
       });
       return;
     }
 
-    const isHoriz = w < h;
-    const side = Math.min(w, h);
+    // Shorter side determines row placement direction
+    const alongWidth = w < h;
+    const side = alongWidth ? w : h;
+
     let row = [remaining[0]];
     let i = 1;
 
@@ -122,13 +86,38 @@ function computeSquarifiedTreemap<T>(
       }
     }
 
-    const rowThickness = layoutRow(row, w, h, x, y, isHoriz);
-    const nextRemaining = remaining.slice(i);
+    const rowArea = row.reduce((sum, item) => sum + item.area, 0);
+    const thickness = rowArea / side;
+    let offset = 0;
 
-    if (isHoriz) {
-      recurse(nextRemaining, x, y + rowThickness, w, h - rowThickness);
+    for (const item of row) {
+      const itemLen = item.area / thickness;
+      if (alongWidth) {
+        rects.push({
+          item: item.data,
+          x: ((x + offset) / width) * 100,
+          y: (y / height) * 100,
+          width: (itemLen / width) * 100,
+          height: (thickness / height) * 100,
+        });
+        offset += itemLen;
+      } else {
+        rects.push({
+          item: item.data,
+          x: (x / width) * 100,
+          y: ((y + offset) / height) * 100,
+          width: (thickness / width) * 100,
+          height: (itemLen / height) * 100,
+        });
+        offset += itemLen;
+      }
+    }
+
+    const nextRemaining = remaining.slice(i);
+    if (alongWidth) {
+      recurse(nextRemaining, x, y + thickness, w, h - thickness);
     } else {
-      recurse(nextRemaining, x + rowThickness, y, w - rowThickness, h);
+      recurse(nextRemaining, x + thickness, y, w - thickness, h);
     }
   }
 
@@ -147,45 +136,88 @@ export function StockTreemapHeatmap({
 }) {
   const [selectedSector, setSelectedSector] = useState<string>("ALL");
   const [sizeMetric, setSizeMetric] = useState<SizeMetric>("market_cap");
-  const [timeframe, setTimeframe] = useState<HeatmapTimeframe>("1D");
   const [hoveredSymbol, setHoveredSymbol] = useState<string | null>(null);
 
-  // Group and select representative stocks
-  const filteredInstruments = useMemo(() => {
+  // Cache sector instruments loaded from API
+  const [sectorCache, setSectorCache] = useState<Record<string, MarketInstrument[]>>({});
+  const [loadingSector, setLoadingSector] = useState<boolean>(false);
+
+  // Fetch full representative stocks for the chosen sector if not yet cached
+  useEffect(() => {
+    if (selectedSector === "ALL") return;
+    if (sectorCache[selectedSector]) return;
+
+    setLoadingSector(true);
+    let cancelled = false;
+
+    fetch(`/api/v1/market/instruments?sector=${encodeURIComponent(selectedSector)}&limit=30&sort=matched_value&direction=desc`)
+      .then((res) => (res.ok ? res.json() : null))
+      .then((data: { data?: MarketInstrument[] } | null) => {
+        if (cancelled) return;
+        if (data?.data && Array.isArray(data.data) && data.data.length > 0) {
+          setSectorCache((prev) => ({ ...prev, [selectedSector]: data.data! }));
+        }
+      })
+      .catch(() => {})
+      .finally(() => {
+        if (!cancelled) setLoadingSector(false);
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [selectedSector, sectorCache]);
+
+  // Determine items to display
+  const activeStockList = useMemo(() => {
     if (selectedSector === "ALL") {
-      // Return top 28 representative stocks sorted by matched value / market cap
+      // Top 32 representative stocks across whole market
       return [...instruments]
         .sort((a, b) => {
           const valA = Number(a.market_cap) || Number(a.matched_value) || 0;
           const valB = Number(b.market_cap) || Number(b.matched_value) || 0;
           return valB - valA;
         })
-        .slice(0, 30);
+        .slice(0, 32);
     }
-    return instruments.filter(
+
+    // Use cached sector data if available
+    const cached = sectorCache[selectedSector];
+    if (cached && cached.length > 0) {
+      return cached;
+    }
+
+    // Fallback to filtering from snapshot instruments
+    const fromSnapshot = instruments.filter(
       (inst) => inst.sector && inst.sector.toLocaleLowerCase("vi-VN") === selectedSector.toLocaleLowerCase("vi-VN")
     );
-  }, [instruments, selectedSector]);
+    return fromSnapshot;
+  }, [instruments, selectedSector, sectorCache]);
 
-  // Compute layout rectangles using Squarified Treemap
+  // Compute treemap rectangles
   const treemapRects = useMemo(() => {
-    const rawItems = filteredInstruments.map((item) => {
+    if (!activeStockList.length) return [];
+
+    const rawItems = activeStockList.map((item) => {
       let weight = Number(item[sizeMetric]);
       if (!weight || weight <= 0) {
-        weight = sizeMetric === "market_cap" ? 10_000_000_000_000 : 10_000_000_000;
+        weight = sizeMetric === "market_cap" ? 5_000_000_000_000 : 5_000_000_000;
       }
       return { item, value: weight };
     });
-    return computeSquarifiedTreemap(rawItems, 1000, 560);
-  }, [filteredInstruments, sizeMetric]);
 
-  const hoveredItem = hoveredSymbol ? instruments.find((i) => i.symbol === hoveredSymbol) : null;
+    return computeSquarifiedTreemap(rawItems, 1000, 560);
+  }, [activeStockList, sizeMetric]);
+
+  const hoveredItem = hoveredSymbol
+    ? activeStockList.find((i) => i.symbol === hoveredSymbol) ?? instruments.find((i) => i.symbol === hoveredSymbol)
+    : null;
 
   return (
     <div className="stock-treemap-heatmap flex flex-col gap-3">
-      {/* Controls Bar */}
+      {/* Controls Bar: Selector & Size Metric (Removed 1D/7D/30D/1Y block per request) */}
       <div className="treemap-controls flex flex-wrap items-center justify-between gap-3 text-xs bg-slate-950/70 p-3 rounded-xl border border-slate-800">
-        <div className="flex flex-wrap items-center gap-2">
+        <div className="flex flex-wrap items-center gap-2.5">
           <label htmlFor="treemap-sector-select" className="text-slate-400 font-semibold shrink-0">
             Ngành:
           </label>
@@ -193,7 +225,7 @@ export function StockTreemapHeatmap({
             id="treemap-sector-select"
             value={selectedSector}
             onChange={(e) => setSelectedSector(e.target.value)}
-            className="bg-slate-900 text-slate-100 font-semibold px-2.5 py-1.5 rounded-lg border border-slate-700 hover:border-slate-600 focus:border-sky-500 focus:outline-none transition cursor-pointer max-w-[200px] truncate"
+            className="bg-slate-900 text-slate-100 font-semibold px-2.5 py-1.5 rounded-lg border border-slate-700 hover:border-slate-600 focus:border-sky-500 focus:outline-none transition cursor-pointer max-w-[220px] truncate"
           >
             <option value="ALL">Toàn bộ thị trường (Tiêu biểu)</option>
             {sectors.map((sec) => (
@@ -205,12 +237,12 @@ export function StockTreemapHeatmap({
 
           <span className="text-slate-600 hidden sm:inline">|</span>
 
-          {/* Size Metric */}
+          {/* Size Metric: Vốn hóa vs GTGD */}
           <div className="inline-flex rounded-lg bg-slate-900 p-0.5 border border-slate-800">
             <button
               type="button"
               onClick={() => setSizeMetric("market_cap")}
-              className={`px-2.5 py-1 rounded-md font-semibold transition cursor-pointer ${
+              className={`px-3 py-1 rounded-md font-semibold transition cursor-pointer ${
                 sizeMetric === "market_cap"
                   ? "bg-sky-600 text-white shadow-sm"
                   : "text-slate-400 hover:text-white"
@@ -221,7 +253,7 @@ export function StockTreemapHeatmap({
             <button
               type="button"
               onClick={() => setSizeMetric("matched_value")}
-              className={`px-2.5 py-1 rounded-md font-semibold transition cursor-pointer ${
+              className={`px-3 py-1 rounded-md font-semibold transition cursor-pointer ${
                 sizeMetric === "matched_value"
                   ? "bg-sky-600 text-white shadow-sm"
                   : "text-slate-400 hover:text-white"
@@ -232,46 +264,39 @@ export function StockTreemapHeatmap({
           </div>
         </div>
 
-        {/* Timeframe Buttons */}
-        <div className="flex items-center gap-1">
-          {(["1D", "7D", "30D", "1Y"] as const).map((tf) => (
-            <button
-              key={tf}
-              type="button"
-              onClick={() => setTimeframe(tf)}
-              className={`px-2 py-1 rounded-md font-bold transition cursor-pointer ${
-                timeframe === tf
-                  ? "bg-slate-800 text-sky-400 border border-sky-500/40"
-                  : "text-slate-400 hover:text-slate-200"
-              }`}
-            >
-              {tf}
-            </button>
-          ))}
-        </div>
+        {/* Indicator that data is daily change */}
+        <span className="text-[11px] text-slate-400 italic">
+          Biến động trong ngày (%)
+        </span>
       </div>
 
-      {/* Treemap Visual Container */}
-      {treemapRects.length > 0 ? (
-        <div
-          className="treemap-canvas relative w-full h-[360px] sm:h-[420px] rounded-xl overflow-hidden bg-slate-950 border border-slate-800 shadow-inner select-none"
-          role="region"
-          aria-labelledby={headingId}
-        >
-          {treemapRects.map(({ item, x, y, width, height }) => {
+      {/* Treemap Canvas Container */}
+      <div
+        className="treemap-canvas relative w-full h-[360px] sm:h-[420px] rounded-xl overflow-hidden bg-slate-950 border border-slate-800 shadow-inner select-none"
+        role="region"
+        aria-labelledby={headingId}
+      >
+        {loadingSector && (
+          <div className="absolute inset-0 z-20 bg-slate-950/70 backdrop-blur-xs flex items-center justify-center text-xs text-sky-400">
+            <div className="inline-block w-5 h-5 border-2 border-sky-400 border-t-transparent rounded-full animate-spin mr-2" />
+            Đang tải dữ liệu ngành...
+          </div>
+        )}
+
+        {treemapRects.length > 0 ? (
+          treemapRects.map(({ item, x, y, width, height }) => {
             const changeNum = Number(item.change_percent);
             const isPos = changeNum > 0;
             const isNeg = changeNum < 0;
 
-            // Rich vibrant colors matching Vietnamese market standards
             const bgClass = isPos
-              ? "bg-[#047857] hover:bg-[#059669] text-emerald-50 border-[#064e3b]"
+              ? "bg-[#047857] hover:bg-[#059669] text-emerald-50 border-slate-950"
               : isNeg
-              ? "bg-[#991b1b] hover:bg-[#b91c1c] text-rose-50 border-[#450a0a]"
-              : "bg-[#b45309] hover:bg-[#d97706] text-amber-50 border-[#78350f]";
+              ? "bg-[#991b1b] hover:bg-[#b91c1c] text-rose-50 border-slate-950"
+              : "bg-[#b45309] hover:bg-[#d97706] text-amber-50 border-slate-950";
 
-            const isBig = width > 12 && height > 14;
-            const isSmall = width < 6 || height < 7;
+            const isBig = width > 11 && height > 13;
+            const isSmall = width < 5 || height < 6;
 
             return (
               <Link
@@ -286,41 +311,41 @@ export function StockTreemapHeatmap({
                   width: `${width}%`,
                   height: `${height}%`,
                 }}
-                className={`absolute border flex flex-col items-center justify-center p-1 transition-all duration-150 overflow-hidden cursor-pointer shadow-sm ${bgClass}`}
+                className={`absolute border box-border flex flex-col items-center justify-center p-1 transition-all duration-150 overflow-hidden cursor-pointer shadow-xs ${bgClass}`}
                 title={`${item.symbol} - ${item.name} | Giá: ${Number(item.price).toLocaleString("vi-VN")} đ | Biến động: ${formatPercent(item.change_percent)} | GTGD: ${formatMoney(item.matched_value)}`}
               >
                 <strong
-                  className={`font-black tracking-tight leading-none drop-shadow-sm ${
-                    isSmall ? "text-[10px]" : isBig ? "text-sm sm:text-base" : "text-xs sm:text-sm"
+                  className={`font-black tracking-tight leading-none drop-shadow-sm truncate max-w-full ${
+                    isSmall ? "text-[9px]" : isBig ? "text-sm sm:text-base" : "text-xs"
                   }`}
                 >
                   {item.symbol}
                 </strong>
                 {!isSmall && (
                   <span
-                    className={`font-bold tracking-tight mt-0.5 drop-shadow-sm ${
-                      isBig ? "text-xs sm:text-sm" : "text-[10px] sm:text-xs"
+                    className={`font-bold tracking-tight mt-0.5 drop-shadow-sm truncate max-w-full ${
+                      isBig ? "text-xs" : "text-[10px]"
                     }`}
                   >
                     {formatPercent(item.change_percent)}
                   </span>
                 )}
                 {isBig && (
-                  <span className="text-[10px] opacity-80 mt-0.5 hidden sm:inline drop-shadow-sm">
+                  <span className="text-[10px] opacity-80 mt-0.5 hidden sm:inline drop-shadow-sm truncate max-w-full">
                     {Number(item.price).toLocaleString("vi-VN")} đ
                   </span>
                 )}
               </Link>
             );
-          })}
-        </div>
-      ) : (
-        <div className="py-12 text-center text-slate-500 bg-slate-950/50 rounded-xl border border-slate-800/80">
-          <p className="text-xs sm:text-sm">Chưa có mã cổ phiếu tiêu biểu nào phù hợp với ngành đã chọn.</p>
-        </div>
-      )}
+          })
+        ) : (
+          <div className="flex items-center justify-center h-full text-slate-500 text-xs sm:text-sm">
+            Chưa có mã cổ phiếu tiêu biểu nào phù hợp với ngành đã chọn.
+          </div>
+        )}
+      </div>
 
-      {/* Floating or Footer Tooltip Details */}
+      {/* Bottom Detail Bar on Hover */}
       {hoveredItem && (
         <div className="treemap-hover-bar flex flex-wrap items-center justify-between gap-3 px-3 py-2 bg-slate-900 border border-slate-800 rounded-lg text-xs animate-fadeIn">
           <div className="flex items-center gap-2">
