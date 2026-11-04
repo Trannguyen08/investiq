@@ -2,6 +2,7 @@ import Link from "next/link";
 
 import { NewsCard, formatNewsTime, newsTickers } from "@/components/news/news-card";
 import { NewsFilterForm } from "@/components/news/news-filter-form";
+import { Pagination } from "@/components/ui/pagination";
 import { getNews, getNewsSources } from "@/lib/api-client";
 
 export const dynamic = "force-dynamic";
@@ -46,15 +47,12 @@ export default async function NewsPage({ searchParams }: { searchParams: SearchP
     }
   }
   const popularSymbols = [...symbolCounts.entries()].sort((a, b) => b[1].count - a[1].count).slice(0, 8);
-  const pageUrl = (page: number) => {
+  const paginationUrlPattern = (() => {
     const params = new URLSearchParams(query);
-    params.set("page", String(page));
+    params.set("page", "[page]");
     return `/news?${params.toString()}`;
-  };
+  })();
   const { page, total_pages: totalPages } = result.pagination;
-  const pageNumbers = Array.from({ length: Math.min(totalPages, 5) }, (_, index) =>
-    Math.max(1, Math.min(page - 2, totalPages - 4)) + index,
-  );
 
   return (
     <main id="main-content" className="news-page">
@@ -83,11 +81,17 @@ export default async function NewsPage({ searchParams }: { searchParams: SearchP
         <div className="news-layout">
           <section className="news-feed" aria-label="Danh sách tin">
             {result.data.map((article, index) => <NewsCard article={article} featured={index === 0} key={article.id} />)}
-            {totalPages > 1 && <nav className="news-pagination" aria-label="Phân trang tin tức">
-              {page > 1 && <Link href={pageUrl(page - 1)}>Trang trước</Link>}
-              {pageNumbers.map((number) => <Link key={number} href={pageUrl(number)} aria-current={number === page ? "page" : undefined}>{number}</Link>)}
-              {page < totalPages && <Link href={pageUrl(page + 1)}>Trang sau</Link>}
-            </nav>}
+            {totalPages > 1 && (
+              <Pagination
+                currentPage={page}
+                totalPages={totalPages}
+                totalItems={result.pagination.total_items}
+                pageSize={result.pagination.page_size || 10}
+                itemLabel="bài viết"
+                pageUrlPattern={paginationUrlPattern}
+                ariaLabel="Phân trang tin tức"
+              />
+            )}
           </section>
           <aside className="news-sidebar">
             <section>

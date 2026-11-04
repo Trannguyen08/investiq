@@ -2,6 +2,7 @@
 
 import { useMemo, useState } from "react";
 import type { DividendItem, DividendSummary } from "@/types/market";
+import { Pagination } from "@/components/ui/pagination";
 
 type StockDividendPanelProps = {
   symbol: string;
@@ -212,63 +213,15 @@ export function StockDividendPanel({ symbol, summary, events }: StockDividendPan
             </div>
 
             {totalFiltered > 0 && (
-              <div className="dividend-pagination-bar mt-4 pt-3 border-t border-slate-800 flex flex-col sm:flex-row items-center justify-between gap-3 text-xs">
-                <div className="text-slate-400">
-                  Hiển thị <strong className="text-slate-200 font-bold">{(clampedPage - 1) * PAGE_SIZE + 1} - {Math.min(clampedPage * PAGE_SIZE, totalFiltered)}</strong> trong tổng số <strong className="text-slate-200 font-bold">{totalFiltered}</strong> đợt chi trả
-                </div>
-                {totalPages > 1 && (
-                  <div className="flex items-center gap-1.5">
-                    <button
-                      type="button"
-                      disabled={clampedPage <= 1}
-                      onClick={() => setPage((p) => Math.max(1, p - 1))}
-                      className="px-3 py-1.5 rounded-lg bg-slate-950 border border-slate-800 text-slate-300 hover:text-white hover:border-slate-700 disabled:opacity-40 disabled:cursor-not-allowed transition font-semibold"
-                    >
-                      ← Trước
-                    </button>
-                    <div className="flex items-center gap-1">
-                      {Array.from({ length: totalPages }, (_, i) => i + 1).map((pNum) => {
-                        if (
-                          totalPages <= 7 ||
-                          pNum === 1 ||
-                          pNum === totalPages ||
-                          Math.abs(pNum - clampedPage) <= 1
-                        ) {
-                          return (
-                            <button
-                              key={pNum}
-                              type="button"
-                              onClick={() => setPage(pNum)}
-                              className={`w-7 h-7 rounded-md text-xs font-bold transition flex items-center justify-center ${
-                                pNum === clampedPage
-                                  ? "bg-sky-600 text-white shadow-sm"
-                                  : "bg-slate-950 text-slate-400 hover:text-white hover:bg-slate-900 border border-slate-800"
-                              }`}
-                            >
-                              {pNum}
-                            </button>
-                          );
-                        }
-                        if (pNum === 2 && clampedPage > 3) {
-                          return <span key="ellipsis-start" className="text-slate-500 px-0.5">...</span>;
-                        }
-                        if (pNum === totalPages - 1 && clampedPage < totalPages - 2) {
-                          return <span key="ellipsis-end" className="text-slate-500 px-0.5">...</span>;
-                        }
-                        return null;
-                      })}
-                    </div>
-                    <button
-                      type="button"
-                      disabled={clampedPage >= totalPages}
-                      onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
-                      className="px-3 py-1.5 rounded-lg bg-slate-950 border border-slate-800 text-slate-300 hover:text-white hover:border-slate-700 disabled:opacity-40 disabled:cursor-not-allowed transition font-semibold"
-                    >
-                      Sau →
-                    </button>
-                  </div>
-                )}
-              </div>
+              <Pagination
+                currentPage={clampedPage}
+                totalPages={totalPages}
+                totalItems={totalFiltered}
+                pageSize={PAGE_SIZE}
+                itemLabel="đợt chi trả"
+                onPageChange={(p) => setPage(p)}
+                ariaLabel="Phân trang cổ tức"
+              />
             )}
           </>
         ) : (

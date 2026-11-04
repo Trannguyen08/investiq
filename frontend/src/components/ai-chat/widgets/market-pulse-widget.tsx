@@ -7,17 +7,17 @@ export function MarketPulseWidget({ data }: { data: MarketPulseWidgetData }) {
   const isPositive = change_percent >= 0;
 
   return (
-    <div className="w-full max-w-xl bg-slate-900/95 border border-slate-800 rounded-2xl p-4 sm:p-5 shadow-2xl my-3 text-slate-200">
-      <div className="flex items-center justify-between border-b border-slate-800 pb-3 mb-3">
+    <div className="w-full max-w-xl bg-slate-900/95 border border-slate-800 rounded-2xl p-3.5 sm:p-4 shadow-2xl my-2.5 text-slate-200 overflow-hidden">
+      <div className="flex flex-wrap items-center justify-between gap-2 border-b border-slate-800 pb-3 mb-3">
         <div>
-          <h4 className="text-sm sm:text-base font-bold text-white m-0">Nhịp đập thị trường toàn sàn</h4>
+          <h4 className="text-sm font-bold text-white m-0">Nhịp đập thị trường toàn sàn</h4>
         </div>
-        <div className="flex items-center gap-2">
-          <strong className="text-sm sm:text-base font-extrabold text-white">
+        <div className="flex items-center gap-2 shrink-0">
+          <strong className="text-sm sm:text-base font-extrabold text-white font-mono whitespace-nowrap">
             {vnindex.toLocaleString("vi-VN", { minimumFractionDigits: 2 })}
           </strong>
           <span
-            className={`text-xs font-bold px-2 py-0.5 rounded ${
+            className={`text-xs font-bold px-2 py-0.5 rounded font-mono whitespace-nowrap ${
               isPositive ? "bg-emerald-950 text-emerald-400 border border-emerald-800/60" : "bg-rose-950 text-rose-400 border border-rose-800/60"
             }`}
           >
@@ -27,18 +27,18 @@ export function MarketPulseWidget({ data }: { data: MarketPulseWidgetData }) {
         </div>
       </div>
 
-      <div className="grid grid-cols-2 gap-3 text-xs bg-slate-950/70 p-3 rounded-xl border border-slate-800">
+      <div className="grid grid-cols-2 gap-2.5 text-xs bg-slate-950/70 p-3 rounded-xl border border-slate-800">
         <div>
           <span className="text-slate-400 block text-[11px] mb-1">Độ rộng toàn sàn</span>
-          <div className="flex items-center gap-3">
-            <span className="font-bold text-emerald-400">{advances} tăng</span>
+          <div className="flex items-center gap-2 flex-wrap">
+            <span className="font-bold text-emerald-400 whitespace-nowrap">{advances} tăng</span>
             <span className="text-slate-500">·</span>
-            <span className="font-bold text-rose-400">{declines} giảm</span>
+            <span className="font-bold text-rose-400 whitespace-nowrap">{declines} giảm</span>
           </div>
         </div>
         <div>
           <span className="text-slate-400 block text-[11px] mb-1">Thanh khoản khớp lệnh</span>
-          <strong className="text-sm font-extrabold text-sky-400">
+          <strong className="text-xs sm:text-sm font-extrabold text-sky-400 whitespace-nowrap">
             ~{liquidity_trillion.toLocaleString("vi-VN")} nghìn tỷ
           </strong>
         </div>
