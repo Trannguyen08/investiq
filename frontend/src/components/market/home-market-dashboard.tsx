@@ -154,7 +154,15 @@ function StockPulseColumn({
   );
 }
 
-export function HomeStockPulse({ instruments, meta }: { instruments: MarketInstrument[]; meta: MarketMeta }) {
+export function HomeStockPulse({
+  instruments,
+  meta,
+  isFullMarket = false,
+}: {
+  instruments: MarketInstrument[];
+  meta: MarketMeta;
+  isFullMarket?: boolean;
+}) {
   const [timeRange, setTimeRange] = useState<PulseTimeRange>("1D");
 
   const enriched: PulseItem[] = instruments.map((item) => ({
@@ -174,7 +182,11 @@ export function HomeStockPulse({ instruments, meta }: { instruments: MarketInstr
         <div>
           <p className="eyebrow">BẢNG QUAN SÁT NHANH</p>
           <h2 id="home-stock-pulse-title">Mã nào đang đáng chú ý?</h2>
-          <p>Xếp hạng trong {instruments.length} mã nổi bật do snapshot trang chủ cung cấp, không phải toàn bộ thị trường.</p>
+          <p>
+            {isFullMarket || instruments.length > 20
+              ? "Xếp hạng biến động và thanh khoản trên toàn bộ thị trường."
+              : `Xếp hạng trong ${instruments.length} mã nổi bật do snapshot trang chủ cung cấp, không phải toàn bộ thị trường.`}
+          </p>
         </div>
         <div className="home-stock-pulse-controls">
           <Link href="/market/stocks" className="stock-pulse-full-link">Mở bảng giá đầy đủ →</Link>
@@ -201,7 +213,9 @@ export function HomeStockPulse({ instruments, meta }: { instruments: MarketInstr
         <StockPulseColumn title="Giảm đáng chú ý" description={timeRange === "1D" ? "Ưu tiên kiểm tra nguyên nhân" : `Giảm sâu nhất (${rangeLabel})`} items={decliners} metric="change" />
         <StockPulseColumn title="Giao dịch sôi động" description="Xếp theo giá trị khớp" items={liquid} metric="liquidity" />
       </div>
-      <p className="home-section-source">Quan sát lúc {formatMarketTime(meta.market_time)} · Nguồn {meta.provider_name} · {meta.partial ? "Phạm vi dữ liệu một phần" : "Phạm vi snapshot hiện có"}. Thứ hạng không phải khuyến nghị mua bán.</p>
+      <p className="home-section-source">
+        Quan sát lúc {formatMarketTime(meta.market_time)} · Nguồn {meta.provider_name} · {isFullMarket || instruments.length > 20 ? "Thống kê toàn thị trường" : meta.partial ? "Phạm vi dữ liệu một phần" : "Phạm vi snapshot hiện có"}. Thứ hạng không phải khuyến nghị mua bán.
+      </p>
     </section>
   );
 }
@@ -318,25 +332,49 @@ function BeginnerDecisionGuide() {
   );
 }
 
-function HomeToolDirectory() {
-  const tools = [
-    { href: "/market/stocks", icon: "⌁", title: "Lọc cổ phiếu", detail: "Tìm theo biến động, thanh khoản, vốn hóa và VN30." },
-    { href: "/market/watchlist", icon: "☆", title: "Watchlist riêng", detail: "Gom các mã cần theo dõi mà chưa cần mua." },
-    { href: "/portfolio", icon: "◫", title: "Danh mục mô phỏng", detail: "Thực hành mua bán và xem lãi/lỗ với tiền giả định." },
-    { href: "/market/events", icon: "◷", title: "Lịch doanh nghiệp", detail: "Theo dõi cổ tức, đại hội và kết quả kinh doanh." },
-  ];
-  return <section className="home-tool-directory" aria-labelledby="home-tools-title"><div className="beginner-heading"><div><p className="eyebrow">KHÁM PHÁ INVESTIQ</p><h2 id="home-tools-title">Chọn công cụ theo việc bạn cần làm</h2><p>Mỗi lối đi mở đúng màn hình và giữ nguyên nhãn nguồn, độ trễ của dữ liệu.</p></div></div><div>{tools.map((tool) => <Link aria-label={tool.title} href={tool.href} key={tool.href}><span aria-hidden="true">{tool.icon}</span><strong>{tool.title}</strong><p>{tool.detail}</p><em>Mở công cụ →</em></Link>)}</div></section>;
-}
-
-export function HomeMarketDashboard({ overview, sectors, news, dividendEvents }: { overview: MarketOverview; sectors: MarketSector[]; news: NewsSummary[]; dividendEvents?: DividendItem[] }) {
+export function HomeMarketDashboard({
+  overview,
+  sectors,
+  news,
+  dividendEvents,
+  allMarketInstruments,
+}: {
+  overview: MarketOverview;
+  sectors: MarketSector[];
+  news: NewsSummary[];
+  dividendEvents?: DividendItem[];
+  allMarketInstruments?: MarketInstrument[];
+}) {
   const symbols = [
     ...overview.data.indices.map((item) => item.symbol),
     ...overview.data.trending.slice(0, 6).map((item) => item.symbol),
   ];
-  return <MarketStreamProvider symbols={symbols}><HomeMarketContent overview={overview} sectors={sectors} news={news} dividendEvents={dividendEvents} /></MarketStreamProvider>;
+  return (
+    <MarketStreamProvider symbols={symbols}>
+      <HomeMarketContent
+        overview={overview}
+        sectors={sectors}
+        news={news}
+        dividendEvents={dividendEvents}
+        allMarketInstruments={allMarketInstruments}
+      />
+    </MarketStreamProvider>
+  );
 }
 
-function HomeMarketContent({ overview, sectors, news, dividendEvents }: { overview: MarketOverview; sectors: MarketSector[]; news: NewsSummary[]; dividendEvents?: DividendItem[] }) {
+function HomeMarketContent({
+  overview,
+  sectors,
+  news,
+  dividendEvents,
+  allMarketInstruments,
+}: {
+  overview: MarketOverview;
+  sectors: MarketSector[];
+  news: NewsSummary[];
+  dividendEvents?: DividendItem[];
+  allMarketInstruments?: MarketInstrument[];
+}) {
   const stream = useMarketStreamState();
   const indices = overview.data.indices.map((item) => mergeLiveIndex(item, stream.items[item.symbol]));
   const instruments = overview.data.trending.map((item) => mergeLiveInstrument(item, stream.items[item.symbol]));
@@ -351,7 +389,13 @@ function HomeMarketContent({ overview, sectors, news, dividendEvents }: { overvi
   const conclusion = marketConclusion(primary, breadth.advances, breadth.declines);
   const sentiment = 50 + (breadth.advances - breadth.declines) / breadthTotal * 38 + Number(primary?.change_percent ?? 0) * 3;
   const liquidity = liquidityComparison(primary);
-  const foreignNet = instruments.reduce((sum, item) => sum + Number(item.foreign_net_value), 0);
+  const marketForeignNet = sectors.length > 0
+    ? sectors.reduce((sum, s) => sum + Number(s.foreign_net_value || 0), 0)
+    : instruments.reduce((sum, item) => sum + Number(item.foreign_net_value || 0), 0);
+  const hasFullMarket = Boolean(allMarketInstruments && allMarketInstruments.length > 0);
+  const pulseInstruments = hasFullMarket
+    ? allMarketInstruments!.map((item) => mergeLiveInstrument(item, stream.items[item.symbol]))
+    : instruments;
   const strongestSector = [...sectors].sort((left, right) => Math.abs(Number(right.change_percent)) - Math.abs(Number(left.change_percent)))[0];
   const nextEvent = overview.data.upcoming_events[0];
   const newestArticle = news[0];
@@ -393,11 +437,11 @@ function HomeMarketContent({ overview, sectors, news, dividendEvents }: { overvi
         <div className="one-minute-grid">
           <article><div className="beginner-card-title"><h3>Tăng hay giảm?</h3><InfoTip term="Độ rộng thị trường">So sánh số cổ phiếu tăng, giảm và đứng giá. Nó cho biết mức tăng có lan tỏa hay chỉ do vài mã lớn kéo chỉ số.</InfoTip></div><strong>{breadth.advances > breadth.declines ? "Sắc xanh đang chiếm ưu thế" : breadth.advances < breadth.declines ? "Sắc đỏ đang chiếm ưu thế" : "Thị trường khá cân bằng"}</strong><div className="beginner-breadth"><span className="advance" style={{ width: `${breadth.advances / breadthTotal * 100}%` }} /><span className="unchanged" style={{ width: `${breadth.unchanged / breadthTotal * 100}%` }} /><span className="decline" style={{ width: `${breadth.declines / breadthTotal * 100}%` }} /></div><p><b className="positive">{breadth.advances} tăng</b> · {breadth.unchanged} đứng giá · <b className="negative">{breadth.declines} giảm</b></p></article>
           <article><div className="beginner-card-title"><h3>Tiền vào hay ra?</h3><InfoTip term="Thanh khoản">Lượng cổ phiếu và tiền được giao dịch. Thanh khoản cao cho thấy mua bán sôi động, không tự động đồng nghĩa giá sẽ tăng.</InfoTip></div><strong>{liquidity === null ? "Chưa đủ 20 phiên để so sánh" : `${liquidity >= 0 ? "Cao hơn" : "Thấp hơn"} bình thường ${Math.abs(liquidity).toFixed(0)}%`}</strong><p>So với trung bình tối đa 20 điểm dữ liệu gần nhất của VN-Index.</p></article>
-          <article><div className="beginner-card-title"><h3>Khối ngoại trong nhóm nổi bật</h3><InfoTip term="Khối ngoại">Nhà đầu tư nước ngoài mua và bán cổ phiếu. Mua ròng nghĩa là giá trị mua lớn hơn giá trị bán.</InfoTip></div><strong className={changeTone(String(foreignNet))}>{foreignNet >= 0 ? "Mua ròng" : "Bán ròng"} {formatMoney(String(Math.abs(foreignNet)))}</strong><p>Cộng trên {instruments.length} mã trong snapshot trang chủ, không đại diện toàn thị trường.</p></article>
+          <article><div className="beginner-card-title"><h3>Khối ngoại toàn thị trường</h3><InfoTip term="Khối ngoại">Tổng giá trị mua và bán ròng của nhà đầu tư nước ngoài trên toàn bộ thị trường.</InfoTip></div><strong className={changeTone(String(marketForeignNet))}>{marketForeignNet >= 0 ? "Mua ròng" : "Bán ròng"} {formatMoney(String(Math.abs(marketForeignNet)))}</strong><p>Tổng giá trị mua/bán ròng của khối ngoại trên toàn bộ thị trường trong phiên.</p></article>
         </div>
       </section>
 
-      <HomeStockPulse instruments={instruments} meta={overview.meta} />
+      <HomeStockPulse instruments={pulseInstruments} meta={overview.meta} isFullMarket={hasFullMarket} />
 
       <HomeLeadingSectors sectors={sectors} />
 
@@ -409,12 +453,7 @@ function HomeMarketContent({ overview, sectors, news, dividendEvents }: { overvi
 
       <BeginnerDecisionGuide />
 
-      <div className="beginner-two-columns">
-        <section className="beginner-glossary" aria-labelledby="term-title"><p className="eyebrow">THUẬT NGỮ HÔM NAY</p><h2 id="term-title">Giá tham chiếu là gì?</h2><p>Là mốc để tính cổ phiếu đang tăng hay giảm trong ngày. Trên bảng giá Việt Nam, giá bằng tham chiếu thường có màu vàng.</p><span className="term-example">Ví dụ: tham chiếu 50.000đ, giá 51.000đ nghĩa là tăng 2%.</span></section>
-        <section className="beginner-glossary home-price-check" aria-labelledby="price-check-title"><p className="eyebrow">TRƯỚC KHI ĐỌC GIÁ</p><h2 id="price-check-title">Giá này thuộc thời điểm nào?</h2><p>Luôn nhìn trạng thái phiên, thời gian cập nhật và độ trễ ở đầu trang. Giá đóng cửa gần nhất không phải giá chắc chắn có thể mua hoặc bán ở phiên tiếp theo.</p><Link href="/market/stocks">Mở bảng giá có timestamp →</Link></section>
-      </div>
 
-      <HomeToolDirectory />
 
       <footer className="beginner-disclaimer"><strong>Thông tin tham khảo, không phải khuyến nghị đầu tư.</strong><span>Nguồn: {overview.meta.provider_name} · trạng thái độ trễ: {overview.meta.delay_class} · cập nhật theo thời gian ghi trên dữ liệu.</span></footer>
     </main>

@@ -1,5 +1,39 @@
 # Current Task
 
+## Full Market Aggregation for Stock Pulse & Foreign Net, Homepage Cleanup (Glossary & Tool Directory Removal) - 2026-11-04 (completed)
+- **User Request**:
+  1. Bảng quan sát nhanh ("Mã nào đang đáng chú ý?") trên trang chủ phải tính toán trên **toàn bộ thị trường** chứ không chỉ lấy từ 8 mã trong snapshot trang chủ.
+  2. Thẻ "Khối ngoại trong nhóm nổi bật" đổi thành "Khối ngoại toàn thị trường", tính toán trên toàn bộ thị trường và xóa bỏ dòng ghi chú "Cộng trên 8 mã trong snapshot trang chủ, không đại diện toàn thị trường".
+  3. Cập nhật mô tả của Bảng quan sát nhanh thành "Xếp hạng biến động và thanh khoản trên toàn bộ thị trường" (loại bỏ hoàn toàn câu "Xếp hạng trong 8 mã nổi bật...").
+  4. Bỏ 2 khung ở ảnh 2 khỏi trang chủ:
+     - Khung 1: Hai cột Thuật ngữ ("THUẬT NGỮ HÔM NAY - Giá tham chiếu là gì?" và "TRƯỚC KHI ĐỌC GIÁ - Giá này thuộc thời điểm nào?").
+     - Khung 2: Khung khám phá công cụ ("KHÁM PHÁ INVESTIQ - Chọn công cụ theo việc bạn cần làm").
+  5. Tiếp tục làm việc và commit/push DUY NHẤT trên nhánh `fix/UI`, **tuyệt đối không merge vào `dev` hay `main`**.
+  6. Vượt qua 100% kiểm thử (Lint, Typecheck, Unit Tests, Quality Gate `./scripts/check-pr.ps1`) và cung cấp link localhost để người dùng kiểm tra.
+- **Branch**: `fix/UI` (committed and pushed only to `fix/UI`, strictly not merged to `dev` or `main`).
+- **Changes**:
+  - `frontend/src/app/(user)/page.tsx`:
+    - Fetch song song danh sách cổ phiếu toàn thị trường bằng `Promise.allSettled`: `pulseQuery` (100 mã thanh khoản cao nhất), `gainersQuery` (20 mã tăng mạnh nhất) và `declinersQuery` (20 mã giảm sâu nhất).
+    - Hợp nhất vào mảng `allMarketInstruments` (loại trừ trùng lặp bằng `Map<string, MarketInstrument>`), truyền xuống `HomeMarketDashboard`.
+  - `frontend/src/components/market/home-market-dashboard.tsx`:
+    - Cập nhật `HomeMarketDashboard` và `HomeMarketContent` nhận prop `allMarketInstruments`.
+    - Tính dòng tiền mua/bán ròng của khối ngoại trên toàn bộ thị trường: `marketForeignNet = sectors.reduce((acc, s) => acc + (Number(s.foreign_net_value) || 0), 0)`.
+    - Đổi tiêu đề thẻ thành `Khối ngoại toàn thị trường`, cập nhật mô tả: "Tổng giá trị mua/bán ròng của khối ngoại trên toàn bộ thị trường trong phiên" (xóa bỏ triệt để dòng "Cộng trên 8 mã trong snapshot trang chủ, không đại diện toàn thị trường").
+    - Cập nhật `HomeStockPulse` nhận cờ `isFullMarket`:
+      - Khi có dữ liệu toàn thị trường (`isFullMarket = true` hoặc `instruments.length > 20`), tiêu đề phụ hiển thị: "Xếp hạng biến động và thanh khoản trên toàn bộ thị trường."
+      - Dòng nguồn hiển thị: "Thống kê toàn thị trường".
+      - Dữ liệu cột Tăng nổi bật, Giảm đáng chú ý và Giao dịch sôi động được xếp hạng từ tập hợp toàn bộ các mã trên sàn (100+ mã thanh khoản, tăng, giảm).
+    - Xóa bỏ hoàn toàn 2 khung ở ảnh 2: `<div className="beginner-two-columns">` (Thuật ngữ) và `<HomeToolDirectory />` (Khám phá công cụ) theo đúng yêu cầu.
+  - `frontend/src/components/market/beginner-market-ui.test.tsx`:
+    - Cập nhật kiểm thử link `/portfolio` trỏ tới nút "Mở danh mục mô phỏng →" trong `BeginnerDecisionGuide` thay vì link từ `HomeToolDirectory` đã xóa.
+- **Verification**:
+  - Quality Gate `./scripts/check-pr.ps1`: Passed 100%.
+  - Frontend Lint (ESLint): Passed 0 lỗi.
+  - Frontend Typecheck (tsc): Passed 0 lỗi.
+  - Frontend Unit Tests (Vitest): 169/169 passed (44 test suites).
+  - Backend Lint (Ruff) & Typecheck (Mypy): Passed 0 lỗi.
+  - Backend Unit Tests (Pytest): Passed 100%.
+
 ## Treemap Visual Contrast, Tab Switch Alignment, Sticky Action Bar & Search Table Centering - 2026-11-04 (completed)
 - **User Request**:
   1. Độ chênh lệch phần trăm phải thể hiện rõ ràng hơn, khắc phục tình trạng các khối nhìn đều như nhau mặc dù % biến động chênh nhau rất nhiều (ví dụ LPB +4.61% và GAS +0.27% hay VIC 0% trước đó có diện tích gần như ngang ngửa nhau).
