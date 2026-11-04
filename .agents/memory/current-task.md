@@ -22,7 +22,7 @@
   - `frontend/src/components/market/stock-dividend-panel.tsx`:
     - Tích hợp component `Pagination` thay cho đoạn code phân trang inline cũ, giữ nguyên nhãn "đợt chi trả" và chuyển trang 0ms client-side.
   - `frontend/src/components/market/events-view.tsx`:
-    - Thay thế giao diện phân trang chữ đơn giản ở giữa (Image 4) bằng `Pagination` đồng bộ chuẩn mực với nhãn "sự kiện", có đầy đủ các ô số trang và nút Trước/Sau.
+    - Thay thế giao diện phân trang chữ đơn giản ở giữa (Image 4) bằng `Pagination` đồng bộ chuẩn mực với nhãn "sự kiện", có đầy đủ các ô số trang và nút Trước/Sau, bổ sung `className="px-5 pb-5"` cân xứng với mép bo tròn của `.market-tab-panel`.
   - `frontend/src/app/(user)/news/page.tsx`:
     - Thay thế cụm nút màu xanh lá ở giữa (Image 3) bằng `Pagination` đồng bộ với nhãn "bài viết", truyền `pageUrlPattern` an toàn từ Server Component.
   - `frontend/src/components/market/market-stocks-beginner.tsx` (và `market-workspace.tsx`):

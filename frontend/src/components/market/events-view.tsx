@@ -176,6 +176,7 @@ export function EventsView({
                 setPage(p);
                 window.scrollTo({ top: 120, behavior: "smooth" });
               }}
+              className="px-5 pb-5"
               ariaLabel="Phân trang sự kiện"
             />
           )}

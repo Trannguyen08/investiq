@@ -126,7 +126,7 @@ export function Pagination({
 
   return (
     <nav
-      className={`app-pagination-bar mt-4 pt-3 border-t border-slate-800 flex flex-col sm:flex-row items-center justify-between gap-3 text-xs ${className}`}
+      className={`app-pagination-bar mt-4 pt-3 pb-2 sm:pb-3 border-t border-slate-800 flex flex-col sm:flex-row items-center justify-between gap-3 text-xs ${className}`}
       aria-label={ariaLabel}
     >
       <div className="text-slate-400">
