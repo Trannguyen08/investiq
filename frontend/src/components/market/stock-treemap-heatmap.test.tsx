@@ -1,7 +1,7 @@
 import { fireEvent, render, screen } from "@testing-library/react";
 import { describe, expect, it } from "vitest";
 
-import { computeSquarifiedTreemap, StockTreemapHeatmap } from "@/components/market/stock-treemap-heatmap";
+import { balanceDynamicWeights, computeSquarifiedTreemap, StockTreemapHeatmap } from "@/components/market/stock-treemap-heatmap";
 import type { MarketInstrument, MarketSector } from "@/types/market";
 
 function sampleInstrument(
@@ -55,6 +55,28 @@ function sampleSector(name: string, changePercent: string, memberCount: number):
     market_cap: "100000000000000",
   };
 }
+
+describe("balanceDynamicWeights", () => {
+  it("compresses extreme 100x ratios so all items stay within readable bounds", () => {
+    // Simulated FPT (150,000B) vs mid-caps (2,000B) vs small-caps (300B)
+    const raw = [150_000, 2_000, 1_500, 800, 500, 300, 200, 150];
+    const balanced = balanceDynamicWeights(raw, 24, 2.5);
+
+    expect(balanced).toHaveLength(raw.length);
+    const sum = balanced.reduce((a, b) => a + b, 0);
+    expect(sum).toBeCloseTo(100, 1);
+
+    // Max item (FPT) is capped near 24% instead of 95%
+    expect(balanced[0]).toBeLessThanOrEqual(25);
+    // Min item is at least 2.5%
+    expect(Math.min(...balanced)).toBeGreaterThanOrEqual(2.5);
+  });
+
+  it("handles edge cases gracefully", () => {
+    expect(balanceDynamicWeights([])).toEqual([]);
+    expect(balanceDynamicWeights([500])).toEqual([100]);
+  });
+});
 
 describe("computeSquarifiedTreemap", () => {
   it("fills the bounding box completely without gaps or overflow", () => {

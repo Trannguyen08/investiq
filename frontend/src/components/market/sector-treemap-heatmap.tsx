@@ -4,7 +4,7 @@ import Link from "next/link";
 import { useMemo, useState } from "react";
 
 import { changeTone, formatMoney, formatPercent } from "@/components/market/formatters";
-import { computeSquarifiedTreemap } from "@/components/market/stock-treemap-heatmap";
+import { balanceDynamicWeights, computeSquarifiedTreemap } from "@/components/market/stock-treemap-heatmap";
 import type { MarketSector } from "@/types/market";
 
 type SectorSizeMetric = "market_cap" | "matched_value";
@@ -21,17 +21,24 @@ export function SectorTreemapHeatmap({
   const [sizeMetric, setSizeMetric] = useState<SectorSizeMetric>("market_cap");
   const [hoveredSectorName, setHoveredSectorName] = useState<string | null>(null);
 
-  // Compute treemap rectangles for all sectors
+  // Compute treemap rectangles for all sectors with balanced dynamic weights
   const treemapRects = useMemo(() => {
     if (!sectors.length) return [];
 
-    const rawItems = sectors.map((sector) => {
+    const rawWeights = sectors.map((sector) => {
       let weight = Number(sector[sizeMetric]);
       if (!weight || weight <= 0) {
         weight = sizeMetric === "market_cap" ? 10_000_000_000_000 : 100_000_000_000;
       }
-      return { item: sector, value: weight };
+      return weight;
     });
+
+    const balancedWeights = balanceDynamicWeights(rawWeights, 20, 2.5);
+
+    const rawItems = sectors.map((sector, idx) => ({
+      item: sector,
+      value: balancedWeights[idx],
+    }));
 
     return computeSquarifiedTreemap(rawItems, 1000, 560);
   }, [sectors, sizeMetric]);

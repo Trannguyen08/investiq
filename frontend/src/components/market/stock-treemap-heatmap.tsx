@@ -125,6 +125,34 @@ export function computeSquarifiedTreemap<T>(
   return rects;
 }
 
+// Damp dynamic range between mega-caps and small-caps so all stocks remain legible
+export function balanceDynamicWeights(
+  rawValues: number[],
+  maxPct = 24,
+  minPct = 2.5
+): number[] {
+  if (rawValues.length === 0) return [];
+  if (rawValues.length === 1) return [100];
+
+  const compressed = rawValues.map((v) => Math.pow(Math.max(v, 1), 0.35));
+  const sumCompressed = compressed.reduce((a, b) => a + b, 0);
+  if (sumCompressed <= 0) return rawValues.map(() => 100 / rawValues.length);
+
+  let pcts = compressed.map((c) => (c / sumCompressed) * 100);
+  const n = rawValues.length;
+  const effectiveMax = Math.max(maxPct, 100 / n);
+  const effectiveMin = Math.min(minPct, 80 / n);
+
+  // Iteratively redistribute surplus to maintain exact bounds [effectiveMin, effectiveMax]
+  for (let iter = 0; iter < 4; iter++) {
+    const clamped = pcts.map((p) => Math.max(Math.min(p, effectiveMax), effectiveMin));
+    const sumClamped = clamped.reduce((a, b) => a + b, 0);
+    pcts = clamped.map((c) => (c / sumClamped) * 100);
+  }
+
+  return pcts;
+}
+
 export function StockTreemapHeatmap({
   instruments,
   sectors,
@@ -160,7 +188,7 @@ export function StockTreemapHeatmap({
     setLoadingSector(true);
     let cancelled = false;
 
-    fetch(`/market-api/instruments?sector=${encodeURIComponent(selectedSector)}&limit=40&sort=matched_value&direction=desc`)
+    fetch(`/market-api/instruments?sector=${encodeURIComponent(selectedSector)}&limit=20&sort=matched_value&direction=desc`)
       .then((res) => (res.ok ? res.json() : null))
       .then((data: { data?: MarketInstrument[] } | null) => {
         if (cancelled) return;
@@ -178,43 +206,52 @@ export function StockTreemapHeatmap({
     };
   }, [selectedSector, sectorCache]);
 
-  // Determine items to display
+  // Determine items to display (max 20 notable stocks per view)
   const activeStockList = useMemo(() => {
     if (selectedSector === "ALL") {
-      // Top 32 representative stocks across whole market
+      // Top 20 representative stocks across whole market
       return [...instruments]
         .sort((a, b) => {
           const valA = Number(a.market_cap) || Number(a.matched_value) || 0;
           const valB = Number(b.market_cap) || Number(b.matched_value) || 0;
           return valB - valA;
         })
-        .slice(0, 32);
+        .slice(0, 20);
     }
 
-    // Use cached sector data if available
+    // Use cached sector data if available (max 20 notable stocks)
     const cached = sectorCache[selectedSector];
     if (cached && cached.length > 0) {
-      return cached;
+      return cached.slice(0, 20);
     }
 
     // Fallback to filtering from snapshot instruments
-    const fromSnapshot = instruments.filter(
-      (inst) => inst.sector && inst.sector.toLocaleLowerCase("vi-VN") === selectedSector.toLocaleLowerCase("vi-VN")
-    );
+    const fromSnapshot = instruments
+      .filter(
+        (inst) => inst.sector && inst.sector.toLocaleLowerCase("vi-VN") === selectedSector.toLocaleLowerCase("vi-VN")
+      )
+      .slice(0, 20);
     return fromSnapshot;
   }, [instruments, selectedSector, sectorCache]);
 
-  // Compute treemap rectangles
+  // Compute treemap rectangles with balanced dynamic weights
   const treemapRects = useMemo(() => {
     if (!activeStockList.length) return [];
 
-    const rawItems = activeStockList.map((item) => {
+    const rawWeights = activeStockList.map((item) => {
       let weight = Number(item[sizeMetric]);
       if (!weight || weight <= 0) {
         weight = sizeMetric === "market_cap" ? 5_000_000_000_000 : 5_000_000_000;
       }
-      return { item, value: weight };
+      return weight;
     });
+
+    const balancedWeights = balanceDynamicWeights(rawWeights, 24, 2.5);
+
+    const rawItems = activeStockList.map((item, idx) => ({
+      item,
+      value: balancedWeights[idx],
+    }));
 
     return computeSquarifiedTreemap(rawItems, 1000, 560);
   }, [activeStockList, sizeMetric]);
@@ -225,7 +262,7 @@ export function StockTreemapHeatmap({
 
   return (
     <div className="stock-treemap-heatmap flex flex-col gap-3">
-      {/* Controls Bar: Selector & Size Metric (Removed 1D/7D/30D/1Y block per request) */}
+      {/* Controls Bar: Selector & Size Metric */}
       <div className="treemap-controls flex flex-wrap items-center justify-between gap-3 text-xs bg-slate-950/70 p-3 rounded-xl border border-slate-800">
         <div className="flex flex-wrap items-center gap-2.5">
           <label htmlFor="treemap-sector-select" className="text-slate-400 font-semibold shrink-0">
@@ -276,7 +313,7 @@ export function StockTreemapHeatmap({
 
         {/* Indicator that data is daily change */}
         <span className="text-[11px] text-slate-400 italic">
-          Biến động trong ngày (%)
+          Biến động trong ngày (%) · Tối đa 20 mã tiêu biểu
         </span>
       </div>
 
@@ -305,9 +342,8 @@ export function StockTreemapHeatmap({
               ? "bg-[#991b1b] hover:bg-[#b91c1c] text-rose-50 border-slate-950"
               : "bg-[#b45309] hover:bg-[#d97706] text-amber-50 border-slate-950";
 
-            const isBig = width > 11 && height > 13;
-            const isTiny = width < 4 || height < 4.5;
-            const isSmall = !isBig && (width < 6.5 || height < 7);
+            const isBig = width > 13 && height > 16;
+            const isSmall = width < 8.5 || height < 9.5;
 
             return (
               <Link
@@ -322,27 +358,25 @@ export function StockTreemapHeatmap({
                   width: `${width}%`,
                   height: `${height}%`,
                 }}
-                className={`absolute border box-border flex flex-col items-center justify-center p-1 transition-all duration-150 overflow-hidden cursor-pointer shadow-xs ${bgClass}`}
+                className={`absolute border box-border flex flex-col items-center justify-center p-1.5 transition-all duration-150 overflow-hidden cursor-pointer shadow-xs text-center ${bgClass}`}
                 title={`${item.symbol} - ${item.name} | Giá: ${Number(item.price).toLocaleString("vi-VN")} đ | Biến động: ${formatPercent(item.change_percent)} | GTGD: ${formatMoney(item.matched_value)}`}
               >
                 <strong
                   className={`font-black tracking-tight leading-none drop-shadow-sm truncate max-w-full ${
-                    isTiny ? "text-[8px]" : isSmall ? "text-[10px]" : isBig ? "text-sm sm:text-base" : "text-xs"
+                    isBig ? "text-sm sm:text-base" : isSmall ? "text-xs" : "text-xs sm:text-sm"
                   }`}
                 >
                   {item.symbol}
                 </strong>
-                {!isTiny && (
-                  <span
-                    className={`font-bold tracking-tight mt-0.5 drop-shadow-sm truncate max-w-full ${
-                      isBig ? "text-xs" : "text-[9px]"
-                    }`}
-                  >
-                    {formatPercent(item.change_percent)}
-                  </span>
-                )}
-                {isBig && (
-                  <span className="text-[10px] opacity-80 mt-0.5 hidden sm:inline drop-shadow-sm truncate max-w-full">
+                <span
+                  className={`font-extrabold tracking-tight mt-1 drop-shadow-sm truncate max-w-full ${
+                    isBig ? "text-xs sm:text-sm" : isSmall ? "text-[10px] sm:text-[11px]" : "text-xs"
+                  }`}
+                >
+                  {formatPercent(item.change_percent)}
+                </span>
+                {!isSmall && (
+                  <span className="text-[10px] opacity-85 mt-0.5 hidden sm:inline drop-shadow-sm truncate max-w-full">
                     {Number(item.price).toLocaleString("vi-VN")} đ
                   </span>
                 )}
