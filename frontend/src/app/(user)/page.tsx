@@ -31,7 +31,7 @@ export default async function OverviewPage() {
     getMarketOverview(15000),
     getMarketSectors(15000),
     getNews(newsQuery, 15000),
-    getMarketDividendCalendar(30),
+    getMarketDividendCalendar(40),
     getMarketInstruments(pulseQuery, 15000),
     getMarketInstruments(gainersQuery, 15000),
     getMarketInstruments(declinersQuery, 15000),

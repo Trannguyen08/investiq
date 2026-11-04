@@ -452,6 +452,7 @@ export type DividendItem = {
   cash_value: number | null;
   title: string;
   source: string;
+  source_url?: string | null;
 };
 
 export type DividendSummary = {
