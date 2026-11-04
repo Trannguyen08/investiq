@@ -2,9 +2,12 @@
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { type FormEvent, type RefObject, useEffect, useRef, useState } from "react";
+import { type FormEvent, type RefObject, useEffect, useMemo, useRef, useState } from "react";
 
 import { InfoTip, MarketColorLegend, MarketLineChart, SectorHeatmap } from "@/components/market/beginner-market-ui";
+import { SectorTreemapHeatmap } from "@/components/market/sector-treemap-heatmap";
+import { StockTreemapHeatmap } from "@/components/market/stock-treemap-heatmap";
+import { Pagination, encodeCursor } from "@/components/ui/pagination";
 import {
   changeTone,
   formatChange,
@@ -381,11 +384,36 @@ export function StocksView({
   const [comparisonOpen, setComparisonOpen] = useState(comparisonSymbols.length >= 2);
   const activeAdvancedFilterCount = [filters.min_change, filters.max_change, filters.min_matched_value_billion, filters.min_market_cap_billion, filters.min_volume_ratio, filters.vn30].filter(Boolean).length;
   const [advancedFilterOpen, setAdvancedFilterOpen] = useState(activeAdvancedFilterCount > 0);
+  const [searchQuery, setSearchQuery] = useState(filters.q || "");
+  const [heatmapTab, setHeatmapTab] = useState<"treemap" | "sectors">("treemap");
+  const [selectedTreemapSector, setSelectedTreemapSector] = useState<string>("ALL");
   const rows = collection.data.map((item) => mergeLiveInstrument(item, stream.items[item.symbol]));
-  const fundamentalsBySymbol = useVisibleFundamentals(
-    rows.filter((item) => item.pe === null || item.pb === null).map((item) => item.symbol),
-  );
   const universe = summary.data.map((item) => mergeLiveInstrument(item, stream.items[item.symbol]));
+
+  const displayedRows = useMemo(() => {
+    const q = searchQuery.trim().toLowerCase();
+    if (!q) return rows;
+    const pool = universe.length > rows.length ? universe : rows;
+    return pool.filter((item) =>
+      item.symbol.toLowerCase().includes(q) ||
+      item.name.toLowerCase().includes(q)
+    );
+  }, [rows, universe, searchQuery]);
+
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      if (searchQuery !== (filters.q || "")) {
+        const nextUrl = hrefWith(filters, { q: searchQuery.trim(), cursor: null });
+        router.replace(nextUrl, { scroll: false });
+      }
+    }, 350);
+    return () => clearTimeout(timer);
+  }, [searchQuery, filters, router]);
+
+  const fundamentalsBySymbol = useVisibleFundamentals(
+    displayedRows.filter((item) => item.pe === null || item.pb === null).map((item) => item.symbol),
+  );
+
   const sectorFlows = [...sectors.data].sort((left, right) => Number(right.market_cap) - Number(left.market_cap));
   const chosen = [...rows, ...universe].find((item) => item.symbol === selected);
   const marketCount = sectors.data.reduce((sum, sector) => sum + sector.member_count, 0);
@@ -442,12 +470,69 @@ export function StocksView({
 
       {/* Heatmap & Quick Facts */}
       <div className="market-overview-layout grid grid-cols-1 md:grid-cols-12 lg:grid-cols-12 gap-5 items-stretch">
-        <div className="col-span-12 md:col-span-7 lg:col-span-8 flex flex-col">
-          <SectorHeatmap sectors={sectors.data} headingId="market-heatmap-title" />
+        <div className="col-span-12 md:col-span-8 lg:col-span-9 flex flex-col">
+          <section className="bg-slate-900/90 border border-slate-800 rounded-2xl p-4 sm:p-5 shadow-sm h-full flex flex-col" aria-labelledby="market-heatmap-title">
+            <div className="beginner-card-title flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-4">
+              <div className="min-w-0 flex-1 pr-2">
+                <h2 id="market-heatmap-title" className="text-lg md:text-xl font-bold text-slate-100 m-0 truncate">
+                  {heatmapTab === "treemap" ? "Bản đồ nhiệt cổ phiếu theo ngành" : "Bản đồ nhiệt biến động các ngành"}
+                </h2>
+                <p className="text-xs text-slate-400 mt-1 m-0 truncate">
+                  {heatmapTab === "treemap"
+                    ? "Khối nhiệt (Treemap) thể hiện % biến động các mã tiêu biểu."
+                    : "Khối nhiệt (Treemap) thể hiện % biến động các ngành. Bấm để lọc."}
+                </p>
+              </div>
+              <div className="inline-flex rounded-lg bg-slate-950 p-1 border border-slate-800 shrink-0 self-start sm:self-center">
+                <button
+                  type="button"
+                  onClick={() => setHeatmapTab("treemap")}
+                  className={`px-3 py-1 text-xs font-bold rounded-md transition cursor-pointer ${
+                    heatmapTab === "treemap"
+                      ? "bg-sky-600 text-white shadow-sm"
+                      : "text-slate-400 hover:text-white"
+                  }`}
+                >
+                  Khối nhiệt cổ phiếu
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setHeatmapTab("sectors")}
+                  className={`px-3 py-1 text-xs font-bold rounded-md transition cursor-pointer ${
+                    heatmapTab === "sectors"
+                      ? "bg-sky-600 text-white shadow-sm"
+                      : "text-slate-400 hover:text-white"
+                  }`}
+                >
+                  Biến động các ngành
+                </button>
+              </div>
+            </div>
+
+            <div className={heatmapTab === "treemap" ? "block" : "hidden"}>
+              <StockTreemapHeatmap
+                instruments={universe}
+                sectors={sectors.data}
+                headingId="market-heatmap-title"
+                selectedSector={selectedTreemapSector}
+                onSectorChange={setSelectedTreemapSector}
+              />
+            </div>
+            <div className={heatmapTab === "sectors" ? "block" : "hidden"}>
+              <SectorTreemapHeatmap
+                sectors={sectors.data}
+                headingId="market-heatmap-title"
+                onSelectSector={(sectorName) => {
+                  setSelectedTreemapSector(sectorName);
+                  setHeatmapTab("treemap");
+                }}
+              />
+            </div>
+          </section>
         </div>
-        <aside className="market-quick-facts col-span-12 md:col-span-5 lg:col-span-4 bg-slate-900/90 border border-slate-800 rounded-2xl p-5 flex flex-col gap-5 shadow-sm">
-          <article className="border-b border-slate-800 pb-4">
-            <div className="beginner-card-title flex items-center justify-between mb-2">
+        <aside className="market-quick-facts col-span-12 md:col-span-4 lg:col-span-3 bg-slate-900/90 border border-slate-800 rounded-2xl p-4 flex flex-col gap-3.5 shadow-sm justify-between">
+          <article className="border-b border-slate-800 pb-3">
+            <div className="beginner-card-title flex items-center justify-between mb-1.5">
               <h3 className="text-sm font-bold text-slate-200 m-0">Độ rộng toàn thị trường</h3>
               <InfoTip term="Độ rộng">Đếm số mã tăng, giảm và đứng giá trong toàn bộ snapshot của nguồn.</InfoTip>
             </div>
@@ -456,25 +541,25 @@ export function StocksView({
               <span className="unchanged bg-amber-400" style={{ width: `${unchanged / total * 100}%` }} />
               <span className="decline bg-rose-500" style={{ width: `${declines / total * 100}%` }} />
             </div>
-            <p className="text-xs text-slate-400 m-0">
+            <p className="text-xs text-slate-400 m-0 leading-tight">
               <b className="positive text-emerald-400 font-bold">{advances} tăng</b> · {unchanged} đứng · <b className="negative text-rose-400 font-bold">{declines} giảm</b>
             </p>
           </article>
-          <article className="border-b border-slate-800 pb-4">
-            <div className="beginner-card-title flex items-center justify-between mb-2">
+          <article className="border-b border-slate-800 pb-3">
+            <div className="beginner-card-title flex items-center justify-between mb-1.5">
               <h3 className="text-sm font-bold text-slate-200 m-0">Định giá P/E &amp; P/B sàn</h3>
               <InfoTip term="Định giá sàn">Định giá P/E và P/B trung bình của các doanh nghiệp niêm yết trong snapshot.</InfoTip>
             </div>
-            <strong className="text-base font-bold text-white block mb-1">P/E {peAvg} · P/B {pbAvg}</strong>
-            <p className="text-xs text-slate-400 m-0">Mức định giá trung bình trong snapshot của nguồn.</p>
+            <strong className="text-base font-bold text-white block mb-0.5">P/E {peAvg} · P/B {pbAvg}</strong>
+            <p className="text-xs text-slate-400 m-0 leading-tight">Mức định giá trung bình trong snapshot của nguồn.</p>
           </article>
           <article>
-            <div className="beginner-card-title flex items-center justify-between mb-2">
+            <div className="beginner-card-title flex items-center justify-between mb-1.5">
               <h3 className="text-sm font-bold text-slate-200 m-0">Thanh khoản &amp; Khối ngoại</h3>
               <InfoTip term="Dòng tiền">Tổng giá trị của {marketCount} mã trong snapshot của nguồn.</InfoTip>
             </div>
-            <strong className="text-base font-bold text-white block mb-1">{formatMoney(String(liquidity))}</strong>
-            <p className="text-xs text-slate-400 m-0">Khối ngoại: <strong className={changeTone(String(foreign))}>{foreign >= 0 ? "Mua ròng" : "Bán ròng"} {formatMoney(String(Math.abs(foreign)))}</strong></p>
+            <strong className="text-base font-bold text-white block mb-0.5">{formatMoney(String(liquidity))}</strong>
+            <p className="text-xs text-slate-400 m-0 leading-tight">Khối ngoại: <strong className={changeTone(String(foreign))}>{foreign >= 0 ? "Mua ròng" : "Bán ròng"} {formatMoney(String(Math.abs(foreign)))}</strong></p>
           </article>
         </aside>
       </div>
@@ -551,15 +636,29 @@ export function StocksView({
         </div>
 
         {/* Filter Form */}
-        <form className="stock-filter bg-slate-950/70 border border-slate-800 rounded-xl p-4 mb-4 flex flex-wrap gap-3 items-end text-xs" action="/market/stocks">
+        <div className="stock-filter bg-slate-950/70 border border-slate-800 rounded-xl p-4 mb-4 flex flex-wrap gap-3 items-end text-xs">
           {filters.sector && <input type="hidden" name="sector" value={filters.sector} />}
           <label className="flex flex-col gap-1 text-slate-400 font-medium min-w-[160px] flex-1">
             Tìm mã hoặc công ty
-            <input name="q" defaultValue={filters.q} placeholder="Ví dụ: FPT, Hòa Phát" className="bg-slate-900 border border-slate-700 rounded-lg px-3 py-1.5 text-white placeholder-slate-500 text-xs focus:outline-none focus:border-sky-500" />
+            <input
+              name="q"
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              placeholder="Gõ mã hoặc tên công ty để lọc ngay (ví dụ: FPT, SSI, MBB)"
+              className="bg-slate-900 border border-slate-700 rounded-lg px-3 py-1.5 text-white placeholder-slate-500 text-xs focus:outline-none focus:border-sky-500"
+            />
           </label>
           <label className="flex flex-col gap-1 text-slate-400 font-medium min-w-[110px]">
             Sàn
-            <select name="exchange" defaultValue={filters.exchange} className="bg-slate-900 border border-slate-700 rounded-lg px-2.5 py-1.5 text-white text-xs focus:outline-none focus:border-sky-500">
+            <select
+              name="exchange"
+              defaultValue={filters.exchange}
+              onChange={(e) => {
+                const nextUrl = hrefWith(filters, { exchange: e.target.value, cursor: null });
+                router.push(nextUrl, { scroll: false });
+              }}
+              className="bg-slate-900 border border-slate-700 rounded-lg px-2.5 py-1.5 text-white text-xs focus:outline-none focus:border-sky-500"
+            >
               <option value="">Tất cả sàn</option>
               <option value="HOSE">HOSE</option>
               <option value="HNX">HNX</option>
@@ -568,7 +667,15 @@ export function StocksView({
           </label>
           <label className="flex flex-col gap-1 text-slate-400 font-medium min-w-[130px]">
             Sắp xếp
-            <select name="sort" defaultValue={hasVolumeBaseline ? filters.sort : filters.sort === "volume_vs_20d" ? "vn30" : filters.sort} className="bg-slate-900 border border-slate-700 rounded-lg px-2.5 py-1.5 text-white text-xs focus:outline-none focus:border-sky-500">
+            <select
+              name="sort"
+              defaultValue={hasVolumeBaseline ? filters.sort : filters.sort === "volume_vs_20d" ? "vn30" : filters.sort}
+              onChange={(e) => {
+                const nextUrl = hrefWith(filters, { sort: e.target.value, cursor: null });
+                router.push(nextUrl, { scroll: false });
+              }}
+              className="bg-slate-900 border border-slate-700 rounded-lg px-2.5 py-1.5 text-white text-xs focus:outline-none focus:border-sky-500"
+            >
               <option value="vn30">VN30 trước</option>
               <option value="symbol">Mã</option>
               <option value="change_percent">% hôm nay</option>
@@ -579,7 +686,15 @@ export function StocksView({
           </label>
           <label className="flex flex-col gap-1 text-slate-400 font-medium min-w-[100px]">
             Thứ tự
-            <select name="direction" defaultValue={filters.direction} className="bg-slate-900 border border-slate-700 rounded-lg px-2.5 py-1.5 text-white text-xs focus:outline-none focus:border-sky-500">
+            <select
+              name="direction"
+              defaultValue={filters.direction}
+              onChange={(e) => {
+                const nextUrl = hrefWith(filters, { direction: e.target.value, cursor: null });
+                router.push(nextUrl, { scroll: false });
+              }}
+              className="bg-slate-900 border border-slate-700 rounded-lg px-2.5 py-1.5 text-white text-xs focus:outline-none focus:border-sky-500"
+            >
               <option value="desc">Giảm dần</option>
               <option value="asc">Tăng dần</option>
             </select>
@@ -594,8 +709,7 @@ export function StocksView({
             Lọc nâng cao{activeAdvancedFilterCount ? <span className="bg-sky-500 text-white rounded-full px-1.5 py-0.2 text-[10px] font-bold">{activeAdvancedFilterCount}</span> : null}
           </button>
           <div className="stock-filter-actions flex items-center gap-2">
-            <button type="submit" className="px-4 py-1.5 rounded-lg bg-sky-600 hover:bg-sky-500 text-white font-bold transition cursor-pointer">Áp dụng</button>
-            <Link href="/market/stocks" prefetch={false} className="px-3 py-1.5 rounded-lg text-slate-400 hover:text-white transition">Đặt lại</Link>
+            <Link href="/market/stocks" prefetch={false} onClick={() => setSearchQuery("")} className="px-3 py-1.5 rounded-lg text-slate-400 hover:text-white transition">Đặt lại</Link>
           </div>
           {advancedFilterOpen && (
             <section id="advanced-stock-filter-panel" className="advanced-stock-filter w-full pt-3 mt-1 border-t border-slate-800" aria-label="Bộ lọc nâng cao">
@@ -616,7 +730,7 @@ export function StocksView({
               </div>
             </section>
           )}
-        </form>
+        </div>
 
         {/* Table Wrap */}
         <div className="market-table-wrap simple-stock-table-wrap overflow-x-auto rounded-xl border border-slate-800">
@@ -635,7 +749,7 @@ export function StocksView({
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-800/60">
-              {rows.map((item) => {
+              {displayedRows.map((item) => {
                 const stockDetailHref = `/market/stocks/${item.symbol}?from=${encodeURIComponent(`${hrefWith(filters, { selected: null })}#stock-table`)}`;
                 const fundamentals = fundamentalsBySymbol[item.symbol];
                 const ratiosLoading = (item.pe === null || item.pb === null) && fundamentals === undefined;
@@ -686,7 +800,7 @@ export function StocksView({
           </table>
         </div>
 
-        {!rows.length && (
+        {!displayedRows.length && (
           <div className="market-empty py-12 text-center text-slate-400">
             <h3 className="text-base font-bold text-slate-300 mb-1">Không tìm thấy cổ phiếu</h3>
             <p className="text-xs text-slate-500 m-0">Thử bỏ bớt bộ lọc hoặc tìm bằng mã khác.</p>
@@ -694,15 +808,26 @@ export function StocksView({
         )}
 
         {!!rows.length && (
-          <nav className="market-pagination flex items-center justify-between mt-4 pt-3 border-t border-slate-800 text-xs text-slate-400" aria-label="Phân trang cổ phiếu">
-            {collection.pagination.previous_cursor ? (
-              <Link href={`${hrefWith(filters, { cursor: collection.pagination.previous_cursor, selected: null })}#stock-table`} className="hover:text-white transition">← Trang trước</Link>
-            ) : <span />}
-            <strong className="text-slate-200 font-semibold">Trang {collection.pagination.page} / {Math.max(1, collection.pagination.total_pages)}</strong>
-            {collection.pagination.next_cursor ? (
-              <Link href={`${hrefWith(filters, { cursor: collection.pagination.next_cursor, selected: null })}#stock-table`} className="hover:text-white transition">Trang sau →</Link>
-            ) : <span />}
-          </nav>
+          <Pagination
+            currentPage={collection.pagination.page}
+            totalPages={Math.max(1, collection.pagination.total_pages)}
+            totalItems={collection.pagination.total_items}
+            pageSize={collection.pagination.limit || 15}
+            itemLabel="mã cổ phiếu"
+            getPageUrl={(targetPage) => {
+              const limit = collection.pagination.limit || 15;
+              let cursor: string | null = null;
+              if (targetPage === collection.pagination.page + 1 && collection.pagination.next_cursor) {
+                cursor = collection.pagination.next_cursor;
+              } else if (targetPage === collection.pagination.page - 1 && collection.pagination.previous_cursor) {
+                cursor = collection.pagination.previous_cursor;
+              } else if (targetPage > 1) {
+                cursor = encodeCursor((targetPage - 1) * limit);
+              }
+              return `${hrefWith(filters, { cursor, selected: null })}#stock-table`;
+            }}
+            ariaLabel="Phân trang cổ phiếu"
+          />
         )}
       </section>
 

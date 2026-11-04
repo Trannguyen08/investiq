@@ -13,6 +13,8 @@ import {
   formatRatioPair,
   priceTone,
 } from "@/components/market/formatters";
+import { mergeLiveInstrument } from "@/components/market/live-market";
+import { useMarketStreamState } from "@/hooks/use-realtime-price";
 import { PaperOrderDialog, requestPaperDashboard } from "@/components/portfolio/paper-order-dialog";
 import { useAuth } from "@/hooks/use-auth";
 import { useVisibleFundamentals } from "@/hooks/use-visible-fundamentals";
@@ -146,10 +148,31 @@ export function PaperTradingDashboard({
   const [orderSide, setOrderSide] = useState("all");
   const [orderSymbol, setOrderSymbol] = useState("");
   const [pnlDialog, setPnlDialog] = useState<"unrealized" | "realized" | null>(null);
+  const stream = useMarketStreamState();
+
+  // Merge market instruments with live stream in real time (identical to /market/stocks)
+  const rows = useMemo(
+    () => marketInstruments.map((item) => mergeLiveInstrument(item, stream.items[item.symbol])),
+    [marketInstruments, stream.items]
+  );
+
+  // Active price map tracking latest real-time prices across instruments and stream
+  const activePriceMap = useMemo(() => {
+    const map = new Map<string, string>();
+    for (const item of rows) {
+      if (item.price) map.set(item.symbol, item.price);
+    }
+    for (const [symbol, liveItem] of Object.entries(stream.items)) {
+      if (liveItem && typeof (liveItem as any).price === "string") {
+        map.set(symbol, (liveItem as any).price);
+      }
+    }
+    return map;
+  }, [rows, stream.items]);
 
   const currentPrices = useMemo(
-    () => new Map(marketInstruments.map((item) => [item.symbol, item.price])),
-    [marketInstruments]
+    () => new Map(rows.map((item) => [item.symbol, item.price])),
+    [rows]
   );
 
   useEffect(() => {
@@ -170,20 +193,65 @@ export function PaperTradingDashboard({
     };
   }, [auth.status]);
 
+  // Periodic background re-sync every 15s to guarantee fresh portfolio state
+  useEffect(() => {
+    if (auth.status !== "authenticated") return;
+    const interval = setInterval(() => {
+      requestPaperDashboard()
+        .then((fresh) => {
+          setDashboard(fresh);
+        })
+        .catch(() => {});
+    }, 15000);
+    return () => clearInterval(interval);
+  }, [auth.status]);
+
+  // Dynamically re-evaluate holdings with real-time market prices
+  const liveHoldings = useMemo(() => {
+    if (!dashboard?.holdings) return [];
+    return dashboard.holdings.map((holding) => {
+      const activePrice = activePriceMap.get(holding.symbol) ?? holding.current_price;
+      if (!activePrice) return holding;
+
+      const numPrice = Number(activePrice);
+      const numAvgCost = Number(holding.average_cost);
+      const qty = Number(holding.quantity);
+
+      if (numPrice <= 0 || qty <= 0) return { ...holding, current_price: activePrice };
+
+      const marketVal = Math.round(numPrice * qty);
+      const costBasis = numAvgCost > 0 ? Math.round(numAvgCost * qty) : Number(holding.total_cost_basis);
+      const unrealizedPnl = marketVal - costBasis;
+      const unrealizedPnlPct = costBasis > 0 ? ((unrealizedPnl / costBasis) * 100).toFixed(2) : holding.unrealized_pnl_percent;
+
+      const liveInstrument = rows.find((r) => r.symbol === holding.symbol);
+      const dailyChange = liveInstrument ? liveInstrument.change_percent : holding.daily_change_percent;
+
+      return {
+        ...holding,
+        current_price: activePrice,
+        market_value: String(marketVal),
+        unrealized_pnl: String(unrealizedPnl),
+        unrealized_pnl_percent: unrealizedPnlPct,
+        daily_change_percent: dailyChange,
+      };
+    });
+  }, [dashboard, activePriceMap, rows]);
+
   const holdingBySymbol = useMemo(
-    () => new Map((dashboard?.holdings ?? []).map((holding) => [holding.symbol, holding])),
-    [dashboard]
+    () => new Map(liveHoldings.map((holding) => [holding.symbol, holding])),
+    [liveHoldings]
   );
   const normalizedMarketQuery = marketQuery.trim().toLocaleUpperCase("vi-VN");
   const filteredMarket = useMemo(
     () =>
-      marketInstruments.filter(
+      rows.filter(
         (item) =>
           !normalizedMarketQuery ||
           item.symbol.includes(normalizedMarketQuery) ||
           item.name.toLocaleUpperCase("vi-VN").includes(normalizedMarketQuery)
       ),
-    [marketInstruments, normalizedMarketQuery]
+    [rows, normalizedMarketQuery]
   );
   const marketPageCount = Math.max(1, Math.ceil(filteredMarket.length / MARKET_PAGE_SIZE));
   const visibleMarket = useMemo(
@@ -269,60 +337,6 @@ export function PaperTradingDashboard({
           </article>
         </section>
 
-        {marketInstruments.length > 0 && (
-          <section className="paper-unauth-market-preview">
-            <div className="preview-header">
-              <div>
-                <p className="eyebrow">DỮ LIỆU THỊ TRƯỜNG TRỰC TIẾP</p>
-                <h2>Cổ phiếu sẵn sàng giao dịch</h2>
-              </div>
-              <span className="preview-badge">Sàn HOSE & HNX</span>
-            </div>
-            <div className="preview-table-wrap">
-              <table className="preview-table">
-                <thead>
-                  <tr>
-                    <th>Mã CP</th>
-                    <th>Tên doanh nghiệp</th>
-                    <th className="text-right">Giá quan sát</th>
-                    <th className="text-right">Biến động</th>
-                    <th className="text-right">P/E</th>
-                    <th className="text-right">P/B</th>
-                    <th className="text-center">Thao tác</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {marketInstruments.slice(0, 8).map((inst) => {
-                    const priceNum = Number(inst.price);
-                    const changePct = Number(inst.change_percent);
-                    const isUp = changePct > 0;
-                    const isDown = changePct < 0;
-
-                    return (
-                      <tr key={inst.symbol}>
-                        <td className="font-bold text-cyan">{inst.symbol}</td>
-                        <td className="text-neutral">{inst.name}</td>
-                        <td className="text-right font-mono font-bold">
-                          {priceNum ? `${priceNum.toLocaleString("vi-VN")} đ` : "—"}
-                        </td>
-                        <td className={`text-right font-mono font-bold ${isUp ? "text-emerald" : isDown ? "text-rose" : "text-neutral"}`}>
-                          {changePct ? `${isUp ? "+" : ""}${changePct.toFixed(2)}%` : "0.00%"}
-                        </td>
-                        <td className="text-right font-mono text-neutral">{inst.pe ?? "—"}</td>
-                        <td className="text-right font-mono text-neutral">{inst.pb ?? "—"}</td>
-                        <td className="text-center">
-                          <Link href="/login" className="btn-table-trade">
-                            Đặt lệnh
-                          </Link>
-                        </td>
-                      </tr>
-                    );
-                  })}
-                </tbody>
-              </table>
-            </div>
-          </section>
-        )}
       </main>
     );
   }
@@ -339,15 +353,16 @@ export function PaperTradingDashboard({
 
   function prepareOrder(selectedSide: "buy" | "sell", selectedSymbol: string) {
     if (!dashboard) return;
-    const holding = dashboard.holdings.find((item) => item.symbol === selectedSymbol);
-    const marketInstrument = marketInstruments.find((item) => item.symbol === selectedSymbol);
+    const holding = holdingBySymbol.get(selectedSymbol);
+    const marketInstrument = rows.find((item) => item.symbol === selectedSymbol);
     const opportunity = dashboard.opportunities.find((item) => item.symbol === selectedSymbol);
+    const activePrice = activePriceMap.get(selectedSymbol) ?? marketInstrument?.price ?? holding?.current_price ?? opportunity?.price ?? null;
     setNotice("");
     setSide(selectedSide);
     setSelectedInstrument({
       symbol: selectedSymbol,
       name: marketInstrument?.name ?? holding?.name ?? opportunity?.name ?? selectedSymbol,
-      price: marketInstrument?.price ?? holding?.current_price ?? opportunity?.price ?? null,
+      price: activePrice,
     });
   }
 
@@ -579,9 +594,9 @@ export function PaperTradingDashboard({
             <p className="eyebrow">ĐANG SỞ HỮU</p>
             <h2>Quản lý cổ phiếu đã mua</h2>
           </div>
-          <span>{dashboard.holdings.length} mã</span>
+          <span>{liveHoldings.length} mã</span>
         </div>
-        {dashboard.holdings.length ? (
+        {liveHoldings.length ? (
           <div className="paper-holdings-wrap">
             <table aria-label="Bảng quản lý cổ phiếu đã mua">
               <thead>
@@ -599,7 +614,7 @@ export function PaperTradingDashboard({
                 </tr>
               </thead>
               <tbody>
-                {dashboard.holdings.map((holding) => (
+                {liveHoldings.map((holding) => (
                   <tr key={holding.symbol}>
                     <td>
                       <Link href={`/market/stocks/${holding.symbol}?from=${encodeURIComponent("/portfolio#paper-market-table")}`} prefetch={false}>

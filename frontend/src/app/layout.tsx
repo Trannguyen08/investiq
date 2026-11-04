@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
-import type { ReactNode } from "react";
+import { type ReactNode, Suspense } from "react";
 
+import { ScrollRestoration } from "@/components/layout/scroll-restoration";
 import "./globals.css";
 
 export const metadata: Metadata = {
@@ -11,7 +12,12 @@ export const metadata: Metadata = {
 export default function RootLayout({ children }: Readonly<{ children: ReactNode }>) {
   return (
     <html lang="vi">
-      <body>{children}</body>
+      <body>
+        <Suspense fallback={null}>
+          <ScrollRestoration />
+        </Suspense>
+        {children}
+      </body>
     </html>
   );
 }

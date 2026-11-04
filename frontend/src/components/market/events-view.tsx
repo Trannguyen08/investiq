@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 import { formatEventDate, formatMarketTime } from "@/components/market/formatters";
 import { EventReminderModal, type ReminderTargetEvent } from "@/components/market/event-reminder-modal";
 import type { EventCollection } from "@/types/market";
+import { Pagination } from "@/components/ui/pagination";
 
 const labels: Record<string, string> = {
   shareholder_meeting: "Đại hội cổ đông",
@@ -165,40 +166,19 @@ export function EventsView({
           </div>
 
           {totalEvents > 0 && (
-            <nav className="event-pagination flex items-center justify-center gap-4" aria-label="Phân trang sự kiện">
-              <button
-                type="button"
-                disabled={clampedPage <= 1}
-                onClick={() => {
-                  setPage((p) => Math.max(1, p - 1));
-                  window.scrollTo({ top: 120, behavior: "smooth" });
-                }}
-                className="event-pagination-btn"
-                title="Về trang trước"
-              >
-                ← Trang trước
-              </button>
-              <div className="event-pagination-info">
-                <span>
-                  Trang <strong>{clampedPage}</strong> / {totalPages}
-                </span>
-                <span className="event-pagination-range">
-                  ({(clampedPage - 1) * PAGE_SIZE + 1} - {Math.min(clampedPage * PAGE_SIZE, totalEvents)} trong tổng {totalEvents} sự kiện)
-                </span>
-              </div>
-              <button
-                type="button"
-                disabled={clampedPage >= totalPages}
-                onClick={() => {
-                  setPage((p) => Math.min(totalPages, p + 1));
-                  window.scrollTo({ top: 120, behavior: "smooth" });
-                }}
-                className="event-pagination-btn"
-                title="Sang trang sau"
-              >
-                Trang sau →
-              </button>
-            </nav>
+            <Pagination
+              currentPage={clampedPage}
+              totalPages={totalPages}
+              totalItems={totalEvents}
+              pageSize={PAGE_SIZE}
+              itemLabel="sự kiện"
+              onPageChange={(p) => {
+                setPage(p);
+                window.scrollTo({ top: 120, behavior: "smooth" });
+              }}
+              className="px-5 pb-5"
+              ariaLabel="Phân trang sự kiện"
+            />
           )}
         </>
       ) : (

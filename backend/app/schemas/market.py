@@ -529,6 +529,7 @@ class DividendItem(StrictModel):
     cash_value: float | None = None
     title: str
     source: str = "CafeF / Market Disclosures"
+    source_url: str | None = None
 
 
 class DividendSummary(StrictModel):
