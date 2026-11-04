@@ -13,12 +13,24 @@ export const userNavigationLinks = [
   ["/", "Tổng quan"],
   ["/market/stocks", "Thị trường"],
   ["/candlestick-prediction", "Dự đoán nến"],
-  ["/ai-assistant", "Trợ lý AI"],
   ["/portfolio", "Danh mục"],
   ["/community", "Cộng đồng"],
   ["/learn", "Chứng khoán căn bản"],
   ["/news", "Tin tức"],
 ] as const;
+
+export function getUserGreeting(fullName: string): string {
+  if (!fullName) return "Xin chào";
+  const trimmed = fullName.trim();
+  if (trimmed.includes("@")) {
+    const localPart = trimmed.split("@")[0];
+    return `Xin chào, ${localPart}`;
+  }
+  const parts = trimmed.split(/\s+/).filter(Boolean);
+  if (parts.length === 0) return "Xin chào";
+  const shortName = parts[parts.length - 1];
+  return `Xin chào, ${shortName}`;
+}
 
 function UserAvatar({ name, url }: { name: string; url: string | null }) {
   if (url) return <img src={url} alt="" referrerPolicy="no-referrer" className="w-7 h-7 rounded-full object-cover border border-slate-700" />;
@@ -35,9 +47,9 @@ function AdminPortalShortcut() {
   return (
     <Link
       href="/admin"
-      className="inline-flex items-center px-3 py-1.5 rounded-lg bg-blue-600 hover:bg-blue-500 text-white text-xs font-bold shadow-sm transition whitespace-nowrap ml-1"
+      className="inline-flex items-center px-2.5 py-1 rounded-lg bg-blue-600 hover:bg-blue-500 text-white text-xs font-bold shadow-sm transition whitespace-nowrap ml-1"
     >
-      Vào trang Admin
+      Admin
     </Link>
   );
 }
@@ -65,7 +77,7 @@ function AccountMenu() {
   if (status !== "authenticated" || !user) {
     return (
       <Link
-        className="account-link px-4 py-1.5 text-xs sm:text-sm font-bold rounded-lg bg-sky-500 hover:bg-sky-400 text-white shadow-md shadow-sky-500/20 transition"
+        className="account-link px-3 sm:px-4 py-1.5 text-xs font-bold rounded-lg bg-sky-500 hover:bg-sky-400 text-white shadow-md shadow-sky-500/20 transition whitespace-nowrap"
         href="/login"
       >
         Đăng nhập
@@ -85,21 +97,26 @@ function AccountMenu() {
     }
   }
 
+  const greeting = getUserGreeting(user.display_name);
+
   return (
-    <div className="account-menu relative" ref={ref}>
+    <div className="account-menu relative shrink-0" ref={ref}>
       <button
-        className="account-trigger flex items-center gap-2 px-3 py-1.5 rounded-xl bg-slate-900 border border-slate-800 hover:border-slate-700 text-slate-200 text-xs sm:text-sm font-semibold transition cursor-pointer"
+        className="account-trigger flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl bg-slate-900 border border-slate-800 hover:border-slate-700 text-slate-200 text-xs font-semibold transition cursor-pointer whitespace-nowrap"
         type="button"
         onClick={() => setOpen((value) => !value)}
         aria-haspopup="menu"
         aria-expanded={open}
       >
         <UserAvatar name={user.display_name} url={user.avatar_url} />
-        <span className="max-w-[120px] truncate">{user.display_name}</span>
+        <span className="truncate max-w-[120px]">{greeting}</span>
         <span aria-hidden="true" className="text-slate-400 text-xs">⌄</span>
       </button>
       {open && (
-        <div className="account-dropdown absolute right-0 mt-2 w-52 bg-slate-900 border border-slate-800 rounded-xl shadow-2xl py-1.5 z-50 text-xs sm:text-sm" role="menu">
+        <div className="account-dropdown absolute right-0 mt-2 w-56 bg-slate-900 border border-slate-800 rounded-xl shadow-2xl py-1.5 z-50 text-xs sm:text-sm" role="menu">
+          <div className="px-4 py-2 border-b border-slate-800 text-xs text-slate-400">
+            Tài khoản: <strong className="text-slate-200">{user.display_name}</strong>
+          </div>
           {user.role === "admin" && (
             <Link
               href="/admin"
@@ -145,7 +162,7 @@ function MobileMenu() {
         {user && status === "authenticated" && (
           <div className="mobile-account flex items-center gap-2.5 pb-2 mb-2 border-b border-slate-800 px-2">
             <UserAvatar name={user.display_name} url={user.avatar_url} />
-            <strong className="text-white text-xs truncate">{user.display_name}</strong>
+            <strong className="text-white text-xs truncate">{getUserGreeting(user.display_name)}</strong>
           </div>
         )}
         {userNavigationLinks.map(([href, label]) => (
@@ -186,17 +203,16 @@ export function UserHeader() {
   return (
     <>
       <header className="site-header sticky top-0 z-50 bg-slate-950/90 backdrop-blur-md border-b border-slate-800/80 shadow-md">
-        <div className="header-inner max-w-7xl mx-auto px-4 sm:px-6 h-16 flex items-center gap-4 sm:gap-6">
+        <div className="header-inner max-w-7xl mx-auto px-2 sm:px-4 h-16 flex items-center gap-2 sm:gap-3 lg:gap-4">
           <Link className="brand shrink-0 flex items-center" href="/" aria-label="InvestIQ — trang tổng quan">
             <img src="/investiq-logo.svg" width="118" height="32" alt="InvestIQ" className="h-8 w-auto" />
           </Link>
-          <nav className="desktop-nav hidden md:flex items-center gap-1" aria-label="Điều hướng chính">
+          <nav className="desktop-nav hidden md:flex items-center gap-0.5 lg:gap-1 shrink-0" aria-label="Điều hướng chính">
             {userNavigationLinks.map(([href, label]) => {
               const active = href === "/" ? pathname === "/" : href.startsWith("/market/") ? pathname.startsWith("/market") : pathname.startsWith(href);
-              const isAi = href === "/ai-assistant";
               return (
                 <Link
-                  className={`nav-link px-3 py-1.5 text-xs font-semibold rounded-lg transition inline-flex items-center gap-1.5 ${
+                  className={`nav-link px-2 lg:px-2.5 py-1.5 text-xs font-semibold rounded-lg transition inline-flex items-center gap-1 whitespace-nowrap ${
                     active ? "active bg-slate-800/90 text-sky-400 font-bold shadow-inner" : "text-slate-300 hover:text-white hover:bg-slate-800/50"
                   }`}
                   href={href}
@@ -204,16 +220,11 @@ export function UserHeader() {
                   aria-current={active ? "page" : undefined}
                 >
                   {label}
-                  {isAi && (
-                    <span className="px-1.5 py-0.5 bg-gradient-to-r from-amber-500 to-amber-400 text-slate-950 font-black text-[9px] leading-none rounded-full uppercase tracking-tighter">
-                      Mới
-                    </span>
-                  )}
                 </Link>
               );
             })}
           </nav>
-          <div className="flex-1" />
+          <div className="flex-1 min-w-0" />
           <HeaderSearch />
           <AccountMenu />
           <AdminPortalShortcut />

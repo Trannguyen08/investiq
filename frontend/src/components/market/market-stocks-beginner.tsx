@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { type FormEvent, type RefObject, useEffect, useMemo, useRef, useState } from "react";
 
 import { InfoTip, MarketColorLegend, MarketLineChart, SectorHeatmap } from "@/components/market/beginner-market-ui";
+import { StockTreemapHeatmap } from "@/components/market/stock-treemap-heatmap";
 import {
   changeTone,
   formatChange,
@@ -382,6 +383,7 @@ export function StocksView({
   const activeAdvancedFilterCount = [filters.min_change, filters.max_change, filters.min_matched_value_billion, filters.min_market_cap_billion, filters.min_volume_ratio, filters.vn30].filter(Boolean).length;
   const [advancedFilterOpen, setAdvancedFilterOpen] = useState(activeAdvancedFilterCount > 0);
   const [searchQuery, setSearchQuery] = useState(filters.q || "");
+  const [heatmapTab, setHeatmapTab] = useState<"treemap" | "sectors">("treemap");
   const rows = collection.data.map((item) => mergeLiveInstrument(item, stream.items[item.symbol]));
   const universe = summary.data.map((item) => mergeLiveInstrument(item, stream.items[item.symbol]));
 
@@ -466,7 +468,55 @@ export function StocksView({
       {/* Heatmap & Quick Facts */}
       <div className="market-overview-layout grid grid-cols-1 md:grid-cols-12 lg:grid-cols-12 gap-5 items-stretch">
         <div className="col-span-12 md:col-span-7 lg:col-span-8 flex flex-col">
-          <SectorHeatmap sectors={sectors.data} headingId="market-heatmap-title" />
+          <section className="bg-slate-900/90 border border-slate-800 rounded-2xl p-5 shadow-sm h-full flex flex-col" aria-labelledby="market-heatmap-title">
+            <div className="beginner-card-title flex flex-wrap items-center justify-between gap-3 mb-4">
+              <div>
+                <h2 id="market-heatmap-title" className="text-lg md:text-xl font-bold text-slate-100 m-0">
+                  {heatmapTab === "treemap" ? "Bản đồ nhiệt cổ phiếu theo ngành" : "Ngành nào đang biến động mạnh?"}
+                </h2>
+                <p className="text-xs text-slate-400 mt-1 m-0">
+                  {heatmapTab === "treemap"
+                    ? "Khối nhiệt (Treemap) thể hiện % biến động và tỷ lệ quy mô của các mã tiêu biểu."
+                    : "Chọn một ô để mở bảng cổ phiếu đã lọc theo ngành đó."}
+                </p>
+              </div>
+              <div className="inline-flex rounded-lg bg-slate-950 p-1 border border-slate-800 shrink-0">
+                <button
+                  type="button"
+                  onClick={() => setHeatmapTab("treemap")}
+                  className={`px-3 py-1 text-xs font-bold rounded-md transition cursor-pointer ${
+                    heatmapTab === "treemap"
+                      ? "bg-sky-600 text-white shadow-sm"
+                      : "text-slate-400 hover:text-white"
+                  }`}
+                >
+                  Khối nhiệt cổ phiếu
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setHeatmapTab("sectors")}
+                  className={`px-3 py-1 text-xs font-bold rounded-md transition cursor-pointer ${
+                    heatmapTab === "sectors"
+                      ? "bg-sky-600 text-white shadow-sm"
+                      : "text-slate-400 hover:text-white"
+                  }`}
+                >
+                  Biến động các ngành
+                </button>
+              </div>
+            </div>
+
+            <div className={heatmapTab === "treemap" ? "block" : "hidden"}>
+              <StockTreemapHeatmap
+                instruments={universe}
+                sectors={sectors.data}
+                headingId="market-heatmap-title"
+              />
+            </div>
+            <div className={heatmapTab === "sectors" ? "block" : "hidden"}>
+              <SectorHeatmap sectors={sectors.data} headingId="market-heatmap-title" embedded />
+            </div>
+          </section>
         </div>
         <aside className="market-quick-facts col-span-12 md:col-span-5 lg:col-span-4 bg-slate-900/90 border border-slate-800 rounded-2xl p-5 flex flex-col gap-5 shadow-sm">
           <article className="border-b border-slate-800 pb-4">
