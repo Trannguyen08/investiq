@@ -7,8 +7,8 @@ import os
 import smtplib
 import ssl
 from datetime import UTC, datetime
-from email.mime.multipart import MIMEMultipart
-from email.mime.text import MIMEText
+from email.message import EmailMessage
+from email.utils import format_datetime, formataddr, make_msgid, parseaddr
 from pathlib import Path
 from typing import Any
 
@@ -341,6 +341,68 @@ def build_paper_portfolio_email_html(
     return html
 
 
+
+
+def build_paper_portfolio_email_text(
+    email: str,
+    account_data: dict[str, Any],
+    ai_review: AIPortfolioReview,
+    report_date_str: str | None = None,
+) -> str:
+    """Render a clean, structured plaintext alternative to prevent email spam flags."""
+    now_str = report_date_str or datetime.now(UTC).strftime("%d/%m/%Y")
+    total_val = float(account_data.get("total_value") or account_data.get("starting_cash") or 1_000_000_000)
+    avail_cash = float(account_data.get("available_cash") or account_data.get("cash_balance") or 0)
+    total_pnl = float(account_data.get("total_pnl") or account_data.get("unrealized_pnl") or 0)
+    total_return_pct = float(
+        str(account_data.get("total_return_percent") or "0")
+        .replace("%", "")
+        .replace("+", "")
+        .replace("−", "-")
+    )
+    pnl_sign = "+" if total_pnl >= 0 else ""
+
+    lines = [
+        "INVESTIQ PAPER TRADING - BÁO CÁO DANH MỤC & NHẬN XÉT AI",
+        f"Phiên giao dịch: {now_str} | Dành riêng cho: {email}",
+        "=" * 50,
+        f"Tổng tài sản: {total_val:,.0f} đ",
+        f"Hiệu suất: {pnl_sign}{total_return_pct:.2f}% ({pnl_sign}{total_pnl:,.0f} đ)",
+        f"Tiền mặt khả dụng: {avail_cash:,.0f} đ",
+        f"Điểm sức khỏe danh mục: {ai_review.portfolio_health_score}/100",
+        f"Khẩu vị rủi ro: {ai_review.risk_profile}",
+        "-" * 50,
+        f"DANH SÁCH CỔ PHIẾU ({len(ai_review.holdings_analyzed)} mã):",
+    ]
+    if ai_review.holdings_analyzed:
+        for h in ai_review.holdings_analyzed:
+            h_sign = "+" if h.pnl >= 0 else ""
+            lines.append(
+                f"- {h.symbol}: {h.quantity:,} CP | Giá vốn: {h.average_cost:,.0f} đ | Hiện tại: {h.current_price:,.0f} đ | Lãi/Lỗ: {h_sign}{h.pnl_percent:.1f}% ({h_sign}{h.pnl:,.0f} đ) | {h.recommendation}"
+            )
+    else:
+        lines.append("- Hiện danh mục đang giữ 100% tiền mặt, chưa mua cổ phiếu nào.")
+
+    lines.extend([
+        "-" * 50,
+        "ĐÁNH GIÁ TỪ TRỢ LÝ AI:",
+        ai_review.overall_verdict,
+        "",
+        "HÀNH ĐỘNG ĐỀ XUẤT:",
+    ])
+    for item in ai_review.action_items:
+        lines.append(f"* {item}")
+
+    lines.extend([
+        "",
+        "=" * 50,
+        "Báo cáo này được tự động tạo bởi InvestIQ Platform.",
+        "Bạn nhận được thư này do đã bật tính năng Báo cáo Danh mục Thử nghiệm Hàng ngày.",
+        "© 2026 InvestIQ Platform · support@investiq.vn",
+    ])
+    return "\n".join(lines)
+
+
 DUMMY_DOMAINS = (
     "@investiq.vn",
     "@example.com",
@@ -421,23 +483,45 @@ def send_paper_portfolio_daily_email(
             f"Báo cáo AI danh mục đã được tạo thành công và lưu bản xem trước cho {to_email} (Dev Mode).",
         )
 
-    try:
-        msg = MIMEMultipart("alternative")
-        msg["Subject"] = (
-            f"InvestIQ - Báo Cáo Danh Mục Thử Nghiệm & Nhận Xét AI ({report_date_str or datetime.now(UTC).strftime('%d/%m/%Y')})"
-        )
-        msg["From"] = f"InvestIQ AI Advisor <{sender_email}>"
-        msg["To"] = to_email
+    text_content = build_paper_portfolio_email_text(
+        email=to_email,
+        account_data=account_data,
+        ai_review=ai_review,
+        report_date_str=report_date_str,
+    )
 
-        part = MIMEText(html_content, "html", "utf-8")
-        msg.attach(part)
+    try:
+        raw_name, raw_address = parseaddr(sender_email)
+        sender_address = raw_address if raw_address else "no-reply@investiq.vn"
+        display_name = raw_name if raw_name else "InvestIQ"
+        formatted_from = formataddr((display_name, sender_address))
+        sender_domain = sender_address.rpartition("@")[2] or "investiq.vn"
+
+        now_utc = datetime.now(UTC)
+        formatted_date = report_date_str or now_utc.strftime("%d/%m/%Y")
+
+        message = EmailMessage()
+        message["Subject"] = f"[InvestIQ] Báo cáo danh mục đầu tư & đánh giá AI ({formatted_date})"
+        message["From"] = formatted_from
+        message["To"] = to_email
+        message["Reply-To"] = formataddr(("InvestIQ Support", sender_address))
+        message["Date"] = format_datetime(now_utc)
+        message["Message-ID"] = make_msgid(domain=sender_domain)
+        message["X-Mailer"] = "InvestIQ Notification Service 1.0"
+        message["Auto-Submitted"] = "auto-generated"
+        message["Precedence"] = "bulk"
+        message["List-Unsubscribe"] = f"<mailto:{sender_address}?subject=unsubscribe>"
+
+        # Set text/plain first, then attach text/html alternative (RFC 2046 compliant to prevent spam)
+        message.set_content(text_content)
+        message.add_alternative(html_content, subtype="html")
 
         with smtplib.SMTP(smtp_host, smtp_port, timeout=12) as server:
             if settings.auth_smtp_starttls:
                 server.starttls(context=ssl.create_default_context())
             if smtp_user and smtp_password:
                 server.login(smtp_user, smtp_password)
-            server.sendmail(sender_email, [to_email], msg.as_string())
+            server.send_message(message, from_addr=sender_address, to_addrs=[to_email])
 
         return True, f"Báo cáo AI danh mục đã được gửi thành công đến {to_email}."
     except Exception as exc:

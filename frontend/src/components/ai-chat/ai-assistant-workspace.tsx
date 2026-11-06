@@ -135,7 +135,7 @@ export function AiAssistantWorkspace() {
       id: `user-${Date.now()}`,
       role: "user",
       content: text,
-      created_at: "2026-11-01T12:00:00.000Z",
+      created_at: new Date().toISOString(),
     };
 
     setMessages((prev) => [...prev, userMsg]);
@@ -153,7 +153,7 @@ export function AiAssistantWorkspace() {
         id: `err-${Date.now()}`,
         role: "assistant",
         content: (err as Error)?.message || "Có lỗi xảy ra khi kết nối trợ lý AI. Vui lòng thử lại sau.",
-        created_at: "2026-11-01T12:00:00.000Z",
+        created_at: new Date().toISOString(),
       };
       setMessages((prev) => [...prev, errorMsg]);
     } finally {
@@ -282,7 +282,7 @@ export function AiAssistantWorkspace() {
         </div>
 
         {/* Message Stream Area */}
-        <div className="flex-1 overflow-y-auto p-4 sm:p-6 space-y-4">
+        <div className="flex-1 overflow-y-auto overflow-x-hidden p-4 sm:p-6 space-y-4">
           {isLoadingHistory ? (
             <div className="h-full flex items-center justify-center text-slate-400 text-sm">
               <span>Đang tải lịch sử hội thoại...</span>

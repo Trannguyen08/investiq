@@ -17,6 +17,7 @@ const mockUpcomingEvents: DividendItem[] = [
     cash_value: 1000,
     title: "Tạm ứng cổ tức đợt 2/2026 bằng Tiền mặt, tỷ lệ 10% (1.000 đ/cp)",
     source: "Nghị quyết HĐQT",
+    source_url: "https://s.cafef.vn/lich-su-kien/FPT/sub.chn",
   },
   {
     id: "HPG-2026-11-28",
@@ -30,8 +31,24 @@ const mockUpcomingEvents: DividendItem[] = [
     cash_value: null,
     title: "Phát hành cổ phiếu trả cổ tức năm 2026, tỷ lệ 10:1",
     source: "Nghị quyết ĐHCĐ",
+    source_url: "https://s.cafef.vn/lich-su-kien/HPG/sub.chn",
   },
 ];
+
+const mockManyEvents: DividendItem[] = Array.from({ length: 8 }, (_, i) => ({
+  id: `SYM${i}-2026-12-0${i + 1}`,
+  symbol: `S${i}`,
+  event_date: `2026-12-0${i + 1}`,
+  ex_date: `2026-12-0${i + 1}`,
+  record_date: null,
+  payout_date: null,
+  type: i % 2 === 0 ? "cash" : "stock",
+  ratio: "10%",
+  cash_value: i % 2 === 0 ? 1000 : null,
+  title: `Sự kiện cổ tức của mã S${i}`,
+  source: "CafeF / HOSE",
+  source_url: `https://s.cafef.vn/lich-su-kien/S${i}/sub.chn`,
+}));
 
 describe("DividendCalendarWidget", () => {
   it("renders upcoming future dividend calendar title and cards", () => {
@@ -59,5 +76,79 @@ describe("DividendCalendarWidget", () => {
 
     expect(screen.getByText("HPG")).toBeInTheDocument();
     expect(screen.queryByText("FPT")).not.toBeInTheDocument();
+  });
+
+  it("sorts events closest to present date first", () => {
+    // Event further away (Dec 2026) vs event closer (Nov 2026)
+    const unsortedEvents: DividendItem[] = [
+      {
+        id: "LATE-2026-12-20",
+        symbol: "LATE",
+        event_date: "2026-12-20",
+        ex_date: "2026-12-20",
+        record_date: null,
+        payout_date: null,
+        type: "cash",
+        ratio: "5%",
+        cash_value: 500,
+        title: "Chi trả cổ tức muộn",
+        source: "Nghị quyết HĐQT",
+      },
+      {
+        id: "EARLY-2026-11-10",
+        symbol: "EARLY",
+        event_date: "2026-11-10",
+        ex_date: "2026-11-10",
+        record_date: null,
+        payout_date: null,
+        type: "cash",
+        ratio: "10%",
+        cash_value: 1000,
+        title: "Chi trả cổ tức sớm",
+        source: "Nghị quyết HĐQT",
+      },
+    ];
+
+    render(<DividendCalendarWidget initialEvents={unsortedEvents} />);
+
+    const badges = screen.getAllByText(/EARLY|LATE/);
+    expect(badges[0]).toHaveTextContent("EARLY");
+    expect(badges[1]).toHaveTextContent("LATE");
+  });
+
+  it("supports pagination when there are more than 6 events", () => {
+    render(<DividendCalendarWidget initialEvents={mockManyEvents} />);
+
+    // Page 1 should render first 6 items: S0 -> S5
+    expect(screen.getByText("S0")).toBeInTheDocument();
+    expect(screen.getByText("S5")).toBeInTheDocument();
+    expect(screen.queryByText("S6")).not.toBeInTheDocument();
+    expect(screen.queryByText("S7")).not.toBeInTheDocument();
+
+    // Check pagination bar
+    expect(screen.getByText(/Hiển thị/i)).toBeInTheDocument();
+    expect(screen.getByText("1 - 6")).toBeInTheDocument();
+
+    // Click next page button "2"
+    const page2Btn = screen.getByRole("button", { name: "Trang 2" });
+    fireEvent.click(page2Btn);
+
+    // Page 2 should render S6 and S7
+    expect(screen.getByText("S6")).toBeInTheDocument();
+    expect(screen.getByText("S7")).toBeInTheDocument();
+    expect(screen.queryByText("S0")).not.toBeInTheDocument();
+  });
+
+  it("links directly to source info URL", () => {
+    render(<DividendCalendarWidget initialEvents={mockUpcomingEvents} />);
+
+    // Check link in title and footer
+    const sourceLinks = screen.getAllByRole("link", { name: /Xem nguồn thông tin|Nguồn tin ↗/i });
+    expect(sourceLinks.length).toBeGreaterThan(0);
+    const fptLink = sourceLinks.find(
+      (link) => link.getAttribute("href") === "https://s.cafef.vn/lich-su-kien/FPT/sub.chn"
+    );
+    expect(fptLink).toBeDefined();
+    expect(fptLink?.getAttribute("target")).toBe("_blank");
   });
 });

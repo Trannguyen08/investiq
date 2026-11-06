@@ -76,6 +76,17 @@ class AiWidget(BaseModel):
     data: dict[str, Any]
 
 
+class AiSource(BaseModel):
+    kind: Literal["internal", "external"]
+    title: str
+    url: str
+
+
+class AiEvaluationResponse(BaseModel):
+    score: float
+    checks: dict[str, bool] = Field(default_factory=dict)
+
+
 class AiMessageResponse(BaseModel):
     id: str
     conversation_id: str | None = None
@@ -83,6 +94,9 @@ class AiMessageResponse(BaseModel):
     content: str
     widgets: list[AiWidget] = Field(default_factory=list)
     suggested_actions: list[SuggestedAction] = Field(default_factory=list)
+    sources: list[AiSource] = Field(default_factory=list)
+    evaluation: AiEvaluationResponse | None = None
+    is_cached: bool = False
     created_at: str
 
 
@@ -106,3 +120,13 @@ class AiChatResponse(BaseModel):
 
 class CreateConversationRequest(BaseModel):
     title: str = Field(default="Hội thoại mới", max_length=200)
+
+
+class AiMetricsResponse(BaseModel):
+    requests: dict[str, Any]
+    latency_ms: dict[str, Any]
+    guardrail_blocks: dict[str, int]
+    cache: dict[str, Any]
+    sources: dict[str, int]
+    evaluation: dict[str, Any]
+    steps: dict[str, Any]

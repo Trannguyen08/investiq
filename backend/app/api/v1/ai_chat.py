@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import threading
 from datetime import UTC, datetime
 from typing import Annotated, Any
 from uuid import uuid4
@@ -11,18 +12,45 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from app.api.deps import authenticated_user_id, optional_user_id
 from app.api.v1.market_data import get_market_provider
 from app.application.use_cases.ai_chat.ai_financial_service import AiFinancialService
+from app.application.use_cases.ai_chat.ai_observability import AiMetricsRegistry
+from app.application.use_cases.ai_chat.knowledge_base import InternalKnowledgeBase
 from app.application.use_cases.market_data.market_service import MarketService
+from app.infrastructure.cache.ai_chat_cache import get_ai_chat_cache
 from app.infrastructure.db.repositories.sql_ai_chat_repository import SqlAiChatRepository
+from app.infrastructure.db.repositories.sql_learning_repository import SqlLearningRepository
+from app.infrastructure.db.repositories.sql_news_repository import SqlNewsRepository
 from app.infrastructure.db.session import get_pool
 from app.schemas.ai_chat import (
     AiChatRequest,
     AiChatResponse,
     AiConversationResponse,
     AiMessageResponse,
+    AiMetricsResponse,
     CreateConversationRequest,
 )
 
 router = APIRouter(prefix="/api/v1/ai", tags=["ai-assistant"])
+
+_shared_metrics = AiMetricsRegistry()
+_shared_kb: InternalKnowledgeBase | None = None
+_shared_kb_lock = threading.Lock()
+
+
+def _get_shared_knowledge_base() -> InternalKnowledgeBase:
+    global _shared_kb
+    with _shared_kb_lock:
+        if _shared_kb is None:
+            repo: SqlLearningRepository
+            try:
+                from app.infrastructure.db.session import _pool
+                if _pool is not None:
+                    repo = SqlLearningRepository(_pool)
+                else:
+                    repo = SqlLearningRepository(None)
+            except Exception:
+                repo = SqlLearningRepository(None)
+            _shared_kb = InternalKnowledgeBase(repo)
+        return _shared_kb
 
 
 def _ai_service() -> AiFinancialService:
@@ -32,7 +60,22 @@ def _ai_service() -> AiFinancialService:
         from app.infrastructure.external.market_fixture_provider import FixtureMarketProvider
 
         provider = FixtureMarketProvider()
-    return AiFinancialService(MarketService(provider))
+
+    news_repo: SqlNewsRepository | None = None
+    try:
+        from app.infrastructure.db.session import _pool
+        if _pool is not None:
+            news_repo = SqlNewsRepository(_pool)
+    except Exception:
+        news_repo = None
+
+    return AiFinancialService(
+        market_service=MarketService(provider),
+        knowledge_base=_get_shared_knowledge_base(),
+        news_repo=news_repo,
+        cache=get_ai_chat_cache(),
+        metrics=_shared_metrics,
+    )
 
 
 def _chat_repo() -> SqlAiChatRepository | None:
@@ -96,6 +139,9 @@ async def chat_with_ai(
         content=ai_result["content"],
         widgets=ai_result["widgets"],
         suggested_actions=ai_result["suggested_actions"],
+        sources=ai_result.get("sources", []),
+        evaluation=ai_result.get("evaluation"),
+        is_cached=ai_result.get("is_cached", False),
         created_at=now_iso,
     )
 
@@ -103,6 +149,14 @@ async def chat_with_ai(
         conversation_id=active_conv_id,
         message=message_response,
     )
+
+
+@router.get("/metrics", response_model=AiMetricsResponse)
+def get_ai_metrics(
+    ai_service: Annotated[AiFinancialService, Depends(_ai_service)],
+) -> AiMetricsResponse:
+    """Return real-time AI telemetry: step latencies, guardrail blocks, cache hits, evals."""
+    return AiMetricsResponse.model_validate(ai_service.metrics.snapshot())
 
 
 @router.get("/conversations", response_model=list[AiConversationResponse])

@@ -174,7 +174,7 @@ describe("beginner market UI", () => {
     expect(screen.getByText("Giao dịch nội bộ · Ngày kết thúc")).toBeInTheDocument();
     expect(screen.getByRole("link", { name: /Nguồn: VCI qua Vnstock/ })).toHaveAttribute("href", "https://example.com/event-1");
     expect(screen.getByRole("heading", { name: "Ba câu hỏi giúp người mới tránh quyết định vội" })).toBeInTheDocument();
-    expect(screen.getByRole("link", { name: "Danh mục mô phỏng" })).toHaveAttribute("href", "/portfolio");
+    expect(screen.getByRole("link", { name: "Mở danh mục mô phỏng →" })).toHaveAttribute("href", "/portfolio");
     expect(screen.queryByText("Cộng đồng học cùng nhau")).not.toBeInTheDocument();
   });
 

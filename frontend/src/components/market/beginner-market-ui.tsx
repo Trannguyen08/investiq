@@ -6,12 +6,64 @@ import { useId } from "react";
 import { changeTone, formatPercent } from "@/components/market/formatters";
 import type { MarketCandle, MarketSector } from "@/types/market";
 
-export function SectorHeatmap({ sectors: values, headingId }: { sectors: MarketSector[]; headingId: string }) {
+export function SectorHeatmap({
+  sectors: values,
+  headingId,
+  embedded = false,
+}: {
+  sectors: MarketSector[];
+  headingId: string;
+  embedded?: boolean;
+}) {
   const sectors = values.slice(0, 16);
   const rows = Array.from(
     { length: Math.ceil(sectors.length / 8) },
     (_, index) => sectors.slice(index * 8, index * 8 + 8),
   );
+
+  const content = sectors.length ? (
+    <div className="heatmap-grid flex flex-col gap-2.5 min-h-[220px]">
+      {rows.map((row, rowIndex) => (
+        <div className="heatmap-row flex flex-nowrap gap-2.5 overflow-x-auto pb-1 scrollbar-none" key={rowIndex}>
+          {row.map((sector) => {
+            const change = Number(sector.change_percent);
+            const magnitude = Math.max(Math.abs(change), 0.05);
+            const isPositive = change > 0;
+            const isNegative = change < 0;
+            return (
+              <Link
+                aria-label={`${sector.name}: ${formatPercent(sector.change_percent)}, mở thị trường ngành`}
+                className={`heatmap-tile ${changeTone(sector.change_percent)} flex flex-col items-center justify-center p-3 rounded-xl border transition-all duration-200 min-h-[96px] min-w-[110px] md:min-w-[125px] text-center hover:scale-[1.02] shadow-sm ${
+                  isPositive
+                    ? "bg-emerald-950/70 border-emerald-500/40 hover:border-emerald-400 text-emerald-100"
+                    : isNegative
+                      ? "bg-rose-950/70 border-rose-500/40 hover:border-rose-400 text-rose-100"
+                      : "bg-amber-950/60 border-amber-500/30 hover:border-amber-400 text-amber-100"
+                }`}
+                href={`/market/stocks?sector=${encodeURIComponent(sector.name)}#stock-table`}
+                prefetch={false}
+                style={{ flexGrow: magnitude }}
+                key={sector.name}
+              >
+                <strong className="text-xs md:text-sm font-bold text-white line-clamp-2 max-w-full leading-tight drop-shadow-sm">{sector.name}</strong>
+                <span className="text-sm md:text-base font-extrabold tracking-wide my-1 drop-shadow-sm">{formatPercent(sector.change_percent)}</span>
+                <small className="text-[11px] opacity-80 whitespace-nowrap text-slate-200">{sector.member_count} mã</small>
+              </Link>
+            );
+          })}
+        </div>
+      ))}
+    </div>
+  ) : (
+    <div className="market-empty py-8 text-center text-slate-500">
+      <p>Chưa có phân loại ngành trong dữ liệu hiện tại.</p>
+    </div>
+  );
+
+  if (embedded) {
+    return content;
+  }
+
   return (
     <section className="sector-heatmap bg-slate-900/90 border border-slate-800 rounded-2xl p-5 shadow-sm" aria-labelledby={headingId}>
       <div className="beginner-card-title flex items-center justify-between mb-3">
@@ -19,44 +71,7 @@ export function SectorHeatmap({ sectors: values, headingId }: { sectors: MarketS
         <InfoTip term="Bản đồ nhiệt">Diện tích ô tỷ lệ với độ lớn phần trăm tăng hoặc giảm bình quân có trọng số. Màu cho biết chiều biến động.</InfoTip>
       </div>
       <p className="text-xs md:text-sm text-slate-400 mb-4">Chọn một ô để mở bảng cổ phiếu đã lọc theo ngành đó.</p>
-      {sectors.length ? (
-        <div className="heatmap-grid flex flex-col gap-2.5 min-h-[220px]">
-          {rows.map((row, rowIndex) => (
-            <div className="heatmap-row flex flex-nowrap gap-2.5 overflow-x-auto pb-1 scrollbar-none" key={rowIndex}>
-              {row.map((sector) => {
-                const change = Number(sector.change_percent);
-                const magnitude = Math.max(Math.abs(change), 0.05);
-                const isPositive = change > 0;
-                const isNegative = change < 0;
-                return (
-                  <Link
-                    aria-label={`${sector.name}: ${formatPercent(sector.change_percent)}, mở thị trường ngành`}
-                    className={`heatmap-tile ${changeTone(sector.change_percent)} flex flex-col items-center justify-center p-3 rounded-xl border transition-all duration-200 min-h-[96px] min-w-[110px] md:min-w-[125px] text-center hover:scale-[1.02] shadow-sm ${
-                      isPositive
-                        ? "bg-emerald-950/70 border-emerald-500/40 hover:border-emerald-400 text-emerald-100"
-                        : isNegative
-                          ? "bg-rose-950/70 border-rose-500/40 hover:border-rose-400 text-rose-100"
-                          : "bg-amber-950/60 border-amber-500/30 hover:border-amber-400 text-amber-100"
-                    }`}
-                    href={`/market/stocks?sector=${encodeURIComponent(sector.name)}#stock-table`}
-                    prefetch={false}
-                    style={{ flexGrow: magnitude }}
-                    key={sector.name}
-                  >
-                    <strong className="text-xs md:text-sm font-bold text-white line-clamp-2 max-w-full leading-tight drop-shadow-sm">{sector.name}</strong>
-                    <span className="text-sm md:text-base font-extrabold tracking-wide my-1 drop-shadow-sm">{formatPercent(sector.change_percent)}</span>
-                    <small className="text-[11px] opacity-80 whitespace-nowrap text-slate-200">{sector.member_count} mã</small>
-                  </Link>
-                );
-              })}
-            </div>
-          ))}
-        </div>
-      ) : (
-        <div className="market-empty py-8 text-center text-slate-500">
-          <p>Chưa có phân loại ngành trong dữ liệu hiện tại.</p>
-        </div>
-      )}
+      {content}
     </section>
   );
 }

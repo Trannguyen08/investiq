@@ -139,7 +139,7 @@ describe("StocksView navigation", () => {
   it("shows sector counts and breadth from the complete aggregate", () => {
     render(<StocksView collection={collection} summary={collection} sectors={sectors} filters={{ q: "", exchange: "", sort: "vn30", direction: "desc", mode: "basic" }} selected="" selectedCandles={[]} index={index} />);
 
-    expect(screen.getByText("20 mã")).toBeInTheDocument();
+    expect(screen.getByRole("option", { name: /Ngân hàng \(20 mã\)/ })).toBeInTheDocument();
     expect(screen.getByText(/toàn bộ 21 cổ phiếu/)).toBeInTheDocument();
     expect(screen.getByText("9 tăng")).toBeInTheDocument();
   });

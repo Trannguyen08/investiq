@@ -6,8 +6,8 @@ export function StockComparisonWidget({ data }: { data: StockComparisonWidgetDat
   const { title, items, summary_verdict } = data;
 
   return (
-    <div className="w-full max-w-xl bg-slate-900/95 border border-slate-800 rounded-2xl p-4 sm:p-5 shadow-2xl my-3 text-slate-200">
-      <div className="border-b border-slate-800 pb-3 mb-4">
+    <div className="w-full max-w-xl bg-slate-900/95 border border-slate-800 rounded-2xl p-3.5 sm:p-4 shadow-2xl my-2.5 text-slate-200 overflow-hidden">
+      <div className="border-b border-slate-800 pb-3 mb-3.5">
         <h4 className="text-sm sm:text-base font-bold text-white m-0">{title}</h4>
       </div>
 
@@ -77,12 +77,14 @@ export function StockComparisonWidget({ data }: { data: StockComparisonWidgetDat
         </table>
       </div>
 
-      {/* Pros & Cons Columns */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mb-3">
+      {/* Pros & Cons Cards */}
+      <div className="grid grid-cols-1 gap-2.5 mb-3">
         {items.map((it) => (
           <div key={it.symbol} className="bg-slate-950/60 p-3 rounded-xl border border-slate-800 text-xs">
             <div className="font-bold text-sky-400 mb-1.5 flex items-center justify-between">
-              <span>{it.symbol} ({it.name})</span>
+              <span>
+                {it.symbol} ({it.name})
+              </span>
             </div>
             {it.pros.length > 0 && (
               <div className="space-y-1 mb-2">
