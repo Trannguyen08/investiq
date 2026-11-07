@@ -712,4 +712,36 @@ describe("PaperTradingDashboard", () => {
     );
   });
 
+  it("validates Stop-Loss < buy price and Take-Profit > buy price with error hints and button disable", async () => {
+    render(<PaperTradingDashboard positiveNews={[]} marketInstruments={marketInstruments} />);
+    await screen.findByRole("heading", { name: "Danh mục mô phỏng của bạn" });
+
+    // Open Buy dialog for HPG (market price 29.100 đ)
+    fireEvent.click(screen.getByRole("button", { name: "Mua HPG" }));
+    const submitBtn = screen.getByRole("button", { name: "Xác nhận mua" });
+    expect(submitBtn).not.toBeDisabled();
+
+    // 1. Enter invalid Stop-Loss: 30000 (which is > 29100)
+    const slInput = screen.getByLabelText("Cắt lỗ tự động (Stop-Loss)");
+    fireEvent.change(slInput, { target: { value: "30.000" } });
+    expect(screen.getByText(/Giá cắt lỗ \(30\.000 ₫\) phải nhỏ hơn giá đặt mua/)).toBeInTheDocument();
+    expect(submitBtn).toBeDisabled();
+
+    // Reset Stop-Loss to valid 27.000
+    fireEvent.change(slInput, { target: { value: "27.000" } });
+    expect(screen.queryByText(/Giá cắt lỗ .* phải nhỏ hơn/)).not.toBeInTheDocument();
+    expect(submitBtn).not.toBeDisabled();
+
+    // 2. Enter invalid Take-Profit: 25000 (which is < 29100)
+    const tpInput = screen.getByLabelText("Chốt lời tự động (Take-Profit)");
+    fireEvent.change(tpInput, { target: { value: "25.000" } });
+    expect(screen.getByText(/Giá chốt lời \(25\.000 ₫\) phải lớn hơn giá đặt mua/)).toBeInTheDocument();
+    expect(submitBtn).toBeDisabled();
+
+    // Reset Take-Profit to valid 35.000
+    fireEvent.change(tpInput, { target: { value: "35.000" } });
+    expect(screen.queryByText(/Giá chốt lời .* phải lớn hơn/)).not.toBeInTheDocument();
+    expect(submitBtn).not.toBeDisabled();
+  });
+
 });

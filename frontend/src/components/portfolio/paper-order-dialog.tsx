@@ -39,40 +39,71 @@ function roundToTickSize(price: number): number {
   return Math.round(price / 100) * 100;
 }
 
+function formatDotNumber(val: string | number): string {
+  if (!val && val !== 0) return "";
+  const clean = String(val).replace(/[^\d]/g, "");
+  if (!clean) return "";
+  return Number(clean).toLocaleString("vi-VN");
+}
+
 function resolveTriggerPrice(
   rawInput: string,
   basePrice: number,
   isStopLoss: boolean,
-): { priceVnd: string; displayHint: string } {
+): { priceVnd: string; displayHint: string; validationError?: string } {
   if (!rawInput.trim() || basePrice <= 0) {
     return { priceVnd: "", displayHint: "" };
   }
-  const clean = rawInput.trim().replace(/%/g, "").replace(/\+/g, "").replace(/-/g, "");
+  const clean = rawInput
+    .trim()
+    .replace(/%/g, "")
+    .replace(/\+/g, "")
+    .replace(/-/g, "")
+    .replace(/\./g, "");
   const num = Number(clean);
   if (Number.isNaN(num) || num <= 0) {
     return { priceVnd: "", displayHint: "" };
   }
 
-  // If input is <= 100 (e.g. 7 or 15), treat as percentage
-  if (num <= 100) {
+  // If input is explicitly percentage (contains %) or is a small number <= 100 without thousand dots
+  const isPercent = rawInput.includes("%") || (num <= 100 && !rawInput.includes("."));
+  if (isPercent) {
     const pct = num;
     const target = isStopLoss
       ? roundToTickSize(basePrice * (1 - pct / 100))
       : roundToTickSize(basePrice * (1 + pct / 100));
     const sign = isStopLoss ? "-" : "+";
+
+    let validationError: string | undefined;
+    if (isStopLoss && target >= basePrice) {
+      validationError = `Giá cắt lỗ (${moneyFormat.format(target)}) phải nhỏ hơn giá đặt mua (${moneyFormat.format(basePrice)}).`;
+    } else if (!isStopLoss && target <= basePrice) {
+      validationError = `Giá chốt lời (${moneyFormat.format(target)}) phải lớn hơn giá đặt mua (${moneyFormat.format(basePrice)}).`;
+    }
+
     return {
       priceVnd: String(target),
       displayHint: `Kích hoạt khi ${isStopLoss ? "≤" : "≥"} ${moneyFormat.format(target)} (${sign}${pct.toFixed(1)}%)`,
+      validationError,
     };
   }
 
-  // Otherwise treat as direct VND price (e.g. 27000)
-  const target = Math.round(Number(rawInput.trim().replace(/[^\d.]/g, "")));
+  // Otherwise treat as direct VND price (e.g. 18.950, 18950, 27000)
+  const target = Math.round(num);
   const diffPct = ((target - basePrice) / basePrice) * 100;
   const sign = diffPct >= 0 ? "+" : "";
+
+  let validationError: string | undefined;
+  if (isStopLoss && target >= basePrice) {
+    validationError = `Giá cắt lỗ (${moneyFormat.format(target)}) phải nhỏ hơn giá đặt mua (${moneyFormat.format(basePrice)}).`;
+  } else if (!isStopLoss && target <= basePrice) {
+    validationError = `Giá chốt lời (${moneyFormat.format(target)}) phải lớn hơn giá đặt mua (${moneyFormat.format(basePrice)}).`;
+  }
+
   return {
     priceVnd: String(target),
     displayHint: `Kích hoạt tại ${moneyFormat.format(target)} (${sign}${diffPct.toFixed(1)}%)`,
+    validationError,
   };
 }
 
@@ -250,6 +281,73 @@ function PaperOrderDialogContent({
     () => resolveTriggerPrice(takeProfitInput, basePriceNum, false),
     [takeProfitInput, basePriceNum],
   );
+
+  const rangeError =
+    resolvedStopLoss.priceVnd &&
+    resolvedTakeProfit.priceVnd &&
+    Number(resolvedStopLoss.priceVnd) >= Number(resolvedTakeProfit.priceVnd)
+      ? "Giá cắt lỗ (Stop-Loss) phải nhỏ hơn giá chốt lời (Take-Profit)."
+      : null;
+
+  const hasValidationError = Boolean(
+    resolvedStopLoss.validationError ||
+    resolvedTakeProfit.validationError ||
+    rangeError
+  );
+
+  function handleIntegerKeyDown(event: React.KeyboardEvent<HTMLInputElement>) {
+    if (
+      [
+        "Backspace", "Delete", "ArrowLeft", "ArrowRight", "Tab", "Home", "End", "Enter",
+      ].includes(event.key) ||
+      event.ctrlKey ||
+      event.metaKey
+    ) {
+      return;
+    }
+    if (!/[\d]/.test(event.key)) {
+      event.preventDefault();
+    }
+  }
+
+  function handleNumericKeyDown(event: React.KeyboardEvent<HTMLInputElement>) {
+    if (
+      [
+        "Backspace", "Delete", "ArrowLeft", "ArrowRight", "Tab", "Home", "End", "Enter",
+      ].includes(event.key) ||
+      event.ctrlKey ||
+      event.metaKey
+    ) {
+      return;
+    }
+    if (!/[\d]/.test(event.key)) {
+      event.preventDefault();
+    }
+  }
+
+  function handleTriggerKeyDown(event: React.KeyboardEvent<HTMLInputElement>) {
+    if (
+      [
+        "Backspace", "Delete", "ArrowLeft", "ArrowRight", "Tab", "Home", "End", "Enter",
+      ].includes(event.key) ||
+      event.ctrlKey ||
+      event.metaKey
+    ) {
+      return;
+    }
+    if (!/[\d.%\-+]/.test(event.key)) {
+      event.preventDefault();
+    }
+  }
+
+  function handleTriggerChange(
+    event: React.ChangeEvent<HTMLInputElement>,
+    setter: (val: string) => void,
+  ) {
+    const sanitized = event.target.value.replace(/[^\d.%\-+]/g, "");
+    setter(sanitized);
+  }
+
   const loading = auth.status === "authenticated" && !dashboard && !error;
 
   useEffect(() => {
@@ -325,6 +423,15 @@ function PaperOrderDialogContent({
     }
     if (!Number.isFinite(numericPrice) || numericPrice <= 0) {
       setError("Chưa có giá quan sát hợp lệ để mô phỏng giao dịch.");
+      return;
+    }
+    if (side === "buy" && hasValidationError) {
+      setError(
+        resolvedStopLoss.validationError ||
+        resolvedTakeProfit.validationError ||
+        rangeError ||
+        "Thông số cắt lỗ / chốt lời không hợp lệ."
+      );
       return;
     }
     if (side === "buy" && estimate.total > Number(dashboard.account.available_cash)) {
@@ -461,9 +568,11 @@ function PaperOrderDialogContent({
               max={side === "sell" ? holding?.available_quantity ?? 0 : 1_000_000}
               step="1"
               value={quantity}
+              onKeyDown={handleIntegerKeyDown}
               onChange={(event) => {
                 idempotencyKeyRef.current = null;
-                setQuantity(event.target.value);
+                const clean = event.target.value.replace(/[^\d]/g, "");
+                setQuantity(clean);
               }}
               required
             />
@@ -473,13 +582,14 @@ function PaperOrderDialogContent({
               Giá đặt giới hạn (VND)
               <input
                 aria-label="Giá đặt giới hạn (VND)"
-                type="number"
-                min="1"
-                step="any"
-                value={customLimitPrice}
+                type="text"
+                inputMode="numeric"
+                value={formatDotNumber(customLimitPrice)}
+                onKeyDown={handleNumericKeyDown}
                 onChange={(event) => {
                   idempotencyKeyRef.current = null;
-                  setCustomLimitPrice(event.target.value);
+                  const clean = event.target.value.replace(/[^\d]/g, "");
+                  setCustomLimitPrice(clean);
                 }}
               />
             </label>
@@ -524,7 +634,8 @@ function PaperOrderDialogContent({
                     type="text"
                     placeholder="VD: -7% hoặc 18.950"
                     value={stopLossInput}
-                    onChange={(event) => setStopLossInput(event.target.value)}
+                    onKeyDown={handleTriggerKeyDown}
+                    onChange={(event) => handleTriggerChange(event, setStopLossInput)}
                   />
                   {stopLossInput && (
                     <button
@@ -560,11 +671,15 @@ function PaperOrderDialogContent({
                     -10%
                   </button>
                 </div>
-                {resolvedStopLoss.displayHint && (
+                {resolvedStopLoss.validationError ? (
+                  <span className="paper-conditional-hint error" role="alert">
+                    {resolvedStopLoss.validationError}
+                  </span>
+                ) : resolvedStopLoss.displayHint ? (
                   <span className="paper-conditional-hint loss">
                     {resolvedStopLoss.displayHint}
                   </span>
-                )}
+                ) : null}
               </div>
               <div className="paper-conditional-col">
                 <label htmlFor="paper-take-profit-input">
@@ -577,7 +692,8 @@ function PaperOrderDialogContent({
                     type="text"
                     placeholder="VD: +15% hoặc 23.500"
                     value={takeProfitInput}
-                    onChange={(event) => setTakeProfitInput(event.target.value)}
+                    onKeyDown={handleTriggerKeyDown}
+                    onChange={(event) => handleTriggerChange(event, setTakeProfitInput)}
                   />
                   {takeProfitInput && (
                     <button
@@ -613,12 +729,21 @@ function PaperOrderDialogContent({
                     +20%
                   </button>
                 </div>
-                {resolvedTakeProfit.displayHint && (
+                {resolvedTakeProfit.validationError ? (
+                  <span className="paper-conditional-hint error" role="alert">
+                    {resolvedTakeProfit.validationError}
+                  </span>
+                ) : resolvedTakeProfit.displayHint ? (
                   <span className="paper-conditional-hint profit">
                     {resolvedTakeProfit.displayHint}
                   </span>
-                )}
+                ) : null}
               </div>
+              {rangeError && (
+                <div className="paper-conditional-range-error" role="alert">
+                  {rangeError}
+                </div>
+              )}
             </div>
           )}
           <dl className="paper-order-totals">
@@ -632,7 +757,7 @@ function PaperOrderDialogContent({
           </div>
           {error && <p className="paper-order-feedback error" role="alert">{error}</p>}
           <p className="paper-order-rule">Trong InvestIQ, giao dịch luyện tập được tự động khớp toàn bộ theo giá quan sát hợp lệ mới nhất, kể cả khi thị trường thật đang đóng cửa. Trên hệ thống giao dịch thật, lệnh có thể chờ, khớp một phần hoặc không khớp do giá, thanh khoản và trạng thái phiên.</p>
-          <footer><button type="submit" className={`paper-submit ${side}`} disabled={pending || !executionPrice || (side === "sell" && !holding?.available_quantity)}>{pending ? "Đang ghi nhận…" : `Xác nhận ${side === "buy" ? "mua" : "bán"}`}</button><button type="button" onClick={onClose}>Đóng</button></footer>
+          <footer><button type="submit" className={`paper-submit ${side}`} disabled={pending || !executionPrice || hasValidationError || (side === "sell" && !holding?.available_quantity)}>{pending ? "Đang ghi nhận…" : `Xác nhận ${side === "buy" ? "mua" : "bán"}`}</button><button type="button" onClick={onClose}>Đóng</button></footer>
         </form>
       )}
       </section>

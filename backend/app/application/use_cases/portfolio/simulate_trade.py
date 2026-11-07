@@ -190,6 +190,28 @@ class PaperTradingService:
                 "Chế độ khớp lệnh chỉ hỗ trợ 'instant' hoặc 'exchange_hours'.",
             )
         self._sim_store.set_mode(user_id, mode)
+        cached_entry = self._dashboard_cache.get(user_id)
+        if cached_entry:
+            expires_at, cached_dash = cached_entry
+            portfolio = self._repository.get_or_create(user_id, STARTING_CASH)
+            if portfolio:
+                updated_dash = dict(cached_dash)
+                updated_dash["exchange_simulation"] = self._exchange_simulation_payload(
+                    user_id, portfolio
+                )
+                self._dashboard_cache[user_id] = (expires_at, updated_dash)
+                return updated_dash
+        cached_entry = self._dashboard_cache.get(user_id)
+        if cached_entry:
+            expires_at, cached_dash = cached_entry
+            portfolio = self._repository.get_or_create(user_id, STARTING_CASH)
+            if portfolio:
+                updated_dash = dict(cached_dash)
+                updated_dash["exchange_simulation"] = self._exchange_simulation_payload(
+                    user_id, portfolio
+                )
+                self._dashboard_cache[user_id] = (expires_at, updated_dash)
+                return updated_dash
         self.invalidate_dashboard_cache(user_id)
         return self.dashboard(user_id)
 
@@ -268,6 +290,30 @@ class PaperTradingService:
         if command.side == "buy" and (
             command.stop_loss_price is not None or command.take_profit_price is not None
         ):
+            base_order_price = (
+                command.limit_price
+                if (active_mode == "exchange_hours" or command.use_orderbook_depth) and command.limit_price
+                else instrument.price
+            )
+            if (
+                command.stop_loss_price is not None
+                and command.take_profit_price is not None
+                and command.stop_loss_price >= command.take_profit_price
+            ):
+                raise PaperOrderError(
+                    "INVALID_TRIGGER_RANGE",
+                    "Giá cắt lỗ (Stop-Loss) phải nhỏ hơn giá chốt lời (Take-Profit).",
+                )
+            if command.stop_loss_price is not None and command.stop_loss_price >= base_order_price:
+                raise PaperOrderError(
+                    "INVALID_STOP_LOSS",
+                    f"Giá cắt lỗ ({decimal_text(command.stop_loss_price)} đ) phải nhỏ hơn giá đặt mua ({decimal_text(base_order_price)} đ).",
+                )
+            if command.take_profit_price is not None and command.take_profit_price <= base_order_price:
+                raise PaperOrderError(
+                    "INVALID_TAKE_PROFIT",
+                    f"Giá chốt lời ({decimal_text(command.take_profit_price)} đ) phải lớn hơn giá đặt mua ({decimal_text(base_order_price)} đ).",
+                )
             self._sim_store.upsert_trigger(
                 user_id=user_id,
                 symbol=instrument.symbol,

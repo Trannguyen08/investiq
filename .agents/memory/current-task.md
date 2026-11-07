@@ -1,5 +1,48 @@
 # Current Task
 
+## Paper Trading Instant Execution Mode Toggle (0ms), Thousand Dot Separator, Strict Stop-Loss / Take-Profit Validation & System-Wide Number Sanitization - 2026-11-08 (completed)
+- **User Request**:
+  1. Tối ưu phản hồi chuyển đổi chế độ khớp lệnh: Giảm thời gian chờ từ 2-3s xuống tức thì (0ms) với Optimistic UI & In-Memory backend cache update.
+  2. Bổ sung dấu chấm phân cách hàng nghìn (`.`) trong các ô nhập giá (VD: `21.200` thay vì `21200`) theo chuẩn Việt Nam.
+  3. Validate bắt buộc:
+     - Giá cắt lỗ (Stop-Loss) phải nhỏ hơn giá đặt mua ($P_{SL} < P_{\text{buy}}$).
+     - Giá chốt lời (Take-Profit) phải lớn hơn giá đặt mua ($P_{TP} > P_{\text{buy}}$).
+     - Giá cắt lỗ phải nhỏ hơn giá chốt lời ($P_{SL} < P_{TP}$).
+     - Chặn hoàn toàn không cho nhập chữ (a-z, A-Z) và ký tự không hợp lệ.
+     - Hiển thị thông báo lỗi màu đỏ trực quan dưới từng ô và vô hiệu hóa nút "Xác nhận mua" khi thông số không hợp lệ.
+  4. Rà soát toàn bộ hệ thống và áp dụng chuẩn validate / format số cho các ô nhập liệu số khác (`paper-order-dialog.tsx`, `paper-pnl-dialog.tsx`, `thesis-arena.tsx`).
+- **Branch**: `refactor/paper-trading`
+- **Changes**:
+  - `backend/app/application/use_cases/portfolio/simulate_trade.py`:
+    - `set_execution_mode`: Cập nhật trực tiếp payload `exchange_simulation` trong bộ đệm `_dashboard_cache` thay vì xóa cache và tính lại chuỗi equity 30 ngày (giảm thời gian backend từ 2.5s xuống < 1ms).
+    - `place_order`: Validate nghiêm ngặt khi đặt lệnh mua:
+      - $P_{SL} \ge P_{\text{buy}} \rightarrow$ ném `PaperOrderError("INVALID_STOP_LOSS")`.
+      - $P_{TP} \le P_{\text{buy}} \rightarrow$ ném `PaperOrderError("INVALID_TAKE_PROFIT")`.
+      - $P_{SL} \ge P_{TP} \rightarrow$ ném `PaperOrderError("INVALID_TRIGGER_RANGE")`.
+  - `frontend/src/components/portfolio/paper-trading-dashboard.tsx`:
+    - Áp dụng Optimistic UI trong `toggleExecutionMode`: Cập nhật state UI `dashboard` và thông báo ngay tức khắc (0ms), gọi API ngầm trong nền, tự động rollback và báo lỗi nếu API gặp sự cố.
+  - `frontend/src/components/portfolio/paper-order-dialog.tsx`:
+    - Thêm hàm `formatDotNumber(val)` định dạng số tiền có dấu chấm phân cách hàng nghìn (`21.200`).
+    - Nâng cấp `resolveTriggerPrice`: Hỗ trợ cả `%` và số tiền VND, tự động tính giá làm tròn bước giá sàn, kiểm tra logic $P_{SL} < P_{\text{order}}$ và $P_{TP} > P_{\text{order}}$, trả về `validationError` chi tiết.
+    - Tính `rangeError` và `hasValidationError`, vô hiệu hóa nút submit khi vi phạm.
+    - Gắn `onKeyDown={handleNumericKeyDown}` và `inputMode="numeric"` chặn chữ, phím không hợp lệ cho ô giá đặt giới hạn.
+    - Gắn `onKeyDown={handleIntegerKeyDown}` chặn chữ và số âm cho ô số lượng cổ phiếu.
+    - Gắn `onKeyDown={handleTriggerKeyDown}` và `handleTriggerChange` cho ô Cắt lỗ & Chốt lời.
+  - `frontend/src/app/globals.css`:
+    - Bổ sung class `.paper-conditional-hint.error` (màu đỏ nổi bật) và `.paper-conditional-range-error` (banner cảnh báo vi phạm dải giá).
+  - `frontend/src/components/portfolio/paper-pnl-dialog.tsx`:
+    - Gắn `onKeyDown` và lọc số nguyên cho ô khối lượng bán giả định, ngăn nhập chữ và ký tự âm.
+  - `frontend/src/components/community/thesis-arena.tsx`:
+    - Thêm định dạng dấu chấm hàng nghìn cho ô "Giá mục tiêu (VND)" và "Giá cắt lỗ an toàn (VND)".
+    - Chặn nhập chữ bằng `onKeyDown` và `inputMode="numeric"`.
+    - Validate bắt buộc: Với xu hướng `bullish`, giá cắt lỗ phải nhỏ hơn giá mục tiêu. Với xu hướng `bearish`, giá cắt lỗ phải lớn hơn giá mục tiêu.
+  - `frontend/src/components/portfolio/paper-trading-dashboard.test.tsx`:
+    - Bổ sung unit test kiểm tra validate Stop-Loss / Take-Profit hiển thị lỗi và vô hiệu hóa nút mua.
+  - `backend/tests/unit/portfolio/test_paper_trading_service.py`:
+    - Bổ sung unit test kiểm tra `INVALID_STOP_LOSS`, `INVALID_TAKE_PROFIT`, `INVALID_TRIGGER_RANGE` và test tốc độ cập nhật cache của `set_execution_mode`.
+- **Verification**:
+  - Full Pre-PR Quality Gate `./scripts/check-pr.ps1`: Đạt chuẩn 6/6 bước 100% (Git diff whitespace, ESLint, TypeScript tsc, Vitest 187/187 tests, Ruff & Mypy, Pytest 179/179 tests).
+
 ## Paper Trading Order Dialog Redesign (% Stop-Loss/Take-Profit, Order Type Grid Polish) & 503 Route Proxy Fix - 2026-11-08 (completed)
 - **User Request**:
   1. Sửa lỗi Ảnh 1 & 2: Khi nhấn chuyển sang "Giờ sàn thật HOSE/HNX", hệ thống báo lỗi `"Không thể chuyển chế độ khớp lệnh"` và console xuất hiện lỗi HTTP `503 Service Unavailable` tại `/portfolio-api/execution-mode`.

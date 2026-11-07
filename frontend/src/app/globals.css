@@ -3344,6 +3344,8 @@ body:has(.market-page) .mobile-menu summary span { background: #d9e8f5; }
 .paper-conditional-hint { font-size: 0.68rem; font-weight: 600; margin-top: 0.1rem; }
 .paper-conditional-hint.loss { color: #f87171; }
 .paper-conditional-hint.profit { color: #4ade80; }
+.paper-conditional-hint.error { color: #ff6b6b; font-weight: 750; }
+.paper-conditional-range-error { grid-column: 1 / -1; padding: 0.45rem 0.65rem; margin-top: 0.2rem; border-radius: 0.45rem; background: rgba(239, 68, 68, 0.15); border: 1px solid rgba(239, 68, 68, 0.4); color: #fca5a5; font-size: 0.68rem; font-weight: 750; }
 .paper-exchange-sim-bar { margin-bottom: 1.25rem; border: 1px solid #234b63; background: linear-gradient(135deg, #091e2f 0%, #0c283d 100%); }
 .paper-exchange-sim-header { display: flex; align-items: flex-start; justify-content: space-between; gap: 1.25rem; flex-wrap: wrap; padding-bottom: 1rem; border-bottom: 1px solid #1a3c52; }
 .paper-exchange-sim-header h2 { margin: 0.25rem 0 0.4rem; color: #f0f7fb; font-size: 1.15rem; font-weight: 800; }

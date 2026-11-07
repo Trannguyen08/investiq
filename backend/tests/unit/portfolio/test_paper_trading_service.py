@@ -798,3 +798,79 @@ def test_improvement_5_conditional_stop_loss_and_take_profit_auto_triggers() -> 
     assert repo.execution.side == "sell"
     assert repo.execution.quantity == 200
     assert repo.execution.execution_price == Decimal("94.00")
+
+
+def test_place_order_stop_loss_and_take_profit_validation() -> None:
+    store = ExchangeSimulationStore()
+    repo = MultiOrderRepository(portfolio())
+    provider = DepthFixtureProvider(session="open", override_price=Decimal("20000"))
+    service = PaperTradingService(repo, provider, sim_store=store)
+
+    # 1. Stop loss >= buy price (20000)
+    with pytest.raises(PaperOrderError) as exc_sl:
+        service.place_order(
+            "user-1",
+            PlacePaperOrder(
+                idempotency_key="key-sl",
+                symbol="HPG",
+                side="buy",
+                order_type="LO",
+                quantity=100,
+                limit_price=Decimal("20000"),
+                stop_loss_price=Decimal("21000"),
+            ),
+        )
+    assert exc_sl.value.code == "INVALID_STOP_LOSS"
+    assert "phải nhỏ hơn giá đặt mua" in exc_sl.value.message
+
+    # 2. Take profit <= buy price (20000)
+    with pytest.raises(PaperOrderError) as exc_tp:
+        service.place_order(
+            "user-1",
+            PlacePaperOrder(
+                idempotency_key="key-tp",
+                symbol="HPG",
+                side="buy",
+                order_type="LO",
+                quantity=100,
+                limit_price=Decimal("20000"),
+                take_profit_price=Decimal("19000"),
+            ),
+        )
+    assert exc_tp.value.code == "INVALID_TAKE_PROFIT"
+    assert "phải lớn hơn giá đặt mua" in exc_tp.value.message
+
+    # 3. Stop loss >= Take profit
+    with pytest.raises(PaperOrderError) as exc_range:
+        service.place_order(
+            "user-1",
+            PlacePaperOrder(
+                idempotency_key="key-range",
+                symbol="HPG",
+                side="buy",
+                order_type="LO",
+                quantity=100,
+                limit_price=Decimal("20000"),
+                stop_loss_price=Decimal("18000"),
+                take_profit_price=Decimal("18000"),
+            ),
+        )
+    assert exc_range.value.code == "INVALID_TRIGGER_RANGE"
+
+
+def test_set_execution_mode_fast_cache_update() -> None:
+    store = ExchangeSimulationStore()
+    repo = MultiOrderRepository(portfolio())
+    provider = DepthFixtureProvider(session="open", override_price=Decimal("20000"))
+    service = PaperTradingService(repo, provider, sim_store=store)
+
+    # Warm cache
+    initial_dash = service.dashboard("user-1")
+    assert isinstance(initial_dash["exchange_simulation"], dict)
+    assert initial_dash["exchange_simulation"]["execution_mode"] == "instant"
+
+    # Toggle mode to exchange_hours
+    updated_dash = service.set_execution_mode("user-1", "exchange_hours")
+    assert isinstance(updated_dash["exchange_simulation"], dict)
+    assert updated_dash["exchange_simulation"]["execution_mode"] == "exchange_hours"
+    assert store.get_mode("user-1") == "exchange_hours"

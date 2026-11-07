@@ -391,8 +391,44 @@ export function PaperTradingDashboard({
   }
 
   async function toggleExecutionMode(nextMode: PaperExecutionMode) {
+    if (!dashboard) return;
+    const previousDashboard = dashboard;
+    // Optimistic instantaneous UI update (0ms response)
+    const optimistic: PaperDashboard = {
+      ...dashboard,
+      exchange_simulation: {
+        ...(dashboard.exchange_simulation || {
+          session_active: true,
+          session_message: "",
+          supported_order_types: ["LO", "MP", "ATO", "ATC"],
+          price_bands: { HOSE: "7%", HNX: "10%", UPCoM: "15%" },
+          t2_settlement: {
+            cycle_rule: "T+2 (Chuẩn VSDC)",
+            advance_fee_rate_per_day: "0.0003",
+            pending_buy_shares_by_symbol: {},
+            pending_buy_settlements: [],
+            pending_sell_settlements: [],
+            receivable_cash_t2: "0",
+            already_advanced_cash: "0",
+            advanceable_cash: "0",
+            estimated_advance_fee: "0",
+            net_advance_available: "0",
+            recent_advances: [],
+          },
+          conditional_triggers: [],
+          order_meta: {},
+        }),
+        execution_mode: nextMode,
+      },
+    };
+    setDashboard(optimistic);
     setError("");
-    setNotice("");
+    setNotice(
+      nextMode === "exchange_hours"
+        ? "Đã chuyển sang chế độ Giờ sàn thật HOSE/HNX (09:00-11:30 & 13:00-14:45, kiểm tra biên độ Trần/Sàn & sổ lệnh 3 bước giá)."
+        : "Đã chuyển sang chế độ Khớp tức thì 24/7 (tự động khớp toàn bộ theo giá quan sát mới nhất)."
+    );
+
     try {
       const csrf = await fetchCsrfToken();
       const res = await fetch("/portfolio-api/execution-mode", {
@@ -410,12 +446,8 @@ export function PaperTradingDashboard({
       }
       invalidatePaperDashboardCache();
       setDashboard(body);
-      setNotice(
-        nextMode === "exchange_hours"
-          ? "Đã chuyển sang chế độ Giờ sàn thật HOSE/HNX (09:00-11:30 & 13:00-14:45, kiểm tra biên độ Trần/Sàn & sổ lệnh 3 bước giá)."
-          : "Đã chuyển sang chế độ Khớp tức thì 24/7 (tự động khớp toàn bộ theo giá quan sát mới nhất)."
-      );
     } catch (reason) {
+      setDashboard(previousDashboard);
       setError(reason instanceof Error ? reason.message : "Không thể chuyển chế độ khớp lệnh.");
     }
   }
