@@ -1,5 +1,47 @@
 # Current Task
 
+## AI Financial Assistant: Business Leaders, Corporate Ecosystems & Entrepreneur Career Resolution - 2026-11-07 (completed)
+- **User Request**:
+  1. Chuyển nhánh `fix/AI`, cho trợ lý AI trả lời các câu hỏi về chứng khoán **bao gồm thông tin doanh nhân**:
+     - Sửa lỗi khi người dùng hỏi *"phạm nhật vượng là ai"*, AI bị rơi vào câu chào giới thiệu chung chung mặc định do chưa nhận diện intent lãnh đạo/doanh nhân.
+     - Hỗ trợ các câu hỏi doanh nhân/lãnh đạo cụ thể (Phạm Nhật Vượng, Trần Đình Long, Nguyễn Thị Phương Thảo, Trương Gia Bình, Hồ Hùng Anh, Nguyễn Đăng Quang, Bùi Thành Nhơn, Nguyễn Đức Tài, Đoàn Nguyên Đức, v.v., và các huyền thoại đầu tư quốc tế Warren Buffett, Charlie Munger, Peter Lynch, George Soros, Elon Musk).
+     - Hỗ trợ danh sách xếp hạng top tỷ phú / người giàu trên sàn chứng khoán (`"top người giàu sàn chứng khoán"`, `"danh sách tỷ phú"`, `"top doanh nhân"`).
+  2. **Doanh nghiệp & Lãnh đạo**: Trả lời trọn vẹn các câu hỏi như *"chủ tịch hòa phát là ai"*, *"chủ tịch vingroup là ai"*, *"vingroup là ai"*, *"hòa phát là ai"*, kết nối trực tiếp với người sáng lập/chủ tịch và mã cổ phiếu niêm yết liên quan.
+  3. **Sự nghiệp doanh nghiệp & Hệ sinh thái**: Trả lời chi tiết khi hỏi về sự nghiệp doanh nhân (`"sự nghiệp phạm nhật vượng"`, `"sự nghiệp trần đình long"`) và hệ sinh thái doanh nghiệp (`"hệ sinh thái vingroup"`, `"hệ sinh thái hòa phát"`, `"hệ sinh thái fpt"`, `"hệ sinh thái masan"`, `"hệ sinh thái sovico"`):
+     - Hiển thị người sáng lập, các trụ cột công ty thành viên (công ty mẹ, công ty con niêm yết, công ty ngoài sàn), tỷ lệ sở hữu và chuỗi giá trị liên kết.
+- **Branch**: `fix/AI`
+- **Changes**:
+  - `backend/app/application/use_cases/ai_chat/intent_parser.py`:
+    - Thêm `is_leader`, `leader_id`, `leader_name`, `is_leader_rankings`, `is_ecosystem`, `ecosystem_id` vào `DetectedIntent`.
+    - Bổ sung `_LEADER_ALIASES` cho 22 lãnh đạo Việt Nam và các huyền thoại quốc tế, bao gồm cả biến thể câu hỏi doanh nghiệp (`"vingroup là ai"`, `"hoa phat la ai"`, `"tap doan vingroup"`, `"he sinh thai vingroup"`, `"su nghiep pham nhat vuong"`...).
+    - Bổ sung nhận diện intent hệ sinh thái (`is_ecosystem`) nhận diện các từ khóa `"he sinh thai"`, `"chuoi gia tri"`, `"cong ty con"`, `"cong ty me"`, `"cac cong ty thanh vien"` và tự động gán `ecosystem_id` (`vingroup`, `hoaphat`, `fpt`, `masan-techcombank`, `sovico`, `ssi-pan`) cùng các mã cổ phiếu cốt lõi.
+    - Thêm từ dừng `"CHU"` vào `_NON_TICKER_WORDS` để ngăn chặn nhận diện nhầm từ "chủ" trong "chủ tịch" thành mã chứng khoán giả định.
+  - `backend/app/infrastructure/external/crawlers/leader_crawler.py`:
+    - Bổ sung `_fold(text)` chuẩn hóa tiếng Việt bỏ dấu cho so sánh linh hoạt.
+    - Bổ sung `_GLOBAL_LEADERS` (Warren Buffett, Charlie Munger, Peter Lynch, George Soros, Elon Musk).
+    - Thêm phương thức `find_leader(query)` tìm kiếm theo ID, họ tên, công ty (với bóc tách từ khóa cốt lõi chống lệch chữ), và mã chứng khoán.
+  - `backend/app/infrastructure/external/market_fixture_provider.py`:
+    - Phương thức `people()` kết nối trực tiếp `get_leader_crawler().get_prominent_leaders()` cung cấp đầy đủ 22 lãnh đạo có giá cổ phiếu live.
+  - `backend/app/application/use_cases/ai_chat/response_builder.py`:
+    - Xây dựng `_build_leader_section(...)` xử lý chuyên biệt 4 trường hợp:
+      1. **Hệ sinh thái doanh nghiệp cụ thể** (`is_ecosystem` và `ecosystem_id`): Kết nối `EcosystemService`, hiển thị người sáng lập, tổng quan, mã niêm yết hạt nhân kèm giá live, danh sách công ty thành viên/trụ cột (mẹ, con niêm yết, ngoài sàn), tỷ lệ sở hữu và chuỗi giá trị liên kết.
+      2. **Hệ sinh thái tổng quát**: Liệt kê 6 đại tập đoàn lớn nhất trên sàn chứng khoán.
+      3. **Top tỷ phú & người giàu**: Liệt kê top người giàu, mã cổ phiếu, tỷ lệ sở hữu, tài sản cổ phiếu niêm yết và tổng tài sản Forbes/CafeF.
+      4. **Doanh nhân / Lãnh đạo / Doanh nghiệp cụ thể**: Hiển thị chức vụ & đơn vị, mã cổ phiếu liên quan & thị giá live, cổ phần nắm giữ, tài sản niêm yết, tổng tài sản, ngoài sàn, tiểu sử sự nghiệp, và tích hợp tóm tắt hệ sinh thái doanh nghiệp của họ.
+  - `backend/app/application/use_cases/ai_chat/ai_financial_service.py`:
+    - Tích hợp `is_leader`, `leader_profile`, `is_ecosystem`, `ecosystem_id` vào pipeline xử lý: tự động nạp instrument live của các mã liên quan vào `stock_data`.
+    - Bổ sung intent `"leader"` vào `_CACHE_TTL_SECONDS` (12 giờ) và nâng `_CACHE_KEY_PREFIX = "ai:chat:v7"`.
+  - `frontend/src/components/ai-chat/ai-chat-bubble.tsx`:
+    - Mở rộng regex trong `HighlightedText` nhận diện highlight số liệu tài sản tỷ phú: `tỷ USD`, `triệu USD`, `tỷ ₫`, `nghìn tỷ ₫`.
+    - Cập nhật `FormattedContent` nhận diện các heading mới: `Thông tin doanh nhân:`, `Thông tin doanh nghiệp & Lãnh đạo:`, `Hệ sinh thái doanh nghiệp:`, `Top doanh nhân & tỷ phú nổi bật:`.
+- **Verification**:
+  - `backend/tests/unit/ai_chat/test_ai_chat.py`: Thêm test kiểm tra `test_ai_leader_pham_nhat_vuong`, `test_ai_leader_by_company_title`, `test_ai_leader_rankings`, `test_ai_global_leader_warren_buffett`, `test_ai_company_and_career_queries` (32/32 passed 100%).
+  - `backend/tests/integration/api/test_ai_chat_api.py`: Thêm integration tests cho endpoint AI chat với các câu hỏi doanh nhân, doanh nghiệp và hệ sinh thái (9/9 passed 100%).
+  - Backend Lint (Ruff): 0 lỗi (`All checks passed!`).
+  - Backend Typecheck (Mypy): 0 lỗi (`Success: no issues found in 43 source files`).
+  - Frontend Lint (ESLint) & Typecheck (tsc): 0 lỗi.
+  - Git diff whitespace check (`git diff origin/dev --check`): 0 lỗi.
+
 ## AI Chat Modularization (`intent_parser`, `market_snapshot`, `external_search`, `response_builder`), VN30 Active Stocks & Upcoming Events Resolution, and Regex Highlight Boundary Fix - 2026-11-04 (completed)
 - **User Request**:
   1. **Ảnh 1 — Trả lời đúng trọng tâm câu hỏi về cổ phiếu trong rổ VN30 hoạt động sôi nổi hôm nay + Sửa lỗi highlight cắt chữ `"điểm"`, `"đạt"`**:

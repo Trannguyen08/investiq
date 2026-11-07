@@ -502,3 +502,84 @@ async def test_ai_upcoming_market_events() -> None:
     assert "Lịch sự kiện thị trường & doanh nghiệp nổi bật sắp tới:" in result["content"]
     assert "Chào bạn, tôi là InvestIQ Financial Assistant" not in result["content"]
     assert any("/market/events" in s.get("url", "") for s in result["sources"])
+
+
+@pytest.mark.anyio
+async def test_ai_leader_pham_nhat_vuong() -> None:
+    provider = FixtureMarketProvider()
+    service = MarketService(provider)
+    ai_service = AiFinancialService(market_service=service)
+
+    result = await ai_service.process_chat("phạm nhật vượng là ai")
+    assert "Thông tin doanh nhân: Phạm Nhật Vượng" in result["content"]
+    assert "Tập đoàn Vingroup" in result["content"]
+    assert "Chào bạn, tôi là InvestIQ Financial Assistant" not in result["content"]
+    assert any("/market/people" in s.get("url", "") for s in result["sources"])
+    assert any("VIC" in a.get("label", "") or "VHM" in a.get("label", "") for a in result["suggested_actions"])
+
+
+@pytest.mark.anyio
+async def test_ai_leader_by_company_title() -> None:
+    provider = FixtureMarketProvider()
+    service = MarketService(provider)
+    ai_service = AiFinancialService(market_service=service)
+
+    result = await ai_service.process_chat("chủ tịch hòa phát là ai")
+    assert "Thông tin doanh nhân: Trần Đình Long" in result["content"]
+    assert "Tập đoàn Hòa Phát" in result["content"]
+    assert "HPG" in result["content"]
+    assert any("/market/people" in s.get("url", "") for s in result["sources"])
+
+
+@pytest.mark.anyio
+async def test_ai_leader_rankings() -> None:
+    provider = FixtureMarketProvider()
+    service = MarketService(provider)
+    ai_service = AiFinancialService(market_service=service)
+
+    result = await ai_service.process_chat("top người giàu sàn chứng khoán")
+    assert "Top doanh nhân & tỷ phú nổi bật trên sàn chứng khoán:" in result["content"]
+    assert any("/market/people" in s.get("url", "") for s in result["sources"])
+
+
+@pytest.mark.anyio
+async def test_ai_global_leader_warren_buffett() -> None:
+    provider = FixtureMarketProvider()
+    service = MarketService(provider)
+    ai_service = AiFinancialService(market_service=service)
+
+    result = await ai_service.process_chat("warren buffett là ai")
+    assert "Thông tin doanh nhân: Warren Buffett" in result["content"]
+    assert "Berkshire Hathaway" in result["content"]
+    assert any("/market/people" in s.get("url", "") for s in result["sources"])
+
+
+@pytest.mark.anyio
+async def test_ai_company_and_career_queries() -> None:
+    provider = FixtureMarketProvider()
+    service = MarketService(provider)
+    ai_service = AiFinancialService(market_service=service)
+
+    # 1. Company query: "vingroup là ai"
+    res_vin = await ai_service.process_chat("vingroup là ai")
+    assert "Tập đoàn Vingroup" in res_vin["content"]
+    assert "Phạm Nhật Vượng" in res_vin["content"]
+    assert "VIC" in res_vin["content"]
+
+    # 2. Ecosystem query: "hệ sinh thái hòa phát"
+    res_eco_hp = await ai_service.process_chat("hệ sinh thái hòa phát")
+    assert "Hệ sinh thái doanh nghiệp: Hệ sinh thái Hòa Phát" in res_eco_hp["content"]
+    assert "Trần Đình Long" in res_eco_hp["content"]
+    assert "HPG" in res_eco_hp["content"]
+    assert "Dung Quất" in res_eco_hp["content"]
+
+    # 3. Ecosystem query: "hệ sinh thái vingroup"
+    res_eco_vin = await ai_service.process_chat("hệ sinh thái vingroup")
+    assert "Hệ sinh thái doanh nghiệp: Hệ sinh thái Vingroup" in res_eco_vin["content"]
+    assert "Vinhomes" in res_eco_vin["content"]
+    assert "VinFast" in res_eco_vin["content"]
+
+    # 4. Career query: "sự nghiệp phạm nhật vượng"
+    res_career = await ai_service.process_chat("sự nghiệp phạm nhật vượng")
+    assert "Phạm Nhật Vượng" in res_career["content"]
+    assert "Tiểu sử & Dấu ấn sự nghiệp" in res_career["content"]

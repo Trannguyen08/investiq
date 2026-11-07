@@ -298,6 +298,524 @@ def _build_news_section(
     )
 
 
+def _build_leader_section(
+    *,
+    user_message: str,
+    tickers: list[str],
+    stock_data: dict[str, Any],
+    leader_profile: Any | None,
+    leader_id: str | None,
+    leader_name: str | None,
+    is_leader_rankings: bool,
+    is_ecosystem: bool = False,
+    ecosystem_id: str | None = None,
+    market_service: Any,
+    external_snippets: list[dict[str, str]],
+    text_parts: list[str],
+    sources: list[dict[str, str]],
+    suggested_actions: list[dict[str, Any]],
+) -> None:
+    del leader_id  # Handled in caller or not needed in text
+
+    # Case A: Explicit corporate ecosystem query
+    if is_ecosystem and ecosystem_id:
+        from app.infrastructure.external.ecosystem.ecosystem_service import get_ecosystem_service
+
+        eco_svc = get_ecosystem_service()
+        eco_detail = eco_svc.get_ecosystem_detail(ecosystem_id)
+        if eco_detail:
+            heading = f"Hệ sinh thái doanh nghiệp: {eco_detail['name']}"
+            text_parts.append(heading)
+            text_parts.append(
+                f"- **Người sáng lập / Lãnh đạo chủ chốt**: {eco_detail['founder_name']}\n"
+                f"- **Lĩnh vực hoạt động**: {eco_detail['sector']}\n"
+                f"- **Tổng quan hệ sinh thái**: {eco_detail['overview']}"
+            )
+
+            # Core tickers with live prices
+            sym_items = []
+            for node in eco_detail.get("nodes", []):
+                t = node.get("ticker")
+                if t:
+                    inst = stock_data.get(t, {}).get("instrument")
+                    if inst and hasattr(inst, "price") and inst.price > 0:
+                        chg = getattr(inst, "change_percent", 0)
+                        sym_items.append(f"{t} ({inst.price:,.0f} đ, {chg:+.2f}%)")
+                    else:
+                        sym_items.append(t)
+            if sym_items:
+                text_parts.append(f"- **Mã cổ phiếu hạt nhân trên sàn**: {', '.join(sym_items)}")
+
+            # Key member companies / Pillars
+            node_lines = ["- **Các công ty thành viên & Trụ cột chính**:"]
+            for node in eco_detail.get("nodes", []):
+                n_name = node.get("name", "")
+                n_ticker = f" (Mã: {node['ticker']})" if node.get("ticker") else " (Ngoài sàn)"
+                n_own = (
+                    f" | Sở hữu: {float(node.get('ownership_percent', 0)):.1f}%"
+                    if float(node.get("ownership_percent", 0)) > 0
+                    else ""
+                )
+                n_role = node.get("role", "")
+                node_lines.append(f"  - **{n_name}**{n_ticker}{n_own}: {n_role}")
+            text_parts.append("\n".join(node_lines))
+
+            # Value chains & relations
+            links = eco_detail.get("links", [])
+            if links:
+                link_lines = ["- **Chuỗi giá trị & Liên kết chiến lược**:"]
+                for link in links[:4]:
+                    link_lines.append(f"  - {link.get('label', '')}")
+                text_parts.append("\n".join(link_lines))
+
+            # Sources & actions
+            sources.append(
+                {
+                    "kind": "internal",
+                    "title": f"Bản đồ hệ sinh thái doanh nghiệp {eco_detail['name']} (InvestIQ)",
+                    "url": "/market/people",
+                }
+            )
+            for node in eco_detail.get("nodes", []):
+                t = node.get("ticker")
+                if t:
+                    sources.append(
+                        {
+                            "kind": "internal",
+                            "title": f"Bảng giá thị trường: {t}",
+                            "url": f"/market/stocks/{t}",
+                        }
+                    )
+            sources.append(
+                {
+                    "kind": "external",
+                    "title": "Dữ liệu sở hữu và hệ sinh thái tập đoàn (CafeF / Vietstock)",
+                    "url": "https://cafef.vn",
+                }
+            )
+
+            for node in eco_detail.get("nodes", [])[:2]:
+                t = node.get("ticker")
+                if t:
+                    suggested_actions.append(
+                        {
+                            "label": f"Phân tích cổ phiếu {t}",
+                            "action_type": "SEND_PROMPT",
+                            "prompt": f"Phân tích {t}",
+                        }
+                    )
+            primary_founder = eco_detail["founder_name"].split("&")[0].strip()
+            suggested_actions.extend(
+                [
+                    {
+                        "label": f"Lãnh đạo: {primary_founder}",
+                        "action_type": "SEND_PROMPT",
+                        "prompt": f"{primary_founder} là ai",
+                    },
+                    {
+                        "label": "Xem danh sách lãnh đạo",
+                        "action_type": "NAVIGATE",
+                        "url": "/market/people",
+                    },
+                ]
+            )
+            return
+
+    # Case B: General corporate ecosystems query
+    if is_ecosystem and not ecosystem_id:
+        heading = "Hệ sinh thái các tập đoàn lớn trên sàn chứng khoán:"
+        text_parts.append(heading)
+        text_parts.append(
+            "Tổng hợp các hệ sinh thái và tập đoàn đa ngành có tầm ảnh hưởng lớn nhất trên thị trường chứng khoán Việt Nam:"
+        )
+        from app.infrastructure.external.ecosystem.ecosystem_service import get_ecosystem_service
+
+        eco_svc = get_ecosystem_service()
+        for eco in eco_svc.list_ecosystems()[:6]:
+            e_name = eco["name"]
+            e_founder = eco["founder_name"]
+            e_sector = eco["sector"]
+            e_tickers = ", ".join(t["symbol"] for t in eco.get("core_tickers", []))
+            text_parts.append(
+                f"- **{e_name}** ({e_founder})\n"
+                f"  - Lĩnh vực: {e_sector} | Mã niêm yết: {e_tickers}\n"
+                f"  - Tổng quan: {eco['overview']}"
+            )
+        sources.append(
+            {
+                "kind": "internal",
+                "title": "Bản đồ hệ sinh thái doanh nghiệp (InvestIQ)",
+                "url": "/market/people",
+            }
+        )
+        suggested_actions.extend(
+            [
+                {
+                    "label": "Hệ sinh thái Vingroup",
+                    "action_type": "SEND_PROMPT",
+                    "prompt": "Hệ sinh thái Vingroup",
+                },
+                {
+                    "label": "Hệ sinh thái Hòa Phát",
+                    "action_type": "SEND_PROMPT",
+                    "prompt": "Hệ sinh thái Hòa Phát",
+                },
+                {
+                    "label": "Hệ sinh thái FPT",
+                    "action_type": "SEND_PROMPT",
+                    "prompt": "Hệ sinh thái FPT",
+                },
+                {
+                    "label": "Xem danh sách lãnh đạo",
+                    "action_type": "NAVIGATE",
+                    "url": "/market/people",
+                },
+            ]
+        )
+        return
+
+    # Case C: Rankings of top entrepreneurs / billionaires on the stock market
+    if is_leader_rankings:
+        heading = "Top doanh nhân & tỷ phú nổi bật trên sàn chứng khoán:"
+        text_parts.append(heading)
+        text_parts.append(
+            "Danh sách các doanh nhân, lãnh đạo và tỷ phú hàng đầu có giá trị tài sản cổ phiếu lớn nhất trên sàn chứng khoán Việt Nam:"
+        )
+
+        people_list: list[dict[str, Any]] = []
+        if hasattr(market_service, "people"):
+            try:
+                res = market_service.people()
+                if isinstance(res, dict) and "data" in res and isinstance(res["data"], list):
+                    people_list = res["data"]
+            except Exception as exc:
+                logger.warning("Failed to fetch people list from market_service: %s", exc)
+
+        if not people_list:
+            try:
+                from app.infrastructure.external.crawlers.leader_crawler import get_leader_crawler
+
+                inst_list = (
+                    market_service.instruments()
+                    if hasattr(market_service, "instruments")
+                    else None
+                )
+                raw_people = get_leader_crawler().get_prominent_leaders(inst_list)
+                for rank, p in enumerate(raw_people[:7], start=1):
+                    people_list.append(
+                        {
+                            "rank": rank,
+                            "full_name": p.full_name,
+                            "role": p.role,
+                            "company": p.company,
+                            "symbols": list(p.symbols),
+                            "ownership_percent": float(p.ownership_percent),
+                            "estimated_listed_equity_value": float(p.estimated_listed_equity_value),
+                            "net_worth_total": p.net_worth_total,
+                        }
+                    )
+            except Exception as exc:
+                logger.warning("Failed to fetch prominent leaders from crawler: %s", exc)
+
+        for p in people_list[:6]:
+            rank = p.get("rank", 1)
+            p_name = p.get("full_name", "")
+            p_role = p.get("role", "")
+            p_comp = p.get("company", "")
+            p_syms = p.get("symbols", [])
+            sym_str = ", ".join(p_syms) if p_syms else "Chưa niêm yết"
+            own_pct = float(p.get("ownership_percent") or 0)
+            listed_val = float(p.get("estimated_listed_equity_value") or 0)
+            net_total = p.get("net_worth_total", "")
+
+            val_str = f"~{listed_val / 1e9:,.0f} tỷ ₫" if listed_val > 0 else "N/A"
+            own_str = f" | Sở hữu: {own_pct:.2f}%" if own_pct > 0 else ""
+            net_str = f" | Tổng tài sản: {net_total}" if net_total else ""
+
+            text_parts.append(
+                f"- **{rank}. {p_name}** — {p_role} ({p_comp})\n"
+                f"  - Cổ phiếu liên quan: {sym_str}{own_str}\n"
+                f"  - Tài sản cổ phiếu: {val_str}{net_str}"
+            )
+
+        sources.append(
+            {
+                "kind": "internal",
+                "title": "Bảng xếp hạng người giàu sàn chứng khoán (InvestIQ)",
+                "url": "/market/people",
+            }
+        )
+        sources.append(
+            {
+                "kind": "external",
+                "title": "Dữ liệu ban lãnh đạo và sở hữu (CafeF & Forbes)",
+                "url": "https://cafef.vn",
+            }
+        )
+
+        suggested_actions.extend(
+            [
+                {
+                    "label": "Phân tích VIC (Phạm Nhật Vượng)",
+                    "action_type": "SEND_PROMPT",
+                    "prompt": "Phân tích VIC",
+                },
+                {
+                    "label": "Phân tích HPG (Trần Đình Long)",
+                    "action_type": "SEND_PROMPT",
+                    "prompt": "Phân tích HPG",
+                },
+                {
+                    "label": "Phân tích FPT (Trương Gia Bình)",
+                    "action_type": "SEND_PROMPT",
+                    "prompt": "Phân tích FPT",
+                },
+                {
+                    "label": "Xem danh sách người giàu",
+                    "action_type": "NAVIGATE",
+                    "url": "/market/people",
+                },
+            ]
+        )
+        return
+
+    # Case D: Specific leader profile matched
+    if leader_profile is not None:
+        name = getattr(leader_profile, "full_name", leader_name or "Doanh nhân")
+        role = getattr(leader_profile, "role", "")
+        company = getattr(leader_profile, "company", "")
+        sector = getattr(leader_profile, "sector", "")
+
+        q_fold = normalize_user_input(user_message).lower()
+        is_company_query = any(w in q_fold for w in ["tap doan", "cong ty", "doanh nghiep"]) or (
+            not any(w in q_fold for w in ["ong", "ba", "chu tich", "tong giam doc", "ceo", "nguoi", "tieu su"])
+            and any(w in q_fold for w in ["vingroup", "hoa phat", "fpt", "masan", "vietjet", "novaland"])
+        )
+        heading = (
+            f"Thông tin doanh nghiệp & Lãnh đạo: {company} ({name})"
+            if is_company_query and company
+            else f"Thông tin doanh nhân: {name}"
+        )
+        text_parts.append(heading)
+
+        if role or company:
+            sector_info = f" (Lĩnh vực: {sector})" if sector else ""
+            text_parts.append(f"- **Chức vụ & Đơn vị**: {role} — {company}{sector_info}")
+
+        symbols = getattr(leader_profile, "symbols", ())
+        if symbols:
+            sym_items = []
+            for s in symbols:
+                inst_info = stock_data.get(s, {}).get("instrument")
+                if inst_info and hasattr(inst_info, "price") and inst_info.price > 0:
+                    p = inst_info.price
+                    chg = getattr(inst_info, "change_percent", 0)
+                    sym_items.append(f"{s} ({p:,.0f} đ, {chg:+.2f}%)")
+                else:
+                    sym_items.append(s)
+            text_parts.append(f"- **Mã cổ phiếu liên quan**: {', '.join(sym_items)}")
+
+        disclosed_shares = float(getattr(leader_profile, "disclosed_shares", 0))
+        own_pct = float(getattr(leader_profile, "ownership_percent", 0))
+        if disclosed_shares > 0 or own_pct > 0:
+            share_parts = []
+            if disclosed_shares > 0:
+                share_parts.append(f"~{disclosed_shares / 1e6:,.1f} triệu cp")
+            if own_pct > 0:
+                share_parts.append(f"~{own_pct:.2f}% vốn điều lệ")
+            text_parts.append(
+                f"- **Cổ phần nắm giữ**: {' ('.join(share_parts) + ')' if len(share_parts) == 2 else share_parts[0]}"
+            )
+
+        # Estimated listed equity
+        if disclosed_shares > 0:
+            primary_sym = symbols[0] if symbols else ""
+            inst_info = stock_data.get(primary_sym, {}).get("instrument") if primary_sym else None
+            price = (
+                float(inst_info.price)
+                if inst_info and hasattr(inst_info, "price") and inst_info.price > 0
+                else float(getattr(leader_profile, "base_price", 0))
+            )
+            if price > 0:
+                listed_equity = disclosed_shares * price
+                text_parts.append(
+                    f"- **Tài sản cổ phiếu niêm yết ước tính**: ~{listed_equity / 1e9:,.0f} tỷ ₫"
+                )
+
+        net_total = getattr(leader_profile, "net_worth_total", "")
+        if net_total:
+            text_parts.append(f"- **Tổng tài sản ước tính**: {net_total}")
+
+        net_ext = getattr(leader_profile, "net_worth_external", "")
+        if net_ext:
+            label = "Hệ sinh thái & Ngoài sàn" if symbols else "Dấu ấn & Triết lý"
+            text_parts.append(f"- **{label}**: {net_ext}")
+
+        bio = getattr(leader_profile, "bio", "")
+        if bio:
+            text_parts.append(f"- **Tiểu sử & Dấu ấn sự nghiệp**: {bio}")
+
+        # Associated corporate ecosystem breakdown
+        try:
+            from app.infrastructure.external.ecosystem.ecosystem_service import (
+                get_ecosystem_service,
+            )
+
+            eco_svc = get_ecosystem_service()
+            associated_eco = None
+            l_id = getattr(leader_profile, "id", "")
+            for eco in eco_svc._ecosystems.values():
+                if eco.founder_id == l_id or (
+                    l_id in {"person-5", "person-6"} and eco.id == "masan-techcombank"
+                ):
+                    associated_eco = eco
+                    break
+            if associated_eco:
+                eco_nodes = ", ".join(
+                    f"{n.name} ({n.ticker})" if n.ticker else n.name
+                    for n in associated_eco.nodes[:4]
+                )
+                text_parts.append(
+                    f"- **Hệ sinh thái doanh nghiệp ({associated_eco.name})**: {associated_eco.overview}\n"
+                    f"  - Các trụ cột cốt lõi: {eco_nodes}"
+                )
+        except Exception as exc:
+            logger.debug("Failed to append associated ecosystem: %s", exc)
+
+        # Sources
+        for s in symbols:
+            sources.append(
+                {
+                    "kind": "internal",
+                    "title": f"Bảng giá thị trường: {s}",
+                    "url": f"/market/stocks/{s}",
+                }
+            )
+        sources.append(
+            {
+                "kind": "internal",
+                "title": f"Hồ sơ lãnh đạo: {name} (InvestIQ)",
+                "url": "/market/people",
+            }
+        )
+        sources.append(
+            {
+                "kind": "external",
+                "title": "Dữ liệu ban lãnh đạo và sở hữu (CafeF & Forbes)",
+                "url": "https://cafef.vn",
+            }
+        )
+
+        # Suggested actions
+        for s in symbols[:2]:
+            suggested_actions.append(
+                {
+                    "label": f"Phân tích cổ phiếu {s}",
+                    "action_type": "SEND_PROMPT",
+                    "prompt": f"Phân tích {s}",
+                }
+            )
+        suggested_actions.extend(
+            [
+                {
+                    "label": "Top tỷ phú chứng khoán",
+                    "action_type": "SEND_PROMPT",
+                    "prompt": "Top người giàu trên sàn chứng khoán",
+                },
+                {
+                    "label": "Xem danh sách lãnh đạo",
+                    "action_type": "NAVIGATE",
+                    "url": "/market/people",
+                },
+            ]
+        )
+        return
+
+    # Case C: Leader not in predefined database, but external snippets found
+    if external_snippets:
+        display_name = leader_name or (tickers[0] if tickers else "Doanh nhân & Lãnh đạo")
+        text_parts.append(f"Thông tin doanh nhân & lãnh đạo: {display_name}")
+        text_parts.append("Thông tin tổng hợp cập nhật từ báo chí và cơ sở dữ liệu thị trường:")
+        for item in external_snippets[:3]:
+            text_parts.append(f"- **{item['title']}**: {item['snippet']}")
+            sources.append(
+                {
+                    "kind": "external",
+                    "title": item["title"],
+                    "url": item["url"],
+                }
+            )
+        sources.append(
+            {
+                "kind": "internal",
+                "title": "Hồ sơ lãnh đạo & Top người giàu sàn chứng khoán (InvestIQ)",
+                "url": "/market/people",
+            }
+        )
+        suggested_actions.extend(
+            [
+                {
+                    "label": "Top tỷ phú chứng khoán",
+                    "action_type": "SEND_PROMPT",
+                    "prompt": "Top người giàu trên sàn chứng khoán",
+                },
+                {
+                    "label": "Xem danh sách lãnh đạo",
+                    "action_type": "NAVIGATE",
+                    "url": "/market/people",
+                },
+                {
+                    "label": "Nhịp đập thị trường",
+                    "action_type": "SEND_PROMPT",
+                    "prompt": "Thị trường hôm nay thế nào?",
+                },
+            ]
+        )
+        return
+
+    # Fallback when no profile and no snippets
+    display_name = leader_name or "Doanh nhân"
+    text_parts.append(f"Thông tin doanh nhân: {display_name}")
+    text_parts.append(
+        "Hệ thống InvestIQ hiện có hồ sơ chi tiết của 22 doanh nhân, lãnh đạo và tỷ phú tiêu biểu trên sàn chứng khoán "
+        "(như Phạm Nhật Vượng, Trần Đình Long, Nguyễn Thị Phương Thảo, Trương Gia Bình, Hồ Hùng Anh...) cùng các huyền thoại đầu tư quốc tế."
+    )
+    text_parts.append(
+        "Bạn có thể đặt câu hỏi theo tên doanh nhân hoặc mã cổ phiếu trực tiếp (ví dụ: 'Phạm Nhật Vượng là ai', 'Chủ tịch Hòa Phát', 'Trương Gia Bình FPT')."
+    )
+    sources.append(
+        {
+            "kind": "internal",
+            "title": "Hồ sơ lãnh đạo & Top người giàu sàn chứng khoán (InvestIQ)",
+            "url": "/market/people",
+        }
+    )
+    suggested_actions.extend(
+        [
+            {
+                "label": "Phân tích HPG (Trần Đình Long)",
+                "action_type": "SEND_PROMPT",
+                "prompt": "Phân tích HPG",
+            },
+            {
+                "label": "Phân tích VIC (Phạm Nhật Vượng)",
+                "action_type": "SEND_PROMPT",
+                "prompt": "Phân tích VIC",
+            },
+            {
+                "label": "Top tỷ phú chứng khoán",
+                "action_type": "SEND_PROMPT",
+                "prompt": "Top người giàu trên sàn chứng khoán",
+            },
+            {
+                "label": "Xem danh sách lãnh đạo",
+                "action_type": "NAVIGATE",
+                "url": "/market/people",
+            },
+        ]
+    )
+
+
 def _build_comparison_section(
     stock_data: dict[str, Any],
     text_parts: list[str],
@@ -863,6 +1381,13 @@ def generate_structured_response(
     is_dividend: bool = False,
     dividend_events: list[dict[str, Any]] | None = None,
     market_events: list[dict[str, Any]] | None = None,
+    is_leader: bool = False,
+    leader_profile: Any = None,
+    leader_id: str | None = None,
+    leader_name: str | None = None,
+    is_leader_rankings: bool = False,
+    is_ecosystem: bool = False,
+    ecosystem_id: str | None = None,
 ) -> dict[str, Any]:
     """Synthesize in-depth analysis and format rich interactive widgets."""
     del is_gold_bank  # Kept in signature for compatibility
@@ -871,7 +1396,24 @@ def generate_structured_response(
     text_parts: list[str] = []
     sources: list[dict[str, str]] = []
 
-    if is_dividend:
+    if is_leader:
+        _build_leader_section(
+            user_message=user_message,
+            tickers=tickers,
+            stock_data=stock_data,
+            leader_profile=leader_profile,
+            leader_id=leader_id,
+            leader_name=leader_name,
+            is_leader_rankings=is_leader_rankings,
+            is_ecosystem=is_ecosystem,
+            ecosystem_id=ecosystem_id,
+            market_service=market_service,
+            external_snippets=external_snippets,
+            text_parts=text_parts,
+            sources=sources,
+            suggested_actions=suggested_actions,
+        )
+    elif is_dividend:
         _build_dividend_and_events_section(
             user_message=user_message,
             tickers=tickers,
