@@ -259,3 +259,18 @@ Toàn bộ luồng hoạt động của Paper Trading và bộ mô phỏng sàn 
    - Kiểm thử bảo mật BFF boundary, `Idempotency-Key`, và toàn bộ các endpoints `/orders`, `/execution-mode`, `/orders/{id}/fill`, `/advance-cash`, `/conditional-triggers`.
 3. **Frontend Component & E2E Flow Tests (`frontend/src/components/portfolio/paper-trading-dashboard.test.tsx`)**:
    - Kiểm thử hiển thị bảng giá, kịch bản giả định P&L chưa chốt, đối chiếu P&L đã chốt, đặt lệnh có bảo vệ CSRF, chuyển đổi chế độ `Giờ sàn thật HOSE/HNX`, ứng trước tiền bán `T+2`, khớp nhanh lệnh chờ `ATO` và đặt lệnh `MP` kèm `Stop-Loss` / `Take-Profit`.
+
+---
+
+## 8. Quản Trị Hệ Thống & Kiểm Toán Lệnh Chờ (Admin Order Book & Audit Trail)
+
+Để hỗ trợ đội ngũ vận hành hệ thống và giám sát thị trường, phân hệ Admin (`/admin/portfolios`) được trang bị tính năng quản trị danh mục và sổ lệnh của người dùng:
+
+1. **Giám sát Sổ lệnh người dùng (User Order Book Monitoring)**:
+   - Trong bảng chi tiết danh mục tài khoản người dùng, hiển thị đầy đủ danh sách các lệnh (`Sổ lệnh giao dịch của người dùng`) bao gồm: Mã lệnh, thời gian đặt, mã cổ phiếu, loại lệnh (`LO`, `MP`, `ATO`, `ATC`), chiều (`MUA`/`BÁN`), khối lượng, giá đặt, khối lượng đã khớp và trạng thái (`open`, `pending`, `filled`, `cancelled`, `expired`, `rejected`).
+2. **Quyền hạn Hủy lệnh chờ của Admin (`Admin Cancel Order`)**:
+   - **Quy chuẩn thực tế**: Tuân thủ chuẩn nghiệp vụ quản trị rủi ro và vận hành sàn giao dịch, Admin chỉ có quyền hủy các lệnh đang treo (`open`, `pending`) khi có sự cố kỹ thuật, lệnh vi phạm quy chế hoặc theo yêu cầu hỗ trợ người dùng.
+   - **Thu hồi ký quỹ tức thì**: Thao tác hủy lệnh tự động cập nhật `status = 'cancelled'`, thiết lập `reserved_cash = 0` hoặc `reserved_quantity = 0` và giải phóng 100% số dư tiền mặt hoặc cổ phiếu đang bị đóng băng của người dùng.
+   - **Ghi vết kiểm toán bắt buộc (`Admin Audit Logs`)**: Mọi thao tác hủy lệnh của Admin đều bắt buộc nhập lý do (tối thiểu 3 ký tự) và được ghi vết vào bảng `auth_audit_events` với `event_type = 'paper_order.cancelled_by_admin'`, lưu trữ danh tính Admin thực hiện, ID danh mục, ID lệnh, mã cổ phiếu, chiều, khối lượng, giá đặt và lý do can thiệp.
+3. **Bảo đảm tính minh bạch (No Admin Force Fill)**:
+   - Nghiệp vụ thực tế nghiêm cấm Admin can thiệp ép khớp lệnh (Force Fill) vào sổ lệnh của người dùng. Chức năng ép khớp chỉ tồn tại ở phía người dùng cá nhân trong chế độ học tập/thử nghiệm cục bộ (`/orders/{id}/fill`), không xuất hiện trong thẩm quyền quản trị của Admin nhằm bảo đảm tính khách quan và trung thực của dữ liệu thị trường.

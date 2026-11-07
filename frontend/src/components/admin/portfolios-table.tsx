@@ -4,6 +4,7 @@ import { useState } from "react";
 import type {
   AdminPortfolioDetail,
   AdminPortfolioItem,
+  PortfolioOrderItem,
 } from "@/lib/server/admin-ops-api";
 import { AdminDetailModal } from "@/components/admin/admin-detail-modal";
 import { IconView } from "@/components/admin/admin-icons";
@@ -11,15 +12,29 @@ import { IconView } from "@/components/admin/admin-icons";
 export function PortfoliosTable({
   portfolios,
   loadDetail,
+  cancelOrder,
 }: {
   portfolios: AdminPortfolioItem[];
   loadDetail: (id: string) => Promise<AdminPortfolioDetail | null>;
+  cancelOrder?: (
+    portfolioId: string,
+    orderId: string,
+    reason: string
+  ) => Promise<{ status: string; message: string; order_id: string }>;
 }) {
   const [selectedDetail, setSelectedDetail] = useState<AdminPortfolioDetail | null>(null);
   const [loadingId, setLoadingId] = useState<string | null>(null);
+  const [cancellingOrder, setCancellingOrder] = useState<PortfolioOrderItem | null>(null);
+  const [cancelReason, setCancelReason] = useState("");
+  const [isSubmittingCancel, setIsSubmittingCancel] = useState(false);
+  const [cancelError, setCancelError] = useState<string | null>(null);
+  const [cancelSuccess, setCancelSuccess] = useState<string | null>(null);
 
   async function handleViewDetail(portfolio: AdminPortfolioItem) {
     setLoadingId(portfolio.id);
+    setCancelError(null);
+    setCancelSuccess(null);
+    setCancellingOrder(null);
     try {
       const detail = await loadDetail(portfolio.id);
       if (detail) {
@@ -27,6 +42,54 @@ export function PortfoliosTable({
       }
     } finally {
       setLoadingId(null);
+    }
+  }
+
+  async function handleConfirmCancel() {
+    if (!cancellingOrder || !cancelOrder || !selectedDetail) return;
+    if (cancelReason.trim().length < 3) {
+      setCancelError("Vui lòng nhập lý do hủy lệnh (tối thiểu 3 ký tự).");
+      return;
+    }
+
+    setIsSubmittingCancel(true);
+    setCancelError(null);
+    try {
+      const res = await cancelOrder(
+        selectedDetail.portfolio.id,
+        cancellingOrder.id,
+        cancelReason.trim()
+      );
+      if (res.status === "ok") {
+        setCancelSuccess(
+          `Đã hủy thành công lệnh ${cancellingOrder.id}. Thao tác đã được ghi vết vào Admin Audit Logs.`
+        );
+        setSelectedDetail((prev) => {
+          if (!prev) return null;
+          return {
+            ...prev,
+            orders: (prev.orders ?? []).map((o) =>
+              o.id === cancellingOrder.id
+                ? {
+                    ...o,
+                    status: "cancelled",
+                    cancelled_at: new Date().toISOString(),
+                    reserved_cash: 0,
+                    reserved_quantity: 0,
+                  }
+                : o
+            ),
+          };
+        });
+        setCancellingOrder(null);
+        setCancelReason("");
+      } else {
+        setCancelError(res.message || "Không thể hủy lệnh.");
+      }
+    } catch (err) {
+      setCancelError(err instanceof Error ? err.message : "Đã xảy ra lỗi khi hủy lệnh.");
+    } finally {
+      setIsSubmittingCancel(false);
     }
   }
 
@@ -144,7 +207,13 @@ export function PortfoliosTable({
       {selectedDetail && (
         <AdminDetailModal
           isOpen={Boolean(selectedDetail)}
-          onClose={() => setSelectedDetail(null)}
+          onClose={() => {
+            setSelectedDetail(null);
+            setCancellingOrder(null);
+            setCancelReason("");
+            setCancelError(null);
+            setCancelSuccess(null);
+          }}
           title={`Chi tiết danh mục: ${selectedDetail.portfolio.user_name} (${selectedDetail.portfolio.user_email})`}
           isLarge
         >
@@ -193,6 +262,179 @@ export function PortfoliosTable({
                   {selectedDetail.portfolio.is_public ? "Công khai" : "Riêng tư"}
                 </span>
               </span>
+            </div>
+          </div>
+
+          {/* EMBEDDED ORDERS TABLE */}
+          <div style={{ marginBottom: "1.5rem" }}>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "0.5rem" }}>
+              <h4 style={{ margin: 0, fontSize: "0.95rem", fontWeight: 700, color: "#0f172a" }}>
+                Sổ lệnh giao dịch của người dùng ({selectedDetail.orders?.length ?? 0})
+              </h4>
+              <span style={{ fontSize: "0.75rem", color: "#64748b" }}>
+                Admin có quyền hủy lệnh chờ (thu hồi ký quỹ) kèm ghi vết kiểm toán
+              </span>
+            </div>
+
+            {cancelSuccess && (
+              <p className="admin-alert success" role="status" style={{ margin: "0.5rem 0", padding: "0.5rem 0.75rem", fontSize: "0.82rem" }}>
+                {cancelSuccess}
+              </p>
+            )}
+
+            {cancelError && (
+              <p className="admin-alert error" role="alert" style={{ margin: "0.5rem 0", padding: "0.5rem 0.75rem", fontSize: "0.82rem" }}>
+                {cancelError}
+              </p>
+            )}
+
+            {cancellingOrder && (
+              <div
+                style={{
+                  background: "#fff1f2",
+                  border: "1px solid #fecdd3",
+                  borderRadius: "8px",
+                  padding: "1rem",
+                  marginBottom: "1rem",
+                }}
+              >
+                <div style={{ fontWeight: 600, color: "#9f1239", marginBottom: "0.35rem" }}>
+                  Xác nhận hủy lệnh của người dùng: {cancellingOrder.symbol} (Mã lệnh: {cancellingOrder.id})
+                </div>
+                <p style={{ fontSize: "0.8rem", color: "#475569", margin: "0 0 0.75rem 0" }}>
+                  Thao tác hủy lệnh sẽ giải phóng số tiền hoặc cổ phiếu đang đóng băng của người dùng và lưu vết vào hệ thống Audit Log.
+                </p>
+                <div style={{ display: "flex", gap: "0.5rem", flexWrap: "wrap", alignItems: "center" }}>
+                  <input
+                    type="text"
+                    value={cancelReason}
+                    onChange={(e) => setCancelReason(e.target.value)}
+                    placeholder="Nhập lý do hủy lệnh (ví dụ: Lỗi kỹ thuật, yêu cầu can thiệp rủi ro)..."
+                    style={{
+                      flex: "1 1 300px",
+                      padding: "0.45rem 0.75rem",
+                      border: "1px solid #cbd5e1",
+                      borderRadius: "6px",
+                      fontSize: "0.85rem",
+                    }}
+                  />
+                  <button
+                    type="button"
+                    className="admin-btn-danger"
+                    disabled={isSubmittingCancel || cancelReason.trim().length < 3}
+                    onClick={handleConfirmCancel}
+                    style={{ padding: "0.45rem 0.9rem", fontSize: "0.85rem" }}
+                  >
+                    {isSubmittingCancel ? "Đang xử lý..." : "Xác nhận hủy lệnh"}
+                  </button>
+                  <button
+                    type="button"
+                    className="admin-btn-secondary"
+                    disabled={isSubmittingCancel}
+                    onClick={() => {
+                      setCancellingOrder(null);
+                      setCancelReason("");
+                      setCancelError(null);
+                    }}
+                    style={{ padding: "0.45rem 0.75rem", fontSize: "0.85rem" }}
+                  >
+                    Đóng
+                  </button>
+                </div>
+              </div>
+            )}
+
+            <div className="admin-table-container">
+              <table className="admin-table-unified">
+                <thead>
+                  <tr>
+                    <th>Thời gian</th>
+                    <th>Mã CP</th>
+                    <th>Loại lệnh</th>
+                    <th>Chiều</th>
+                    <th>Khối lượng</th>
+                    <th>Giá đặt</th>
+                    <th>Đã khớp</th>
+                    <th>Trạng thái</th>
+                    <th style={{ textAlign: "right" }}>Thao tác</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {selectedDetail.orders && selectedDetail.orders.length ? (
+                    selectedDetail.orders.map((o) => {
+                      const isWaiting = o.status === "open" || o.status === "pending";
+                      return (
+                        <tr key={o.id}>
+                          <td>{new Date(o.created_at).toLocaleString("vi-VN")}</td>
+                          <td>
+                            <strong>{o.symbol}</strong>
+                          </td>
+                          <td>
+                            <span className="admin-badge neutral" style={{ fontSize: "0.72rem" }}>
+                              {o.order_type}
+                            </span>
+                          </td>
+                          <td>
+                            <span className={`admin-badge ${o.side === "buy" ? "active" : "disabled"}`}>
+                              {o.side === "buy" ? "MUA" : "BÁN"}
+                            </span>
+                          </td>
+                          <td>{o.quantity.toLocaleString("vi-VN")}</td>
+                          <td>{o.limit_price.toLocaleString("vi-VN")} ₫</td>
+                          <td>{o.filled_quantity.toLocaleString("vi-VN")}</td>
+                          <td>
+                            <span
+                              className={`admin-badge ${
+                                o.status === "filled"
+                                  ? "active"
+                                  : isWaiting
+                                  ? "warning"
+                                  : "disabled"
+                              }`}
+                            >
+                              {o.status === "filled"
+                                ? "Đã khớp"
+                                : o.status === "open"
+                                ? "Chờ khớp"
+                                : o.status === "pending"
+                                ? "Chờ xử lý"
+                                : o.status === "cancelled"
+                                ? "Đã hủy"
+                                : o.status === "expired"
+                                ? "Hết hạn"
+                                : "Từ chối"}
+                            </span>
+                          </td>
+                          <td style={{ textAlign: "right" }}>
+                            {isWaiting && cancelOrder ? (
+                              <button
+                                type="button"
+                                className="admin-btn-danger"
+                                style={{ fontSize: "0.75rem", padding: "0.2rem 0.5rem" }}
+                                onClick={() => {
+                                  setCancellingOrder(o);
+                                  setCancelReason("");
+                                  setCancelError(null);
+                                }}
+                              >
+                                Hủy lệnh (Admin)
+                              </button>
+                            ) : (
+                              <span style={{ color: "#94a3b8", fontSize: "0.75rem" }}>—</span>
+                            )}
+                          </td>
+                        </tr>
+                      );
+                    })
+                  ) : (
+                    <tr>
+                      <td colSpan={9} style={{ textAlign: "center", color: "#64748b", padding: "1.5rem" }}>
+                        Chưa có lệnh nào trong sổ lệnh mô phỏng.
+                      </td>
+                    </tr>
+                  )}
+                </tbody>
+              </table>
             </div>
           </div>
 

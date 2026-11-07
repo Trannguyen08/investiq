@@ -1,5 +1,9 @@
 import Link from "next/link";
-import { getAdminPortfolios, getAdminPortfolioDetail } from "@/lib/server/admin-ops-api";
+import {
+  getAdminPortfolios,
+  getAdminPortfolioDetail,
+  cancelAdminPaperOrder,
+} from "@/lib/server/admin-ops-api";
 import { PortfoliosTable } from "@/components/admin/portfolios-table";
 import { IconSearch, IconReset } from "@/components/admin/admin-icons";
 import { AdminAlertMessages, AdminPaginationBar, isNextRedirect } from "@/components/admin/admin-page-controls";
@@ -56,6 +60,11 @@ export default async function AdminPortfoliosPage({
     return getAdminPortfolioDetail(id);
   }
 
+  async function cancelOrderAction(portfolioId: string, orderId: string, reason: string) {
+    "use server";
+    return cancelAdminPaperOrder(portfolioId, orderId, reason);
+  }
+
   return (
     <div>
       <div className="admin-view-header">
@@ -102,6 +111,7 @@ export default async function AdminPortfoliosPage({
       <PortfoliosTable
         portfolios={result.items}
         loadDetail={loadDetailAction}
+        cancelOrder={cancelOrderAction}
       />
 
       <AdminPaginationBar

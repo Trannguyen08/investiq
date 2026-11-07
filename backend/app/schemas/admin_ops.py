@@ -146,6 +146,23 @@ class PortfolioTradeItem(BaseModel):
     created_at: str
 
 
+class PortfolioOrderItem(BaseModel):
+    model_config = ConfigDict(extra="ignore")
+    id: str
+    symbol: str
+    side: Literal["buy", "sell"]
+    order_type: str
+    status: Literal["pending", "open", "filled", "cancelled", "rejected", "expired"]
+    quantity: int
+    filled_quantity: int
+    limit_price: float
+    reserved_cash: float
+    reserved_quantity: int
+    created_at: str
+    expires_at: str
+    cancelled_at: str | None = None
+
+
 class AdminPortfolioItem(BaseModel):
     model_config = ConfigDict(extra="ignore")
     id: str
@@ -177,6 +194,20 @@ class AdminPortfolioDetail(BaseModel):
     portfolio: AdminPortfolioItem
     holdings: list[PortfolioHoldingItem]
     recent_trades: list[PortfolioTradeItem]
+    orders: list[PortfolioOrderItem] = Field(default_factory=list)
+
+
+class AdminCancelOrderRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    reason: str = Field(min_length=3, max_length=500)
+
+
+class AdminCancelOrderResponse(BaseModel):
+    model_config = ConfigDict(extra="ignore")
+    status: Literal["ok", "error"]
+    message: str
+    order_id: str
+
 
 
 # Audit logs schemas

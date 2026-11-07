@@ -1,5 +1,25 @@
 # Current Task
 
+## Paper Trading Admin Order Book & Risk Cancellation with Audit Log - 2026-11-07 (in progress)
+- **User Request**:
+  1. Cho phép Admin giám sát sổ lệnh của người dùng trong phân hệ quản trị danh mục (`/admin/portfolios`).
+  2. Cho phép Admin thao tác **Hủy lệnh chờ (Cancel Order)** đối với các lệnh đang treo (`open`, `pending`) của người dùng kèm bắt buộc nhập lý do nghiệp vụ và ghi vết đầy đủ vào `Admin Audit Logs` (`auth_audit_events`), tuân thủ chuẩn quản trị rủi ro sàn chứng khoán thực tế; **KHÔNG** cho phép Admin "Khớp lệnh ngay (Force Fill)" để bảo đảm tính minh bạch và tránh sai lệch bản chất dữ liệu sàn.
+  3. Khi Admin hủy lệnh, hệ thống tự động giải phóng toàn bộ số dư ký quỹ tiền mặt (`reserved_cash = 0`) hoặc cổ phiếu (`reserved_quantity = 0`) và cập nhật `cancelled_at = now()`.
+  4. Chạy toàn bộ hệ thống (Backend FastAPI tại `http://127.0.0.1:8000` và Frontend Next.js tại `http://localhost:3000`) để người dùng kiểm thử trực tiếp.
+- **Branch**: `refactor/paper-trading`
+- **Changes**:
+  - `backend/app/schemas/admin_ops.py`: Bổ sung schema `PortfolioOrderItem`, mở rộng `AdminPortfolioDetail` với `orders: list[PortfolioOrderItem]`, bổ sung `AdminCancelOrderRequest` và `AdminCancelOrderResponse`.
+  - `backend/app/infrastructure/db/repositories/sql_admin_repository.py`:
+    - Cập nhật `get_portfolio_detail` truy vấn danh sách lệnh từ `paper_orders` kèm thông tin chi tiết (trạng thái, loại lệnh, giá đặt, số lượng, khối lượng khớp, tiền/cổ phiếu ký quỹ, thời gian).
+    - Thêm phương thức `cancel_paper_order(portfolio_id, order_id, actor_id, reason, request_id)`: cập nhật `status = 'cancelled'`, `cancelled_at = now()`, `reserved_cash = 0`, `reserved_quantity = 0` và ghi log kiểm toán vào `auth_audit_events` với `event_type = 'paper_order.cancelled_by_admin'`.
+  - `backend/app/api/v1/admin_ops.py`: Bổ sung endpoint `POST /api/v1/admin/portfolios/{portfolio_id}/orders/{order_id}/cancel`.
+  - `frontend/src/lib/server/admin-ops-api.ts`: Thêm `PortfolioOrderItem`, mở rộng `AdminPortfolioDetail`, thêm hàm gọi API `cancelAdminPaperOrder`.
+  - `frontend/src/app/(admin)/admin/portfolios/page.tsx`: Thêm server action `cancelOrderAction` và truyền vào `PortfoliosTable`.
+  - `frontend/src/components/admin/portfolios-table.tsx`: Hiển thị bảng "Sổ lệnh giao dịch của người dùng (`orders`)", nút "Hủy lệnh (Admin)" cho các lệnh `open`/`pending`, hộp thoại nhập lý do hủy lệnh, cập nhật trạng thái UI và thông báo kiểm toán. Tuân thủ nghiêm ngặt Zero Leading Icons.
+  - `frontend/src/components/admin/portfolios-table.test.tsx`: Thêm kiểm thử hiển thị sổ lệnh và thao tác hủy lệnh Admin (4/4 passed).
+  - `backend/tests/unit/portfolio/test_admin_paper_portfolio_ops.py`: Viết bộ kiểm thử đơn vị cho API chi tiết danh mục kèm sổ lệnh và endpoint hủy lệnh Admin (passed 100%).
+  - `docs/paper-trading-architecture.md`: Cập nhật mục 8 tài liệu hóa kiến trúc Sổ lệnh Admin, quy chuẩn hủy lệnh rủi ro và ghi vết kiểm toán.
+
 ## Paper Trading Vietnam Stock Exchange Simulator (Option B + 5 Core Exchange Improvements) - 2026-11-07 (completed)
 - **User Request**:
   1. Commit and push current AI & Data Pipeline docs and typo suggestions to branch `fix/AI`, then switch to branch `refactor/paper-trading` and pull from `fix/AI`.
