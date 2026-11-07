@@ -14,7 +14,7 @@
 
 ---
 
-## 📌 1. Giới Thiệu (Overview)
+## 1. Giới Thiệu (Overview)
 
 **InvestIQ** là nền tảng công nghệ tài chính (FinTech) thế hệ mới dành cho thị trường chứng khoán Việt Nam, kết hợp sức mạnh của **Mô hình Định lượng Đa nhân tố (Multi-Factor Quantitative Engine)**, **Trợ lý Trí tuệ Nhân tạo Tài chính Chuyên sâu (Financial AI Assistant)**, cùng hệ sinh thái **Giáo dục & Đầu tư Thực nghiệm (EdTech & Paper Trading)**.
 
@@ -28,24 +28,24 @@ InvestIQ mang lại một giải pháp trọn vẹn: **Dữ liệu chuẩn xác 
 
 ---
 
-## 🚀 2. Các Tính Năng Cốt Lõi (Core Features)
+## 2. Các Tính Năng Cốt Lõi (Core Features)
 
 ```mermaid
 flowchart LR
     subgraph CorePlatform ["HỆ SINH THÁI INVESTIQ"]
-        AI["🤖 Trợ lý AI Tài chính<br/>(Radar, BCTC, Doanh nhân, Hệ sinh thái)"]
-        Market["📈 Dữ liệu & Thị trường<br/>(Nến, Sổ lệnh, Treemap, Cổ tức)"]
-        Learn["🎓 Học tập & Khảo sát<br/>(Lộ trình F0, Điểm kỷ luật)"]
-        Paper["💼 Đầu tư Giả lập<br/>(100M VND, Khớp thị giá, Cố vấn AI)"]
-        Thesis["🏛️ Đấu trường Luận điểm<br/>(Minh bạch ROI, Target/Stoploss)"]
-        News["📰 Tin tức 6 Nguồn<br/>(Sentiment, Topic Mining)"]
-        Admin["🛡️ Quản trị Doanh nghiệp<br/>(Bảo mật JWT, Giám sát vận hành)"]
+        AI["Trợ lý AI Tài chính<br/>(Radar, BCTC, Doanh nhân, Hệ sinh thái)"]
+        Market["Dữ liệu & Thị trường<br/>(Nến, Sổ lệnh, Treemap, Cổ tức)"]
+        Learn["Học tập & Khảo sát<br/>(Lộ trình F0, Điểm kỷ luật)"]
+        Paper["Đầu tư Giả lập<br/>(100M VND, Khớp thị giá, Cố vấn AI)"]
+        Thesis["Đấu trường Luận điểm<br/>(Minh bạch ROI, Target/Stoploss)"]
+        News["Tin tức 6 Nguồn<br/>(Sentiment, Topic Mining)"]
+        Admin["Quản trị Doanh nghiệp<br/>(Bảo mật JWT, Giám sát vận hành)"]
     end
 
     User(["Nhà đầu tư"]) --> CorePlatform
 ```
 
-### 🤖 2.1. Trợ Lý AI Tài Chính Định Lượng (`/ai-assistant` & Floating Drawer)
+### 2.1. Trợ Lý AI Tài Chính Định Lượng (`/ai-assistant` & Floating Drawer)
 Khác biệt hoàn toàn với các chatbot thông thường, InvestIQ AI Assistant vận hành trên **Deterministic Quantitative RAG Pipeline** ưu tiên 100% dữ liệu tài chính nội bộ đã kiểm chuẩn:
 - **Biểu đồ Radar Đa nhân tố (5 Dimensions)**: Tự động chấm điểm (0–100) và trực quan hóa 5 trụ cột: Định giá (Valuation), Sức khỏe tài chính (Financial Health), Tăng trưởng (Growth), Động lượng kỹ thuật (Technical Momentum), và Dòng tiền (Cash Flow).
 - **So sánh Đối đầu Đa tài sản**: So sánh đối đầu giữa 2 cổ phiếu hoặc so sánh cổ phiếu với **Vàng miếng SJC** và **Lãi suất Tiết kiệm ngân hàng** với dữ liệu lịch sử đối chiếu trực quan.
@@ -56,7 +56,7 @@ Khác biệt hoàn toàn với các chatbot thông thường, InvestIQ AI Assist
 - **Lịch Sự kiện & Cổ tức**: Cập nhật lịch chốt quyền cổ tức tiền mặt/cổ phiếu, phát hành thêm, giao dịch nội bộ kèm trích dẫn nguồn công bố chính thức.
 - **An toàn & Tối ưu**: Tích hợp Security Guardrails chống Prompt Injection / rò rỉ dữ liệu mật, Shared Cache Redis TTL thông minh, và hệ thống đo lường độ trễ Telemetry từng bước.
 
-### 📈 2.2. Trung Tâm Thị Trường & Phân Tích Cổ Phiếu (`/market`, `/search`)
+### 2.2. Trung Tâm Thị Trường & Phân Tích Cổ Phiếu (`/market`, `/search`)
 - **Bảng Giá VN30-First**: Hiển thị bảng giá chuẩn sàn chứng khoán, 9 cột số liệu căn giữa đồng bộ, lọc nhanh theo rổ VN30, nhóm ngành, biến động giá.
 - **Biểu đồ Nến Kỹ thuật Đỉnh cao**: Biểu đồ Candlestick chuẩn tài chính tích hợp đường MA5, MA20, Khối lượng giao dịch (Volume), linh hoạt đổi khung thời gian (Ngày, Tuần, Tháng, Năm), hỗ trợ phóng to/thu nhỏ bằng chuột (Mouse wheel zoom) và rê bàn phím (Keyboard pan).
 - **Sổ Lệnh 3 Cấp Độ & Khớp Lệnh Realtime**: Quan sát 3 bước giá mua/bán tốt nhất và dòng băng chuyền khớp lệnh trực tiếp (Intraday Execution Tape).
@@ -64,7 +64,7 @@ Khác biệt hoàn toàn với các chatbot thông thường, InvestIQ AI Assist
 - **Lịch Cổ Tức Toàn Diện**: Danh sách sự kiện cổ tức toàn sàn có phân trang chuẩn (`Pagination`), sắp xếp theo mốc thời gian gần nhất và gắn link trực tiếp tới văn bản công bố của doanh nghiệp.
 - **Trang Tìm Kiếm Chuyên Biệt (`/search`)**: Tra cứu tức thì mọi mã cổ phiếu, lọc theo chỉ số vốn hóa, P/E, P/B và biến động phiên.
 
-### 🎓 2.3. Giáo Dục & Đánh Giá Năng Lực Đầu Tư (`/learn`, `/learn/readiness`)
+### 2.3. Giáo Dục & Đánh Giá Năng Lực Đầu Tư (`/learn`, `/learn/readiness`)
 - **Lộ trình Kiến thức Chứng khoán Căn bản**: Giáo trình chuẩn hóa 3 cấp độ (Cơ bản $\rightarrow$ Trung cấp $\rightarrow$ Nâng cao) kết hợp bài đọc lý thuyết, ví dụ thực tế gắn liền với biểu đồ nến VN-Index thực tế và bài kiểm tra trắc nghiệm chấm điểm có giải thích tức thì.
 - **Đánh giá Năng lực & Khảo sát Tâm lý (`/learn/readiness`)**:
   - 10 câu hỏi tình huống thực tế đánh giá tâm lý chịu đựng rủi ro.
@@ -72,20 +72,20 @@ Khác biệt hoàn toàn với các chatbot thông thường, InvestIQ AI Assist
   - **Điểm Kỷ luật Giao dịch (Discipline Score)**: Hệ thống tự động phân tích hành vi trong tài khoản Paper Trading (tỷ lệ tuân thủ cắt lỗ -7%, mức độ đa dạng hóa danh mục, tỷ lệ đệm tiền mặt an toàn, tần suất giao dịch) để xuất ra Báo cáo Chẩn đoán Mức độ Sẵn sàng (Investor Readiness Report) trước khi đưa tiền thật vào thị trường.
 - **Đấu Trường Dự Đoán Nến (`/learn/candlestick-arena`)**: Trò chơi giáo dục thử thách dự đoán xu hướng tiếp theo của cây nến dựa trên các mô hình nến đảo chiều kinh điển.
 
-### 💼 2.4. Đầu Tư Giả Lập & Cố Vấn Danh Mục AI (`/portfolio`)
+### 2.4. Đầu Tư Giả Lập & Cố Vấn Danh Mục AI (`/portfolio`)
 - **Tài khoản Mô phỏng 100.000.000 ₫**: Khởi đầu an toàn cho mọi nhà đầu tư, thực hiện lệnh mua/bán khớp giá thị trường thực tế với cơ chế khóa dòng (Row-locking) bảo vệ dữ liệu concurrency.
 - **Sổ cái Minh bạch**: Tách bạch rõ ràng giữa Giá vốn, Thị giá hiện tại, Lãi/Lỗ chưa thực hiện và Lãi/Lỗ đã chốt lời/cắt lỗ kèm lịch sử giao dịch chi tiết.
 - **Cố Vấn AI Danh Mục Tự Động (AI Portfolio Advisor)**: Định kỳ quét danh mục của người dùng, phân tích độ tập trung rủi ro, cảnh báo cổ phiếu giảm sâu và tự động soạn thảo gửi Báo cáo Tối ưu Danh mục qua Email.
 
-### 🏛️ 2.5. Đấu Trường Luận Điểm Đầu Tư (`/community`)
+### 2.5. Đấu Trường Luận Điểm Đầu Tư (`/community`)
 - **Proof-of-Thesis Arena**: Môi trường chia sẻ ý tưởng đầu tư văn minh và minh bạch. Mọi bài viết bắt buộc phải có luận điểm phân tích, giá mục tiêu (Target Price), ngưỡng cắt lỗ (Stoploss) và kỳ hạn đầu tư.
 - **Xếp hạng Hiệu quả**: Hệ thống tự động theo dõi biến động thị giá để tính toán tỷ suất sinh lời thực tế (Outcome ROI) và xếp hạng uy tín của người viết luận điểm.
 
-### 📰 2.6. Hệ Thống Thu Thập Tin Tức Tự Động 6 Nguồn (`/news`)
+### 2.6. Hệ Thống Thu Thập Tin Tức Tự Động 6 Nguồn (`/news`)
 - **Thu thập Đa nguồn Thời gian thực**: Tự động tổng hợp tin tức từ 6 đầu báo tài chính uy tín: *Vietstock*, *CafeF*, *HNX*, *StockBiz*, *VnEconomy*, *VnExpress*.
 - **Phân tích Cảm xúc & Gắn thẻ Mã**: Tự động phân tích sắc thái bài viết (Tích cực / Tiêu cực / Trung tính), xác định mức độ ảnh hưởng tới thị trường và liên kết chính xác với mã cổ phiếu liên quan.
 
-### 🛡️ 2.7. Cổng Quản Trị Doanh Nghiệp Toàn Diện (`/admin`)
+### 2.7. Cổng Quản Trị Doanh Nghiệp Toàn Diện (`/admin`)
 - **Bảo mật Đa tầng**: Bảo vệ nghiêm ngặt bằng JWT role-based (`require_admin_user`) và session độc lập.
 - **Bộ Công cụ Vận hành Tập trung**:
   - *Quản lý Tài khoản (`/admin/users`)*: Tìm kiếm, phân quyền, khóa/mở tài khoản, thu hồi phiên làm việc tức thì.
@@ -98,7 +98,7 @@ Khác biệt hoàn toàn với các chatbot thông thường, InvestIQ AI Assist
 
 ---
 
-## 🏗️ 3. Kiến Trúc Kỹ Thuật (Architecture & Tech Stack)
+## 3. Kiến Trúc Kỹ Thuật (Architecture & Tech Stack)
 
 Hệ thống được thiết kế theo mô hình **Monorepo** chuẩn mực, kết hợp **Clean Architecture** ở phía Backend và kiến trúc **Backend-for-Frontend (BFF)** hiện đại ở phía Frontend:
 
@@ -153,7 +153,7 @@ flowchart TD
     CeleryBeat --> RedisDB
 ```
 
-### 🛠️ Chi tiết Công nghệ (Tech Stack Breakdown):
+### Chi tiết Công nghệ (Tech Stack Breakdown):
 - **Frontend**: Next.js 16 (App Router, Server Components, Server Actions), React 19, TypeScript, Tailwind CSS v4, Lucide Icons, Vitest.
 - **Backend**: Python 3.13, FastAPI (Uvicorn), Pydantic v2, Clean Architecture, Pytest, Ruff (Linter & Formatter), Mypy (Static Typing).
 - **Cơ sở dữ liệu & Caching**: PostgreSQL 17 (kết nối qua `psycopg` pool có SSL), Redis 8 (chia 3 logical databases độc lập).
@@ -162,7 +162,7 @@ flowchart TD
 
 ---
 
-## 📂 4. Cấu Trúc Thư Mục (Repository Structure)
+## 4. Cấu Trúc Thư Mục (Repository Structure)
 
 ```text
 investiq/
@@ -197,7 +197,7 @@ investiq/
 
 ---
 
-## ⚡ 5. Hướng Dẫn Cài Đặt & Chạy Cục Bộ (Quickstart Guide)
+## 5. Hướng Dẫn Cài Đặt & Chạy Cục Bộ (Quickstart Guide)
 
 ### 5.1. Yêu Cầu Môi Trường (Prerequisites)
 - **Docker & Docker Compose** (khuyên dùng để chạy đầy đủ mọi dịch vụ).
@@ -251,7 +251,7 @@ npm run dev
 
 ---
 
-## 🧪 6. Kiểm Thử & Tiêu Chuẩn Chất Lượng (Quality Gate)
+## 6. Kiểm Thử & Tiêu Chuẩn Chất Lượng (Quality Gate)
 
 Hệ thống được bảo vệ bởi **Pre-PR / Pre-Push Quality Gate** tự động (`./scripts/check-pr.ps1`), mô phỏng 100% quy trình kiểm tra của GitHub Actions CI:
 
@@ -282,11 +282,11 @@ KẾT QUẢ: TẤT CẢ KIỂM TRA ĐỀU XANH (READY FOR PR / MERGE)!
 
 ---
 
-## ☁️ 7. Triển Khai Môi Trường Thực Tế (Cloud Deployment)
+## 7. Triển Khai Môi Trường Thực Tế (Cloud Deployment)
 
 InvestIQ hỗ trợ 2 mô hình triển khai đám mây tối ưu chi phí và hiệu năng:
 
-### 🌟 Mô hình Khuyên dùng: Frontend Vercel + Backend Render + Neon.tech DB
+### Mô hình Khuyên dùng: Frontend Vercel + Backend Render + Neon.tech DB
 - **Frontend (Vercel)**: Tận dụng Edge Network toàn cầu của Vercel cho Next.js, loại bỏ 100% hiện tượng "chờ Render restart", tốc độ tải trang tức thì (< 50ms).
 - **Backend (Render.com)**: Chạy Web Service FastAPI kết nối Neon.tech PostgreSQL (máy chủ Singapore `ap-southeast-1` cho độ trễ cực thấp 5–15ms).
 - **Keep-Alive Monitor**: Dự án đã tích hợp sẵn GitHub Actions `keepalive.yml` (hoặc cấu hình qua [UptimeRobot](https://uptimerobot.com)) ping định kỳ endpoint `GET /healthz` mỗi 5–10 phút để backend Render luôn thức 24/7.
@@ -296,7 +296,7 @@ InvestIQ hỗ trợ 2 mô hình triển khai đám mây tối ưu chi phí và h
 
 ---
 
-## 🔒 8. An Toàn & Bảo Mật (Security & Compliance)
+## 8. An Toàn & Bảo Mật (Security & Compliance)
 
 - **Nguyên tắc Không lưu Mật khẩu & Token**: Tuyệt đối không commit file `.env` lên GitHub; toàn bộ khóa bí mật được quản lý thông qua GitHub Actions Secrets và Cloud Environment Variables.
 - **Fail-Closed Design**: Mọi chức năng yêu cầu quyền (Admin, Paper Trading, Auth) đều mặc định từ chối truy cập (Fail-closed) nếu thiếu biến môi trường hoặc token không hợp lệ.
@@ -305,7 +305,7 @@ InvestIQ hỗ trợ 2 mô hình triển khai đám mây tối ưu chi phí và h
 
 ---
 
-## 📄 9. Giấy Phép & Bản Quyền (License & Disclaimer)
+## 9. Giấy Phép & Bản Quyền (License & Disclaimer)
 
 - **Mục đích**: Nền tảng được phát triển phục vụ mục đích nghiên cứu, học tập và hỗ trợ phân tích đầu tư định lượng.
 - **Tuyên bố Miễn trừ Trách nhiệm Tài chính (Disclaimer)**: Mọi thông tin, điểm số định lượng, phân tích kỹ thuật và phản hồi từ Trợ lý AI chỉ mang tính chất tham khảo giáo dục, không cấu thành lời mời chào hay khuyến nghị mua/bán bất kỳ chứng khoán nào. Nhà đầu tư tự chịu trách nhiệm hoàn toàn đối với các quyết định giao dịch bằng tiền thật trên thị trường chứng khoán.

@@ -1,5 +1,26 @@
 # Current Task
 
+## Environment Unification, Clean Example Config & Zero Leading Icons Polish - 2026-11-07 (completed)
+- **User Request**:
+  1. Gom các key ở env trong `backend/` và `frontend/` đồng bộ trong `.env` ở root; các file cấu hình khi đọc key mặc định trỏ vào `.env` ở root.
+  2. Đồng bộ `.env` và `.env.example` (chỉ chứa tên biến, tuyệt đối không chứa key/secret thật).
+  3. Kiểm thử toàn diện đảm bảo không gây ra bất kỳ lỗi hồi quy nào cho hệ thống.
+  4. Bỏ toàn bộ các icon/emoji trước các text trong `README.md` theo quy tắc Zero Leading Icons.
+- **Branch**: `fix/AI`
+- **Changes**:
+  - `c:\investiq\.env`: Đồng bộ toàn bộ các biến môi trường từ backend và frontend (Runtime, API URLs, Auth JWT, Google OAuth, DB Neon, Redis, Celery, Market Data, News Pipeline, Admin Console, AI/Gemini, Cloud Deployment).
+  - `c:\investiq\.env.example`: Đồng bộ 100% tên biến tương ứng với `.env`, để trống hoặc sử dụng placeholder an toàn cho mọi credential, không chứa bất kỳ secret thật nào.
+  - `backend/app/infrastructure/config/settings.py`: Cập nhật `SettingsConfigDict` nạp ưu tiên file `.env` ở root repository thông qua đường dẫn tuyệt đối `_repo_root / ".env"`, an toàn khi khởi chạy backend từ bất kỳ thư mục con nào.
+  - `frontend/next.config.ts`: Nạp an toàn root `.env` trong Next.js thông qua `fileURLToPath(new URL("../.env", import.meta.url))` bằng `process.loadEnvFile()`.
+  - `frontend/src/test/setup.ts`: Nạp an toàn root `.env` trong môi trường Vitest qua `new URL("../../../.env", import.meta.url)`.
+  - `README.md`: Loại bỏ toàn bộ emoji và biểu tượng đứng trước các tiêu đề, thẻ tính năng, danh sách, và trong sơ đồ Mermaid.
+- **Verification**:
+  - Frontend Lint (ESLint): Passed (0 warnings, 0 errors).
+  - Frontend Typecheck (tsc): Passed (0 errors).
+  - Frontend Vitest (48 files, 186/186 tests): Passed 100%.
+  - Backend Ruff & Mypy: Passed (0 errors / 43 source files).
+  - Backend Pytest: Passed (169/169 tests).
+
 ## Project Final Audit, Handover Checklist & Deployment Hardening - 2026-11-07 (completed)
 - **User Request**:
   - Xem xét toàn bộ dự án còn cần hoàn thiện điều gì không để hoàn thiện nốt và bàn giao / kết thúc dự án ("xem project cần hoàn thiện cái gì k để hoàn thiện nốt rồi end project").

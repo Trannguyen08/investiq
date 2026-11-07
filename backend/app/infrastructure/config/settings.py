@@ -2,16 +2,23 @@
 
 import base64
 from functools import lru_cache
+from pathlib import Path
 from typing import Literal
 
 from pydantic import Field, SecretStr, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
+_repo_root = Path(__file__).resolve().parents[4]
+_root_env = _repo_root / ".env"
+
 
 class Settings(BaseSettings):
     """Runtime configuration supplied by Compose or the host environment."""
 
-    model_config = SettingsConfigDict(env_file=".env", extra="ignore")
+    model_config = SettingsConfigDict(
+        env_file=(_root_env, ".env", "../.env"),
+        extra="ignore",
+    )
 
     app_name: str = "InvestIQ API"
     app_env: str = "development"
