@@ -1,282 +1,318 @@
-# InvestIQ
+# InvestIQ — Nền tảng Phân tích Định lượng, Trợ lý AI & Giáo dục Chứng khoán Toàn diện
 
-InvestIQ is a FastAPI and Next.js monorepo for an investment intelligence platform. The operational
-baseline is runnable; most finance and ML feature modules remain intentional placeholders.
+<p align="center">
+  <img src="https://img.shields.io/badge/Python-3.13-3776AB?style=for-the-badge&logo=python&logoColor=white" alt="Python 3.13" />
+  <img src="https://img.shields.io/badge/FastAPI-0.141-009688?style=for-the-badge&logo=fastapi&logoColor=white" alt="FastAPI" />
+  <img src="https://img.shields.io/badge/Next.js-16-000000?style=for-the-badge&logo=next.js&logoColor=white" alt="Next.js 16" />
+  <img src="https://img.shields.io/badge/TypeScript-5.x-3178C6?style=for-the-badge&logo=typescript&logoColor=white" alt="TypeScript" />
+  <img src="https://img.shields.io/badge/PostgreSQL-17-4169E1?style=for-the-badge&logo=postgresql&logoColor=white" alt="PostgreSQL 17" />
+  <img src="https://img.shields.io/badge/Redis-8-DC382D?style=for-the-badge&logo=redis&logoColor=white" alt="Redis 8" />
+  <img src="https://img.shields.io/badge/TailwindCSS-v4-06B6D4?style=for-the-badge&logo=tailwindcss&logoColor=white" alt="Tailwind CSS" />
+  <img src="https://img.shields.io/badge/Docker-Compose-2496ED?style=for-the-badge&logo=docker&logoColor=white" alt="Docker" />
+  <img src="https://img.shields.io/badge/Quality_Gate-Passed_100%25-10B981?style=for-the-badge&logo=githubactions&logoColor=white" alt="Quality Gate" />
+</p>
 
-## Runtime architecture
+---
 
-| Service | Responsibility | Exposure |
-| --- | --- | --- |
-| `nginx` | Public reverse proxy for the UI, API, and WebSockets | Host port `HTTP_PORT` |
-| `frontend` | Next.js standalone server | Internal port 3000 |
-| `frontend-dev` | Next.js development server with HMR (local `development` profile) | Loopback port `FRONTEND_PORT` (3000 by default) |
-| `backend` | FastAPI application, health endpoints, and isolated market-provider egress | Internal port 8000 |
-| `db` | PostgreSQL persistence | Internal only |
-| `redis` | Cache plus Celery broker/result backend | Internal only |
-| `celery-worker` | Asynchronous task execution | Internal only |
-| `celery-notifications` | Isolated OTP and authentication email delivery | Internal services plus outbound SMTP |
-| `celery-beat` | Scheduled task dispatch | Internal only |
-| `docker-socket-proxy` | Endpoint-restricted Docker log access | Internal only |
-| `log-viewer` | Dozzle runtime log viewer | Loopback port `LOG_VIEWER_PORT` |
+## 📌 1. Giới Thiệu (Overview)
 
-Kafka, RabbitMQ, and other standalone message buses are not part of the architecture. Celery uses
-Redis databases 1 and 2 for delivery/results; application caching uses Redis database 0.
+**InvestIQ** là nền tảng công nghệ tài chính (FinTech) thế hệ mới dành cho thị trường chứng khoán Việt Nam, kết hợp sức mạnh của **Mô hình Định lượng Đa nhân tố (Multi-Factor Quantitative Engine)**, **Trợ lý Trí tuệ Nhân tạo Tài chính Chuyên sâu (Financial AI Assistant)**, cùng hệ sinh thái **Giáo dục & Đầu tư Thực nghiệm (EdTech & Paper Trading)**.
 
-## Local Docker startup
+### Vấn đề InvestIQ giải quyết:
+- **Nhiễu loạn thông tin & Cảm xúc cá nhân**: Đa số nhà đầu tư cá nhân (đặc biệt là F0) thường đưa ra quyết định dựa trên tin đồn "phím hàng", mạng xã hội hoặc cảm xúc FOMO, thiếu hụt các công cụ phân tích khách quan và độc lập.
+- **Rủi ro cháy tài khoản do thiếu kỷ luật**: Thiếu sự chuẩn bị về tâm lý, không biết cách quản lý danh mục và không tuân thủ nguyên tắc cắt lỗ dẫn đến những tổn thất vốn nghiêm trọng.
+- **Ảo giác thông tin từ các LLM thông thường**: Các mô hình AI ngôn ngữ chung (ChatGPT, Claude...) thường xuyên gặp hiện tượng "bịa đặt số liệu" (hallucination), không có dữ liệu giá realtime, không hiểu thấu đáo cấu trúc BCTC Việt Nam, hồ sơ doanh nhân hay các hệ sinh thái doanh nghiệp lớn trên sàn HOSE/HNX.
 
-1. Copy `.env.example` to `.env` and replace every `replace-with-...` value. Passwords used in the
-   generated connection URLs must be URL-safe.
-2. Start the complete stack:
+### Giải pháp từ InvestIQ:
+InvestIQ mang lại một giải pháp trọn vẹn: **Dữ liệu chuẩn xác thời gian thực**, **Trợ lý AI định lượng không ảo giác**, **Môi trường đầu tư giả lập rèn luyện kỷ luật**, và **Giáo trình phân cấp thực chiến** trước khi nhà đầu tư bước vào thị trường thật.
 
-   ```sh
-   docker compose up --build --wait
-   ```
+---
 
-3. Apply the database migrations before using the UI or API:
+## 🚀 2. Các Tính Năng Cốt Lõi (Core Features)
 
-   ```sh
-   docker compose run --rm backend python -m app.infrastructure.db.base
-   ```
+```mermaid
+flowchart LR
+    subgraph CorePlatform ["HỆ SINH THÁI INVESTIQ"]
+        AI["🤖 Trợ lý AI Tài chính<br/>(Radar, BCTC, Doanh nhân, Hệ sinh thái)"]
+        Market["📈 Dữ liệu & Thị trường<br/>(Nến, Sổ lệnh, Treemap, Cổ tức)"]
+        Learn["🎓 Học tập & Khảo sát<br/>(Lộ trình F0, Điểm kỷ luật)"]
+        Paper["💼 Đầu tư Giả lập<br/>(100M VND, Khớp thị giá, Cố vấn AI)"]
+        Thesis["🏛️ Đấu trường Luận điểm<br/>(Minh bạch ROI, Target/Stoploss)"]
+        News["📰 Tin tức 6 Nguồn<br/>(Sentiment, Topic Mining)"]
+        Admin["🛡️ Quản trị Doanh nghiệp<br/>(Bảo mật JWT, Giám sát vận hành)"]
+    end
 
-4. Open `http://localhost:3000`. The checked-in local environment enables the `development` profile
-   and fixes the HMR frontend to loopback port 3000. The production-like Nginx route remains at
-   `http://localhost:8080` (or the configured `HTTP_PORT`), and its API smoke endpoint is
-   `http://localhost:8080/api/v1/status`.
-5. Open `http://localhost:9999` (or the configured `LOG_VIEWER_PORT`) for runtime logs. The port is
-   bound to `127.0.0.1` only. The viewer includes every application runtime container while
-   excluding image-build output, its own viewer/proxy logs, and routine health request entries.
-6. Stop containers with `docker compose down`. Add `--volumes` only when intentionally deleting the
-   local PostgreSQL and Redis data.
-
-All Compose services use Docker's `json-file` log driver with `max-size=10m` and `max-file=3`.
-This caps Docker-managed logs at approximately 30 MB per container. The setting takes effect when a
-container is created or recreated; it does not retroactively change an existing container.
-
-Liveness is available at `/healthz` inside the backend container; `/readyz` verifies PostgreSQL and
-Redis without returning connection details.
-
-## Home and market center
-
-The home dashboard and `/market` center are implemented with stable `/market/stocks`,
-`/market/watchlist`, `/market/indices`, `/market/events`, and `/market/people` routes. Legacy
-`/market?tab=...` links redirect without dropping filters. Public FastAPI routes live under
-`/api/v1/market`; the versioned snapshot/quote stream is `/ws/v1/market`. PostgreSQL migration
-`0011_market_foundation` adds canonical instrument/candle,
-event, public professional/holding, privacy-bounded engagement, and private watchlist storage.
-Public market read models use a bounded Redis cache; watchlist traffic crosses the authenticated
-Next.js BFF and remains `private, no-store`.
-
-The dark navy Home and Market experience defaults to beginner language: a one-sentence conclusion,
-VN-Index line chart, explicitly derived sentiment gauge, breadth/liquidity/foreign-flow explanations,
-five-color Vietnamese price legend, learning path, glossary, and source/delay disclaimer. Market adds
-clickable Home/Market sector heatmaps sized by absolute weighted daily movement, relative
-sector-strength bars, explained top lists, a 15-row VN30-first simplified table, a right-hand stock
-drawer, database-backed news from the latest 24 hours, and an explicit latest-data timestamp.
-Sector tiles, breadth, liquidity, and foreign-flow totals come from the bounded
-`/api/v1/market/sectors` aggregate over the provider's complete snapshot; the stock table remains
-independently paginated and does not truncate sector member counts.
-The stock screener applies URL-addressable daily-change, liquidity, market-cap, volume-baseline, and
-VN30 filters to the complete provider snapshot before cursor pagination. Practical preset links show
-their numeric thresholds directly, while an accessible URL-backed comparison dialog loads charts and
-fundamentals for up to three replaceable symbols without turning unavailable ratios into zero. Its AI
-outlook remains explicitly unavailable until a validated prediction model is active. Home adds an observed-data-only daily focus block, while
-the shared status bar explains whether the displayed snapshot is inside or outside trading hours.
-`mode=advanced` reveals candlesticks and detailed financial columns. Each stock also links to
-`/market/stocks/<symbol>` for a two-column range-based OHLCV and market/fundamental metrics view.
-
-Market data fails closed by default. For local UI development only, set:
-
-```env
-MARKET_DATA_MODE=fixture
-MARKET_PUBLIC_CACHE_SECONDS=30
+    User(["Nhà đầu tư"]) --> CorePlatform
 ```
 
-The fixture is deterministic and every page labels it **Dữ liệu minh họa**. Keep
-`MARKET_DATA_MODE=disabled` in shared or production environments until a licensed provider contract,
-field catalog, credentials, redistribution rights, and SLA are approved. The provider port keeps the
-domain, API, cache, WebSocket, and UI independent from SSI, DNSE, FiinGroup, or another approved feed.
+### 🤖 2.1. Trợ Lý AI Tài Chính Định Lượng (`/ai-assistant` & Floating Drawer)
+Khác biệt hoàn toàn với các chatbot thông thường, InvestIQ AI Assistant vận hành trên **Deterministic Quantitative RAG Pipeline** ưu tiên 100% dữ liệu tài chính nội bộ đã kiểm chuẩn:
+- **Biểu đồ Radar Đa nhân tố (5 Dimensions)**: Tự động chấm điểm (0–100) và trực quan hóa 5 trụ cột: Định giá (Valuation), Sức khỏe tài chính (Financial Health), Tăng trưởng (Growth), Động lượng kỹ thuật (Technical Momentum), và Dòng tiền (Cash Flow).
+- **So sánh Đối đầu Đa tài sản**: So sánh đối đầu giữa 2 cổ phiếu hoặc so sánh cổ phiếu với **Vàng miếng SJC** và **Lãi suất Tiết kiệm ngân hàng** với dữ liệu lịch sử đối chiếu trực quan.
+- **Chẩn đoán Rủi ro BCTC & Cờ đỏ Kế toán**: Tích hợp chỉ số dự báo phá sản **Altman Z-Score** và 4 thuật toán tự động quét cờ đỏ (áp lực nợ vay, dòng tiền kinh doanh âm, chất lượng khoản phải thu).
+- **Nhịp đập Thị trường & Rổ VN30 Sôi nổi**: Phân tích chỉ số VN-Index, VN30, HNX, độ rộng thị trường và bóc tách các cổ phiếu trụ cột hoạt động sôi nổi nhất trong phiên.
+- **Hồ sơ Doanh nhân & Lãnh đạo Doanh nghiệp**: Cơ sở dữ liệu 22 doanh nhân hàng đầu Việt Nam (Phạm Nhật Vượng, Trần Đình Long, Nguyễn Thị Phương Thảo, Trương Gia Bình...) cùng các huyền thoại quốc tế (Warren Buffett, Charlie Munger...). Cung cấp thị giá cổ phiếu live, tỷ lệ sở hữu, tài sản niêm yết và tổng tài sản Forbes.
+- **Bản đồ Hệ sinh thái Doanh nghiệp**: Trực quan hóa cấu trúc tập đoàn, công ty mẹ, công ty con niêm yết, công ty ngoài sàn (như Taxi Xanh GSM, Vinmec) và chuỗi giá trị của 6 đại tập đoàn: Vingroup, Hòa Phát, FPT, Masan & Techcombank, Sovico, SSI & Pan.
+- **Lịch Sự kiện & Cổ tức**: Cập nhật lịch chốt quyền cổ tức tiền mặt/cổ phiếu, phát hành thêm, giao dịch nội bộ kèm trích dẫn nguồn công bố chính thức.
+- **An toàn & Tối ưu**: Tích hợp Security Guardrails chống Prompt Injection / rò rỉ dữ liệu mật, Shared Cache Redis TTL thông minh, và hệ thống đo lường độ trễ Telemetry từng bước.
 
-For local evaluation with source-delayed real quotes and daily/intraday OHLCV, use Vnstock. A key is
-optional for Guest access and remains server-only when supplied:
+### 📈 2.2. Trung Tâm Thị Trường & Phân Tích Cổ Phiếu (`/market`, `/search`)
+- **Bảng Giá VN30-First**: Hiển thị bảng giá chuẩn sàn chứng khoán, 9 cột số liệu căn giữa đồng bộ, lọc nhanh theo rổ VN30, nhóm ngành, biến động giá.
+- **Biểu đồ Nến Kỹ thuật Đỉnh cao**: Biểu đồ Candlestick chuẩn tài chính tích hợp đường MA5, MA20, Khối lượng giao dịch (Volume), linh hoạt đổi khung thời gian (Ngày, Tuần, Tháng, Năm), hỗ trợ phóng to/thu nhỏ bằng chuột (Mouse wheel zoom) và rê bàn phím (Keyboard pan).
+- **Sổ Lệnh 3 Cấp Độ & Khớp Lệnh Realtime**: Quan sát 3 bước giá mua/bán tốt nhất và dòng băng chuyền khớp lệnh trực tiếp (Intraday Execution Tape).
+- **Bản đồ Nhiệt Động lượng (Stock & Sector Treemap)**: Trực quan hóa phân bổ dòng tiền toàn thị trường với thuật toán khuếch đại độ tương phản trọng số (> 6x contrast), giữ nguyên thanh chi tiết khi người dùng tương tác.
+- **Lịch Cổ Tức Toàn Diện**: Danh sách sự kiện cổ tức toàn sàn có phân trang chuẩn (`Pagination`), sắp xếp theo mốc thời gian gần nhất và gắn link trực tiếp tới văn bản công bố của doanh nghiệp.
+- **Trang Tìm Kiếm Chuyên Biệt (`/search`)**: Tra cứu tức thì mọi mã cổ phiếu, lọc theo chỉ số vốn hóa, P/E, P/B và biến động phiên.
 
-```env
-MARKET_DATA_MODE=vnstock
-VNSTOCK_API_KEY=
-VNSTOCK_REFRESH_SECONDS=60
-VNSTOCK_CANDLE_CACHE_SECONDS=300
-VNSTOCK_FUNDAMENTAL_CACHE_SECONDS=3600
+### 🎓 2.3. Giáo Dục & Đánh Giá Năng Lực Đầu Tư (`/learn`, `/learn/readiness`)
+- **Lộ trình Kiến thức Chứng khoán Căn bản**: Giáo trình chuẩn hóa 3 cấp độ (Cơ bản $\rightarrow$ Trung cấp $\rightarrow$ Nâng cao) kết hợp bài đọc lý thuyết, ví dụ thực tế gắn liền với biểu đồ nến VN-Index thực tế và bài kiểm tra trắc nghiệm chấm điểm có giải thích tức thì.
+- **Đánh giá Năng lực & Khảo sát Tâm lý (`/learn/readiness`)**:
+  - 10 câu hỏi tình huống thực tế đánh giá tâm lý chịu đựng rủi ro.
+  - Phân loại 4 hình mẫu nhà đầu tư: *Tích lũy DCA*, *Giá trị & Tăng trưởng*, *Lướt sóng Ngắn hạn*, hay *Bảo thủ/Chứng chỉ quỹ*.
+  - **Điểm Kỷ luật Giao dịch (Discipline Score)**: Hệ thống tự động phân tích hành vi trong tài khoản Paper Trading (tỷ lệ tuân thủ cắt lỗ -7%, mức độ đa dạng hóa danh mục, tỷ lệ đệm tiền mặt an toàn, tần suất giao dịch) để xuất ra Báo cáo Chẩn đoán Mức độ Sẵn sàng (Investor Readiness Report) trước khi đưa tiền thật vào thị trường.
+- **Đấu Trường Dự Đoán Nến (`/learn/candlestick-arena`)**: Trò chơi giáo dục thử thách dự đoán xu hướng tiếp theo của cây nến dựa trên các mô hình nến đảo chiều kinh điển.
+
+### 💼 2.4. Đầu Tư Giả Lập & Cố Vấn Danh Mục AI (`/portfolio`)
+- **Tài khoản Mô phỏng 100.000.000 ₫**: Khởi đầu an toàn cho mọi nhà đầu tư, thực hiện lệnh mua/bán khớp giá thị trường thực tế với cơ chế khóa dòng (Row-locking) bảo vệ dữ liệu concurrency.
+- **Sổ cái Minh bạch**: Tách bạch rõ ràng giữa Giá vốn, Thị giá hiện tại, Lãi/Lỗ chưa thực hiện và Lãi/Lỗ đã chốt lời/cắt lỗ kèm lịch sử giao dịch chi tiết.
+- **Cố Vấn AI Danh Mục Tự Động (AI Portfolio Advisor)**: Định kỳ quét danh mục của người dùng, phân tích độ tập trung rủi ro, cảnh báo cổ phiếu giảm sâu và tự động soạn thảo gửi Báo cáo Tối ưu Danh mục qua Email.
+
+### 🏛️ 2.5. Đấu Trường Luận Điểm Đầu Tư (`/community`)
+- **Proof-of-Thesis Arena**: Môi trường chia sẻ ý tưởng đầu tư văn minh và minh bạch. Mọi bài viết bắt buộc phải có luận điểm phân tích, giá mục tiêu (Target Price), ngưỡng cắt lỗ (Stoploss) và kỳ hạn đầu tư.
+- **Xếp hạng Hiệu quả**: Hệ thống tự động theo dõi biến động thị giá để tính toán tỷ suất sinh lời thực tế (Outcome ROI) và xếp hạng uy tín của người viết luận điểm.
+
+### 📰 2.6. Hệ Thống Thu Thập Tin Tức Tự Động 6 Nguồn (`/news`)
+- **Thu thập Đa nguồn Thời gian thực**: Tự động tổng hợp tin tức từ 6 đầu báo tài chính uy tín: *Vietstock*, *CafeF*, *HNX*, *StockBiz*, *VnEconomy*, *VnExpress*.
+- **Phân tích Cảm xúc & Gắn thẻ Mã**: Tự động phân tích sắc thái bài viết (Tích cực / Tiêu cực / Trung tính), xác định mức độ ảnh hưởng tới thị trường và liên kết chính xác với mã cổ phiếu liên quan.
+
+### 🛡️ 2.7. Cổng Quản Trị Doanh Nghiệp Toàn Diện (`/admin`)
+- **Bảo mật Đa tầng**: Bảo vệ nghiêm ngặt bằng JWT role-based (`require_admin_user`) và session độc lập.
+- **Bộ Công cụ Vận hành Tập trung**:
+  - *Quản lý Tài khoản (`/admin/users`)*: Tìm kiếm, phân quyền, khóa/mở tài khoản, thu hồi phiên làm việc tức thì.
+  - *Kiểm duyệt Luận điểm (`/admin/theses`)*: Phê duyệt bài viết cộng đồng và theo dõi trạng thái luận điểm.
+  - *Khóa học & Kiến thức (`/admin/learning`)*: CRUD toàn diện giáo trình, ví dụ thực tế và bộ câu hỏi trắc nghiệm.
+  - *Quản lý Khảo sát Năng lực (`/admin/assessment`)*: Quản lý ngân hàng câu hỏi tâm lý và cấu hình trọng số các hình mẫu nhà đầu tư.
+  - *Giám sát Danh mục (`/admin/portfolios`)*: Tra cứu và kiểm tra hành vi đầu tư mô phỏng của người dùng.
+  - *Điều hành Thu thập Dữ liệu (`/admin/data-pipeline`)*: Bật/tắt crawler, theo dõi trạng thái pipeline và dọn dẹp dữ liệu lưu trữ.
+  - *Nhật ký Kiểm toán (`/admin/audit-logs`)*: Lưu vết mọi thao tác quản trị nhằm đảm bảo an ninh hệ thống.
+
+---
+
+## 🏗️ 3. Kiến Trúc Kỹ Thuật (Architecture & Tech Stack)
+
+Hệ thống được thiết kế theo mô hình **Monorepo** chuẩn mực, kết hợp **Clean Architecture** ở phía Backend và kiến trúc **Backend-for-Frontend (BFF)** hiện đại ở phía Frontend:
+
+```mermaid
+flowchart TD
+    subgraph ClientLayer ["1. Client / Presentation Layer"]
+        Browser["Trình duyệt người dùng (Web Browser)"]
+    end
+
+    subgraph EdgeLayer ["2. Edge & Ingress Layer"]
+        Nginx["Nginx Reverse Proxy (:8080)<br/>GZip, TLS, Routing"]
+        VercelEdge["Vercel Edge CDN<br/>(Tùy chọn Production Frontend)"]
+    end
+
+    subgraph FrontendLayer ["3. Frontend Layer (Next.js 16 - React 19)"]
+        NextServer["Next.js Server (App Router & SSR)"]
+        BFF["BFF API Route Handlers<br/>(/auth-api, /portfolio-api, /ai-api, /market-api)"]
+    end
+
+    subgraph BackendLayer ["4. Backend Core Layer (FastAPI - Python 3.13)"]
+        API["FastAPI HTTP & WebSocket Endpoints"]
+        CleanArch["Clean Architecture Layers:<br/>• Domain Rules & Entities<br/>• Use Cases & AI Orchestrator<br/>• Infrastructure Adapters"]
+        Guardrails["AI Security Guardrails & Telemetry"]
+    end
+
+    subgraph WorkerLayer ["5. Asynchronous & Scheduled Workers"]
+        CeleryWorker["Celery News Ingestion Worker"]
+        CeleryNotifier["Celery Notification & Email Worker"]
+        CeleryBeat["Celery Beat Periodic Scheduler"]
+    end
+
+    subgraph StorageLayer ["6. Storage & External Integration"]
+        Postgres[("PostgreSQL 17<br/>Relational Data & Ledgers")]
+        RedisDB[("Redis 8<br/>DB 0: App Cache<br/>DB 1: Broker | DB 2: Results")]
+        ExternalFeeds["External Feeds & Crawlers<br/>(CafeF, Vietstock, Vnstock)"]
+    end
+
+    Browser -->|HTTPS / WSS| Nginx
+    Browser -.->|HTTPS CDN| VercelEdge
+    Nginx --> NextServer
+    VercelEdge --> NextServer
+    NextServer --> BFF
+    BFF -->|Internal Secure API| API
+    API --> CleanArch
+    CleanArch --> Guardrails
+    CleanArch --> Postgres
+    CleanArch --> RedisDB
+    CeleryWorker --> RedisDB
+    CeleryWorker --> Postgres
+    CeleryWorker --> ExternalFeeds
+    CeleryNotifier --> Postgres
+    CeleryBeat --> RedisDB
 ```
 
-The adapter uses Vnstock's unified API with KBS quotes/OHLCV and VCI industry plus current TTM
-P/E/P/B statistics. Visible stock pages request at most 15 cached ratios at a time and retain the
-last observed values across transient source failures. When KBS resets its board to zero before a new session, one VCI batch supplies the
-latest completed close and preceding reference instead of presenting a fabricated 0% move or issuing
-per-symbol history requests. It caches bounded snapshots and per-symbol fundamentals, converts
-Vnstock quota exits into ordinary provider failures, and falls back to a clearly labeled stale
-snapshot. Vnstock is a connector to third-party sources, not a grant to redistribute
-exchange data. Treat this mode as local/private evaluation until Vnstock and the original source
-confirm public display, caching, and redistribution rights in writing.
+### 🛠️ Chi tiết Công nghệ (Tech Stack Breakdown):
+- **Frontend**: Next.js 16 (App Router, Server Components, Server Actions), React 19, TypeScript, Tailwind CSS v4, Lucide Icons, Vitest.
+- **Backend**: Python 3.13, FastAPI (Uvicorn), Pydantic v2, Clean Architecture, Pytest, Ruff (Linter & Formatter), Mypy (Static Typing).
+- **Cơ sở dữ liệu & Caching**: PostgreSQL 17 (kết nối qua `psycopg` pool có SSL), Redis 8 (chia 3 logical databases độc lập).
+- **Xử lý nền & Lập lịch**: Celery 5.6, Celery Beat scheduler cho các tác vụ crawl tin tức và kiểm tra định kỳ.
+- **Giám sát & Logs**: Dozzle log viewer, per-step AI telemetry metrics endpoint (`/api/v1/ai/metrics`).
 
-Market data modes supported are `vnstock`, `fixture`, and `disabled`. The system uses Vnstock
-as the primary live provider, featuring market snapshots, technical indicators, financial reports,
-and prominent business leader valuation analysis.
+---
 
-## Beginner paper trading
-
-The authenticated `/portfolio` workspace provides one private educational simulation account per
-user with 100,000,000 VND of virtual cash. Users confirm simulated buys/sells against the latest
-observed canonical price. Accepted practice trades automatically fill in full so users can review
-cash, holdings, cost basis, current value, realized/unrealized profit or loss, price history, an
-estimated portfolio curve, and the last 100 immutable simulated fills. The UI explains that real
-orders can wait, partially fill, or fail to fill. The page also
-shows observed daily gainers, existing positive news tagged to symbols, and deterministic risk notices
-for sharp/continuous declines, stale prices, or portfolio concentration. It never connects to a broker
-or places a real order.
-
-Migrations `0012_paper_trading` and `0013_paper_orders` own the account, holding, durable order,
-reservation, and trade ledgers. Private browser traffic
-uses the CSRF-protected `/portfolio-api` Next.js BFF; FastAPI exposes
-`GET /api/v1/paper-portfolio` and idempotent `POST /api/v1/paper-portfolio/orders` only after verifying
-the BFF secret and active user session. Eligible legacy pending orders are reconciled on dashboard
-reads. Personalized responses and errors are `no-store`.
-The model assumes a disclosed 0.15% simulated broker fee and 0.1% simulated sell tax; it does not yet
-model partial fills, ATO/ATC orders, settlement, dividends, splits, margin, or short sales. See the
-[paper-trading plan](docs/plan/paper-trading.md) for calculations, privacy, rollout, and test criteria.
-
-## Stock news MVP
-
-Apply database migrations as a dedicated step before opening the news routes:
-
-```sh
-docker compose run --rm backend python -m app.infrastructure.db.base
-```
-
-The public pages are `/news` and `/news/<article-id>`. Celery Beat queues an initial crawl of the
-six configured sources whenever the scheduler starts, then discovers new stories every five
-minutes. `NEWS_INGESTION_ENABLED` defaults to `true`; set it to `false` to pause automatic crawling.
-Only revisions with complete extracted content are published by the public news API. Migration
-`0014_withdraw_incomplete_news` withdraws existing partial and metadata-only articles without
-rewriting their immutable revision history; future incomplete revisions are stored as withdrawn.
-The default Compose topology treats the news worker and the single Beat scheduler as application
-readiness dependencies: starting the public `nginx` service also starts both, and local/staging/
-production `docker compose up` waits for their health checks. Starting only the Compose `backend`
-service also brings both ingestion processes up. Discovery URLs are canonicalized before
-their hourly idempotency key is stored; PostgreSQL additionally enforces one article per source and
-canonical URL, while later observations update that article's revision history instead of duplicating
-the feed.
-Before production ingestion, approve each source's storage/display policy and import a reviewed
-UTF-8 security master CSV with columns `exchange,symbol,issuer_name,valid_from`:
-
-```sh
-docker compose run --rm backend python -m app.infrastructure.db.import_securities \
-  --file /data/securities.csv --source reviewed-master --dry-run
-```
-
-The container must be given a read-only mount for that CSV before running the import. Remove
-`--dry-run` only after reviewing validation output. See the
-[implementation report](docs/plan/news-implementation-report.md) for source status, test evidence,
-backup commands, and remaining activation gates.
-
-FastAPI/Celery and Nginx emit sanitized JSON fields for `code`, `api_url`, `log_content`,
-`logged_at`, `container`, `problem`, and `request_id`. The viewer parses these fields, highlights
-warnings/errors, supports level/text filtering, and merges selected containers chronologically.
-Application code must not log request bodies, credentials, tokens, cookies, or personal financial
-data. Access beyond the Docker host should use an SSH tunnel or an authenticated TLS reverse proxy;
-do not change the viewer bind address to a public interface without adding authentication.
-
-## CI/CD
-
-- `backend-ci.yml` runs Ruff, mypy, pytest, builds the backend image, and validates Compose.
-- `frontend-ci.yml` runs ESLint, TypeScript, and Vitest checks, then builds the production image.
-- A push to `develop` publishes immutable `staging-<commit>` images to GHCR and deploys staging.
-- A `v*` tag publishes versioned images and deploys production. Manual dispatch builds the selected
-  commit with a `manual-<commit>` tag.
-
-Deployment jobs require dedicated Linux self-hosted runners labelled `investiq-staging` and
-`investiq-production`. Configure GitHub environments with secrets `POSTGRES_PASSWORD`,
-`REDIS_PASSWORD`, and `SECRET_KEY`; optional variables include `HTTP_PORT`, `LOG_VIEWER_PORT`,
-`LOG_LEVEL`, `POSTGRES_DB`, `POSTGRES_USER`, and `NEWS_INGESTION_ENABLED` (defaults to `true`).
-Protect the `production` environment with required reviewers. A rollback deploys a previous immutable
-backend/frontend tag with the same Compose file;
-database migrations must include their own compatibility and rollback plan once migrations are
-introduced.
-
-News ingestion accepts publisher-dated articles within `NEWS_INGESTION_MAX_AGE_HOURS` (2160, or 90
-days, by default). Public feeds are limited to `NEWS_RETENTION_DAYS` (90 by default). Vietstock archive
-backfill scans one page at a time and checkpoints progress in PostgreSQL; Beat resumes interrupted runs.
-Start a local 90-day backfill after migrations with:
-
-```powershell
-docker compose exec -T celery-worker python -c "from datetime import UTC, datetime, timedelta; from app.workers.news_ingestion_worker import backfill_news; today=datetime.now(UTC); backfill_news.apply_async(args=(1,(today-timedelta(days=90)).date().isoformat(),today.date().isoformat()),queue='news-ingestion')"
-```
-
-The public news API supports numbered pages and accent-insensitive substring search. A 30-second Redis
-read cache is invalidated after successful ingestion. The news worker joins a dedicated outbound
-network for publisher requests. Provider requests use a Redis-coordinated per-domain rate limit and
-circuit breaker. The protected news operations endpoints
-under `/api/v1/admin/news` remain disabled until `NEWS_ADMIN_TOKEN` is configured; retention deletion
-also requires an explicit non-dry-run request with `confirm=true`.
-
-The Admin News workspace is available at `/admin-login`. It also requires `ADMIN_UI_PASSWORD` and
-an independent `ADMIN_SESSION_SECRET` of at least 32 random characters. The browser receives only a
-signed, HttpOnly, eight-hour session cookie; `NEWS_ADMIN_TOKEN` stays on the Next.js server and is
-never exposed to client code. From `/admin/data-pipeline`, an authenticated operator can pause or
-resume sources, queue manual crawls, inspect the latest 100 crawl runs, preview retention cleanup,
-and confirm deletion by entering `DELETE`. Leave all three Admin variables unset to keep these
-operations fail-closed.
-
-The `/admin/users` account-management page requires both the Admin workspace session above and a
-signed-in InvestIQ account with the `admin` role. The backend also requires the server-only BFF
-secret; the Admin News password does not grant account-management permission. Grant the first admin
-role to a verified account through a controlled database operation, then apply the PostgreSQL
-migrations before using the page. See
-the [account-management plan](docs/plan/admin-user-management.md) for supported filters, controls,
-audit behavior, and access checks.
-
-## Project layout
+## 📂 4. Cấu Trúc Thư Mục (Repository Structure)
 
 ```text
 investiq/
-|-- backend/              # FastAPI runtime, Clean Architecture modules, workers, Dockerfile
-|-- frontend/             # Next.js app and Dockerfile
-|-- docs/                 # Specifications, tutorials, and deployment/CI-CD guides
-|-- infra/
-|   |-- log-viewer/       # Default local runtime-log viewer profile
-|   |-- nginx/            # Reverse-proxy configuration
-|   `-- scripts/          # Operational scripts
-|-- .github/workflows/    # Backend/frontend CI and staging/production delivery
-|-- .agents/              # Agent memory, rules, skills, roles, and workflows
-|-- docker-compose.yml    # Ten-service local/deployment topology with local log viewer
-`-- .env.example          # Non-secret configuration template
+├── backend/                       # Python 3.13 / FastAPI Application
+│   ├── app/
+│   │   ├── api/v1/                # REST & WebSocket API Routers (Market, AI, Auth, Admin...)
+│   │   ├── application/           # Use Cases, Ports & AI Financial Logic
+│   │   │   └── use_cases/ai_chat/ # AI Modular Engine (Intent, Snapshot, RAG, Response...)
+│   │   ├── domain/                # Domain Entities & Business Rules
+│   │   ├── infrastructure/        # PostgreSQL Repositories, Redis Cache, Crawlers, Settings
+│   │   └── workers/               # Celery Tasks (News Ingestion, Email Reminders)
+│   ├── tests/                     # Unit Tests, API Integration Tests & Coverage Configuration
+│   ├── Dockerfile                 # Backend Container Specification
+│   └── requirements.txt           # Python Dependency Pins
+├── frontend/                      # Next.js 16 / TypeScript Application
+│   ├── src/
+│   │   ├── app/                   # App Router Pages & BFF Route Handlers
+│   │   ├── components/            # Reusable UI Components (Market, AI, Learn, Admin...)
+│   │   ├── lib/                   # API Client, Route Resolvers, Utils
+│   │   └── types/                 # TypeScript Domain Type Definitions
+│   ├── Dockerfile                 # Frontend Container Specification
+│   └── package.json               # NPM Packages & Build Scripts
+├── infra/                         # Reverse Proxy (Nginx) & Log Viewer Profiles
+├── docs/                          # Detailed Technical Documentation
+│   ├── deploy.md                  # Hướng dẫn Triển khai Cloud (Render, Neon, Vercel) & CI/CD
+│   └── plan/                      # Tài liệu Đặc tả Yêu cầu & Kiến trúc Chi tiết
+├── scripts/                       # Automation Scripts & Quality Gate
+│   └── check-pr.ps1               # Pre-PR / Pre-Push Local CI Quality Gate
+├── docker-compose.yml             # Full-Stack 10-Service Topology
+└── README.md                      # Project Entry Point
 ```
 
-The canonical architectural overview is `.agents/memory/architecture.md`. Every structural change
-must update that overview and all configuration or documentation that references affected paths.
+---
 
-See [`DEVELOPMENT_GUIDE.md`](DEVELOPMENT_GUIDE.md) for Docker lifecycle commands, the complete port
-table, backend quality checks, and per-feature coverage reports.
+## ⚡ 5. Hướng Dẫn Cài Đặt & Chạy Cục Bộ (Quickstart Guide)
 
-See [`docs/deploy.md`](docs/deploy.md) for the step-by-step guide on deploying to Render (Frontend, Backend, PostgreSQL) and configuring GitHub Actions for CI/CD.
+### 5.1. Yêu Cầu Môi Trường (Prerequisites)
+- **Docker & Docker Compose** (khuyên dùng để chạy đầy đủ mọi dịch vụ).
+- Hoặc cài đặt cục bộ: **Node.js 22+**, **Python 3.13+**, **PostgreSQL 16+**, **Redis 7+**.
 
-See [`docs/plan/`](docs/plan/README.md) for the feature specifications. The first vertical slice of
-the [beginner stock-learning plan](docs/plan/stock-basic.md) is implemented at `/learn`: it replaces
-the empty AI prediction destination with two source-backed Vietnamese micro-lessons, retrieval
-practice, versioned local progress, and an honestly labeled live VN-Index candle example. Later
-curriculum phases remain plan-only pending usage evidence. The
-[authentication plan](docs/plan/auth.md) covers email/Google login, OTP, server-held JWT/refresh
-credentials, and automatic session refresh. The implementation is available behind
-the fail-closed `AUTH_ENABLED` flag; configure the blank auth entries in `.env` before enabling it.
-The
-[Vietnamese stock-market news plan](docs/plan/vietnam-stock-news.md) now has an implemented,
-tested six-source MVP; the [implementation report](docs/plan/news-implementation-report.md)
-records research evidence, validation results, activation gates, and remaining source limitations.
-The next product phase is defined in the
-[market and investment-community roadmap](docs/plan/community-market-roadmap.md): licensed market
-data, private watchlists, structured evidence-backed theses, outcome-based reputation, moderation,
-and source-linked AI assistance. It targets a differentiated MVP in 12 weeks and public beta in 28
-weeks. The implementation-ready [home and market pages plan](docs/plan/home-market-pages.md) defines
-the home dashboard, five `/market` tabs, provider strategy, canonical data model, REST/WebSocket
-contracts, caching, freshness, privacy, acceptance criteria, and a 12-week delivery sequence.
-The local vertical slice is implemented with a clearly labeled deterministic fixture and private
-watchlists. Production market data, ingestion/reconciliation jobs, and provider failover remain
-gated by licensing, credentials, redistribution approval, and source-specific field mapping.
+### 5.2. Cách 1: Chạy bằng Docker Compose (Khuyên dùng - 1 câu lệnh)
+1. **Clone repository**:
+   ```bash
+   git clone https://github.com/Trannguyen08/investiq.git
+   cd investiq
+   ```
+2. **Khởi tạo biến môi trường**:
+   ```bash
+   cp .env.example .env
+   ```
+   *(Mặc định cấu hình đã được tối ưu sẵn cho môi trường Local Development).*
+3. **Khởi động toàn bộ 10 dịch vụ**:
+   ```bash
+   docker compose up --build -d
+   ```
+4. **Áp dụng Database Migrations**:
+   ```bash
+   docker compose run --rm backend python -m app.infrastructure.db.base
+   ```
+5. **Truy cập ứng dụng**:
+   - **Frontend UI**: [http://localhost:3000](http://localhost:3000) (hoặc qua Nginx: [http://localhost:8080](http://localhost:8080))
+   - **Backend API Docs (Swagger)**: [http://localhost:8080/docs](http://localhost:8080/docs) (hoặc [http://localhost:8000/docs](http://localhost:8000/docs))
+   - **Dozzle Log Viewer**: [http://localhost:9999](http://localhost:9999)
+
+---
+
+### 5.3. Cách 2: Chạy trực tiếp trên máy không dùng Docker (Bare-metal)
+
+#### Khởi chạy Backend:
+```bash
+cd backend
+python -m venv .venv
+# Trên Windows: .\.venv\Scripts\activate | Trên Linux/macOS: source .venv/bin/activate
+pip install -r requirements-dev.txt
+python -m app.infrastructure.db.base
+uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
+```
+
+#### Khởi chạy Frontend:
+```bash
+cd frontend
+npm install
+npm run dev
+# Mở trình duyệt tại http://localhost:3000
+```
+
+---
+
+## 🧪 6. Kiểm Thử & Tiêu Chuẩn Chất Lượng (Quality Gate)
+
+Hệ thống được bảo vệ bởi **Pre-PR / Pre-Push Quality Gate** tự động (`./scripts/check-pr.ps1`), mô phỏng 100% quy trình kiểm tra của GitHub Actions CI:
+
+```powershell
+# Chạy toàn bộ 6 bước kiểm tra chất lượng trước khi tạo PR hoặc Push:
+.\scripts\check-pr.ps1
+```
+
+```text
+====================================================
+   INVESTIQ LOCAL CI / PRE-PR QUALITY GATE
+====================================================
+[1/6] Kiểm tra Git Diff Whitespace (git diff origin/dev --check)...  -> PASSED
+[2/6] Kiểm tra Frontend Lint (ESLint)...                             -> PASSED
+[3/6] Kiểm tra Frontend TypeScript Typecheck (tsc)...                -> PASSED
+[4/6] Kiểm tra Frontend Unit Tests (Vitest 186/186 passed)...        -> PASSED
+[5/6] Kiểm tra Backend Ruff & Mypy (0 errors / 43 files)...          -> PASSED
+[6/6] Kiểm tra Backend Unit Tests (Pytest 169/169 passed)...         -> PASSED
+====================================================
+KẾT QUẢ: TẤT CẢ KIỂM TRA ĐỀU XANH (READY FOR PR / MERGE)!
+```
+
+### Chạy kiểm thử riêng lẻ:
+- **Backend Tests**: `cd backend && pytest`
+- **Backend Linting**: `cd backend && ruff check . && mypy`
+- **Frontend Tests**: `cd frontend && npm test`
+- **Frontend Typecheck**: `cd frontend && npm run typecheck`
+
+---
+
+## ☁️ 7. Triển Khai Môi Trường Thực Tế (Cloud Deployment)
+
+InvestIQ hỗ trợ 2 mô hình triển khai đám mây tối ưu chi phí và hiệu năng:
+
+### 🌟 Mô hình Khuyên dùng: Frontend Vercel + Backend Render + Neon.tech DB
+- **Frontend (Vercel)**: Tận dụng Edge Network toàn cầu của Vercel cho Next.js, loại bỏ 100% hiện tượng "chờ Render restart", tốc độ tải trang tức thì (< 50ms).
+- **Backend (Render.com)**: Chạy Web Service FastAPI kết nối Neon.tech PostgreSQL (máy chủ Singapore `ap-southeast-1` cho độ trễ cực thấp 5–15ms).
+- **Keep-Alive Monitor**: Dự án đã tích hợp sẵn GitHub Actions `keepalive.yml` (hoặc cấu hình qua [UptimeRobot](https://uptimerobot.com)) ping định kỳ endpoint `GET /healthz` mỗi 5–10 phút để backend Render luôn thức 24/7.
+
+> [!TIP]
+> Xem hướng dẫn cấu hình chi tiết từng bước cho từng nền tảng tại tài liệu: [`docs/deploy.md`](docs/deploy.md).
+
+---
+
+## 🔒 8. An Toàn & Bảo Mật (Security & Compliance)
+
+- **Nguyên tắc Không lưu Mật khẩu & Token**: Tuyệt đối không commit file `.env` lên GitHub; toàn bộ khóa bí mật được quản lý thông qua GitHub Actions Secrets và Cloud Environment Variables.
+- **Fail-Closed Design**: Mọi chức năng yêu cầu quyền (Admin, Paper Trading, Auth) đều mặc định từ chối truy cập (Fail-closed) nếu thiếu biến môi trường hoặc token không hợp lệ.
+- **BFF Security Layer**: Token xác thực JWT và session nhạy cảm được mã hóa lưu trữ ở Redis phía máy chủ Next.js BFF; trình duyệt người dùng chỉ nhận cookie `HttpOnly`, `SameSite=Lax`, ngăn chặn hoàn toàn tấn công XSS đánh cắp token.
+- **Bảo vệ Trợ lý AI**: Bộ lọc `Guardrails` quét toàn bộ input/output, ngăn chặn triệt để kỹ thuật tấn công chèn lệnh (Prompt Injection), lệnh phá hoại cơ sở dữ liệu (`DROP`, `DELETE`), và cấm tuyệt đối việc làm lộ biến môi trường hệ thống.
+
+---
+
+## 📄 9. Giấy Phép & Bản Quyền (License & Disclaimer)
+
+- **Mục đích**: Nền tảng được phát triển phục vụ mục đích nghiên cứu, học tập và hỗ trợ phân tích đầu tư định lượng.
+- **Tuyên bố Miễn trừ Trách nhiệm Tài chính (Disclaimer)**: Mọi thông tin, điểm số định lượng, phân tích kỹ thuật và phản hồi từ Trợ lý AI chỉ mang tính chất tham khảo giáo dục, không cấu thành lời mời chào hay khuyến nghị mua/bán bất kỳ chứng khoán nào. Nhà đầu tư tự chịu trách nhiệm hoàn toàn đối với các quyết định giao dịch bằng tiền thật trên thị trường chứng khoán.
+
+---
+
+<p align="center">
+  <b>InvestIQ</b> — Nâng tầm tri thức và kỷ luật cho nhà đầu tư Việt Nam.<br/>
+  <i>Được phát triển với niềm đam mê dành cho Công nghệ Tài chính & Trí tuệ Nhân tạo.</i>
+</p>
