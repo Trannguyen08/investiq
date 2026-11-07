@@ -5,6 +5,7 @@ from __future__ import annotations
 import asyncio
 import contextlib
 import logging
+import os
 from collections.abc import AsyncIterator, Awaitable
 from contextlib import asynccontextmanager
 from typing import Any
@@ -208,15 +209,21 @@ async def lifespan(_: FastAPI) -> AsyncIterator[None]:
         close_pool()
 
 
+_raw_origins = os.getenv("BACKEND_CORS_ORIGINS", "")
+_extra_origins = [o.strip() for o in _raw_origins.split(",") if o.strip()]
+_cors_origins = [
+    "http://localhost:3000",
+    "http://127.0.0.1:3000",
+    "http://localhost:8000",
+    "http://127.0.0.1:8000",
+    *_extra_origins,
+]
+
 app = FastAPI(title=settings.app_name, version="0.1.0", lifespan=lifespan)
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=[
-        "http://localhost:3000",
-        "http://127.0.0.1:3000",
-        "http://localhost:8000",
-        "http://127.0.0.1:8000",
-    ],
+    allow_origins=_cors_origins,
+    allow_origin_regex=r"^https://.*(vercel\.app|onrender\.com)$",
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],

@@ -1,5 +1,24 @@
 # Current Task
 
+## Project Final Audit, Handover Checklist & Deployment Hardening - 2026-11-07 (completed)
+- **User Request**:
+  - Xem xét toàn bộ dự án còn cần hoàn thiện điều gì không để hoàn thiện nốt và bàn giao / kết thúc dự án ("xem project cần hoàn thiện cái gì k để hoàn thiện nốt rồi end project").
+- **Branch**: `fix/AI`
+- **Audit Results**:
+  1. **Core Feature Completeness**:
+     - 6-Source News Aggregator (`/news`): Đầy đủ sentiment, crawler operations, extraction review.
+     - Live & Historical Market Engine (`/market`, `/market/stocks/[symbol]`, `/search`): VN30, nến OHLCV, depth sổ lệnh, khớp lệnh intraday, treemap contrast cao, sector heatmap, sự kiện, cổ tức phân trang có nguồn chính thức.
+     - Education & Readiness Assessment (`/learn`, `/learn/readiness`, `/learn/candlestick-arena`): Giáo trình phân cấp, 10 câu hỏi tâm lý/rủi ro, điểm kỷ luật paper trading, báo cáo chẩn đoán sẵn sàng đầu tư.
+     - Paper Trading & AI Portfolio Advisor (`/portfolio`): 100M VND vốn ảo, khớp lệnh thị trường thực tế, phân bổ P&L, báo cáo phân tích danh mục AI tự động gửi email.
+     - Community Thesis Arena (`/community`): Đăng tải luận điểm đầu tư, mục tiêu giá, cắt lỗ.
+     - Quantitative AI Financial Assistant (`/ai-assistant` & drawer): 5-factor radar score card, đối đầu đa tài sản (Vàng, Tiết kiệm), Altman Z-score & cờ đỏ BCTC, RAG kiến thức nội bộ, tin tức, lịch cổ tức, sự kiện sắp tới, cổ phiếu sôi nổi VN30, hồ sơ 22 doanh nhân & lãnh đạo kèm tài sản/sự nghiệp, hệ sinh thái doanh nghiệp & chuỗi giá trị, security guardrails, shared cache, observability metrics.
+     - Enterprise Admin Console (`/admin`): JWT role-based security (`require_admin_user`), quản lý người dùng, luận điểm, danh mục, khóa học, bài đánh giá, crawler tin tức, audit logs.
+  2. **Deployment Hardening & Cloud Resiliency**:
+     - `backend/app/main.py`: Nâng cấp `CORSMiddleware` hỗ trợ linh hoạt cả `https://*.vercel.app`, `https://*.onrender.com` qua `allow_origin_regex` và biến môi trường `BACKEND_CORS_ORIGINS`.
+     - `docs/deploy.md`: Bổ sung Mục 9 hướng dẫn triển khai Frontend lên Vercel (Edge CDN, 0ms cold-start) kết hợp Backend Render và Neon PostgreSQL.
+- **Verification**:
+  - Full Quality Gate `./scripts/check-pr.ps1`: 6/6 passed 100% (Git diff whitespace, Frontend Lint, Frontend Typecheck, Frontend Vitest 186/186, Backend Ruff & Mypy, Backend Pytest 169/169).
+
 ## AI Financial Assistant: Business Leaders, Corporate Ecosystems & Entrepreneur Career Resolution - 2026-11-07 (completed)
 - **User Request**:
   1. Chuyển nhánh `fix/AI`, cho trợ lý AI trả lời các câu hỏi về chứng khoán **bao gồm thông tin doanh nhân**:
