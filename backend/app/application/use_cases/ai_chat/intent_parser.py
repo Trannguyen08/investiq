@@ -8,6 +8,9 @@ from dataclasses import dataclass
 from typing import Any, Literal
 
 from app.application.use_cases.ai_chat.guardrails import fold_text
+from app.application.use_cases.ai_chat.ticker_resolver import (
+    extract_tickers_with_typo_handling,
+)
 
 AiIntent = Literal[
     "blocked",
@@ -80,6 +83,7 @@ class DetectedIntent:
     ecosystem_id: str | None = None
     comparison_mode: str | None = None
     comparison_exceeded_limit: bool = False
+    invalid_tickers: tuple[str, ...] = ()
 
 
 # Map of known entrepreneur and market leader aliases: (aliases, leader_id, leader_name, default_symbols)
@@ -527,6 +531,15 @@ def detect_intent(user_message: str) -> DetectedIntent:
     """Analyze user message and classify primary financial/market intent."""
     norm_message = normalize_user_input(user_message)
     tickers = _extract_tickers(norm_message)
+    valid_resolved, invalid_resolved = extract_tickers_with_typo_handling(
+        norm_message, _NON_TICKER_WORDS
+    )
+    for sym in valid_resolved:
+        if sym not in tickers:
+            tickers.append(sym)
+    for sym in invalid_resolved:
+        if sym not in tickers:
+            tickers.append(sym)
     query_lower = norm_message.lower()
     query_folded = fold_text(norm_message)
 
@@ -892,6 +905,10 @@ def detect_intent(user_message: str) -> DetectedIntent:
         )
     )
 
+    active_invalid = (
+        () if (is_leader or is_news or is_market_general) else tuple(invalid_resolved)
+    )
+
     return DetectedIntent(
         normalized_message=norm_message,
         query_lower=query_lower,
@@ -911,4 +928,5 @@ def detect_intent(user_message: str) -> DetectedIntent:
         ecosystem_id=ecosystem_id,
         comparison_mode=comparison_mode,
         comparison_exceeded_limit=comparison_exceeded_limit,
+        invalid_tickers=active_invalid,
     )

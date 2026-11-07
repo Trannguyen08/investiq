@@ -1,5 +1,32 @@
 # Current Task
 
+## AI Chatbox & Header Search Closest-Ticker Typo Suggestions - 2026-11-07 (completed)
+- **User Request**:
+  1. Nếu người dùng nhập sai mã cổ phiếu trong chatbox (ví dụ: `"so sánh hbg và hpb"`, `"so sánh hbg và vcb"`, `"phân tích hbg"`, `"định giá vicc"`, `"cổ tức mb"`), hệ thống phải nhận biết mã cổ phiếu bị viết sai và gợi ý các mã cổ phiếu hợp lệ gần đúng nhất (kèm tên doanh nghiệp, ngành nghề và các nút thao tác nhanh `Suggested Actions`).
+  2. Áp dụng nhận biết mã cổ phiếu gần đúng với mã viết sai cho khung tìm kiếm trên header (`HeaderSearch`) và trang kết quả tìm kiếm (`/search`).
+  3. Đảm bảo project chạy ổn định ở local (`http://127.0.0.1:8000` và `http://localhost:3000`).
+- **Branch**: `fix/AI`
+- **Changes**:
+  - `backend/app/application/use_cases/ai_chat/ticker_resolver.py`:
+    - Xây dựng module nhận diện và gợi ý mã cổ phiếu gần đúng dựa trên danh mục 2,059 mã cổ phiếu (`stock_sectors.json`), từ điển thương hiệu/doanh nghiệp (`_BRAND_TO_TICKER`), và tên đầy đủ của hơn 85 doanh nghiệp đầu ngành (`_TOP_COMPANY_NAMES`).
+    - Thuật toán `find_closest_tickers` sử dụng khoảng cách chỉnh sửa Levenshtein (`dist <= 1`, độ dài token `2..4`) kết hợp trọng số ưu tiên: rổ `VN30` (+25), cổ phiếu thanh khoản lớn `MAJOR` (+15), lỗi gõ nhầm âm vị tiếng Việt `B`/`P` (+12, ví dụ `HBG` -> `HPG`), khớp ký tự đầu (+8), và bao hàm chuỗi con (`VICC` -> `VIC`, `MB` -> `MBB`, `TCBB` -> `TCB`, +15).
+    - Hàm `extract_tickers_with_typo_handling` bóc tách chính xác `(valid_tickers, invalid_tickers)` mà không bắt nhầm các từ tiếng Việt phổ thông.
+  - `backend/app/application/use_cases/ai_chat/intent_parser.py` & `ai_financial_service.py`:
+    - Bổ sung `invalid_tickers: tuple[str, ...] = ()` vào `DetectedIntent` và truyền xuyên suốt pipeline `AiFinancialService`.
+    - Bỏ qua RAG/external search khi phát hiện người dùng gõ sai mã cổ phiếu để phản hồi trực tiếp danh sách gợi ý mã gần đúng; không phạt điểm `Eval` đối với mã gõ sai.
+  - `backend/app/application/use_cases/ai_chat/response_builder.py`:
+    - Thêm `_build_typo_suggestion_section` cho các câu hỏi phân tích đơn lẻ, định giá, cổ tức hoặc BCTC khi mã nhập vào bị sai.
+    - Nâng cấp `_build_comparison_section` xử lý thông minh khi 1 hoặc cả 2 mã so sánh bị gõ sai hoặc chưa có dữ liệu giao dịch (ví dụ `"so sánh hbg và hpb"`, `"so sánh hbg và vcb"`), hiển thị gợi ý mã gần đúng kèm các nút bấm thao tác nhanh (`So sánh HPG và VCB`, `So sánh HPG và MBB`, `Phân tích HPG`).
+  - `frontend/src/lib/ticker-matcher.ts`:
+    - Xây dựng bộ khớp mã cổ phiếu và gợi ý lỗi gõ sai (`matchStockQuery`) cho Frontend, hỗ trợ tìm kiếm theo mã, tên doanh nghiệp tiếng Việt không dấu, và gợi ý Levenshtein (`isTypo: true`, `closestMatches`) khi nhập sai mã.
+  - `frontend/src/components/layout/header-search.tsx`:
+    - Nâng cấp thanh tìm kiếm trên Header với dropdown gợi ý trực tiếp khi gõ (`query.trim().length >= 2`), điều hướng bàn phím (`ArrowUp`, `ArrowDown`, `Enter`, `Escape`), và hiển thị danh sách mã cổ phiếu gần đúng khi người dùng gõ sai mã.
+  - `frontend/src/app/search-api/route.ts` & `frontend/src/app/(user)/search/page.tsx`:
+    - Trả về `suggestions: closestMatches` từ `/search-api` và hiển thị các thẻ gợi ý mã cổ phiếu gần đúng trên trang `/search`.
+- **Verification**:
+  - `backend/tests/unit/ai_chat/test_ai_chat.py`: Thêm `test_ai_typo_ticker_suggestions` (33/33 passed 100%).
+  - `frontend/src/lib/ticker-matcher.test.ts`: Thêm 5 unit tests kiểm tra khớp chính xác và gợi ý mã viết sai.
+
 ## Interactive Stock Comparison in Chatbox & Market Page Growth Comparison Block - 2026-11-07 (completed)
 - **User Request**:
   1. Thêm xử lý yêu cầu so sánh 2 cổ phiếu trong chatbox:

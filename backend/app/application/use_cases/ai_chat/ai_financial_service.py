@@ -166,6 +166,7 @@ class AiFinancialService:
         with trace.step("intent_detection") as i_step:
             parsed_intent = detect_intent(user_message)
             tickers = parsed_intent.tickers
+            invalid_tickers = list(parsed_intent.invalid_tickers)
             comparison_mode = parsed_intent.comparison_mode or "ask"
             comparison_exceeded_limit = parsed_intent.comparison_exceeded_limit
             is_leader = parsed_intent.is_leader
@@ -182,11 +183,8 @@ class AiFinancialService:
             is_market_general = parsed_intent.is_market_general
 
             # Maintain recent comparison tickers for follow-up criteria prompts
-            if is_comparison:
-                if not tickers and self._recent_comparison_tickers:
-                    tickers = list(self._recent_comparison_tickers)
-                elif tickers and len(tickers) >= 2:
-                    self._recent_comparison_tickers = tickers[:3]
+            if is_comparison and not tickers and self._recent_comparison_tickers:
+                tickers = list(self._recent_comparison_tickers)
 
             i_step.mark(
                 "ok",
@@ -241,7 +239,7 @@ class AiFinancialService:
                         dividend_events = crawler.get_symbol_dividends(target_sym)
                         if inst:
                             stock_data[target_sym] = {"instrument": inst}
-                        elif not dividend_events:
+                        elif not dividend_events and target_sym not in invalid_tickers:
                             # Token is not a valid listed instrument or dividend symbol; fall back to market calendar
                             tickers = []
                     if not tickers:
@@ -325,6 +323,8 @@ class AiFinancialService:
                             }
                     except Exception as exc:
                         logger.warning("Failed to fetch internal data for %s: %s", ticker, exc)
+                if is_comparison and len(stock_data) >= 2:
+                    self._recent_comparison_tickers = list(stock_data.keys())[:3]
                 d_step.mark("ok", passed=True, note=f"resolved={len(stock_data)}")
 
         # Step 5: Knowledge retrieval (curated internal educational content & glossary)
@@ -333,6 +333,7 @@ class AiFinancialService:
             if (
                 self._knowledge
                 and not stock_data
+                and not invalid_tickers
                 and not is_market_general
                 and not is_news
                 and not is_dividend
@@ -350,7 +351,7 @@ class AiFinancialService:
                 search_query = f"doanh nhân {leader_name or user_message} tiểu sử sự nghiệp"
                 external_snippets = await self._search_external_info(search_query)
                 s_step.mark("ok", passed=True, note=f"leader_snippets={len(external_snippets)}")
-            elif is_dividend and not dividend_events and not market_events:
+            elif is_dividend and not dividend_events and not market_events and not invalid_tickers:
                 search_query = (
                     f"lịch chia cổ tức {tickers[0]} mới nhất"
                     if tickers
@@ -358,7 +359,7 @@ class AiFinancialService:
                 )
                 external_snippets = await self._search_external_info(search_query)
                 s_step.mark("ok", passed=True, note=f"dividend_snippets={len(external_snippets)}")
-            elif is_news and not news_articles:
+            elif is_news and not news_articles and not invalid_tickers:
                 search_query = (
                     f"tin tức cổ phiếu {tickers[0]} mới nhất"
                     if tickers
@@ -368,6 +369,7 @@ class AiFinancialService:
                 s_step.mark("ok", passed=True, note=f"news_snippets={len(external_snippets)}")
             elif (
                 not stock_data
+                and not invalid_tickers
                 and not is_market_general
                 and not is_news
                 and not is_dividend
@@ -389,7 +391,7 @@ class AiFinancialService:
             intent = "news"
         elif is_comparison or len(stock_data) >= 2:
             intent = "comparison"
-        elif len(stock_data) == 1:
+        elif len(stock_data) == 1 or invalid_tickers:
             intent = "stock_analysis"
         elif is_market_general:
             intent = "market_overview"
@@ -423,6 +425,7 @@ class AiFinancialService:
                 ecosystem_id=ecosystem_id,
                 comparison_mode=comparison_mode,
                 exceeded_limit=comparison_exceeded_limit,
+                invalid_tickers=invalid_tickers,
             )
             gen_step.mark("ok", passed=True, note=f"intent={intent}")
 
@@ -443,7 +446,7 @@ class AiFinancialService:
             evaluation = evaluate_response(
                 content=content_safe,
                 blocked=False,
-                requested_tickers=tickers,
+                requested_tickers=[t for t in tickers if t in stock_data],
                 resolved_tickers=list(stock_data.keys()),
                 external_urls=external_urls,
                 redactions=redactions,
@@ -519,6 +522,7 @@ class AiFinancialService:
         ecosystem_id: str | None = None,
         comparison_mode: str = "ask",
         exceeded_limit: bool = False,
+        invalid_tickers: list[str] | None = None,
     ) -> dict[str, Any]:
         """Synthesize structured response and widgets via ``response_builder``."""
         return generate_structured_response(
@@ -546,4 +550,5 @@ class AiFinancialService:
             ecosystem_id=ecosystem_id,
             comparison_mode=comparison_mode,
             exceeded_limit=exceeded_limit,
+            invalid_tickers=invalid_tickers or [],
         )

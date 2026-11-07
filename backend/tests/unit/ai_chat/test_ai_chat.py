@@ -281,7 +281,9 @@ async def test_external_search_mandatory_citation() -> None:
         }
     ]
 
-    with patch.object(ai_service, "_search_external_info", new=AsyncMock(return_value=fake_snippets)):
+    with patch.object(
+        ai_service, "_search_external_info", new=AsyncMock(return_value=fake_snippets)
+    ):
         res = await ai_service.process_chat("Dự báo thời tiết và tác động nông sản quốc tế")
         assert len(res["sources"]) >= 1
         assert res["sources"][0]["kind"] == "external"
@@ -485,7 +487,9 @@ async def test_ai_dividend_deduplicates_sources() -> None:
             "source_url": "https://s.cafef.vn/lich-su-kien/MBB/sub.chn",
         },
     ]
-    with patch("app.application.use_cases.ai_chat.ai_financial_service.get_dividend_crawler") as mock_crawler:
+    with patch(
+        "app.application.use_cases.ai_chat.ai_financial_service.get_dividend_crawler"
+    ) as mock_crawler:
         mock_crawler.return_value.get_symbol_dividends.return_value = fake_events
         result = await ai_service.process_chat("cho tao lịch chia cổ tức của mbb")
 
@@ -548,7 +552,10 @@ async def test_ai_leader_pham_nhat_vuong() -> None:
     assert "Tập đoàn Vingroup" in result["content"]
     assert "Chào bạn, tôi là InvestIQ Financial Assistant" not in result["content"]
     assert any("/market/people" in s.get("url", "") for s in result["sources"])
-    assert any("VIC" in a.get("label", "") or "VHM" in a.get("label", "") for a in result["suggested_actions"])
+    assert any(
+        "VIC" in a.get("label", "") or "VHM" in a.get("label", "")
+        for a in result["suggested_actions"]
+    )
 
 
 @pytest.mark.anyio
@@ -616,3 +623,38 @@ async def test_ai_company_and_career_queries() -> None:
     res_career = await ai_service.process_chat("sự nghiệp phạm nhật vượng")
     assert "Phạm Nhật Vượng" in res_career["content"]
     assert "Tiểu sử & Dấu ấn sự nghiệp" in res_career["content"]
+
+
+@pytest.mark.anyio
+async def test_ai_typo_ticker_suggestions() -> None:
+    provider = FixtureMarketProvider()
+    service = MarketService(provider)
+    ai_service = AiFinancialService(market_service=service)
+
+    # 1. Comparison with mistyped tickers ("so sánh hbg và hpb")
+    res_comp_typo = await ai_service.process_chat("so sánh hbg và hpb")
+    assert "HBG" in res_comp_typo["content"]
+    assert "Gợi ý các mã cổ phiếu gần đúng" in res_comp_typo["content"]
+    assert "HPG" in res_comp_typo["content"]
+    assert any("HPG" in a.get("prompt", "") for a in res_comp_typo["suggested_actions"])
+
+    # 2. Comparison with 1 mistyped and 1 valid ticker ("so sánh hbg và vcb")
+    res_comp_partial = await ai_service.process_chat("so sánh hbg và vcb")
+    assert "HBG" in res_comp_partial["content"]
+    assert "HPG" in res_comp_partial["content"]
+    assert "VCB" in res_comp_partial["content"]
+    assert any(
+        a.get("prompt") == "So sánh HPG và VCB" for a in res_comp_partial["suggested_actions"]
+    )
+
+    # 3. Single stock analysis with mistyped ticker ("phân tích hbg" & "định giá vicc")
+    res_single_typo = await ai_service.process_chat("phân tích hbg")
+    assert "Không tìm thấy mã cổ phiếu **HBG**" in res_single_typo["content"]
+    assert "HPG" in res_single_typo["content"]
+    assert "Tập đoàn Hòa Phát" in res_single_typo["content"]
+    assert any(a.get("prompt") == "Phân tích HPG" for a in res_single_typo["suggested_actions"])
+
+    res_vicc = await ai_service.process_chat("định giá vicc")
+    assert "VICC" in res_vicc["content"]
+    assert "VIC" in res_vicc["content"]
+    assert "Tập đoàn Vingroup" in res_vicc["content"]

@@ -14,6 +14,7 @@ from app.application.use_cases.ai_chat.intent_parser import (
 )
 from app.application.use_cases.ai_chat.knowledge_base import KnowledgeHit
 from app.application.use_cases.ai_chat.market_snapshot import build_daily_market_snapshot
+from app.application.use_cases.ai_chat.ticker_resolver import find_closest_tickers
 
 logger = logging.getLogger(__name__)
 
@@ -816,6 +817,96 @@ def _build_leader_section(
     )
 
 
+def _build_typo_suggestion_section(
+    *,
+    invalid_tickers: list[str],
+    is_dividend: bool,
+    is_forensics: bool,
+    text_parts: list[str],
+    sources: list[dict[str, str]],
+    suggested_actions: list[dict[str, Any]],
+) -> None:
+    """Synthesize helpful closest-match suggestions when user enters an unrecognized stock ticker."""
+    bad_list_str = ", ".join(f"**{t}**" for t in invalid_tickers[:3])
+    text_parts.append(
+        f"Không tìm thấy mã cổ phiếu {bad_list_str} trên các sàn chứng khoán Việt Nam (HOSE, HNX, UPCoM)."
+    )
+
+    all_suggestions: list[Any] = []
+    seen_syms: set[str] = set()
+    suggestion_lines: list[str] = []
+
+    for bad_sym in invalid_tickers[:3]:
+        matches = find_closest_tickers(bad_sym, max_results=3, allow_valid=True)
+        for m in matches:
+            if m.symbol not in seen_syms:
+                seen_syms.add(m.symbol)
+                all_suggestions.append(m)
+                suggestion_lines.append(
+                    f"- **{m.symbol}** — {m.name} (Ngành: {m.sector})"
+                )
+
+    if suggestion_lines:
+        text_parts.append(
+            "Có phải bạn đang tìm kiếm một trong các mã cổ phiếu gần đúng sau:\n"
+            + "\n".join(suggestion_lines[:4])
+        )
+        text_parts.append(
+            "Vui lòng chọn mã gợi ý bên dưới hoặc nhập lại mã cổ phiếu chính xác để InvestIQ phân tích."
+        )
+
+        for m in all_suggestions[:3]:
+            sources.append(
+                {
+                    "kind": "internal",
+                    "title": f"Bảng giá thị trường InvestIQ: {m.symbol} ({m.name})",
+                    "url": f"/market/stocks/{m.symbol}",
+                }
+            )
+            if is_dividend:
+                suggested_actions.append(
+                    {
+                        "label": f"Lịch chia cổ tức {m.symbol}",
+                        "action_type": "SEND_PROMPT",
+                        "prompt": f"Lịch chia cổ tức {m.symbol}",
+                    }
+                )
+            elif is_forensics:
+                suggested_actions.append(
+                    {
+                        "label": f"Kiểm tra rủi ro BCTC {m.symbol}",
+                        "action_type": "SEND_PROMPT",
+                        "prompt": f"Kiểm tra BCTC {m.symbol}",
+                    }
+                )
+            else:
+                suggested_actions.append(
+                    {
+                        "label": f"Phân tích {m.symbol} ({m.name})",
+                        "action_type": "SEND_PROMPT",
+                        "prompt": f"Phân tích {m.symbol}",
+                    }
+                )
+    else:
+        text_parts.append(
+            "Vui lòng kiểm tra lại mã chứng khoán (gồm 3 ký tự niêm yết trên HOSE, HNX hoặc UPCoM, ví dụ: HPG, VCB, FPT)."
+        )
+        suggested_actions.extend(
+            [
+                {
+                    "label": "Phân tích cổ phiếu HPG",
+                    "action_type": "SEND_PROMPT",
+                    "prompt": "Phân tích HPG",
+                },
+                {
+                    "label": "So sánh VCB và MBB",
+                    "action_type": "SEND_PROMPT",
+                    "prompt": "So sánh VCB và MBB",
+                },
+            ]
+        )
+
+
 def _build_comparison_section(
     *,
     user_message: str,
@@ -827,13 +918,132 @@ def _build_comparison_section(
     suggested_actions: list[dict[str, Any]],
     comparison_mode: str = "ask",
     exceeded_limit: bool = False,
+    invalid_tickers: list[str] | None = None,
 ) -> None:
     del user_message  # Unused directly in synthesis
     active_tickers = [t for t in (tickers or list(stock_data.keys()))[:3] if t in stock_data]
     if not active_tickers:
         active_tickers = list(stock_data.keys())[:3]
 
+    unresolved: list[str] = []
+    for t in tickers:
+        if t not in stock_data and t not in unresolved:
+            unresolved.append(t)
+    for t in invalid_tickers or []:
+        if t not in stock_data and t not in unresolved:
+            unresolved.append(t)
+
     if len(active_tickers) < 2:
+        if unresolved:
+            bad_str = ", ".join(f"**{t}**" for t in unresolved[:3])
+            text_parts.append(
+                f"Mã cổ phiếu {bad_str} không tồn tại hoặc chưa có dữ liệu giao dịch trên các sàn chứng khoán Việt Nam (HOSE, HNX, UPCoM)."
+            )
+
+            suggestion_blocks: list[str] = []
+            top_per_bad: list[str] = []
+            all_suggested_objs: list[Any] = []
+
+            for bad_sym in unresolved[:3]:
+                matches = find_closest_tickers(bad_sym, max_results=3, allow_valid=True)
+                filtered = [m for m in matches if m.symbol not in active_tickers]
+                if filtered:
+                    for cand in filtered:
+                        if cand.symbol not in top_per_bad:
+                            top_per_bad.append(cand.symbol)
+                            break
+                    for m in filtered:
+                        if all(x.symbol != m.symbol for x in all_suggested_objs):
+                            all_suggested_objs.append(m)
+                    items_desc = ", ".join(f"**{m.symbol}** ({m.name})" for m in filtered[:3])
+                    suggestion_blocks.append(f"- Gần đúng với **{bad_sym}**: {items_desc}")
+
+            if len(active_tickers) == 1:
+                valid_sym = active_tickers[0]
+                valid_alts = [
+                    m
+                    for m in find_closest_tickers(valid_sym, max_results=3, allow_valid=True)
+                    if m.symbol != valid_sym
+                ]
+                if valid_alts and valid_sym not in ("HPG", "VCB", "FPT", "VIC", "VHM", "MBB", "TCB", "SSI", "VNM", "MWG", "ACB", "STB"):
+                    alt_desc = ", ".join(f"**{m.symbol}** ({m.name})" for m in valid_alts[:3])
+                    suggestion_blocks.append(
+                        f"- Nếu **{valid_sym}** cũng là mã nhập nhầm, gợi ý gần đúng: {alt_desc}"
+                    )
+
+            if suggestion_blocks:
+                text_parts.append("Gợi ý các mã cổ phiếu gần đúng:\n" + "\n".join(suggestion_blocks))
+
+            if len(active_tickers) == 1:
+                valid_sym = active_tickers[0]
+                if all_suggested_objs:
+                    best_sym = all_suggested_objs[0].symbol
+                    text_parts.append(
+                        f"Bạn đã chọn mã hợp lệ **{valid_sym}**. Có phải bạn muốn so sánh giữa **{best_sym}** và **{valid_sym}** không?"
+                    )
+                    for m in all_suggested_objs[:2]:
+                        suggested_actions.append(
+                            {
+                                "label": f"So sánh {m.symbol} và {valid_sym}",
+                                "action_type": "SEND_PROMPT",
+                                "prompt": f"So sánh {m.symbol} và {valid_sym}",
+                            }
+                        )
+                    suggested_actions.append(
+                        {
+                            "label": f"Phân tích {best_sym}",
+                            "action_type": "SEND_PROMPT",
+                            "prompt": f"Phân tích {best_sym}",
+                        }
+                    )
+                else:
+                    text_parts.append(
+                        f"Bạn đã chọn mã **{valid_sym}**. Vui lòng cung cấp thêm ít nhất 1 mã cổ phiếu hợp lệ nữa để đối chiếu."
+                    )
+                sources.append(
+                    {
+                        "kind": "internal",
+                        "title": f"Bảng giá thị trường InvestIQ: {valid_sym}",
+                        "url": f"/market/stocks/{valid_sym}",
+                    }
+                )
+            else:
+                # 0 valid tickers, 1+ unresolved typos
+                pair_candidates: list[str] = list(top_per_bad)
+                for m in all_suggested_objs:
+                    if m.symbol not in pair_candidates:
+                        pair_candidates.append(m.symbol)
+                if len(pair_candidates) >= 2:
+                    s1, s2 = pair_candidates[0], pair_candidates[1]
+                    text_parts.append(
+                        f"Có phải bạn muốn so sánh giữa **{s1}** và **{s2}** không?"
+                    )
+                    suggested_actions.append(
+                        {
+                            "label": f"So sánh {s1} và {s2}",
+                            "action_type": "SEND_PROMPT",
+                            "prompt": f"So sánh {s1} và {s2}",
+                        }
+                    )
+                for m in all_suggested_objs[:2]:
+                    suggested_actions.append(
+                        {
+                            "label": f"Phân tích {m.symbol} ({m.name})",
+                            "action_type": "SEND_PROMPT",
+                            "prompt": f"Phân tích {m.symbol}",
+                        }
+                    )
+
+            for m in all_suggested_objs[:2]:
+                sources.append(
+                    {
+                        "kind": "internal",
+                        "title": f"Bảng giá thị trường InvestIQ: {m.symbol}",
+                        "url": f"/market/stocks/{m.symbol}",
+                    }
+                )
+            return
+
         if len(active_tickers) == 1:
             sym = active_tickers[0]
             text_parts.append(
@@ -846,6 +1056,17 @@ def _build_comparison_section(
                 "(Ví dụ: 'So sánh VCB và HPG', 'So sánh FPT, MWG và VNM')."
             )
         return
+
+    if unresolved:
+        bad_notes: list[str] = []
+        for bad_sym in unresolved[:2]:
+            matches = find_closest_tickers(bad_sym, max_results=2, allow_valid=True)
+            hint = f" (gợi ý gần đúng: {', '.join(m.symbol for m in matches)})" if matches else ""
+            bad_notes.append(f"**{bad_sym}**{hint}")
+        text_parts.append(
+            f"> [!NOTE] Mã {', '.join(bad_notes)} không tồn tại trên sàn niêm yết. "
+            f"Hệ thống tiến hành đối chiếu các mã hợp lệ: {', '.join(active_tickers)}.\n"
+        )
 
     # Add limit notice if user asked for > 3 stocks
     if exceeded_limit:
@@ -1639,6 +1860,7 @@ def generate_structured_response(
     ecosystem_id: str | None = None,
     comparison_mode: str = "ask",
     exceeded_limit: bool = False,
+    invalid_tickers: list[str] | None = None,
 ) -> dict[str, Any]:
     """Synthesize in-depth analysis and format rich interactive widgets."""
     del is_gold_bank  # Kept in signature for compatibility
@@ -1646,6 +1868,7 @@ def generate_structured_response(
     suggested_actions: list[dict[str, Any]] = []
     text_parts: list[str] = []
     sources: list[dict[str, str]] = []
+    bad_tickers = list(invalid_tickers or [])
 
     if is_leader:
         _build_leader_section(
@@ -1665,16 +1888,26 @@ def generate_structured_response(
             suggested_actions=suggested_actions,
         )
     elif is_dividend:
-        _build_dividend_and_events_section(
-            user_message=user_message,
-            tickers=tickers,
-            stock_data=stock_data,
-            dividend_events=dividend_events,
-            market_events=market_events,
-            text_parts=text_parts,
-            sources=sources,
-            suggested_actions=suggested_actions,
-        )
+        if bad_tickers and not stock_data and not dividend_events:
+            _build_typo_suggestion_section(
+                invalid_tickers=bad_tickers,
+                is_dividend=True,
+                is_forensics=False,
+                text_parts=text_parts,
+                sources=sources,
+                suggested_actions=suggested_actions,
+            )
+        else:
+            _build_dividend_and_events_section(
+                user_message=user_message,
+                tickers=tickers,
+                stock_data=stock_data,
+                dividend_events=dividend_events,
+                market_events=market_events,
+                text_parts=text_parts,
+                sources=sources,
+                suggested_actions=suggested_actions,
+            )
     elif is_news:
         _build_news_section(
             tickers=tickers,
@@ -1695,6 +1928,7 @@ def generate_structured_response(
             suggested_actions=suggested_actions,
             comparison_mode=comparison_mode,
             exceeded_limit=exceeded_limit,
+            invalid_tickers=bad_tickers,
         )
     elif len(stock_data) == 1:
         _build_single_stock_section(
@@ -1702,6 +1936,15 @@ def generate_structured_response(
             is_forensics=is_forensics,
             text_parts=text_parts,
             widgets=widgets,
+            sources=sources,
+            suggested_actions=suggested_actions,
+        )
+    elif bad_tickers:
+        _build_typo_suggestion_section(
+            invalid_tickers=bad_tickers,
+            is_dividend=False,
+            is_forensics=is_forensics,
+            text_parts=text_parts,
             sources=sources,
             suggested_actions=suggested_actions,
         )
