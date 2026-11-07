@@ -15,7 +15,12 @@ import {
 } from "@/components/market/formatters";
 import { mergeLiveInstrument } from "@/components/market/live-market";
 import { useMarketStreamState } from "@/hooks/use-realtime-price";
-import { PaperOrderDialog, requestPaperDashboard } from "@/components/portfolio/paper-order-dialog";
+import {
+  PaperOrderDialog,
+  requestPaperDashboard,
+  getCachedPaperDashboard,
+  invalidatePaperDashboardCache,
+} from "@/components/portfolio/paper-order-dialog";
 import { useAuth } from "@/hooks/use-auth";
 import { useVisibleFundamentals } from "@/hooks/use-visible-fundamentals";
 import { roundVnd } from "@/lib/portfolio-math";
@@ -135,7 +140,7 @@ export function PaperTradingDashboard({
 }) {
   const router = useRouter();
   const auth = useAuth();
-  const [dashboard, setDashboard] = useState<PaperDashboard | null>(null);
+  const [dashboard, setDashboard] = useState<PaperDashboard | null>(() => getCachedPaperDashboard());
   const [error, setError] = useState("");
   const [notice, setNotice] = useState("");
   const [side, setSide] = useState<"buy" | "sell">("buy");
@@ -403,6 +408,7 @@ export function PaperTradingDashboard({
       if (!res.ok || !body?.account) {
         throw new Error(body?.detail ?? "Không thể chuyển chế độ khớp lệnh.");
       }
+      invalidatePaperDashboardCache();
       setDashboard(body);
       setNotice(
         nextMode === "exchange_hours"
@@ -436,6 +442,7 @@ export function PaperTradingDashboard({
       if (!res.ok || !body?.data || !body?.advance) {
         throw new Error(body?.detail ?? "Không thể ứng trước tiền bán T+2.");
       }
+      invalidatePaperDashboardCache();
       setDashboard(body.data);
       setNotice(
         `Ứng trước tiền bán T+2 thành công: Thực nhận ${money(body.advance.net_received)} (Phí ứng 0,03%/ngày: ${money(body.advance.fee_amount)}).`
@@ -463,6 +470,7 @@ export function PaperTradingDashboard({
       if (!res.ok || !body?.data) {
         throw new Error(body?.detail ?? "Không thể hủy lệnh đang chờ.");
       }
+      invalidatePaperDashboardCache();
       setDashboard(body.data);
       setNotice(`Đã hủy lệnh chờ ${body.order?.symbol ?? ""} và hoàn lại sức mua/cổ phiếu khả dụng.`);
     } catch (reason) {
@@ -488,6 +496,7 @@ export function PaperTradingDashboard({
       if (!res.ok || !body?.data || !body?.trade) {
         throw new Error(body?.detail ?? "Không thể khớp nhanh lệnh đang chờ.");
       }
+      invalidatePaperDashboardCache();
       setDashboard(body.data);
       setNotice(
         `Đã khớp nhanh ${body.trade.quantity} ${body.trade.symbol} tại giá ${money(body.trade.execution_price)}.`

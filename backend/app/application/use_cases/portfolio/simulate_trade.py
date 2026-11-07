@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from datetime import UTC, datetime, time, timedelta
 from decimal import Decimal
+from time import monotonic as _monotonic
 from typing import cast
 from uuid import uuid4
 from zoneinfo import ZoneInfo
@@ -128,6 +129,13 @@ class PaperTradingService:
         self._provider = provider
         self._sim_store = sim_store or get_exchange_simulation_store()
         self._clock = clock
+        self._dashboard_cache: dict[str, tuple[float, dict[str, object]]] = {}
+
+    def invalidate_dashboard_cache(self, user_id: str | None = None) -> None:
+        if user_id:
+            self._dashboard_cache.pop(user_id, None)
+        else:
+            self._dashboard_cache.clear()
 
     def _now(self) -> datetime:
         return self._clock or datetime.now(UTC)
@@ -182,6 +190,7 @@ class PaperTradingService:
                 "Chế độ khớp lệnh chỉ hỗ trợ 'instant' hoặc 'exchange_hours'.",
             )
         self._sim_store.set_mode(user_id, mode)
+        self.invalidate_dashboard_cache(user_id)
         return self.dashboard(user_id)
 
     def place_order(
@@ -189,6 +198,7 @@ class PaperTradingService:
         user_id: str,
         command: PlacePaperOrder,
     ) -> tuple[PaperOrder, PaperTrade | None]:
+        self.invalidate_dashboard_cache(user_id)
         instrument = self._provider.instrument(command.symbol, include_fundamentals=False)
         if instrument is None:
             raise PaperOrderError("UNKNOWN_INSTRUMENT", "Không tìm thấy mã cổ phiếu này.")
@@ -431,6 +441,7 @@ class PaperTradingService:
         user_id: str,
         order_id: str,
     ) -> tuple[PaperOrder, PaperTrade | None]:
+        self.invalidate_dashboard_cache(user_id)
         portfolio = self._repository.get_or_create(user_id, STARTING_CASH)
         target = next((o for o in portfolio.orders if o.id == order_id), None)
         if target is None:
@@ -489,6 +500,7 @@ class PaperTradingService:
             net_received=net_received,
             days_advanced=days_advanced,
         )
+        self.invalidate_dashboard_cache(user_id)
         return {
             "advance": {
                 "id": record.id,
@@ -534,13 +546,16 @@ class PaperTradingService:
             take_profit_price=take_profit_price,
             quantity=quantity,
         )
+        self.invalidate_dashboard_cache(user_id)
         return self.dashboard(user_id)
 
     def cancel_conditional_trigger(self, user_id: str, trigger_id: str) -> dict[str, object]:
         self._sim_store.cancel_trigger(user_id, trigger_id)
+        self.invalidate_dashboard_cache(user_id)
         return self.dashboard(user_id)
 
     def cancel_order(self, user_id: str, order_id: str) -> PaperOrder:
+        self.invalidate_dashboard_cache(user_id)
         return self._repository.cancel_order(user_id, order_id)
 
     def _refresh_orders(self, user_id: str) -> PaperPortfolio:
@@ -665,6 +680,11 @@ class PaperTradingService:
         return self._repository.get_or_create(user_id, STARTING_CASH)
 
     def dashboard(self, user_id: str) -> dict[str, object]:
+        now_ts = _monotonic()
+        cached = self._dashboard_cache.get(user_id)
+        if cached and cached[0] > now_ts:
+            return cached[1]
+
         portfolio = self._refresh_orders(user_id)
         open_orders = tuple(
             order for order in portfolio.orders if order.status in {"pending", "open"}
@@ -831,7 +851,7 @@ class PaperTradingService:
             reverse=True,
         )[:6]
         equity_curve = self._equity_curve(portfolio)
-        return {
+        res: dict[str, object] = {
             "account": {
                 "id": portfolio.id,
                 "currency": portfolio.currency,
@@ -909,6 +929,8 @@ class PaperTradingService:
             },
             "exchange_simulation": self._exchange_simulation_payload(user_id, portfolio),
         }
+        self._dashboard_cache[user_id] = (now_ts + 15.0, res)
+        return res
 
     def _exchange_simulation_payload(
         self,
@@ -1016,6 +1038,7 @@ class PaperTradingService:
     def set_public_visibility(
         self, user_id: str, is_public: bool, nickname: str | None = None
     ) -> dict[str, object]:
+        self.invalidate_dashboard_cache(user_id)
         self._repository.set_public_status(user_id=user_id, is_public=is_public, nickname=nickname)
         return self.dashboard(user_id)
 

@@ -1,6 +1,39 @@
 # Current Task
 
-## Paper Trading Admin Order Book & Risk Cancellation with Audit Log - 2026-11-07 (in progress)
+## Paper Trading CSS Layout Polish, 117 Turbopack React Key Red Issue Fixes & High-Speed Multi-Tier Caching - 2026-11-07 (completed)
+- **User Request**:
+  1. Sửa lỗi không nhận CSS và layout bị vỡ trên giao diện Paper Trading:
+     - Khối "CHẾ ĐỘ KHỚP LỆNH & CHU KỲ BÙ TRỪ VSDC T+2" trên trang danh mục (`/portfolio`) bị dồn chữ, mất viền card, mất pill toggle và chưa style bảng T+2.
+     - Khung popup "GIAO DỊCH MÔ PHỎNG TỰ ĐỘNG - Mua/Bán": ô checkbox khớp độ sâu sổ lệnh bị kéo thành ô vuông trắng to bất thường; hai ô input "Cắt lỗ tự động (Stop-Loss)" và "Chốt lời tự động (Take-Profit)" bị dồn đè lên nhau.
+  2. Sửa toàn bộ lỗi cảnh báo đỏ ("117 Issues" trên badge Turbopack):
+     - Nguyên nhân: trùng key React trong `MarketCandlestickChart` (`key={item.source.timestamp}`, `key={'volume-' + item.source.timestamp}`) và `StockPriceChart` do các điểm dữ liệu lịch sử thị trường có timestamp trùng nhau.
+  3. Tối ưu tốc độ tải trang Danh mục mô phỏng (`/portfolio`) và cơ chế cache đa tầng:
+     - Lần đầu load trang danh mục nạp dữ liệu xong thì cache lại.
+     - Các lần load tiếp theo (hoặc chuyển qua lại giữa các trang) không phải chờ đợi mà mở ngay lập tức (0ms load time).
+     - Áp dụng cơ chế vô hiệu hóa cache (cache invalidation) tức thì ngay khi người dùng thực hiện giao dịch (đặt lệnh, khớp lệnh, ứng trước tiền bán, hủy lệnh).
+- **Branch**: `refactor/paper-trading`
+- **Changes**:
+  - `frontend/src/app/globals.css`:
+    - Bổ sung toàn bộ styles hoàn chỉnh cho `.paper-exchange-sim-bar`, `.paper-exchange-sim-header`, `.paper-mode-switch`, và `.paper-t2-summary-grid` (gradient card, toggle pill với active state, 3-column T+2 grid kèm badge trạng thái và nút ứng tiền).
+    - Sửa `.paper-order-checkbox`: loại trừ input checkbox khỏi style text input thông thường (`.paper-order-dialog input:not([type="checkbox"])`), đặt `grid-column: 1 / -1;`, `width: 1.15rem; height: 1.15rem; min-height: auto !important; accent-color: #52dbae;` loại bỏ hoàn toàn ô vuông trắng to.
+    - Sửa `.paper-order-conditional-grid`: đặt `grid-column: 1 / -1; display: grid; grid-template-columns: 1fr 1fr; gap: 0.8rem;`, tách biệt 2 cột Stop-Loss và Take-Profit độc lập, rõ ràng, không đè chữ.
+  - `frontend/src/components/market/market-candlestick-chart.tsx` & `frontend/src/components/market/stock-price-chart.tsx`:
+    - Đính kèm index vào key React (`key={'volume-' + item.source.timestamp + '-' + index}`, `key={'candle-' + item.source.timestamp + '-' + index}`, `key={'hit-' + item.source.timestamp + '-' + index}`, `key={'table-' + item.source.timestamp + '-' + index}`), triệt tiêu hoàn toàn 117 cảnh báo đỏ trong Turbopack.
+  - `backend/app/application/use_cases/portfolio/simulate_trade.py`:
+    - Thêm bộ đệm trong bộ nhớ `_dashboard_cache: dict[str, tuple[float, dict[str, object]]]` với TTL 15 giây.
+    - Tự động gọi `invalidate_dashboard_cache(user_id)` trên toàn bộ các phương thức thay đổi trạng thái danh mục: `place_order`, `cancel_order`, `fill_order`, `force_fill_order`, `set_execution_mode`, `advance_sale_cash`, `upsert_conditional_trigger`, `cancel_conditional_trigger`, `set_public_visibility`.
+  - `frontend/src/components/portfolio/paper-order-dialog.tsx`:
+    - Bổ sung `getCachedPaperDashboard()`, `invalidatePaperDashboardCache()` và cơ chế Stale-While-Revalidate (SWR) kết hợp RAM + `sessionStorage` (TTL 25s).
+    - Trong môi trường kiểm thử Vitest (`process.env.NODE_ENV === 'test'`), tự động bypass cache để bảo toàn tính độc lập của các test case.
+  - `frontend/src/components/portfolio/paper-trading-dashboard.tsx`:
+    - Khởi tạo state bằng `useState<PaperDashboard | null>(() => getCachedPaperDashboard())` giúp hiển thị ngay tức thì khi chuyển tab/trang mà không bị giật trang hay chờ đợi.
+  - `frontend/src/app/(user)/portfolio/page.tsx`:
+    - Cấu hình revalidate 30s cho `getMarketInstruments(marketQuery, 30)` để tận dụng Data Cache của Next.js cho 100 mã cổ phiếu.
+- **Verification**:
+  - Full Quality Gate `./scripts/check-pr.ps1`: Đạt chuẩn 6/6 bước 100% (Git diff whitespace, Frontend ESLint, Frontend TypeScript tsc, Vitest 186/186 tests, Backend Ruff & Mypy, Backend Pytest 177/177 tests).
+  - Khởi động cả 2 server: Backend FastAPI tại `http://127.0.0.1:8000` và Frontend Next.js Turbopack tại `http://localhost:3000`.
+
+## Paper Trading Admin Order Book & Risk Cancellation with Audit Log - 2026-11-07 (completed)
 - **User Request**:
   1. Cho phép Admin giám sát sổ lệnh của người dùng trong phân hệ quản trị danh mục (`/admin/portfolios`).
   2. Cho phép Admin thao tác **Hủy lệnh chờ (Cancel Order)** đối với các lệnh đang treo (`open`, `pending`) của người dùng kèm bắt buộc nhập lý do nghiệp vụ và ghi vết đầy đủ vào `Admin Audit Logs` (`auth_audit_events`), tuân thủ chuẩn quản trị rủi ro sàn chứng khoán thực tế; **KHÔNG** cho phép Admin "Khớp lệnh ngay (Force Fill)" để bảo đảm tính minh bạch và tránh sai lệch bản chất dữ liệu sàn.

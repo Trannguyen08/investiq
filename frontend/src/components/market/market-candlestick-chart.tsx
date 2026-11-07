@@ -871,7 +871,7 @@ export function MarketCandlestickChart({
             {values.map((item, index) => (
               <rect
                 className={item.close >= item.open ? "up" : "down"}
-                key={`volume-${item.source.timestamp}`}
+                key={`volume-${item.source.timestamp}-${index}`}
                 x={x(index) - bodyWidth / 2}
                 y={volumeY(item.volume)}
                 width={bodyWidth}
@@ -887,7 +887,7 @@ export function MarketCandlestickChart({
               const top = priceY(Math.max(item.open, item.close));
               const bottom = priceY(Math.min(item.open, item.close));
               return (
-                <g className={rising ? "up" : "down"} key={item.source.timestamp}>
+                <g className={rising ? "up" : "down"} key={`candle-${item.source.timestamp}-${index}`}>
                   <line x1={x(index)} x2={x(index)} y1={priceY(item.high)} y2={priceY(item.low)} />
                   <rect
                     x={x(index) - bodyWidth / 2}
@@ -1062,7 +1062,7 @@ export function MarketCandlestickChart({
               type="button"
               className="financial-chart-hit-target"
               aria-label={`Xem nến ${candleLabel(item, intraday)}`}
-              key={item.source.timestamp}
+              key={`hit-${item.source.timestamp}-${index}`}
               style={{
                 left: `${((left + slot * index) / width) * 100}%`,
                 top: `${(priceTop / totalSvgHeight) * 100}%`,
@@ -1191,8 +1191,8 @@ export function MarketCandlestickChart({
           <caption>{label}</caption>
           <thead><tr><th>Thời gian</th><th>Mở</th><th>Cao</th><th>Thấp</th><th>Đóng</th><th>Khối lượng</th></tr></thead>
           <tbody>
-            {values.map((item) => (
-              <tr key={item.source.timestamp}>
+            {values.map((item, index) => (
+              <tr key={`table-${item.source.timestamp}-${index}`}>
                 <td>{item.source.timestamp}</td>
                 <td>{item.source.open}</td>
                 <td>{item.source.high}</td>

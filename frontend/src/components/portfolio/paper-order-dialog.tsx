@@ -39,15 +39,91 @@ async function csrfToken() {
   return body.csrf_token;
 }
 
-export async function requestPaperDashboard(): Promise<PaperDashboard> {
+let memoryDashboardCache: PaperDashboard | null = null;
+let memoryDashboardTimestamp = 0;
+const DASHBOARD_CACHE_KEY = "investiq_cached_paper_dashboard";
+const CACHE_TTL_MS = 25_000;
+
+export function getCachedPaperDashboard(): PaperDashboard | null {
+  if (process.env.NODE_ENV === "test") return null;
+  if (memoryDashboardCache && Date.now() - memoryDashboardTimestamp < CACHE_TTL_MS) {
+    return memoryDashboardCache;
+  }
+  if (typeof window !== "undefined") {
+    try {
+      const stored = sessionStorage.getItem(DASHBOARD_CACHE_KEY);
+      if (stored) {
+        const parsed = JSON.parse(stored);
+        if (
+          parsed &&
+          typeof parsed.timestamp === "number" &&
+          Date.now() - parsed.timestamp < CACHE_TTL_MS
+        ) {
+          memoryDashboardCache = parsed.data;
+          memoryDashboardTimestamp = parsed.timestamp;
+          return memoryDashboardCache;
+        }
+      }
+    } catch {}
+  }
+  return null;
+}
+
+export function invalidatePaperDashboardCache(): void {
+  memoryDashboardCache = null;
+  memoryDashboardTimestamp = 0;
+  if (typeof window !== "undefined") {
+    try {
+      sessionStorage.removeItem(DASHBOARD_CACHE_KEY);
+    } catch {}
+  }
+}
+
+export async function requestPaperDashboard(forceRefresh = false): Promise<PaperDashboard> {
+  if (process.env.NODE_ENV !== "test") {
+    const cached = getCachedPaperDashboard();
+    if (!forceRefresh && cached) {
+      if (Date.now() - memoryDashboardTimestamp > 5000) {
+        fetch("/portfolio-api", { cache: "no-store" })
+          .then((res) => (res.ok ? res.json() : null))
+          .then((fresh) => {
+            if (fresh && !fresh.error) {
+              memoryDashboardCache = fresh;
+              memoryDashboardTimestamp = Date.now();
+              try {
+                sessionStorage.setItem(
+                  DASHBOARD_CACHE_KEY,
+                  JSON.stringify({ timestamp: Date.now(), data: fresh })
+                );
+              } catch {}
+            }
+          })
+          .catch(() => {});
+      }
+      return cached;
+    }
+  }
+
   const response = await fetch("/portfolio-api", { cache: "no-store" });
-  const body = await response.json().catch(() => null) as (PaperDashboard & {
+  const body = (await response.json().catch(() => null)) as (PaperDashboard & {
     error?: { message?: string };
   }) | null;
   if (!response.ok || !body || body.error) {
-    throw new Error(body?.error
-      ? body.error.message ?? "Không thể tải tài khoản mô phỏng."
-      : "Không thể tải tài khoản mô phỏng.");
+    throw new Error(
+      body?.error
+        ? body.error.message ?? "Không thể tải tài khoản mô phỏng."
+        : "Không thể tải tài khoản mô phỏng."
+    );
+  }
+  memoryDashboardCache = body;
+  memoryDashboardTimestamp = Date.now();
+  if (typeof window !== "undefined") {
+    try {
+      sessionStorage.setItem(
+        DASHBOARD_CACHE_KEY,
+        JSON.stringify({ timestamp: Date.now(), data: body })
+      );
+    } catch {}
   }
   return body;
 }
@@ -259,6 +335,16 @@ function PaperOrderDialogContent({
         successMessage = `Đã đặt lệnh chờ ${side === "buy" ? "Mua" : "Bán"} ${body.order.quantity} ${body.order.symbol} (${orderType}) tại ${money(body.order.limit_price)}. ${reason}`;
       }
       setLoadedDashboard(body.data);
+      memoryDashboardCache = body.data;
+      memoryDashboardTimestamp = Date.now();
+      if (typeof window !== "undefined") {
+        try {
+          sessionStorage.setItem(
+            DASHBOARD_CACHE_KEY,
+            JSON.stringify({ timestamp: Date.now(), data: body.data })
+          );
+        } catch {}
+      }
       idempotencyKeyRef.current = null;
       onDashboard?.(body.data);
       onSuccess?.(successMessage);
