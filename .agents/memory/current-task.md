@@ -1,5 +1,55 @@
 # Current Task
 
+## Interactive Stock Comparison in Chatbox & Market Page Growth Comparison Block - 2026-11-07 (completed)
+- **User Request**:
+  1. Thêm xử lý yêu cầu so sánh 2 cổ phiếu trong chatbox:
+     - Chat hỏi lại tiêu chí so sánh: theo thông số hoặc báo cáo tăng trưởng hoặc cả hai.
+     - Cung cấp các nút gợi ý thao tác nhanh (Quick Action Buttons: Thông số, Báo cáo tăng trưởng, Cả hai).
+     - Người dùng chọn gì thì response đúng nội dung đó.
+     - Giới hạn tối đa 3 cổ phiếu trong cùng 1 lượt so sánh (thông báo rõ ràng nếu người dùng yêu cầu vượt quá 3 mã).
+  2. Thêm khối so sánh báo cáo tăng trưởng trong khung so sánh ở mục so sánh cổ phiếu trong trang thị trường (`/market`):
+     - Hiển thị khối Báo cáo tăng trưởng & Sức khỏe tài chính bên trong từng thẻ cổ phiếu so sánh.
+     - Bổ sung Bảng đối chiếu Báo cáo tăng trưởng chi tiết đa chiều (Comparative Growth Matrix Table) đặt các mã cạnh nhau theo các chỉ tiêu: Sức khỏe, Vốn hóa 1T/3T/6T/1N, Doanh thu & LNST quý YoY, LNST TTM, Khối lượng vs TB20.
+- **Branch**: `fix/AI`
+- **Changes**:
+  - `backend/app/schemas/ai_chat.py`:
+    - Mở rộng `StockComparisonItem` với các trường tăng trưởng: `health_status`, `health_title`, `health_summary`, `market_cap_growth_1m/3m/6m/1y`, `revenue_growth_yoy`, `profit_growth_yoy`, `revenue_ttm`, `profit_ttm`, `volume_growth_20d`, `growth_insights`.
+    - Mở rộng `StockComparisonWidgetData` với trường `mode: str = "metrics"` (`"metrics"` | `"growth"` | `"both"`).
+  - `backend/app/application/use_cases/ai_chat/intent_parser.py`:
+    - Bổ sung nhận diện tiêu chí so sánh trong `detect_intent`: `comparison_mode` (`"ask"`, `"metrics"`, `"growth"`, `"both"`).
+    - Giới hạn tối đa 3 mã: `tickers[:3]`, kích hoạt cờ `comparison_exceeded_limit` khi yêu cầu > 3 mã.
+    - Hỗ trợ câu trả lời ngắn tiêu chí tiếp nối (e.g. "thông số", "báo cáo tăng trưởng", "cả hai").
+  - `backend/app/application/use_cases/ai_chat/ai_financial_service.py`:
+    - Nạp tự động dữ liệu tăng trưởng `self._market.growth(ticker)` vào `stock_data` cho từng mã so sánh.
+    - Duy trì `_recent_comparison_tickers` để hỗ trợ phản hồi mượt mà khi người dùng gõ trả lời ngắn tiếp nối.
+  - `backend/app/application/use_cases/ai_chat/response_builder.py`:
+    - Tái cấu trúc `_build_comparison_section` xử lý đầy đủ 4 chế độ:
+      1. `ask`: Hỏi lại người dùng tiêu chí muốn so sánh kèm 3 suggested actions (`So sánh theo Thông số`, `So sánh Báo cáo tăng trưởng`, `So sánh Cả hai (Toàn diện)`).
+      2. `metrics`: Phân tích đối chiếu thông số định giá P/E, P/B, ROE, thị giá, vốn hóa, ưu/nhược điểm từng mã kèm widget `stock_comparison` (hỗ trợ 2 hoặc 3 mã).
+      3. `growth`: Phân tích đối chiếu báo cáo tăng trưởng, sức khỏe doanh nghiệp, tăng trưởng vốn hóa qua các mốc, doanh thu/LNST quý gần nhất, LNST TTM kèm widget tăng trưởng.
+      4. `both`: Đối chiếu toàn diện kết hợp cả 3 phần: Thông số định giá, Báo cáo tăng trưởng, và Nhận định tổng hợp đa chiều.
+  - `frontend/src/types/ai-chat.ts`:
+    - Đồng bộ `StockComparisonItem` và `StockComparisonWidgetData` với TypeScript interfaces.
+  - `frontend/src/components/ai-chat/widgets/stock-comparison-widget.tsx`:
+    - Nâng cấp hỗ trợ hiển thị 2 hoặc 3 mã cổ phiếu song song.
+    - Hỗ trợ chế độ `both` với tab chuyển đổi tương tác (`Thông số định giá` / `Báo cáo tăng trưởng`).
+    - Hiển thị bảng và thẻ insight tăng trưởng khi ở chế độ `growth`.
+  - `frontend/src/app/(user)/market/[tab]/page.tsx`:
+    - Nạp song song `getMarketGrowth(symbol)` trong `comparison` SSR pipeline.
+  - `frontend/src/components/market/market-stocks-beginner.tsx`:
+    - Cập nhật `type StockComparison` bổ sung `growth?: StockGrowthData | null`.
+    - Trong `StockComparisonDialog`:
+      - Nạp động `getMarketGrowth` cho các mã được chọn.
+      - Bổ sung khối **Báo cáo tăng trưởng & Sức khỏe tài chính** trong từng card cổ phiếu so sánh.
+      - Bổ sung **Bảng so sánh Báo cáo tăng trưởng chi tiết** (Comparative Growth Matrix Table) đặt các mã cạnh nhau theo 8 chỉ tiêu tăng trưởng cốt lõi.
+- **Verification**:
+  - `backend/tests/unit/ai_chat/test_ai_chat.py`: Thêm kiểm thử so sánh hỏi lại (ask), thông số (metrics), tăng trưởng (growth), toàn diện (both), 3 mã cổ phiếu, và giới hạn vượt quá 3 mã (32/32 tests passed 100%).
+  - `backend/tests/integration/api/test_ai_chat_api.py`: 9/9 tests passed 100%.
+  - `frontend/src/components/ai-chat/ai-chat-bubble.test.tsx`: Thêm test render widget so sánh với chế độ `both`, `growth`, và `metrics` (6/6 tests passed 100%).
+  - `frontend/src/components/market/market-stocks-beginner.test.tsx`: 14/14 tests passed 100%.
+  - Backend Ruff & Mypy: Passed 0 errors.
+  - Frontend ESLint & TypeScript Typecheck: Passed 0 errors.
+
 ## Environment Unification, Clean Example Config & Zero Leading Icons Polish - 2026-11-07 (completed)
 - **User Request**:
   1. Gom các key ở env trong `backend/` và `frontend/` đồng bộ trong `.env` ở root; các file cấu hình khi đọc key mặc định trỏ vào `.env` ở root.

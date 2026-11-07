@@ -13,6 +13,7 @@ import {
   getMarketCandles,
   getMarketEcosystems,
   getMarketEvents,
+  getMarketGrowth,
   getMarketIndices,
   getMarketInstrument,
   getMarketInstruments,
@@ -160,14 +161,16 @@ export default async function MarketTabPage({
       ? getMarketCandles(selectedSymbol, "1d", 90).catch(() => null)
       : Promise.resolve(null),
     Promise.all(requestedComparisons.map(async (symbol) => {
-      const [instrumentResult, candleResult] = await Promise.allSettled([
+      const [instrumentResult, candleResult, growthResult] = await Promise.allSettled([
         getMarketInstrument(symbol),
         getMarketCandles(symbol, "1d", 90),
+        getMarketGrowth(symbol),
       ]);
       if (instrumentResult.status !== "fulfilled") return null;
       return {
         instrument: instrumentResult.value.data,
         candles: candleResult.status === "fulfilled" ? candleResult.value.data : [],
+        growth: growthResult.status === "fulfilled" ? growthResult.value.data : null,
       };
     })).then((items) => items.filter((item) => item !== null)),
   ]);

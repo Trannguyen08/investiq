@@ -817,118 +817,367 @@ def _build_leader_section(
 
 
 def _build_comparison_section(
+    *,
+    user_message: str,
+    tickers: list[str],
     stock_data: dict[str, Any],
     text_parts: list[str],
     widgets: list[dict[str, Any]],
     sources: list[dict[str, str]],
     suggested_actions: list[dict[str, Any]],
+    comparison_mode: str = "ask",
+    exceeded_limit: bool = False,
 ) -> None:
-    t1, t2 = list(stock_data.keys())[:2]
-    d1, d2 = stock_data[t1], stock_data[t2]
-    inst1, inst2 = d1["instrument"], d2["instrument"]
+    del user_message  # Unused directly in synthesis
+    active_tickers = [t for t in (tickers or list(stock_data.keys()))[:3] if t in stock_data]
+    if not active_tickers:
+        active_tickers = list(stock_data.keys())[:3]
 
-    p1 = float(_get_val(inst1, "price", 0))
-    p2 = float(_get_val(inst2, "price", 0))
-    name1 = _get_val(inst1, "name", t1)
-    name2 = _get_val(inst2, "name", t2)
-    sector1 = _get_val(inst1, "sector", "")
-    sector2 = _get_val(inst2, "sector", "")
-    change1 = float(_get_val(inst1, "change_percent", 0))
-    change2 = float(_get_val(inst2, "change_percent", 0))
+    if len(active_tickers) < 2:
+        if len(active_tickers) == 1:
+            sym = active_tickers[0]
+            text_parts.append(
+                f"Bạn đã chọn mã **{sym}**. Vui lòng cung cấp thêm ít nhất 1 mã cổ phiếu nữa để InvestIQ tiến hành đối chiếu "
+                f"(Ví dụ: 'So sánh {sym} và HPG' hoặc 'So sánh {sym}, MBB và TCB')."
+            )
+        else:
+            text_parts.append(
+                "Bạn muốn so sánh những mã cổ phiếu nào? Vui lòng cung cấp từ 2 đến 3 mã cổ phiếu "
+                "(Ví dụ: 'So sánh VCB và HPG', 'So sánh FPT, MWG và VNM')."
+            )
+        return
 
-    pe1 = float(_get_val(inst1, "pe", 12.5) or 12.5)
-    pe2 = float(_get_val(inst2, "pe", 14.2) or 14.2)
-    pb1 = float(_get_val(inst1, "pb", 1.6) or 1.6)
-    pb2 = float(_get_val(inst2, "pb", 1.8) or 1.8)
-    roe1 = float(_get_val(inst1, "roe_percent", 18.0) or 18.0)
-    roe2 = float(_get_val(inst2, "roe_percent", 16.5) or 16.5)
+    # Add limit notice if user asked for > 3 stocks
+    if exceeded_limit:
+        text_parts.append(
+            f"> [!NOTE] InvestIQ hỗ trợ so sánh tối đa 3 mã cổ phiếu trong cùng một lượt. "
+            f"Hệ thống sẽ tiến hành so sánh 3 mã: {', '.join(active_tickers)}.\n"
+        )
 
-    verdict_text = (
-        f"{t1} có lợi thế định giá P/E hấp dẫn hơn ({pe1:.1f}x so với {pe2:.1f}x của {t2}), "
-        f"trong khi {t2} ghi nhận tỷ suất sinh lời ROE {roe2:.1f}% và thanh khoản giao dịch mạnh mẽ. "
-        f"Tùy vào khẩu vị (giá trị vs tăng trưởng) để bạn phân bổ tỷ trọng phù hợp."
+    tickers_title = " vs ".join(active_tickers)
+    tickers_and = " và ".join(active_tickers)
+
+    # Internal sources for each ticker
+    for sym in active_tickers:
+        sources.append(
+            {
+                "kind": "internal",
+                "title": f"Bảng giá thị trường InvestIQ: {sym}",
+                "url": f"/market/stocks/{sym}",
+            }
+        )
+
+    # Extract metrics and growth for each active ticker
+    parsed_items: list[dict[str, Any]] = []
+    for sym in active_tickers:
+        d = stock_data[sym]
+        inst = d["instrument"]
+        growth = d.get("growth", {}) or {}
+
+        p = float(_get_val(inst, "price", 0))
+        name = _get_val(inst, "name", sym)
+        sector = _get_val(inst, "sector", "")
+        chg = float(_get_val(inst, "change_percent", 0))
+        pe = float(_get_val(inst, "pe", 12.5) or 12.5)
+        pb = float(_get_val(inst, "pb", 1.6) or 1.6)
+        roe = float(_get_val(inst, "roe_percent", 18.0) or 18.0)
+        market_cap_str = (
+            f"{float(_get_val(inst, 'market_cap', 0)):,.0f} ₫"
+            if _get_val(inst, "market_cap")
+            else "Chưa có"
+        )
+
+        # Growth fields
+        health_status = growth.get("health_status") or "stable"
+        health_title = growth.get("health_title") or "Hoạt động & tài chính ổn định"
+        health_summary = growth.get("health_summary") or f"{name} duy trì cơ cấu tài chính lành mạnh."
+        cap_1m = growth.get("market_cap_growth_1m")
+        cap_3m = growth.get("market_cap_growth_3m")
+        cap_6m = growth.get("market_cap_growth_6m")
+        cap_1y = growth.get("market_cap_growth_1y")
+
+        quarters = growth.get("quarters", []) or []
+        latest_q = quarters[-1] if quarters else {}
+        rev_growth = latest_q.get("revenue_growth_yoy")
+        profit_growth = latest_q.get("profit_growth_yoy")
+        revenue_ttm = growth.get("revenue_ttm")
+        profit_ttm = growth.get("profit_ttm")
+        vol_growth = growth.get("volume_growth_20d") or "Khối lượng ổn định"
+        insights = growth.get("insights", []) or []
+
+        # Determine Pros & Cons based on quantitative metrics
+        pros: list[str] = []
+        cons: list[str] = []
+        if pe <= 13.0:
+            pros.append(f"P/E {pe:.1f}x định giá hấp dẫn")
+        else:
+            cons.append(f"P/E {pe:.1f}x ở mức cao so với trung vị ngành")
+        if roe >= 15.0:
+            pros.append(f"Biên ROE {roe:.1f}% hiệu quả sinh lời tốt")
+        else:
+            cons.append(f"ROE {roe:.1f}% cần cải thiện hiệu quả sử dụng vốn")
+        if chg > 0:
+            pros.append(f"Động lượng giá tích cực (+{chg:.2f}%)")
+        if rev_growth and rev_growth.startswith("+"):
+            pros.append(f"Doanh thu quý tăng trưởng {rev_growth}")
+        if profit_growth and profit_growth.startswith("-"):
+            cons.append(f"Lợi nhuận quý suy giảm {profit_growth}")
+
+        if not pros:
+            pros.append(f"Vốn hóa đầu ngành {sector or 'niêm yết'}")
+        if not cons:
+            cons.append("Biến động theo xu hướng chung của thị trường")
+
+        parsed_items.append(
+            {
+                "symbol": sym,
+                "name": name,
+                "price": p,
+                "change_percent": f"{chg:+.2f}%",
+                "pe": f"{pe:.1f}x",
+                "pb": f"{pb:.1f}x",
+                "roe": f"{roe:.1f}%",
+                "sector": sector,
+                "market_cap": market_cap_str,
+                "pros": pros[:2],
+                "cons": cons[:2],
+                "health_status": health_status,
+                "health_title": health_title,
+                "health_summary": health_summary,
+                "market_cap_growth_1m": cap_1m,
+                "market_cap_growth_3m": cap_3m,
+                "market_cap_growth_6m": cap_6m,
+                "market_cap_growth_1y": cap_1y,
+                "revenue_growth_yoy": rev_growth,
+                "profit_growth_yoy": profit_growth,
+                "revenue_ttm": revenue_ttm,
+                "profit_ttm": profit_ttm,
+                "volume_growth_20d": vol_growth,
+                "growth_insights": insights[:2],
+            }
+        )
+
+    # 1. Mode ASK: Ask the user to choose criteria
+    if comparison_mode == "ask":
+        text_parts.append(f"Lựa chọn tiêu chí so sánh: {tickers_title}")
+        text_parts.append(
+            f"Bạn muốn so sánh các mã **{', '.join(active_tickers)}** theo tiêu chí nào dưới đây?\n\n"
+            f"- **Thông số tài chính & Định giá**: Đối chiếu thị giá, định giá P/E, P/B, tỷ suất sinh lời ROE, vốn hóa và ưu/nhược điểm kỹ thuật.\n"
+            f"- **Báo cáo tăng trưởng**: Tốc độ tăng trưởng doanh thu, lợi nhuận sau thuế, EPS, tăng trưởng vốn hóa qua các mốc (1T, 3T, 6T, 1N) và sức khỏe tài chính.\n"
+            f"- **Cả hai (Toàn diện)**: Bảng đối chiếu song song thông số định giá kết hợp phân tích báo cáo tăng trưởng chuyên sâu.\n\n"
+            f"*Vui lòng bấm chọn một trong các tùy chọn gợi ý bên dưới để InvestIQ phản hồi ngay:*"
+        )
+        suggested_actions.extend(
+            [
+                {
+                    "label": "So sánh theo Thông số",
+                    "action_type": "SEND_PROMPT",
+                    "prompt": f"So sánh {tickers_and} theo thông số",
+                },
+                {
+                    "label": "So sánh Báo cáo tăng trưởng",
+                    "action_type": "SEND_PROMPT",
+                    "prompt": f"So sánh {tickers_and} theo báo cáo tăng trưởng",
+                },
+                {
+                    "label": "So sánh Cả hai (Toàn diện)",
+                    "action_type": "SEND_PROMPT",
+                    "prompt": f"So sánh {tickers_and} cả hai",
+                },
+            ]
+        )
+        for sym in active_tickers:
+            suggested_actions.append(
+                {
+                    "label": f"Xem biểu đồ {sym}",
+                    "action_type": "NAVIGATE",
+                    "url": f"/market/stocks/{sym}",
+                }
+            )
+        return
+
+    # 2. Mode METRICS: Valuation and technical parameters
+    if comparison_mode == "metrics":
+        text_parts.append(f"Đối chiếu so sánh thông số: {tickers_title}")
+        metric_lines = []
+        for it in parsed_items:
+            metric_lines.append(
+                f"- **{it['symbol']}** ({it['name']}): Giá hiện tại {it['price']:,.0f} đ ({it['change_percent']}), "
+                f"P/E {it['pe']}, P/B {it['pb']}, ROE {it['roe']}. Vốn hóa: {it['market_cap']}. Ngành: {it['sector'] or 'Chưa phân ngành'}."
+            )
+        text_parts.append("\n".join(metric_lines))
+
+        # Build comparison verdict
+        best_pe = min(parsed_items, key=lambda x: float(x["pe"].replace("x", "")) if "x" in x["pe"] else 999.0)
+        best_roe = max(parsed_items, key=lambda x: float(x["roe"].replace("%", "")) if "%" in x["roe"] else -999.0)
+        verdict = (
+            f"Về mặt định giá, **{best_pe['symbol']}** sở hữu chỉ số P/E hấp dẫn nhất ({best_pe['pe']}), "
+            f"trong khi **{best_roe['symbol']}** dẫn đầu về hiệu quả sinh lời trên vốn chủ sở hữu (ROE {best_roe['roe']}). "
+            f"Nhà đầu tư theo trường phái giá trị có thể ưu tiên mã có P/E thấp, trong khi nhà đầu tư tăng trưởng nên cân nhắc hiệu quả sử dụng vốn ROE cao."
+        )
+        text_parts.append(verdict)
+
+        widgets.append(
+            {
+                "type": "stock_comparison",
+                "data": {
+                    "title": f"Bảng so sánh thông số định giá {tickers_and}",
+                    "mode": "metrics",
+                    "items": parsed_items,
+                    "summary_verdict": verdict,
+                },
+            }
+        )
+
+        suggested_actions.extend(
+            [
+                {
+                    "label": "So sánh Báo cáo tăng trưởng",
+                    "action_type": "SEND_PROMPT",
+                    "prompt": f"So sánh {tickers_and} theo báo cáo tăng trưởng",
+                },
+                {
+                    "label": "So sánh Cả hai (Toàn diện)",
+                    "action_type": "SEND_PROMPT",
+                    "prompt": f"So sánh {tickers_and} cả hai",
+                },
+            ]
+        )
+        for sym in active_tickers:
+            suggested_actions.append(
+                {
+                    "label": f"Xem biểu đồ {sym}",
+                    "action_type": "NAVIGATE",
+                    "url": f"/market/stocks/{sym}",
+                }
+            )
+        return
+
+    # 3. Mode GROWTH: Revenue, profit, market cap horizons, financial health
+    if comparison_mode == "growth":
+        text_parts.append(f"Đối chiếu so sánh báo cáo tăng trưởng: {tickers_title}")
+        growth_lines = []
+        for it in parsed_items:
+            rev_txt = f"Doanh thu quý: {it['revenue_growth_yoy']}" if it['revenue_growth_yoy'] else "Doanh thu: Đang cập nhật"
+            prof_txt = f"LNST quý: {it['profit_growth_yoy']}" if it['profit_growth_yoy'] else "LNST: Đang cập nhật"
+            cap_txt = f"Vốn hóa 1T: {it['market_cap_growth_1m'] or 'N/A'}, 1N: {it['market_cap_growth_1y'] or 'N/A'}"
+            growth_lines.append(
+                f"- **{it['symbol']}** ({it['name']}): Trạng thái **{it['health_title']}**. "
+                f"{rev_txt}, {prof_txt}. LNST TTM đạt {it['profit_ttm'] or 'N/A'}. {cap_txt}."
+            )
+            if it["growth_insights"]:
+                for ins in it["growth_insights"][:1]:
+                    growth_lines.append(f"  * Điểm nổi bật: {ins}")
+
+        text_parts.append("\n".join(growth_lines))
+
+        growth_verdict = (
+            "Về tốc độ bứt phá kết quả kinh doanh và mở rộng quy mô, các mã đều thể hiện những động lực tăng trưởng riêng biệt. "
+            "Mã có trạng thái tăng trưởng bứt phá hoặc doanh thu/LNST tăng trưởng dương bền vững qua các quý sẽ có sức chống chịu tốt hơn trong các nhịp thị trường điều chỉnh."
+        )
+        text_parts.append(growth_verdict)
+
+        widgets.append(
+            {
+                "type": "stock_comparison",
+                "data": {
+                    "title": f"Bảng so sánh báo cáo tăng trưởng {tickers_and}",
+                    "mode": "growth",
+                    "items": parsed_items,
+                    "summary_verdict": growth_verdict,
+                },
+            }
+        )
+
+        suggested_actions.extend(
+            [
+                {
+                    "label": "So sánh theo Thông số",
+                    "action_type": "SEND_PROMPT",
+                    "prompt": f"So sánh {tickers_and} theo thông số",
+                },
+                {
+                    "label": "So sánh Cả hai (Toàn diện)",
+                    "action_type": "SEND_PROMPT",
+                    "prompt": f"So sánh {tickers_and} cả hai",
+                },
+            ]
+        )
+        for sym in active_tickers:
+            suggested_actions.append(
+                {
+                    "label": f"Xem biểu đồ {sym}",
+                    "action_type": "NAVIGATE",
+                    "url": f"/market/stocks/{sym}",
+                }
+            )
+        return
+
+    # 4. Mode BOTH: Comprehensive evaluation (Metrics + Growth)
+    text_parts.append(f"Đối chiếu so sánh toàn diện: {tickers_title}")
+
+    # Section 1: Thông số định giá
+    text_parts.append("### 1. Thông số tài chính & Định giá:")
+    metric_lines = []
+    for it in parsed_items:
+        metric_lines.append(
+            f"- **{it['symbol']}**: Giá {it['price']:,.0f} đ ({it['change_percent']}), "
+            f"P/E {it['pe']}, P/B {it['pb']}, ROE {it['roe']}. Vốn hóa: {it['market_cap']}."
+        )
+    text_parts.append("\n".join(metric_lines))
+
+    # Section 2: Báo cáo tăng trưởng
+    text_parts.append("### 2. Báo cáo Tăng trưởng & Sức khỏe Tài chính:")
+    growth_lines = []
+    for it in parsed_items:
+        rev_txt = f"Doanh thu quý {it['revenue_growth_yoy']}" if it['revenue_growth_yoy'] else "Doanh thu ổn định"
+        prof_txt = f"LNST quý {it['profit_growth_yoy']}" if it['profit_growth_yoy'] else "LNST ổn định"
+        growth_lines.append(
+            f"- **{it['symbol']}**: Trạng thái **{it['health_title']}**. "
+            f"{rev_txt}, {prof_txt}. LNST TTM: {it['profit_ttm'] or 'N/A'}. Tăng trưởng vốn hóa 1T: {it['market_cap_growth_1m'] or 'N/A'}."
+        )
+    text_parts.append("\n".join(growth_lines))
+
+    # Section 3: Nhận định tổng hợp
+    text_parts.append("### 3. Nhận định Tổng hợp Đa chiều:")
+    overall_verdict = (
+        "Đối chiếu giữa góc nhìn định giá và động lực tăng trưởng cho thấy: "
+        "Mỗi mã đều có ưu thế cạnh tranh trong rổ ngành tương ứng. "
+        "Nếu ưu tiên sự an toàn và định giá thấp, hãy xem xét mã có P/E chiết khấu sâu. "
+        "Nếu theo đuổi đà tăng giá từ kết quả kinh doanh đột phá, các mã có tăng trưởng doanh thu/lợi nhuận hai chữ số sẽ là điểm tựa vững chắc."
     )
-
-    text_parts.append(f"Đối chiếu so sánh: {t1} vs {t2}")
-    text_parts.append(verdict_text)
-    text_parts.append(
-        f"- {t1} ({name1}): Giá hiện tại {p1:,.0f} đ ({change1:+.2f}%), "
-        f"P/E {pe1:.1f}x, P/B {pb1:.1f}x, ROE {roe1:.1f}%. Vị thế cơ bản ổn định, thuộc rổ ngành {sector1}.\n"
-        f"- {t2} ({name2}): Giá hiện tại {p2:,.0f} đ ({change2:+.2f}%), "
-        f"P/E {pe2:.1f}x, P/B {pb2:.1f}x, ROE {roe2:.1f}%. Sức bật thị giá và sự quan tâm của dòng tiền tốt."
-    )
-
-    comparison_items = [
-        {
-            "symbol": t1,
-            "name": name1,
-            "price": p1,
-            "change_percent": f"{change1:+.2f}%",
-            "pe": f"{pe1:.1f}x",
-            "pb": f"{pb1:.1f}x",
-            "roe": f"{roe1:.1f}%",
-            "pros": [f"P/E {pe1:.1f}x hấp dẫn", f"Biên ROE {roe1:.1f}% lành mạnh"],
-            "cons": ["Áp lực điều chỉnh chung theo chỉ số ngành"],
-        },
-        {
-            "symbol": t2,
-            "name": name2,
-            "price": p2,
-            "change_percent": f"{change2:+.2f}%",
-            "pe": f"{pe2:.1f}x",
-            "pb": f"{pb2:.1f}x",
-            "roe": f"{roe2:.1f}%",
-            "pros": ["Dòng tiền giao dịch sôi động", f"Vốn hóa đầu ngành {sector2}"],
-            "cons": [f"Định giá P/B {pb2:.1f}x cao hơn trung bình"],
-        },
-    ]
+    text_parts.append(overall_verdict)
 
     widgets.append(
         {
             "type": "stock_comparison",
             "data": {
-                "title": f"Bảng so sánh đối đầu {t1} và {t2}",
-                "items": comparison_items,
-                "summary_verdict": verdict_text,
+                "title": f"Bảng đối chiếu toàn diện {tickers_and}",
+                "mode": "both",
+                "items": parsed_items,
+                "summary_verdict": overall_verdict,
             },
         }
-    )
-
-    sources.extend(
-        [
-            {
-                "kind": "internal",
-                "title": f"Bảng giá thị trường InvestIQ: {t1}",
-                "url": f"/market/stocks/{t1}",
-            },
-            {
-                "kind": "internal",
-                "title": f"Bảng giá thị trường InvestIQ: {t2}",
-                "url": f"/market/stocks/{t2}",
-            },
-        ]
     )
 
     suggested_actions.extend(
         [
             {
-                "label": f"Xem biểu đồ {t1}",
-                "action_type": "NAVIGATE",
-                "url": f"/market/stocks/{t1}",
-            },
-            {
-                "label": f"Xem biểu đồ {t2}",
-                "action_type": "NAVIGATE",
-                "url": f"/market/stocks/{t2}",
-            },
-            {
                 "label": "So sánh Cổ phiếu vs Vàng & Ngân hàng",
                 "action_type": "OPEN_MODAL",
                 "modal_type": "COMPARATOR",
-                "symbol": t1,
+                "symbol": active_tickers[0],
             },
         ]
     )
+    for sym in active_tickers:
+        suggested_actions.append(
+            {
+                "label": f"Xem biểu đồ {sym}",
+                "action_type": "NAVIGATE",
+                "url": f"/market/stocks/{sym}",
+            }
+        )
 
 
 def _build_single_stock_section(
@@ -1388,6 +1637,8 @@ def generate_structured_response(
     is_leader_rankings: bool = False,
     is_ecosystem: bool = False,
     ecosystem_id: str | None = None,
+    comparison_mode: str = "ask",
+    exceeded_limit: bool = False,
 ) -> dict[str, Any]:
     """Synthesize in-depth analysis and format rich interactive widgets."""
     del is_gold_bank  # Kept in signature for compatibility
@@ -1433,13 +1684,17 @@ def generate_structured_response(
             sources=sources,
             suggested_actions=suggested_actions,
         )
-    elif (is_comparison or (len(tickers) >= 2 and not is_forensics)) and len(stock_data) >= 2:
+    elif is_comparison or (len(tickers) >= 2 and not is_forensics and not is_leader):
         _build_comparison_section(
+            user_message=user_message,
+            tickers=tickers,
             stock_data=stock_data,
             text_parts=text_parts,
             widgets=widgets,
             sources=sources,
             suggested_actions=suggested_actions,
+            comparison_mode=comparison_mode,
+            exceeded_limit=exceeded_limit,
         )
     elif len(stock_data) == 1:
         _build_single_stock_section(

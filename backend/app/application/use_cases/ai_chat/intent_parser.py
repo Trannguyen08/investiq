@@ -78,6 +78,8 @@ class DetectedIntent:
     is_leader_rankings: bool = False
     is_ecosystem: bool = False
     ecosystem_id: str | None = None
+    comparison_mode: str | None = None
+    comparison_exceeded_limit: bool = False
 
 
 # Map of known entrepreneur and market leader aliases: (aliases, leader_id, leader_name, default_symbols)
@@ -588,12 +590,108 @@ def detect_intent(user_message: str) -> DetectedIntent:
         ]
     )
 
+    is_criteria_followup = (
+        len(tickers) == 0
+        and not is_dividend
+        and not is_news
+        and query_folded.strip()
+        in [
+            "thong so",
+            "theo thong so",
+            "ve thong so",
+            "bao cao tang truong",
+            "tang truong",
+            "theo bao cao tang truong",
+            "ve tang truong",
+            "ca hai",
+            "ca 2",
+            "toan dien",
+            "ca hai tieu chi",
+        ]
+    )
+
     is_comparison = (
         not is_dividend
         and not is_news
-        and any(kw in query_lower for kw in ["so sánh", "hay là", "vs", "hơn", "chọn mã nào"])
-        and len(tickers) >= 2
+        and (
+            (
+                any(
+                    kw in query_folded
+                    for kw in [
+                        "so sanh",
+                        "so voi",
+                        "hay la",
+                        " vs ",
+                        "vs.",
+                        " hon ",
+                        "chon ma nao",
+                        "doi dau",
+                        "giua hai",
+                        "giua 2",
+                        "giua 3",
+                    ]
+                )
+                and len(tickers) >= 2
+            )
+            or is_criteria_followup
+        )
     )
+
+    comparison_mode: str | None = None
+    comparison_exceeded_limit = False
+
+    if is_comparison:
+        if len(tickers) > 3:
+            comparison_exceeded_limit = True
+            tickers = tickers[:3]
+
+        if any(
+            kw in query_folded
+            for kw in [
+                "ca hai",
+                "ca 2",
+                "tat ca",
+                "toan dien",
+                "day du",
+                "ca thong so va tang truong",
+                "ca hai tieu chi",
+                "ca hai mat",
+            ]
+        ):
+            comparison_mode = "both"
+        elif any(
+            kw in query_folded
+            for kw in [
+                "bao cao tang truong",
+                "tang truong",
+                "growth",
+                "doanh thu",
+                "loi nhuan",
+                "kqkd",
+                "ket qua kinh doanh",
+                "theo bao cao tang truong",
+                "ve mat tang truong",
+            ]
+        ):
+            comparison_mode = "growth"
+        elif any(
+            kw in query_folded
+            for kw in [
+                "thong so",
+                "chi so",
+                "dinh gia",
+                "p/e",
+                "p/b",
+                "roe",
+                "co ban",
+                "ky thuat",
+                "theo thong so",
+                "ve mat thong so",
+            ]
+        ):
+            comparison_mode = "metrics"
+        else:
+            comparison_mode = "ask"
     is_gold_bank = any(
         kw in query_lower for kw in ["vàng", "ngân hàng", "tiết kiệm", "gửi tiền"]
     )
@@ -811,4 +909,6 @@ def detect_intent(user_message: str) -> DetectedIntent:
         is_leader_rankings=is_leader_rankings,
         is_ecosystem=is_ecosystem,
         ecosystem_id=ecosystem_id,
+        comparison_mode=comparison_mode,
+        comparison_exceeded_limit=comparison_exceeded_limit,
     )

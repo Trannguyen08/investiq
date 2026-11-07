@@ -150,12 +150,45 @@ async def test_ai_financial_service_comparison() -> None:
     service = MarketService(provider)
     ai_service = AiFinancialService(service)
 
+    # 1. Asking step: user asks without criteria -> AI asks back and provides 3 action options
     result = await ai_service.process_chat("So sánh VNM và HPG")
     assert "VNM" in result["content"] and "HPG" in result["content"]
-    widget_types = [w["type"] for w in result["widgets"]]
-    assert "stock_comparison" in widget_types
+    assert "tiêu chí" in result["content"].lower()
+    action_prompts = [a.get("prompt", "") for a in result["suggested_actions"]]
+    assert any("theo thông số" in p for p in action_prompts)
+    assert any("theo báo cáo tăng trưởng" in p for p in action_prompts)
+    assert any("cả hai" in p for p in action_prompts)
     assert len(result["sources"]) >= 2
-    assert all(s["kind"] == "internal" for s in result["sources"])
+
+    # 2. Metrics mode: user selects or asks for metrics
+    res_metrics = await ai_service.process_chat("So sánh VNM và HPG theo thông số")
+    assert "VNM" in res_metrics["content"] and "HPG" in res_metrics["content"]
+    widget_types = [w["type"] for w in res_metrics["widgets"]]
+    assert "stock_comparison" in widget_types
+    assert res_metrics["widgets"][0]["data"]["mode"] == "metrics"
+
+    # 3. Growth mode: user selects growth report
+    res_growth = await ai_service.process_chat("So sánh VNM và HPG theo báo cáo tăng trưởng")
+    assert "VNM" in res_growth["content"] and "HPG" in res_growth["content"]
+    assert "báo cáo tăng trưởng" in res_growth["content"].lower()
+    widget_types_growth = [w["type"] for w in res_growth["widgets"]]
+    assert "stock_comparison" in widget_types_growth
+    assert res_growth["widgets"][0]["data"]["mode"] == "growth"
+
+    # 4. Both mode: user selects both
+    res_both = await ai_service.process_chat("So sánh VNM và HPG cả hai")
+    assert "stock_comparison" in [w["type"] for w in res_both["widgets"]]
+    assert res_both["widgets"][0]["data"]["mode"] == "both"
+
+    # 5. Comparing 3 stocks
+    res_three = await ai_service.process_chat("So sánh VCB, MBB và TCB theo thông số")
+    assert "stock_comparison" in [w["type"] for w in res_three["widgets"]]
+    assert len(res_three["widgets"][0]["data"]["items"]) == 3
+
+    # 6. Exceeding 3 stocks limit (capped at 3)
+    res_four = await ai_service.process_chat("So sánh VCB, MBB, TCB, HPG theo thông số")
+    assert "tối đa 3 mã" in res_four["content"]
+    assert len(res_four["widgets"][0]["data"]["items"]) == 3
 
 
 @pytest.mark.anyio

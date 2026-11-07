@@ -98,6 +98,7 @@ class AiFinancialService:
         self._news_repo = news_repo
         self._cache = cache
         self._metrics = metrics or AiMetricsRegistry()
+        self._recent_comparison_tickers: list[str] = []
 
     @property
     def metrics(self) -> AiMetricsRegistry:
@@ -165,6 +166,8 @@ class AiFinancialService:
         with trace.step("intent_detection") as i_step:
             parsed_intent = detect_intent(user_message)
             tickers = parsed_intent.tickers
+            comparison_mode = parsed_intent.comparison_mode or "ask"
+            comparison_exceeded_limit = parsed_intent.comparison_exceeded_limit
             is_leader = parsed_intent.is_leader
             leader_id = parsed_intent.leader_id
             leader_name = parsed_intent.leader_name
@@ -177,12 +180,20 @@ class AiFinancialService:
             is_gold_bank = parsed_intent.is_gold_bank
             is_forensics = parsed_intent.is_forensics
             is_market_general = parsed_intent.is_market_general
+
+            # Maintain recent comparison tickers for follow-up criteria prompts
+            if is_comparison:
+                if not tickers and self._recent_comparison_tickers:
+                    tickers = list(self._recent_comparison_tickers)
+                elif tickers and len(tickers) >= 2:
+                    self._recent_comparison_tickers = tickers[:3]
+
             i_step.mark(
                 "ok",
                 passed=True,
                 note=(
                     f"tickers={len(tickers)} leader={is_leader} eco={is_ecosystem} dividend={is_dividend} news={is_news} "
-                    f"comparison={is_comparison} forensics={is_forensics} market={is_market_general}"
+                    f"comparison={is_comparison} mode={comparison_mode} forensics={is_forensics} market={is_market_general}"
                 ),
             )
 
@@ -299,11 +310,18 @@ class AiFinancialService:
                                 if isinstance(forensics_res, dict)
                                 else {}
                             )
+                            growth_res = self._market.growth(ticker)
+                            growth = (
+                                growth_res.get("data", {})
+                                if isinstance(growth_res, dict)
+                                else {}
+                            )
                             stock_data[ticker] = {
                                 "instrument": inst,
                                 "candles_count": len(candle_list),
                                 "closes": closes,
                                 "forensics": forensics,
+                                "growth": growth,
                             }
                     except Exception as exc:
                         logger.warning("Failed to fetch internal data for %s: %s", ticker, exc)
@@ -403,6 +421,8 @@ class AiFinancialService:
                 is_leader_rankings=is_leader_rankings,
                 is_ecosystem=is_ecosystem,
                 ecosystem_id=ecosystem_id,
+                comparison_mode=comparison_mode,
+                exceeded_limit=comparison_exceeded_limit,
             )
             gen_step.mark("ok", passed=True, note=f"intent={intent}")
 
@@ -497,6 +517,8 @@ class AiFinancialService:
         is_leader_rankings: bool = False,
         is_ecosystem: bool = False,
         ecosystem_id: str | None = None,
+        comparison_mode: str = "ask",
+        exceeded_limit: bool = False,
     ) -> dict[str, Any]:
         """Synthesize structured response and widgets via ``response_builder``."""
         return generate_structured_response(
@@ -522,4 +544,6 @@ class AiFinancialService:
             is_leader_rankings=is_leader_rankings,
             is_ecosystem=is_ecosystem,
             ecosystem_id=ecosystem_id,
+            comparison_mode=comparison_mode,
+            exceeded_limit=exceeded_limit,
         )
