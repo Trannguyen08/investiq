@@ -126,4 +126,3 @@ Hệ thống tuân thủ nguyên tắc **Zero Single Point of Failure**:
    - Bước `guardrail` (`evaluate_guardrails` trong `guardrails.py`) chạy đầu tiên ngay trong bộ nhớ trên chuỗi đã chuẩn hóa không dấu (`fold_text`), từ chối tức thì các truy vấn độc hại trước khi chạm vào Cache, Database hay Market Service.
 3. **Ngân sách độ trễ (Latency Budget)**:
    - Giám sát độ trễ toàn trình ở mức `3.000 ms` (`LATENCY_BUDGET_MS = 3000.0`) trên từng request.
-

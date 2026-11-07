@@ -22,6 +22,7 @@ import { roundVnd } from "@/lib/portfolio-math";
 import type { MarketInstrument } from "@/types/market";
 import type {
   PaperDashboard,
+  PaperExecutionMode,
   PaperPricePoint,
   PositivePaperNews,
 } from "@/types/portfolio";
@@ -373,6 +374,129 @@ export function PaperTradingDashboard({
     });
   }
 
+  const exchangeSim = dashboard.exchange_simulation;
+  const activeExecutionMode: PaperExecutionMode = exchangeSim?.execution_mode ?? "instant";
+  const t2Summary = exchangeSim?.t2_settlement;
+
+  async function fetchCsrfToken(): Promise<string> {
+    const res = await fetch("/auth-api/csrf", { cache: "no-store" });
+    const body = await res.json().catch(() => null) as { csrf_token?: string } | null;
+    if (!res.ok || !body?.csrf_token) throw new Error("Không thể xác thực thao tác.");
+    return body.csrf_token;
+  }
+
+  async function toggleExecutionMode(nextMode: PaperExecutionMode) {
+    setError("");
+    setNotice("");
+    try {
+      const csrf = await fetchCsrfToken();
+      const res = await fetch("/portfolio-api/execution-mode", {
+        method: "POST",
+        cache: "no-store",
+        headers: {
+          "Content-Type": "application/json",
+          "X-CSRF-Token": csrf,
+        },
+        body: JSON.stringify({ execution_mode: nextMode }),
+      });
+      const body = await res.json().catch(() => null) as (PaperDashboard & { detail?: string }) | null;
+      if (!res.ok || !body?.account) {
+        throw new Error(body?.detail ?? "Không thể chuyển chế độ khớp lệnh.");
+      }
+      setDashboard(body);
+      setNotice(
+        nextMode === "exchange_hours"
+          ? "Đã chuyển sang chế độ Giờ sàn thật HOSE/HNX (09:00-11:30 & 13:00-14:45, kiểm tra biên độ Trần/Sàn & sổ lệnh 3 bước giá)."
+          : "Đã chuyển sang chế độ Khớp tức thì 24/7 (tự động khớp toàn bộ theo giá quan sát mới nhất)."
+      );
+    } catch (reason) {
+      setError(reason instanceof Error ? reason.message : "Không thể chuyển chế độ khớp lệnh.");
+    }
+  }
+
+  async function handleAdvanceSaleCash() {
+    setError("");
+    setNotice("");
+    try {
+      const csrf = await fetchCsrfToken();
+      const res = await fetch("/portfolio-api/advance-cash", {
+        method: "POST",
+        cache: "no-store",
+        headers: {
+          "Content-Type": "application/json",
+          "X-CSRF-Token": csrf,
+        },
+        body: JSON.stringify({}),
+      });
+      const body = await res.json().catch(() => null) as {
+        advance?: { net_received: string; fee_amount: string };
+        data?: PaperDashboard;
+        detail?: string;
+      } | null;
+      if (!res.ok || !body?.data || !body?.advance) {
+        throw new Error(body?.detail ?? "Không thể ứng trước tiền bán T+2.");
+      }
+      setDashboard(body.data);
+      setNotice(
+        `Ứng trước tiền bán T+2 thành công: Thực nhận ${money(body.advance.net_received)} (Phí ứng 0,03%/ngày: ${money(body.advance.fee_amount)}).`
+      );
+    } catch (reason) {
+      setError(reason instanceof Error ? reason.message : "Không thể ứng trước tiền bán T+2.");
+    }
+  }
+
+  async function handleCancelWaitingOrder(orderId: string) {
+    setError("");
+    setNotice("");
+    try {
+      const csrf = await fetchCsrfToken();
+      const res = await fetch(`/portfolio-api/orders/${orderId}`, {
+        method: "DELETE",
+        cache: "no-store",
+        headers: { "X-CSRF-Token": csrf },
+      });
+      const body = await res.json().catch(() => null) as {
+        data?: PaperDashboard;
+        order?: { symbol: string };
+        detail?: string;
+      } | null;
+      if (!res.ok || !body?.data) {
+        throw new Error(body?.detail ?? "Không thể hủy lệnh đang chờ.");
+      }
+      setDashboard(body.data);
+      setNotice(`Đã hủy lệnh chờ ${body.order?.symbol ?? ""} và hoàn lại sức mua/cổ phiếu khả dụng.`);
+    } catch (reason) {
+      setError(reason instanceof Error ? reason.message : "Không thể hủy lệnh đang chờ.");
+    }
+  }
+
+  async function handleForceFillWaitingOrder(orderId: string) {
+    setError("");
+    setNotice("");
+    try {
+      const csrf = await fetchCsrfToken();
+      const res = await fetch(`/portfolio-api/orders/${orderId}/fill`, {
+        method: "POST",
+        cache: "no-store",
+        headers: { "X-CSRF-Token": csrf },
+      });
+      const body = await res.json().catch(() => null) as {
+        data?: PaperDashboard;
+        trade?: { symbol: string; quantity: number; execution_price: string };
+        detail?: string;
+      } | null;
+      if (!res.ok || !body?.data || !body?.trade) {
+        throw new Error(body?.detail ?? "Không thể khớp nhanh lệnh đang chờ.");
+      }
+      setDashboard(body.data);
+      setNotice(
+        `Đã khớp nhanh ${body.trade.quantity} ${body.trade.symbol} tại giá ${money(body.trade.execution_price)}.`
+      );
+    } catch (reason) {
+      setError(reason instanceof Error ? reason.message : "Không thể khớp nhanh lệnh đang chờ.");
+    }
+  }
+
   return (
     <main id="main-content" className="paper-page">
       <section className="paper-hero">
@@ -437,6 +561,71 @@ export function PaperTradingDashboard({
       </section>
 
       <TradingDisciplineCard dashboard={dashboard} />
+
+      <section className="paper-card paper-exchange-sim-bar" aria-label="Cấu hình mô phỏng sàn HOSE/HNX và Chu kỳ T+2">
+        <div className="paper-exchange-sim-header">
+          <div>
+            <p className="eyebrow">CHẾ ĐỘ KHỚP LỆNH &amp; CHU KỲ BÙ TRỪ VSDC T+2</p>
+            <h2>
+              {activeExecutionMode === "exchange_hours"
+                ? "Chế độ Giờ sàn thật HOSE/HNX (09:00-11:30 & 13:00-14:45)"
+                : "Chế độ Khớp tức thì 24/7 (Môi trường học tập linh hoạt)"}
+            </h2>
+            <p>
+              {exchangeSim?.session_message ??
+                "Hỗ trợ đầy đủ lệnh LO, MP, ATO, ATC, biên độ Trần/Sàn, bước giá 10/50/100 ₫, sổ lệnh 3 bước giá và chu kỳ T+2."}
+            </p>
+          </div>
+          <div className="paper-mode-switch" role="group" aria-label="Chọn chế độ khớp lệnh">
+            <button
+              type="button"
+              className={activeExecutionMode === "instant" ? "active" : ""}
+              aria-pressed={activeExecutionMode === "instant"}
+              onClick={() => toggleExecutionMode("instant")}
+            >
+              Khớp tức thì 24/7
+            </button>
+            <button
+              type="button"
+              className={activeExecutionMode === "exchange_hours" ? "active" : ""}
+              aria-pressed={activeExecutionMode === "exchange_hours"}
+              onClick={() => toggleExecutionMode("exchange_hours")}
+            >
+              Giờ sàn thật HOSE/HNX
+            </button>
+          </div>
+        </div>
+        {t2Summary && (
+          <div className="paper-t2-summary-grid">
+            <div>
+              <span>Cổ phiếu mua chờ về (T+2)</span>
+              <strong>
+                {Object.keys(t2Summary.pending_buy_shares_by_symbol).length > 0
+                  ? Object.entries(t2Summary.pending_buy_shares_by_symbol)
+                      .map(([sym, qty]) => `${sym}: ${numberFormat.format(qty)} CP`)
+                      .join(", ")
+                  : "0 CP"}
+              </strong>
+              <small>Về tài khoản lúc 13:00 ngày T+2</small>
+            </div>
+            <div>
+              <span>Tiền bán chờ về (T+2)</span>
+              <strong>{money(t2Summary.receivable_cash_t2)}</strong>
+              <small>Khả dụng ứng trước: {money(t2Summary.advanceable_cash)}</small>
+            </div>
+            <div>
+              <span>Ứng trước tiền bán (Phí 0,03%/ngày)</span>
+              {Number(t2Summary.advanceable_cash) > 0 ? (
+                <button type="button" onClick={handleAdvanceSaleCash}>
+                  Ứng trước tiền bán ({money(t2Summary.net_advance_available)})
+                </button>
+              ) : (
+                <small>Chưa có khoản tiền bán chờ về cần ứng</small>
+              )}
+            </div>
+          </div>
+        )}
+      </section>
 
       {error && <p className="paper-inline-message error" role="alert">{error}</p>}
       {notice && <p className="paper-trade-toast" role="status">{notice}</p>}
@@ -706,31 +895,73 @@ export function PaperTradingDashboard({
                   <th>Kết quả</th>
                   <th>Giá mô phỏng</th>
                   <th>Số lượng</th>
+                  {activeExecutionMode === "exchange_hours" && <th>Thao tác</th>}
                 </tr>
               </thead>
               <tbody>
-                {filteredOrders.map((order) => (
-                  <tr key={order.id}>
-                    <td>{timeFormat.format(new Date(order.created_at))}</td>
-                    <td><span className={`paper-side ${order.side}`}>{order.side === "buy" ? "Mua" : "Bán"}</span></td>
-                    <td><strong>{order.symbol}</strong></td>
-                    <td>
-                      <span className={`paper-order-status ${order.status}`}>
-                        {order.status === "filled"
-                          ? "Đã tự động khớp"
-                          : order.status === "cancelled"
-                          ? "Đã hủy trước đây"
-                          : order.status === "expired"
-                          ? "Đã hết hạn trước đây"
-                          : order.status === "rejected"
-                          ? "Bị từ chối"
-                          : "Đang đồng bộ"}
-                      </span>
-                    </td>
-                    <td>{money(order.limit_price)}</td>
-                    <td>{numberFormat.format(order.filled_quantity || order.quantity)} CP</td>
-                  </tr>
-                ))}
+                {filteredOrders.map((order) => {
+                  const meta = exchangeSim?.order_meta?.[order.id];
+                  const displayType = meta?.display_order_type ?? order.order_type;
+                  const canAct =
+                    activeExecutionMode === "exchange_hours" &&
+                    (order.status === "open" || order.status === "pending");
+                  return (
+                    <tr key={order.id}>
+                      <td>{timeFormat.format(new Date(order.created_at))}</td>
+                      <td>
+                        <span className={`paper-side ${order.side}`}>
+                          {order.side === "buy" ? "Mua" : "Bán"} ({displayType})
+                        </span>
+                      </td>
+                      <td><strong>{order.symbol}</strong></td>
+                      <td>
+                        <span className={`paper-order-status ${order.status}`}>
+                          {order.status === "filled"
+                            ? "Đã tự động khớp"
+                            : order.status === "cancelled"
+                            ? "Đã hủy trước đây"
+                            : order.status === "expired"
+                            ? "Đã hết hạn trước đây"
+                            : order.status === "rejected"
+                            ? "Bị từ chối"
+                            : activeExecutionMode === "exchange_hours"
+                            ? "Đang chờ khớp trên sàn"
+                            : "Đang đồng bộ"}
+                        </span>
+                        {meta?.pending_reason && (
+                          <small className="paper-order-pending-reason">{meta.pending_reason}</small>
+                        )}
+                      </td>
+                      <td>{money(order.limit_price)}</td>
+                      <td>{numberFormat.format(order.filled_quantity || order.quantity)} CP</td>
+                      {activeExecutionMode === "exchange_hours" && (
+                        <td>
+                          {canAct ? (
+                            <div className="paper-stock-actions">
+                              <button
+                                type="button"
+                                onClick={() => handleForceFillWaitingOrder(order.id)}
+                                aria-label={`Khớp nhanh ${order.symbol}`}
+                              >
+                                Khớp nhanh
+                              </button>
+                              <button
+                                type="button"
+                                className="sell"
+                                onClick={() => handleCancelWaitingOrder(order.id)}
+                                aria-label="Hủy lệnh"
+                              >
+                                Hủy lệnh
+                              </button>
+                            </div>
+                          ) : (
+                            "—"
+                          )}
+                        </td>
+                      )}
+                    </tr>
+                  );
+                })}
               </tbody>
             </table>
           </div>

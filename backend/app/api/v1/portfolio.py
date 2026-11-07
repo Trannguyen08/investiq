@@ -28,13 +28,17 @@ from app.infrastructure.db.repositories.sql_portfolio_repository import (
 )
 from app.infrastructure.db.session import get_pool
 from app.schemas.portfolio import (
+    AdvanceSaleCashRequest,
+    AdvanceSaleCashResponse,
     CancelPaperOrderResponse,
     PaperDashboardResponse,
     PaperReportSubscriptionResponse,
     PlacePaperOrderRequest,
     PlacePaperOrderResponse,
     SendPaperReportNowResponse,
+    SetExecutionModeRequest,
     SetPaperReportSubscriptionRequest,
+    UpsertConditionalTriggerRequest,
 )
 from app.schemas.thesis import (
     PublicPortfolioDetailResponse,
@@ -136,6 +140,13 @@ def place_paper_order(
                 order_type=body.order_type,
                 limit_price=Decimal(body.limit_price),
                 idempotency_key=idempotency_key,
+                execution_mode=body.execution_mode,
+                use_orderbook_depth=body.use_orderbook_depth,
+                strict_rules=body.strict_rules,
+                stop_loss_price=Decimal(body.stop_loss_price) if body.stop_loss_price else None,
+                take_profit_price=(
+                    Decimal(body.take_profit_price) if body.take_profit_price else None
+                ),
             ),
         )
     except PaperOrderError as exc:
@@ -149,6 +160,105 @@ def place_paper_order(
         "trade": _trade_response(trade),
         "data": service.dashboard(user_id),
     }
+
+
+@router.post(
+    "/orders/{order_id}/fill",
+    response_model=PlacePaperOrderResponse,
+)
+def force_fill_paper_order(
+    order_id: UUID,
+    response: Response,
+    user_id: Annotated[str, Depends(authenticated_user_id)],
+    service: Annotated[PaperTradingService, Depends(get_paper_trading_service)],
+) -> dict[str, object]:
+    _private(response)
+    try:
+        order, trade = service.force_fill_order(user_id, str(order_id))
+    except PaperOrderError as exc:
+        raise HTTPException(status_code=422, detail=exc.message) from exc
+    except (InsufficientCashError, InsufficientSharesError, HoldingLimitError, PortfolioConflictError) as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
+    return {
+        "order": _order_response(order),
+        "trade": _trade_response(trade),
+        "data": service.dashboard(user_id),
+    }
+
+
+@router.post(
+    "/execution-mode",
+    response_model=PaperDashboardResponse,
+)
+def set_paper_execution_mode(
+    body: SetExecutionModeRequest,
+    response: Response,
+    user_id: Annotated[str, Depends(authenticated_user_id)],
+    service: Annotated[PaperTradingService, Depends(get_paper_trading_service)],
+) -> dict[str, object]:
+    _private(response)
+    try:
+        return service.set_execution_mode(user_id, body.execution_mode)
+    except PaperOrderError as exc:
+        raise HTTPException(status_code=422, detail=exc.message) from exc
+
+
+@router.post(
+    "/advance-cash",
+    response_model=AdvanceSaleCashResponse,
+)
+def advance_paper_sale_cash(
+    body: AdvanceSaleCashRequest,
+    response: Response,
+    user_id: Annotated[str, Depends(authenticated_user_id)],
+    service: Annotated[PaperTradingService, Depends(get_paper_trading_service)],
+) -> dict[str, object]:
+    _private(response)
+    try:
+        return service.advance_sale_cash(
+            user_id,
+            Decimal(body.amount) if body.amount else None,
+        )
+    except PaperOrderError as exc:
+        raise HTTPException(status_code=422, detail=exc.message) from exc
+
+
+@router.post(
+    "/conditional-triggers",
+    response_model=PaperDashboardResponse,
+)
+def upsert_paper_conditional_trigger(
+    body: UpsertConditionalTriggerRequest,
+    response: Response,
+    user_id: Annotated[str, Depends(authenticated_user_id)],
+    service: Annotated[PaperTradingService, Depends(get_paper_trading_service)],
+) -> dict[str, object]:
+    _private(response)
+    try:
+        return service.upsert_conditional_trigger(
+            user_id=user_id,
+            symbol=body.symbol,
+            stop_loss_price=Decimal(body.stop_loss_price) if body.stop_loss_price else None,
+            take_profit_price=Decimal(body.take_profit_price) if body.take_profit_price else None,
+            quantity=body.quantity,
+        )
+    except PaperOrderError as exc:
+        raise HTTPException(status_code=422, detail=exc.message) from exc
+
+
+@router.delete(
+    "/conditional-triggers/{trigger_id}",
+    response_model=PaperDashboardResponse,
+)
+def cancel_paper_conditional_trigger(
+    trigger_id: str,
+    response: Response,
+    user_id: Annotated[str, Depends(authenticated_user_id)],
+    service: Annotated[PaperTradingService, Depends(get_paper_trading_service)],
+) -> dict[str, object]:
+    _private(response)
+    return service.cancel_conditional_trigger(user_id, trigger_id)
+
 
 
 @router.delete(

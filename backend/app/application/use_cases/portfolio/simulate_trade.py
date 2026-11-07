@@ -4,9 +4,25 @@ from __future__ import annotations
 
 from datetime import UTC, datetime, time, timedelta
 from decimal import Decimal
+from typing import cast
+from uuid import uuid4
 from zoneinfo import ZoneInfo
 
 from app.application.dto.portfolio_dto import PlacePaperOrder
+from app.application.use_cases.portfolio.exchange_simulator import (
+    ADVANCE_FEE_RATE_PER_DAY,
+    ANTI_LOOKAHEAD_QUARANTINE_SECONDS,
+    ExchangeSimulationStore,
+    ExecutionMode,
+    OrderExtendedMeta,
+    OrderTypeCode,
+    build_t2_settlement_summary,
+    classify_lot_type,
+    get_exchange_simulation_store,
+    is_within_exchange_trading_hours,
+    match_against_orderbook,
+    validate_vietnam_exchange_rules,
+)
 from app.domain.entities.market import MarketInstrument
 from app.domain.entities.portfolio import PaperOrder, PaperPortfolio, PaperTrade
 from app.domain.repositories.i_market_provider import IMarketProvider
@@ -22,6 +38,7 @@ BROKER_FEE_RATE = Decimal("0.0015")
 SELL_TAX_RATE = Decimal("0.001")
 MAX_HOLDINGS = 20
 _MARKET_TZ = ZoneInfo("Asia/Ho_Chi_Minh")
+SUPPORTED_ORDER_TYPES: set[str] = {"LO", "MP", "ATO", "ATC"}
 
 
 class PaperOrderError(ValueError):
@@ -100,16 +117,29 @@ def _day_order_expiry(now: datetime) -> datetime:
 
 
 class PaperTradingService:
-    def __init__(self, repository: IPortfolioRepository, provider: IMarketProvider) -> None:
+    def __init__(
+        self,
+        repository: IPortfolioRepository,
+        provider: IMarketProvider,
+        sim_store: ExchangeSimulationStore | None = None,
+        clock: datetime | None = None,
+    ) -> None:
         self._repository = repository
         self._provider = provider
+        self._sim_store = sim_store or get_exchange_simulation_store()
+        self._clock = clock
+
+    def _now(self) -> datetime:
+        return self._clock or datetime.now(UTC)
 
     def _execution(
         self,
         order: PaperOrder,
         instrument: MarketInstrument,
+        execution_price: Decimal | None = None,
     ) -> PaperExecution:
-        gross = round_vnd(instrument.price * Decimal(order.quantity))
+        fill_price = execution_price if execution_price is not None else instrument.price
+        gross = round_vnd(fill_price * Decimal(order.quantity))
         fee = round_vnd(gross * BROKER_FEE_RATE)
         tax_rate = SELL_TAX_RATE if order.side == "sell" else Decimal()
         return PaperExecution(
@@ -120,7 +150,7 @@ class PaperTradingService:
             exchange=instrument.exchange,
             sector=instrument.sector,
             quantity=order.quantity,
-            execution_price=instrument.price,
+            execution_price=fill_price,
             gross_amount=gross,
             fee_rate=BROKER_FEE_RATE,
             fee_amount=fee,
@@ -128,12 +158,31 @@ class PaperTradingService:
             tax_amount=round_vnd(gross * tax_rate),
             provider=self._provider.slug,
             price_at=_market_datetime(self._provider.market_time),
-            received_at=datetime.now(UTC),
+            received_at=self._now(),
             delay_class=self._provider.delay_class,
         )
 
-    def _can_simulate_fill(self) -> bool:
-        return True
+    def _can_simulate_fill(self, user_id: str | None = None) -> bool:
+        if user_id is None:
+            return True
+        mode = self._sim_store.get_mode(user_id)
+        if mode == "instant":
+            return True
+        in_session, _ = is_within_exchange_trading_hours(
+            self._now(),
+            self._provider.session,
+            "LO",
+        )
+        return in_session
+
+    def set_execution_mode(self, user_id: str, mode: ExecutionMode) -> dict[str, object]:
+        if mode not in {"instant", "exchange_hours"}:
+            raise PaperOrderError(
+                "INVALID_EXECUTION_MODE",
+                "Chế độ khớp lệnh chỉ hỗ trợ 'instant' hoặc 'exchange_hours'.",
+            )
+        self._sim_store.set_mode(user_id, mode)
+        return self.dashboard(user_id)
 
     def place_order(
         self,
@@ -148,25 +197,155 @@ class PaperTradingService:
                 "PRICE_UNAVAILABLE",
                 "Chưa có giá quan sát hợp lệ để mô phỏng khớp lệnh.",
             )
-        if command.order_type != "LO":
-            raise PaperOrderError("UNSUPPORTED_ORDER_TYPE", "Hiện chỉ hỗ trợ lệnh LO.")
+        order_type_upper = command.order_type.strip().upper()
+        if order_type_upper not in SUPPORTED_ORDER_TYPES:
+            raise PaperOrderError(
+                "UNSUPPORTED_ORDER_TYPE",
+                "Hiện chỉ hỗ trợ các loại lệnh chuẩn HOSE/HNX: LO, MP, ATO, ATC.",
+            )
+        typed_order_type = cast(OrderTypeCode, order_type_upper)
         if command.limit_price <= 0:
             raise PaperOrderError("INVALID_LIMIT_PRICE", "Giá đặt lệnh phải lớn hơn 0.")
-        reserved_gross = round_vnd(instrument.price * Decimal(command.quantity))
+
+        active_mode: ExecutionMode = (
+            cast(ExecutionMode, command.execution_mode)
+            if command.execution_mode in {"instant", "exchange_hours"}
+            else self._sim_store.get_mode(user_id)
+        )
+        enforce_strict = (
+            command.strict_rules
+            or active_mode == "exchange_hours"
+            or typed_order_type != "LO"
+        )
+
+        is_valid, err_code, err_msg = validate_vietnam_exchange_rules(
+            side=command.side,
+            order_type=typed_order_type,
+            quantity=command.quantity,
+            limit_price=command.limit_price,
+            instrument=instrument,
+            strict_rules=enforce_strict,
+        )
+        if not is_valid and err_code and err_msg:
+            raise PaperOrderError(err_code, err_msg)
+
+        now = self._now()
+        self._repository.expire_orders(user_id, now)
+        lot_type = classify_lot_type(command.quantity)
+
+        # Determine if we are in strict exchange hours mode and outside session
+        in_session = True
+        session_reason: str | None = None
+        if active_mode == "exchange_hours":
+            in_session, session_reason = is_within_exchange_trading_hours(
+                now,
+                self._provider.session,
+                typed_order_type,
+            )
+
+        # Match against orderbook depth / limit price
+        match = match_against_orderbook(
+            side=command.side,
+            order_type=typed_order_type,
+            quantity=command.quantity,
+            limit_price=command.limit_price,
+            instrument=instrument,
+            execution_mode=active_mode,
+            use_orderbook_depth=command.use_orderbook_depth or active_mode == "exchange_hours",
+        )
+
+        # Register Stop-Loss / Take-Profit conditional trigger if provided on buy
+        if command.side == "buy" and (
+            command.stop_loss_price is not None or command.take_profit_price is not None
+        ):
+            self._sim_store.upsert_trigger(
+                user_id=user_id,
+                symbol=instrument.symbol,
+                stop_loss_price=command.stop_loss_price,
+                take_profit_price=command.take_profit_price,
+                quantity=command.quantity,
+            )
+
+        # Case 1: Order cannot fill immediately (outside exchange hours or non-marketable LO)
+        if not in_session or not match.can_fill_now:
+            effective_limit = (
+                command.limit_price
+                if (active_mode == "exchange_hours" or command.use_orderbook_depth)
+                else instrument.price
+            )
+            reserved_gross = round_vnd(effective_limit * Decimal(command.quantity))
+            reserved_fee = round_vnd(reserved_gross * BROKER_FEE_RATE)
+            submission = PaperOrderSubmission(
+                idempotency_key=command.idempotency_key,
+                side=command.side,
+                order_type="LO",  # Stored as LO in DB check constraint; display_order_type in meta
+                symbol=instrument.symbol,
+                name=instrument.name,
+                exchange=instrument.exchange,
+                sector=instrument.sector,
+                quantity=command.quantity,
+                limit_price=effective_limit,
+                reserved_cash=(
+                    reserved_gross + reserved_fee if command.side == "buy" else Decimal()
+                ),
+                reserved_quantity=command.quantity if command.side == "sell" else 0,
+                provider=self._provider.slug,
+                price_at=_market_datetime(self._provider.market_time),
+                received_at=now,
+                delay_class=self._provider.delay_class,
+                initial_status="open",
+                expires_at=_day_order_expiry(now),
+            )
+            order = self._repository.place_order(
+                user_id,
+                STARTING_CASH,
+                submission,
+                MAX_HOLDINGS,
+            )
+            quarantine_until = (
+                now + timedelta(seconds=ANTI_LOOKAHEAD_QUARANTINE_SECONDS)
+                if not match.can_fill_now
+                else None
+            )
+            self._sim_store.save_order_meta(
+                OrderExtendedMeta(
+                    order_id=order.id,
+                    display_order_type=typed_order_type,
+                    lot_type=lot_type,
+                    slippage_vnd=Decimal("0"),
+                    slippage_bps=Decimal("0"),
+                    quarantine_until=quarantine_until,
+                    pending_reason=session_reason if not in_session else match.pending_reason,
+                    stop_loss_price=command.stop_loss_price,
+                    take_profit_price=command.take_profit_price,
+                )
+            )
+            return order, None
+
+        # Case 2: Immediate fill (full or partial fill across 3-level orderbook)
+        filled_qty = match.filled_quantity
+        unfilled_qty = match.unfilled_quantity
+        exec_price = match.execution_price
+
+        submission_limit_price = (
+            instrument.price
+            if (active_mode == "instant" and not command.use_orderbook_depth and typed_order_type == "LO")
+            else exec_price
+        )
+        reserved_gross = round_vnd(submission_limit_price * Decimal(filled_qty))
         reserved_fee = round_vnd(reserved_gross * BROKER_FEE_RATE)
-        now = datetime.now(UTC)
         submission = PaperOrderSubmission(
             idempotency_key=command.idempotency_key,
             side=command.side,
-            order_type=command.order_type,
+            order_type="LO",
             symbol=instrument.symbol,
             name=instrument.name,
             exchange=instrument.exchange,
             sector=instrument.sector,
-            quantity=command.quantity,
-            limit_price=instrument.price,
+            quantity=filled_qty,
+            limit_price=submission_limit_price,
             reserved_cash=(reserved_gross + reserved_fee if command.side == "buy" else Decimal()),
-            reserved_quantity=command.quantity if command.side == "sell" else 0,
+            reserved_quantity=filled_qty if command.side == "sell" else 0,
             provider=self._provider.slug,
             price_at=_market_datetime(self._provider.market_time),
             received_at=now,
@@ -174,46 +353,238 @@ class PaperTradingService:
             initial_status="open",
             expires_at=_day_order_expiry(now),
         )
-        self._repository.expire_orders(user_id, now)
         order = self._repository.place_order(
             user_id,
             STARTING_CASH,
             submission,
             MAX_HOLDINGS,
         )
-        if order.status == "filled":
-            return self._repository.fill_order(
+        self._sim_store.save_order_meta(
+            OrderExtendedMeta(
+                order_id=order.id,
+                display_order_type=typed_order_type,
+                lot_type=lot_type,
+                slippage_vnd=match.slippage_vnd,
+                slippage_bps=match.slippage_bps,
+                pending_reason=match.pending_reason,
+                stop_loss_price=command.stop_loss_price,
+                take_profit_price=command.take_profit_price,
+            )
+        )
+        if order.status == "pending":
+            order = self._repository.activate_order(user_id, order.id)
+        if order.status in {"open", "filled"}:
+            filled_order, trade = self._repository.fill_order(
                 user_id,
                 order.id,
-                self._execution(order, instrument),
+                self._execution(order, instrument, execution_price=exec_price),
                 MAX_HOLDINGS,
             )
-        if order.status in {"pending", "open"}:
-            if order.status == "pending":
-                order = self._repository.activate_order(user_id, order.id)
-            return self._repository.fill_order(
+        else:
+            return order, None
+
+        # If partial fill occurred, place a resting open child order for the remaining shares
+        if unfilled_qty > 0:
+            rem_gross = round_vnd(command.limit_price * Decimal(unfilled_qty))
+            rem_fee = round_vnd(rem_gross * BROKER_FEE_RATE)
+            rem_submission = PaperOrderSubmission(
+                idempotency_key=f"{command.idempotency_key[:110]}:rem",
+                side=command.side,
+                order_type="LO",
+                symbol=instrument.symbol,
+                name=instrument.name,
+                exchange=instrument.exchange,
+                sector=instrument.sector,
+                quantity=unfilled_qty,
+                limit_price=command.limit_price,
+                reserved_cash=(rem_gross + rem_fee if command.side == "buy" else Decimal()),
+                reserved_quantity=unfilled_qty if command.side == "sell" else 0,
+                provider=self._provider.slug,
+                price_at=_market_datetime(self._provider.market_time),
+                received_at=now,
+                delay_class=self._provider.delay_class,
+                initial_status="open",
+                expires_at=_day_order_expiry(now),
+            )
+            rem_order = self._repository.place_order(
                 user_id,
-                order.id,
-                self._execution(order, instrument),
+                STARTING_CASH,
+                rem_submission,
                 MAX_HOLDINGS,
             )
-        return order, None
+            self._sim_store.save_order_meta(
+                OrderExtendedMeta(
+                    order_id=rem_order.id,
+                    display_order_type=typed_order_type,
+                    lot_type=classify_lot_type(unfilled_qty),
+                    pending_reason=(
+                        f"Phần dư {unfilled_qty} CP từ lệnh khớp một phần đang chờ thanh khoản tại giá "
+                        f"{decimal_text(command.limit_price)}."
+                    ),
+                )
+            )
+
+        return filled_order, trade
+
+    def force_fill_order(
+        self,
+        user_id: str,
+        order_id: str,
+    ) -> tuple[PaperOrder, PaperTrade | None]:
+        portfolio = self._repository.get_or_create(user_id, STARTING_CASH)
+        target = next((o for o in portfolio.orders if o.id == order_id), None)
+        if target is None:
+            raise PaperOrderError("ORDER_NOT_FOUND", "Không tìm thấy lệnh chờ này.")
+        if target.status not in {"pending", "open"}:
+            raise PaperOrderError("ORDER_NOT_OPEN", "Chỉ có thể khớp nhanh các lệnh đang chờ.")
+        instrument = self._provider.instrument(target.symbol, include_fundamentals=False)
+        if instrument is None or instrument.price <= 0:
+            raise PaperOrderError(
+                "PRICE_UNAVAILABLE",
+                "Chưa có giá thị trường hợp lệ để khớp lệnh này.",
+            )
+        active = (
+            self._repository.activate_order(user_id, target.id)
+            if target.status == "pending"
+            else target
+        )
+        return self._repository.fill_order(
+            user_id,
+            active.id,
+            self._execution(active, instrument, execution_price=instrument.price),
+            MAX_HOLDINGS,
+        )
+
+    def advance_sale_cash(
+        self,
+        user_id: str,
+        requested_amount: Decimal | None = None,
+    ) -> dict[str, object]:
+        portfolio = self._repository.get_or_create(user_id, STARTING_CASH)
+        t2_summary = build_t2_settlement_summary(
+            user_id=user_id,
+            trades=portfolio.trades,
+            now=self._now(),
+            store=self._sim_store,
+        )
+        advanceable = Decimal(str(t2_summary["advanceable_cash"]))
+        if advanceable <= 0:
+            raise PaperOrderError(
+                "NO_ADVANCEABLE_CASH",
+                "Hiện không có tiền bán chờ về (T+2) khả dụng để ứng trước.",
+            )
+        gross = requested_amount if requested_amount is not None else advanceable
+        if gross <= 0 or gross > advanceable:
+            raise PaperOrderError(
+                "INVALID_ADVANCE_AMOUNT",
+                f"Số tiền ứng trước phải lớn hơn 0 và không vượt quá {decimal_text(advanceable)} ₫.",
+            )
+        days_advanced = 2
+        fee = round_vnd(gross * ADVANCE_FEE_RATE_PER_DAY * Decimal(days_advanced))
+        net_received = max(Decimal("0"), gross - fee)
+        record = self._sim_store.record_cash_advance(
+            user_id=user_id,
+            gross_amount=gross,
+            fee_amount=fee,
+            net_received=net_received,
+            days_advanced=days_advanced,
+        )
+        return {
+            "advance": {
+                "id": record.id,
+                "gross_amount": decimal_text(record.gross_amount),
+                "fee_amount": decimal_text(record.fee_amount),
+                "net_received": decimal_text(record.net_received),
+                "days_advanced": record.days_advanced,
+                "created_at": _iso(record.created_at),
+            },
+            "data": self.dashboard(user_id),
+        }
+
+    def upsert_conditional_trigger(
+        self,
+        user_id: str,
+        symbol: str,
+        stop_loss_price: Decimal | None,
+        take_profit_price: Decimal | None,
+        quantity: int | None = None,
+    ) -> dict[str, object]:
+        if stop_loss_price is None and take_profit_price is None:
+            raise PaperOrderError(
+                "EMPTY_CONDITIONAL_TRIGGER",
+                "Vui lòng nhập ít nhất một mức giá Cắt lỗ (Stop-Loss) hoặc Chốt lời (Take-Profit).",
+            )
+        if stop_loss_price is not None and stop_loss_price <= 0:
+            raise PaperOrderError("INVALID_STOP_LOSS", "Giá cắt lỗ phải lớn hơn 0.")
+        if take_profit_price is not None and take_profit_price <= 0:
+            raise PaperOrderError("INVALID_TAKE_PROFIT", "Giá chốt lời phải lớn hơn 0.")
+        if (
+            stop_loss_price is not None
+            and take_profit_price is not None
+            and stop_loss_price >= take_profit_price
+        ):
+            raise PaperOrderError(
+                "INVALID_TRIGGER_RANGE",
+                "Giá cắt lỗ (Stop-Loss) phải nhỏ hơn giá chốt lời (Take-Profit).",
+            )
+        self._sim_store.upsert_trigger(
+            user_id=user_id,
+            symbol=symbol,
+            stop_loss_price=stop_loss_price,
+            take_profit_price=take_profit_price,
+            quantity=quantity,
+        )
+        return self.dashboard(user_id)
+
+    def cancel_conditional_trigger(self, user_id: str, trigger_id: str) -> dict[str, object]:
+        self._sim_store.cancel_trigger(user_id, trigger_id)
+        return self.dashboard(user_id)
 
     def cancel_order(self, user_id: str, order_id: str) -> PaperOrder:
         return self._repository.cancel_order(user_id, order_id)
 
     def _refresh_orders(self, user_id: str) -> PaperPortfolio:
-        now = datetime.now(UTC)
+        now = self._now()
         self._repository.expire_orders(user_id, now)
         portfolio = self._repository.get_or_create(user_id, STARTING_CASH)
-        if not self._can_simulate_fill():
+        mode = self._sim_store.get_mode(user_id)
+        if not self._can_simulate_fill(user_id):
             return portfolio
+
         for order in portfolio.orders:
             if order.status not in {"pending", "open"}:
+                continue
+            meta = self._sim_store.get_order_meta(order.id)
+            if meta and meta.quarantine_until and now < meta.quarantine_until:
                 continue
             instrument = self._provider.instrument(order.symbol, include_fundamentals=False)
             if instrument is None or instrument.price <= 0:
                 continue
+
+            if mode == "exchange_hours":
+                display_type: OrderTypeCode = meta.display_order_type if meta else "LO"
+                in_sess, _ = is_within_exchange_trading_hours(
+                    now,
+                    self._provider.session,
+                    display_type,
+                )
+                if not in_sess:
+                    continue
+                match = match_against_orderbook(
+                    side=order.side,
+                    order_type=display_type,
+                    quantity=order.quantity,
+                    limit_price=order.limit_price,
+                    instrument=instrument,
+                    execution_mode=mode,
+                    use_orderbook_depth=True,
+                )
+                if not match.can_fill_now:
+                    continue
+                fill_price = match.execution_price
+            else:
+                fill_price = instrument.price
+
             active = (
                 self._repository.activate_order(user_id, order.id)
                 if order.status == "pending"
@@ -222,9 +593,75 @@ class PaperTradingService:
             self._repository.fill_order(
                 user_id,
                 active.id,
-                self._execution(active, instrument),
+                self._execution(active, instrument, execution_price=fill_price),
                 MAX_HOLDINGS,
             )
+
+        # Evaluate automated Stop-Loss / Take-Profit triggers against current holdings
+        portfolio = self._repository.get_or_create(user_id, STARTING_CASH)
+        triggers = self._sim_store.list_triggers(user_id)
+        active_triggers = [t for t in triggers if t.status == "active"]
+        if active_triggers:
+            holding_by_sym = {h.symbol: h for h in portfolio.holdings}
+            for trig in active_triggers:
+                holding = holding_by_sym.get(trig.symbol)
+                if holding is None or holding.quantity <= 0:
+                    continue
+                instrument = self._provider.instrument(trig.symbol, include_fundamentals=False)
+                if instrument is None or instrument.price <= 0:
+                    continue
+                reason: str | None = None
+                if trig.stop_loss_price is not None and instrument.price <= trig.stop_loss_price:
+                    reason = (
+                        f"Kích hoạt Cắt lỗ tự động (Stop-Loss <= {decimal_text(trig.stop_loss_price)}) "
+                        f"khi giá thị trường chạm {decimal_text(instrument.price)}."
+                    )
+                elif (
+                    trig.take_profit_price is not None
+                    and instrument.price >= trig.take_profit_price
+                ):
+                    reason = (
+                        f"Kích hoạt Chốt lời tự động (Take-Profit >= {decimal_text(trig.take_profit_price)}) "
+                        f"khi giá thị trường chạm {decimal_text(instrument.price)}."
+                    )
+                if reason is not None:
+                    sell_qty = (
+                        min(holding.quantity, trig.quantity)
+                        if trig.quantity and trig.quantity > 0
+                        else holding.quantity
+                    )
+                    gross = round_vnd(instrument.price * Decimal(sell_qty))
+                    fee = round_vnd(gross * BROKER_FEE_RATE)
+                    exec_cmd = PaperExecution(
+                        idempotency_key=f"trigger:{trig.id}:{uuid4().hex[:8]}",
+                        side="sell",
+                        symbol=instrument.symbol,
+                        name=instrument.name,
+                        exchange=instrument.exchange,
+                        sector=instrument.sector,
+                        quantity=sell_qty,
+                        execution_price=instrument.price,
+                        gross_amount=gross,
+                        fee_rate=BROKER_FEE_RATE,
+                        fee_amount=fee,
+                        tax_rate=SELL_TAX_RATE,
+                        tax_amount=round_vnd(gross * SELL_TAX_RATE),
+                        provider=self._provider.slug,
+                        price_at=_market_datetime(self._provider.market_time),
+                        received_at=now,
+                        delay_class=self._provider.delay_class,
+                    )
+                    trade = self._repository.execute(
+                        user_id,
+                        STARTING_CASH,
+                        exec_cmd,
+                        MAX_HOLDINGS,
+                    )
+                    trig.status = "triggered"
+                    trig.trigger_reason = reason
+                    trig.triggered_trade_id = trade.id
+                    trig.triggered_at = now
+
         return self._repository.get_or_create(user_id, STARTING_CASH)
 
     def dashboard(self, user_id: str) -> dict[str, object]:
@@ -464,12 +901,85 @@ class PaperTradingService:
                 "provider": self._provider.slug,
                 "provider_name": self._provider.display_name,
                 "market_time": self._provider.market_time,
-                "received_at": _iso(datetime.now(UTC)),
+                "received_at": _iso(self._now()),
                 "delay_class": self._provider.delay_class,
                 "freshness": self._provider.freshness,
                 "session": self._provider.session,
                 "partial": self._provider.partial,
             },
+            "exchange_simulation": self._exchange_simulation_payload(user_id, portfolio),
+        }
+
+    def _exchange_simulation_payload(
+        self,
+        user_id: str,
+        portfolio: PaperPortfolio,
+    ) -> dict[str, object]:
+        now = self._now()
+        mode = self._sim_store.get_mode(user_id)
+        in_session, session_msg = is_within_exchange_trading_hours(
+            now,
+            self._provider.session,
+            "LO",
+        )
+        t2_summary = build_t2_settlement_summary(
+            user_id=user_id,
+            trades=portfolio.trades,
+            now=now,
+            store=self._sim_store,
+        )
+        triggers = [
+            {
+                "id": t.id,
+                "symbol": t.symbol,
+                "stop_loss_price": (
+                    decimal_text(t.stop_loss_price) if t.stop_loss_price is not None else None
+                ),
+                "take_profit_price": (
+                    decimal_text(t.take_profit_price) if t.take_profit_price is not None else None
+                ),
+                "quantity": t.quantity,
+                "status": t.status,
+                "trigger_reason": t.trigger_reason,
+                "triggered_trade_id": t.triggered_trade_id,
+                "created_at": _iso(t.created_at),
+                "triggered_at": _iso(t.triggered_at) if t.triggered_at else None,
+            }
+            for t in self._sim_store.list_triggers(user_id)
+        ]
+        order_meta_map: dict[str, dict[str, object]] = {}
+        for o in portfolio.orders:
+            meta = self._sim_store.get_order_meta(o.id)
+            if meta is not None:
+                order_meta_map[o.id] = {
+                    "display_order_type": meta.display_order_type,
+                    "lot_type": meta.lot_type,
+                    "slippage_vnd": decimal_text(meta.slippage_vnd),
+                    "slippage_bps": decimal_text(meta.slippage_bps),
+                    "quarantine_until": (
+                        _iso(meta.quarantine_until) if meta.quarantine_until else None
+                    ),
+                    "pending_reason": meta.pending_reason,
+                    "stop_loss_price": (
+                        decimal_text(meta.stop_loss_price)
+                        if meta.stop_loss_price is not None
+                        else None
+                    ),
+                    "take_profit_price": (
+                        decimal_text(meta.take_profit_price)
+                        if meta.take_profit_price is not None
+                        else None
+                    ),
+                }
+        return {
+            "execution_mode": mode,
+            "session_active": in_session,
+            "session_message": session_msg,
+            "supported_order_types": ["LO", "MP", "ATO", "ATC"],
+            "price_bands": {"HOSE": "7%", "HNX": "10%", "UPCoM": "15%"},
+            "t2_settlement": t2_summary,
+            "conditional_triggers": triggers,
+            "order_meta": order_meta_map,
         }
 
     def _equity_curve(self, portfolio: PaperPortfolio) -> list[dict[str, str]]:

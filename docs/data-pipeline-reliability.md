@@ -129,4 +129,3 @@ InvestIQ giải quyết bài toán bản quyền báo chí **ngay trong thiết 
 3. **Định danh Bot minh bạch & Giới hạn thời gian lưu trữ (Data Retention Policy)**:
    - Crawler sử dụng định danh minh bạch `User-Agent: InvestIQ-NewsBot/1.0 (+https://investiq.local/news-crawler)` (`base.py`), không giả mạo trình duyệt người dùng để vượt tường lửa hay paywall.
    - Hệ thống áp dụng giới hạn lưu trữ tự động theo ngày (`settings.news_retention_days` trong `sql_news_repository.py`), tự động ẩn và dọn dẹp các bài tin cũ quá hạn, tuyệt đối không lưu trữ vĩnh viễn kho dữ liệu báo chí của bên thứ ba.
-

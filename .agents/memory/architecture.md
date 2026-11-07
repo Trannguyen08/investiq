@@ -272,11 +272,7 @@ Market-data tasks follow `.agents/rules/market-data-freshness.md`: agents compar
 with the latest valid `Asia/Ho_Chi_Minh` trading session, use bounded revalidation when stale, and do
 not fabricate weekend/holiday candles to match the current calendar date.
 
-`docs/plan/paper-trading.md` defines the implemented beginner simulation boundary. It deliberately
-uses automatic full fills at a qualifying observed provider price and discloses that this is not
-exchange order-book matching. Production activation remains gated by authentication configuration,
-migrations through `0013`, and approved market-data display/redistribution rights; partial fills,
-settlement, corporate actions, margin, short sales, and broker connectivity remain outside this slice.
+- `docs/plan/paper-trading.md` and `docs/paper-trading-architecture.md` define the implemented paper-trading simulation boundary. It supports both Option B dual execution modes (`"instant"` 24/7 educational fills vs. `"exchange_hours"` strict HOSE/HNX session hours `09:00-11:30` & `13:00-14:45`), VSDC `T+2` settlement cycle tracking & cash advance (`0.03%/day`), exchange price bands (`HOSE` $\pm 7\%$, `HNX` $\pm 10\%$, `UPCoM` $\pm 15\%$), tick size (`10 / 50 / 100 ₫`) & odd-lot validation, 3-level orderbook depth matching with slippage & partial fills, `LO`/`MP`/`ATO`/`ATC` order types with a 60-second anti-lookahead quarantine window, and automated `Stop-Loss`/`Take-Profit` conditional triggers. Production activation remains gated by authentication configuration, migrations through `0013`, and approved market-data display/redistribution rights.
 
 This file is the canonical architectural overview. Every path or boundary change updates this file
 and all affected references in the same task, following `.agents/rules/project-structure.md`.

@@ -586,4 +586,121 @@ describe("PaperTradingDashboard", () => {
 
   });
 
+  it("supports Option B exchange_hours mode toggle, T+2 cash advance, waiting order actions, and MP/orderbook depth order placement", async () => {
+    const exchangeSimDashboard: PaperDashboard = {
+      ...dashboard,
+      orders: [pendingOrder],
+      exchange_simulation: {
+        execution_mode: "exchange_hours",
+        session_active: false,
+        session_message: "Thị trường nghỉ cuối tuần. Lệnh được lưu chờ phiên sáng Thứ Hai.",
+        supported_order_types: ["LO", "MP", "ATO", "ATC"],
+        price_bands: { HOSE: "7%", HNX: "10%", UPCoM: "15%" },
+        t2_settlement: {
+          cycle_rule: "T+2 (Chuẩn VSDC Việt Nam)",
+          advance_fee_rate_per_day: "0.0003",
+          pending_buy_shares_by_symbol: { FPT: 100 },
+          pending_buy_settlements: [],
+          pending_sell_settlements: [],
+          receivable_cash_t2: "10000000",
+          already_advanced_cash: "0",
+          advanceable_cash: "10000000",
+          estimated_advance_fee: "6000",
+          net_advance_available: "9994000",
+          recent_advances: [],
+        },
+        conditional_triggers: [],
+        order_meta: {
+          [pendingOrder.id]: {
+            display_order_type: "ATO",
+            lot_type: "even",
+            slippage_vnd: "0",
+            slippage_bps: "0",
+            quarantine_until: null,
+            pending_reason: "Chờ phiên khớp lệnh định kỳ mở cửa (ATO 09:00 - 09:15).",
+            stop_loss_price: null,
+            take_profit_price: null,
+          },
+        },
+      },
+    };
+
+    const fetchMock = vi.fn()
+      // 1. Initial dashboard load
+      .mockResolvedValueOnce({ ok: true, json: async () => exchangeSimDashboard })
+      // 2. CSRF + Cash advance
+      .mockResolvedValueOnce({ ok: true, json: async () => ({ csrf_token: "csrf-adv" }) })
+      .mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({
+          advance: { net_received: "9994000", fee_amount: "6000" },
+          data: exchangeSimDashboard,
+        }),
+      })
+      // 3. CSRF + Force-fill waiting order
+      .mockResolvedValueOnce({ ok: true, json: async () => ({ csrf_token: "csrf-fill" }) })
+      .mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({
+          data: exchangeSimDashboard,
+          order: { ...pendingOrder, status: "filled" },
+          trade: { symbol: "HPG", quantity: 100, execution_price: "28000" },
+        }),
+      })
+      // 4. CSRF + Place MP order with Stop-Loss / Take-Profit that rests in orderbook outside session
+      .mockResolvedValueOnce({ ok: true, json: async () => ({ csrf_token: "csrf-order" }) })
+      .mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({
+          data: exchangeSimDashboard,
+          order: pendingOrder,
+          trade: null,
+        }),
+      });
+
+    vi.stubGlobal("fetch", fetchMock);
+
+    render(<PaperTradingDashboard positiveNews={[]} marketInstruments={marketInstruments} />);
+
+    expect(
+      await screen.findByRole("heading", {
+        name: /Chế độ Giờ sàn thật HOSE\/HNX/,
+      })
+    ).toBeInTheDocument();
+
+    // Verify T+2 pending shares and receivable cash are displayed
+    expect(screen.getByText("FPT: 100 CP")).toBeInTheDocument();
+    expect(screen.getByText("10.000.000 ₫")).toBeInTheDocument();
+
+    // Click T+2 Cash Advance button
+    fireEvent.click(screen.getByRole("button", { name: /Ứng trước tiền bán/ }));
+    expect(await screen.findByRole("status")).toHaveTextContent(
+      /Ứng trước tiền bán T\+2 thành công: Thực nhận 9.994.000 ₫/
+    );
+
+    // In exchange_hours mode, waiting order shows "Khớp nhanh" and "Hủy lệnh"
+    expect(screen.getByText("Mua (ATO)")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Hủy lệnh" })).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Khớp nhanh HPG" }));
+    expect(await screen.findByRole("status")).toHaveTextContent(
+      /Đã khớp nhanh 100 HPG tại giá 28.000 ₫/
+    );
+
+    // Open Buy dialog for HPG, select MP order type, enter Stop-Loss & Take-Profit, and submit
+    fireEvent.click(screen.getByRole("button", { name: "Mua HPG" }));
+    const typeSelect = screen.getByLabelText("Loại lệnh sàn HOSE/HNX");
+    fireEvent.change(typeSelect, { target: { value: "MP" } });
+    fireEvent.change(screen.getByLabelText("Cắt lỗ tự động (Stop-Loss)"), {
+      target: { value: "27000" },
+    });
+    fireEvent.change(screen.getByLabelText("Chốt lời tự động (Take-Profit)"), {
+      target: { value: "33000" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Xác nhận mua" }));
+
+    expect(await screen.findByRole("status")).toHaveTextContent(
+      /Đã đặt lệnh chờ Mua 100 HPG \(MP\)/
+    );
+  });
+
 });

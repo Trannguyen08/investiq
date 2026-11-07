@@ -4,9 +4,23 @@ import Link from "next/link";
 import { FormEvent, useEffect, useMemo, useRef, useState } from "react";
 
 import { useAuth } from "@/hooks/use-auth";
-import type { PaperDashboard, PaperOrder, PaperTrade } from "@/types/portfolio";
+import type {
+  PaperDashboard,
+  PaperExecutionMode,
+  PaperOrder,
+  PaperOrderTypeCode,
+  PaperTrade,
+} from "@/types/portfolio";
 
-type Instrument = { symbol: string; name: string; price: string | null };
+type Instrument = {
+  symbol: string;
+  name: string;
+  price: string | null;
+  exchange?: string;
+  reference_price?: string | null;
+  ceiling_price?: string | null;
+  floor_price?: string | null;
+};
 
 const moneyFormat = new Intl.NumberFormat("vi-VN", {
   style: "currency",
@@ -93,7 +107,19 @@ function PaperOrderDialogContent({
   const [error, setError] = useState("");
   const dashboard = suppliedDashboard ?? loadedDashboard;
   const holding = dashboard?.holdings.find((item) => item.symbol === instrument.symbol) ?? null;
-  const executionPrice = instrument.price ?? holding?.current_price ?? "";
+  const marketPrice = instrument.price ?? holding?.current_price ?? "";
+  const activeExecutionMode: PaperExecutionMode =
+    dashboard?.exchange_simulation?.execution_mode ?? "instant";
+  const [orderType, setOrderType] = useState<PaperOrderTypeCode>("LO");
+  const [customLimitPrice, setCustomLimitPrice] = useState<string>(marketPrice);
+  const [useOrderbookDepth, setUseOrderbookDepth] = useState<boolean>(false);
+  const [stopLossPrice, setStopLossPrice] = useState<string>("");
+  const [takeProfitPrice, setTakeProfitPrice] = useState<string>("");
+
+  const executionPrice =
+    orderType === "LO" && (activeExecutionMode === "exchange_hours" || useOrderbookDepth) && customLimitPrice
+      ? customLimitPrice
+      : marketPrice;
   const loading = auth.status === "authenticated" && !dashboard && !error;
 
   useEffect(() => {
@@ -186,6 +212,23 @@ function PaperOrderDialogContent({
       const csrf = await csrfToken();
       const idempotencyKey = idempotencyKeyRef.current ?? crypto.randomUUID();
       idempotencyKeyRef.current = idempotencyKey;
+      const payload: Record<string, unknown> = {
+        side,
+        order_type: orderType,
+        symbol: instrument.symbol,
+        quantity: numericQuantity,
+        limit_price: executionPrice,
+      };
+      if (useOrderbookDepth) {
+        payload.use_orderbook_depth = true;
+      }
+      if (side === "buy" && stopLossPrice.trim()) {
+        payload.stop_loss_price = stopLossPrice.trim();
+      }
+      if (side === "buy" && takeProfitPrice.trim()) {
+        payload.take_profit_price = takeProfitPrice.trim();
+      }
+
       const response = await fetch("/portfolio-api/orders", {
         method: "POST",
         cache: "no-store",
@@ -194,13 +237,7 @@ function PaperOrderDialogContent({
           "X-CSRF-Token": csrf,
           "Idempotency-Key": idempotencyKey,
         },
-        body: JSON.stringify({
-          side,
-          order_type: "LO",
-          symbol: instrument.symbol,
-          quantity: numericQuantity,
-          limit_price: executionPrice,
-        }),
+        body: JSON.stringify(payload),
       });
       const body = await response.json().catch(() => null) as {
         data?: PaperDashboard;
@@ -213,8 +250,14 @@ function PaperOrderDialogContent({
         const errorText = body?.detail ?? body?.error?.message ?? "Không thể đặt lệnh mô phỏng.";
         throw new Error(errorText);
       }
-      if (!body.trade) throw new Error("Giao dịch chưa được tự động khớp. Vui lòng tải lại dữ liệu giá và thử lại.");
-      const successMessage = `${side === "buy" ? "Mua" : "Bán"} thành công: Đã tự động khớp ${body.trade.quantity} ${body.trade.symbol} tại ${money(body.trade.execution_price)}.`;
+      let successMessage: string;
+      if (body.trade) {
+        successMessage = `${side === "buy" ? "Mua" : "Bán"} thành công: Đã tự động khớp ${body.trade.quantity} ${body.trade.symbol} tại ${money(body.trade.execution_price)}.`;
+      } else {
+        const meta = body.data.exchange_simulation?.order_meta?.[body.order.id];
+        const reason = meta?.pending_reason ?? "Đang xếp hàng chờ khớp trên sổ lệnh theo quy tắc sàn.";
+        successMessage = `Đã đặt lệnh chờ ${side === "buy" ? "Mua" : "Bán"} ${body.order.quantity} ${body.order.symbol} (${orderType}) tại ${money(body.order.limit_price)}. ${reason}`;
+      }
       setLoadedDashboard(body.data);
       idempotencyKeyRef.current = null;
       onDashboard?.(body.data);
@@ -242,9 +285,99 @@ function PaperOrderDialogContent({
         <div className="paper-order-loading" role={error ? "alert" : "status"}>{error || "Đang tải sức mua và vị thế…"}</div>
       ) : (
         <form onSubmit={submit}>
-          <div className="paper-order-quote"><span>Giá tự động khớp dự kiến</span><strong>{executionPrice ? money(executionPrice) : "Chưa có giá"}</strong><small>{dashboard.market.provider_name} · {dashboard.market.delay_class}</small></div>
-          <label>Chế độ khớp<select value="automatic" disabled><option value="automatic">Tự động · Giá quan sát mới nhất</option></select></label>
-          <label>Số lượng cổ phiếu<input aria-label="Số lượng cổ phiếu" type="number" min="1" max={side === "sell" ? holding?.available_quantity ?? 0 : 1_000_000} step="1" value={quantity} onChange={(event) => { idempotencyKeyRef.current = null; setQuantity(event.target.value); }} required /></label>
+          <div className="paper-order-quote">
+            <span>Giá tự động khớp dự kiến</span>
+            <strong>{executionPrice ? money(executionPrice) : "Chưa có giá"}</strong>
+            <small>{dashboard.market.provider_name} · {dashboard.market.delay_class}</small>
+          </div>
+          <label>
+            Loại lệnh sàn HOSE/HNX
+            <select
+              aria-label="Loại lệnh sàn HOSE/HNX"
+              value={orderType}
+              onChange={(event) => {
+                idempotencyKeyRef.current = null;
+                setOrderType(event.target.value as PaperOrderTypeCode);
+              }}
+            >
+              <option value="LO">LO · Lệnh giới hạn (Khớp tại giá chỉ định hoặc tốt hơn)</option>
+              <option value="MP">MP · Lệnh thị trường (Khớp ngay tại giá đối ứng tốt nhất)</option>
+              <option value="ATO">ATO · Lệnh khớp định kỳ mở cửa (09:00 - 09:15)</option>
+              <option value="ATC">ATC · Lệnh khớp định kỳ đóng cửa (14:30 - 14:45)</option>
+            </select>
+          </label>
+          <label>
+            Số lượng cổ phiếu
+            <input
+              aria-label="Số lượng cổ phiếu"
+              type="number"
+              min="1"
+              max={side === "sell" ? holding?.available_quantity ?? 0 : 1_000_000}
+              step="1"
+              value={quantity}
+              onChange={(event) => {
+                idempotencyKeyRef.current = null;
+                setQuantity(event.target.value);
+              }}
+              required
+            />
+          </label>
+          {orderType === "LO" && (activeExecutionMode === "exchange_hours" || useOrderbookDepth) && (
+            <label>
+              Giá đặt giới hạn (VND)
+              <input
+                aria-label="Giá đặt giới hạn (VND)"
+                type="number"
+                min="1"
+                step="any"
+                value={customLimitPrice}
+                onChange={(event) => {
+                  idempotencyKeyRef.current = null;
+                  setCustomLimitPrice(event.target.value);
+                }}
+              />
+            </label>
+          )}
+          <label className="paper-order-checkbox">
+            <input
+              type="checkbox"
+              checked={useOrderbookDepth || activeExecutionMode === "exchange_hours"}
+              disabled={activeExecutionMode === "exchange_hours"}
+              onChange={(event) => {
+                idempotencyKeyRef.current = null;
+                setUseOrderbookDepth(event.target.checked);
+              }}
+            />
+            <span>Khớp theo độ sâu sổ lệnh 3 bước giá (Bid/Ask 1..3 &amp; trượt giá thực tế)</span>
+          </label>
+          {side === "buy" && (
+            <div className="paper-order-conditional-grid">
+              <label>
+                Cắt lỗ tự động (Stop-Loss)
+                <input
+                  aria-label="Cắt lỗ tự động (Stop-Loss)"
+                  type="number"
+                  min="0"
+                  step="any"
+                  placeholder="Tùy chọn (VND)"
+                  value={stopLossPrice}
+                  onChange={(event) => setStopLossPrice(event.target.value)}
+                />
+              </label>
+              <label>
+                Chốt lời tự động (Take-Profit)
+                <input
+                  aria-label="Chốt lời tự động (Take-Profit)"
+                  type="number"
+                  min="0"
+                  step="any"
+                  placeholder="Tùy chọn (VND)"
+                  value={takeProfitPrice}
+                  onChange={(event) => setTakeProfitPrice(event.target.value)}
+                />
+              </label>
+            </div>
+          )}
           <dl className="paper-order-totals">
             <div><dt>Giá trị dự kiến</dt><dd>{money(estimate.gross || 0)}</dd></div>
             <div><dt>Phí mô phỏng 0,15%</dt><dd>{money(estimate.fee || 0)}</dd></div>

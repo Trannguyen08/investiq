@@ -1,5 +1,30 @@
 # Current Task
 
+## Paper Trading Vietnam Stock Exchange Simulator (Option B + 5 Core Exchange Improvements) - 2026-11-07 (completed)
+- **User Request**:
+  1. Commit and push current AI & Data Pipeline docs and typo suggestions to branch `fix/AI`, then switch to branch `refactor/paper-trading` and pull from `fix/AI`.
+  2. Implement **Option B** (Dual Execution Mode toggle: `"instant"` 24/7 educational mode vs. `"exchange_hours"` strict HOSE/HNX trading session hours `09:00-11:30` & `13:00-14:45`).
+  3. Implement the **5 proposed Paper Trading Exchange Simulation improvements** (excluding Option 6 Market Replay):
+     - **Improvement 1**: VSDC `T+2` settlement cycle tracking (`pending_buy_settlements`, `pending_sell_settlements`, `receivable_cash_t2`) & Cash Advance (`Ứng trước tiền bán` at `0.03%/ngày`).
+     - **Improvement 2**: Price band validation (`HOSE` $\pm 7\%$, `HNX` $\pm 10\%$, `UPCoM` $\pm 15\%$), Tick size validation (`10 / 50 / 100 ₫`), and Lot size classification (`even` 100-share multiples vs. `odd` 1–99 shares, rejecting `mixed` > 100 non-multiples in strict mode and requiring `LO` for odd lots).
+     - **Improvement 3**: 3-level Orderbook depth matching (`Bid 1..3` / `Ask 1..3`), weighted average execution price, slippage calculation (`slippage_vnd`, `slippage_bps`), and partial fills (executing the filled quantity as a trade and placing a child `open` order for the remaining shares).
+     - **Improvement 4**: Full order types (`LO`, `MP`, `ATO`, `ATC`) and Anti-Lookahead Quarantine (`60s` delay window) for non-marketable resting `LO` orders.
+     - **Improvement 5**: Automated Conditional Orders (`Stop-Loss` & `Take-Profit` triggers) evaluated automatically during `_refresh_orders`.
+  4. Write and execute Unit, Integration, API, and E2E tests until 100% pass.
+  5. Write comprehensive Markdown documentation (`docs/paper-trading-architecture.md`) explaining the Paper Trading architecture and workflow.
+- **Branch**: `refactor/paper-trading` (branched from `fix/AI` at `f50ff4d`)
+- **Changes**:
+  - `backend/app/application/use_cases/portfolio/exchange_simulator.py`: Created core Vietnamese stock exchange simulator (`ExchangeSimulationStore`, `get_tick_size`, `calculate_price_band`, `classify_lot_type`, `is_within_exchange_trading_hours`, `validate_vietnam_exchange_rules`, `match_against_orderbook`, `compute_t2_settlement_date`, `build_t2_settlement_summary`).
+  - `backend/app/application/dto/portfolio_dto.py` & `backend/app/application/use_cases/portfolio/simulate_trade.py`: Extended `PlacePaperOrder` and `PaperTradingService` with dual execution modes, 3-level orderbook matching, partial-fill child order creation, 60s quarantine, `T+2` cash advance, conditional Stop-Loss/Take-Profit triggers, and `exchange_simulation` dashboard state while preserving the exact 18-key `account` contract.
+  - `backend/app/schemas/portfolio.py` & `backend/app/api/v1/portfolio.py`: Added strict schemas and endpoints `POST /execution-mode`, `POST /orders/{order_id}/fill`, `POST /advance-cash`, `POST /conditional-triggers`, and `DELETE /conditional-triggers/{trigger_id}`.
+  - `frontend/src/types/portfolio.ts`, `frontend/src/components/portfolio/paper-order-dialog.tsx`, & `frontend/src/components/portfolio/paper-trading-dashboard.tsx`: Added Exchange Simulation Control Bar (mode switcher between `Khớp tức thì 24/7` and `Giờ sàn thật HOSE/HNX`, `T+2` pending shares & cash advance button), orderbook depth & `LO`/`MP`/`ATO`/`ATC` + `Stop-Loss`/`Take-Profit` controls in order dialog, and `Khớp nhanh` / `Hủy lệnh` actions on waiting orders in `exchange_hours` mode.
+  - `docs/paper-trading-architecture.md`: Created detailed Markdown documentation covering the Paper Trading architecture and end-to-end order lifecycle.
+- **Verification**:
+  - `backend/tests/unit/portfolio/test_paper_trading_service.py`: 10/10 unit tests passed 100%.
+  - `backend/tests/integration/api/test_paper_portfolio_api.py`: 4/4 API integration tests passed 100%.
+  - `frontend/src/components/portfolio/paper-trading-dashboard.test.tsx`: 12/12 component & E2E tests passed 100%.
+  - Full Pre-PR Quality Gate (`./scripts/check-pr.ps1`): Passed 100% (Frontend ESLint, TypeScript `tsc`, Vitest, Backend Ruff, Mypy, Pytest).
+
 ## AI Chatbox & Header Search Closest-Ticker Typo Suggestions - 2026-11-07 (completed)
 - **User Request**:
   1. Nếu người dùng nhập sai mã cổ phiếu trong chatbox (ví dụ: `"so sánh hbg và hpb"`, `"so sánh hbg và vcb"`, `"phân tích hbg"`, `"định giá vicc"`, `"cổ tức mb"`), hệ thống phải nhận biết mã cổ phiếu bị viết sai và gợi ý các mã cổ phiếu hợp lệ gần đúng nhất (kèm tên doanh nghiệp, ngành nghề và các nút thao tác nhanh `Suggested Actions`).
