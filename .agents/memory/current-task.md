@@ -23,11 +23,16 @@
     - Áp dụng Optimistic UI trong `toggleExecutionMode`: Cập nhật state UI `dashboard` và thông báo ngay tức khắc (0ms), gọi API ngầm trong nền, tự động rollback và báo lỗi nếu API gặp sự cố.
   - `frontend/src/components/portfolio/paper-order-dialog.tsx`:
     - Thêm hàm `formatDotNumber(val)` định dạng số tiền có dấu chấm phân cách hàng nghìn (`21.200`).
+    - Nâng cấp `handleTriggerChange` và `handleTriggerBlur`: Khi người dùng nhập số tiền VND (ví dụ `21500` hoặc `18950`), ô input tự động hiển thị dấu chấm phần nghìn ngay khi gõ (`21.500`, `18.950`).
     - Nâng cấp `resolveTriggerPrice`: Hỗ trợ cả `%` và số tiền VND, tự động tính giá làm tròn bước giá sàn, kiểm tra logic $P_{SL} < P_{\text{order}}$ và $P_{TP} > P_{\text{order}}$, trả về `validationError` chi tiết.
     - Tính `rangeError` và `hasValidationError`, vô hiệu hóa nút submit khi vi phạm.
     - Gắn `onKeyDown={handleNumericKeyDown}` và `inputMode="numeric"` chặn chữ, phím không hợp lệ cho ô giá đặt giới hạn.
     - Gắn `onKeyDown={handleIntegerKeyDown}` chặn chữ và số âm cho ô số lượng cổ phiếu.
     - Gắn `onKeyDown={handleTriggerKeyDown}` và `handleTriggerChange` cho ô Cắt lỗ & Chốt lời.
+  - `frontend/src/components/portfolio/paper-trading-dashboard.tsx`:
+    - Loại bỏ dòng chữ giải thích nhỏ (`meta.pending_reason`) trong ô "Kết quả" của bảng Sổ lệnh, chuyển thành thuộc tính `title` tooltip của badge trạng thái để giữ cho các cột bảng luôn thẳng hàng, không bị méo lệch cột.
+  - `backend/app/infrastructure/external/vnstock_market_provider.py`:
+    - Tối ưu `candles(symbol, interval)`: Khi nguồn dữ liệu ngoài (KBS/VCI) gặp lỗi timeout hoặc trả về rỗng tạm thời, tự động tái sử dụng dữ liệu nến đã nạp trước đó từ cache thay vì xóa cache hay trả về rỗng, triệt tiêu hiện tượng thỉnh thoảng một mã bị hiện "Chưa đủ lịch sử giá".
   - `frontend/src/app/globals.css`:
     - Bổ sung class `.paper-conditional-hint.error` (màu đỏ nổi bật) và `.paper-conditional-range-error` (banner cảnh báo vi phạm dải giá).
   - `frontend/src/components/portfolio/paper-pnl-dialog.tsx`:

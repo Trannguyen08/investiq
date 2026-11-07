@@ -956,7 +956,10 @@ export function PaperTradingDashboard({
                       </td>
                       <td><strong>{order.symbol}</strong></td>
                       <td>
-                        <span className={`paper-order-status ${order.status}`}>
+                        <span
+                          className={`paper-order-status ${order.status}`}
+                          title={meta?.pending_reason || undefined}
+                        >
                           {order.status === "filled"
                             ? "Đã tự động khớp"
                             : order.status === "cancelled"
@@ -969,9 +972,6 @@ export function PaperTradingDashboard({
                             ? "Đang chờ khớp trên sàn"
                             : "Đang đồng bộ"}
                         </span>
-                        {meta?.pending_reason && (
-                          <small className="paper-order-pending-reason">{meta.pending_reason}</small>
-                        )}
                       </td>
                       <td>{money(order.limit_price)}</td>
                       <td>{numberFormat.format(order.filled_quantity || order.quantity)} CP</td>

@@ -344,8 +344,44 @@ function PaperOrderDialogContent({
     event: React.ChangeEvent<HTMLInputElement>,
     setter: (val: string) => void,
   ) {
-    const sanitized = event.target.value.replace(/[^\d.%\-+]/g, "");
-    setter(sanitized);
+    const raw = event.target.value.replace(/[^\d.%\-+]/g, "");
+    if (!raw) {
+      setter("");
+      return;
+    }
+    // If it's a percentage (e.g. -7%, +15%, -5, +10)
+    if (raw.includes("%") || raw.startsWith("-") || raw.startsWith("+")) {
+      setter(raw);
+      return;
+    }
+    const cleanDigits = raw.replace(/[^\d]/g, "");
+    if (!cleanDigits) {
+      setter("");
+      return;
+    }
+    const num = Number(cleanDigits);
+    // If > 100, format with thousand dots (e.g. 21500 -> 21.500)
+    if (num > 100) {
+      setter(num.toLocaleString("vi-VN"));
+      return;
+    }
+    setter(raw);
+  }
+
+  function handleTriggerBlur(
+    val: string,
+    setter: (val: string) => void,
+    isStopLoss: boolean,
+  ) {
+    if (!val.trim()) return;
+    const cleanDigits = val.replace(/[^\d]/g, "");
+    if (!cleanDigits) return;
+    const num = Number(cleanDigits);
+    if (num <= 100 && !val.includes("%")) {
+      setter(`${isStopLoss ? "-" : "+"}${num}%`);
+    } else if (num > 100) {
+      setter(num.toLocaleString("vi-VN"));
+    }
   }
 
   const loading = auth.status === "authenticated" && !dashboard && !error;
@@ -636,6 +672,7 @@ function PaperOrderDialogContent({
                     value={stopLossInput}
                     onKeyDown={handleTriggerKeyDown}
                     onChange={(event) => handleTriggerChange(event, setStopLossInput)}
+                    onBlur={() => handleTriggerBlur(stopLossInput, setStopLossInput, true)}
                   />
                   {stopLossInput && (
                     <button
@@ -694,6 +731,7 @@ function PaperOrderDialogContent({
                     value={takeProfitInput}
                     onKeyDown={handleTriggerKeyDown}
                     onChange={(event) => handleTriggerChange(event, setTakeProfitInput)}
+                    onBlur={() => handleTriggerBlur(takeProfitInput, setTakeProfitInput, false)}
                   />
                   {takeProfitInput && (
                     <button
