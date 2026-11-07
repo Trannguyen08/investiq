@@ -686,10 +686,19 @@ describe("PaperTradingDashboard", () => {
       /Đã khớp nhanh 100 HPG tại giá 28.000 ₫/
     );
 
-    // Open Buy dialog for HPG, select MP order type, enter Stop-Loss & Take-Profit, and submit
+    // Open Buy dialog for HPG, select MP order type, test percentage pills and submit
     fireEvent.click(screen.getByRole("button", { name: "Mua HPG" }));
     const typeSelect = screen.getByLabelText("Loại lệnh sàn HOSE/HNX");
     fireEvent.change(typeSelect, { target: { value: "MP" } });
+
+    // Click quick percentage pills for Stop-Loss and Take-Profit
+    fireEvent.click(screen.getByRole("button", { name: "-7%" }));
+    expect(await screen.findByText(/Kích hoạt khi ≤ 27.100/)).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: "+15%" }));
+    expect(await screen.findByText(/Kích hoạt khi ≥ 33.500/)).toBeInTheDocument();
+
+    // Custom direct price input also works seamlessly
     fireEvent.change(screen.getByLabelText("Cắt lỗ tự động (Stop-Loss)"), {
       target: { value: "27000" },
     });

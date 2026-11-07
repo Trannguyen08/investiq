@@ -32,6 +32,50 @@ function money(value: number | string) {
   return moneyFormat.format(Number(value));
 }
 
+function roundToTickSize(price: number): number {
+  if (price <= 0) return 0;
+  if (price < 10_000) return Math.round(price / 10) * 10;
+  if (price < 50_000) return Math.round(price / 50) * 50;
+  return Math.round(price / 100) * 100;
+}
+
+function resolveTriggerPrice(
+  rawInput: string,
+  basePrice: number,
+  isStopLoss: boolean,
+): { priceVnd: string; displayHint: string } {
+  if (!rawInput.trim() || basePrice <= 0) {
+    return { priceVnd: "", displayHint: "" };
+  }
+  const clean = rawInput.trim().replace(/%/g, "").replace(/\+/g, "").replace(/-/g, "");
+  const num = Number(clean);
+  if (Number.isNaN(num) || num <= 0) {
+    return { priceVnd: "", displayHint: "" };
+  }
+
+  // If input is <= 100 (e.g. 7 or 15), treat as percentage
+  if (num <= 100) {
+    const pct = num;
+    const target = isStopLoss
+      ? roundToTickSize(basePrice * (1 - pct / 100))
+      : roundToTickSize(basePrice * (1 + pct / 100));
+    const sign = isStopLoss ? "-" : "+";
+    return {
+      priceVnd: String(target),
+      displayHint: `Kích hoạt khi ${isStopLoss ? "≤" : "≥"} ${moneyFormat.format(target)} (${sign}${pct.toFixed(1)}%)`,
+    };
+  }
+
+  // Otherwise treat as direct VND price (e.g. 27000)
+  const target = Math.round(Number(rawInput.trim().replace(/[^\d.]/g, "")));
+  const diffPct = ((target - basePrice) / basePrice) * 100;
+  const sign = diffPct >= 0 ? "+" : "";
+  return {
+    priceVnd: String(target),
+    displayHint: `Kích hoạt tại ${moneyFormat.format(target)} (${sign}${diffPct.toFixed(1)}%)`,
+  };
+}
+
 async function csrfToken() {
   const response = await fetch("/auth-api/csrf", { cache: "no-store" });
   const body = await response.json() as { csrf_token?: string };
@@ -189,13 +233,23 @@ function PaperOrderDialogContent({
   const [orderType, setOrderType] = useState<PaperOrderTypeCode>("LO");
   const [customLimitPrice, setCustomLimitPrice] = useState<string>(marketPrice);
   const [useOrderbookDepth, setUseOrderbookDepth] = useState<boolean>(false);
-  const [stopLossPrice, setStopLossPrice] = useState<string>("");
-  const [takeProfitPrice, setTakeProfitPrice] = useState<string>("");
+  const [stopLossInput, setStopLossInput] = useState<string>("");
+  const [takeProfitInput, setTakeProfitInput] = useState<string>("");
 
   const executionPrice =
     orderType === "LO" && (activeExecutionMode === "exchange_hours" || useOrderbookDepth) && customLimitPrice
       ? customLimitPrice
       : marketPrice;
+
+  const basePriceNum = Number(executionPrice || marketPrice || 0);
+  const resolvedStopLoss = useMemo(
+    () => resolveTriggerPrice(stopLossInput, basePriceNum, true),
+    [stopLossInput, basePriceNum],
+  );
+  const resolvedTakeProfit = useMemo(
+    () => resolveTriggerPrice(takeProfitInput, basePriceNum, false),
+    [takeProfitInput, basePriceNum],
+  );
   const loading = auth.status === "authenticated" && !dashboard && !error;
 
   useEffect(() => {
@@ -298,11 +352,11 @@ function PaperOrderDialogContent({
       if (useOrderbookDepth) {
         payload.use_orderbook_depth = true;
       }
-      if (side === "buy" && stopLossPrice.trim()) {
-        payload.stop_loss_price = stopLossPrice.trim();
+      if (side === "buy" && resolvedStopLoss.priceVnd) {
+        payload.stop_loss_price = resolvedStopLoss.priceVnd;
       }
-      if (side === "buy" && takeProfitPrice.trim()) {
-        payload.take_profit_price = takeProfitPrice.trim();
+      if (side === "buy" && resolvedTakeProfit.priceVnd) {
+        payload.take_profit_price = resolvedTakeProfit.priceVnd;
       }
 
       const response = await fetch("/portfolio-api/orders", {
@@ -376,9 +430,15 @@ function PaperOrderDialogContent({
             <strong>{executionPrice ? money(executionPrice) : "Chưa có giá"}</strong>
             <small>{dashboard.market.provider_name} · {dashboard.market.delay_class}</small>
           </div>
-          <label>
-            Loại lệnh sàn HOSE/HNX
+          <div className="paper-order-type-group">
+            <label htmlFor="paper-order-type-select">
+              Loại lệnh sàn HOSE/HNX
+              <span className="paper-order-type-hint">
+                Mặc định: LO (Khớp theo giá quan sát)
+              </span>
+            </label>
             <select
+              id="paper-order-type-select"
               aria-label="Loại lệnh sàn HOSE/HNX"
               value={orderType}
               onChange={(event) => {
@@ -391,7 +451,7 @@ function PaperOrderDialogContent({
               <option value="ATO">ATO · Lệnh khớp định kỳ mở cửa (09:00 - 09:15)</option>
               <option value="ATC">ATC · Lệnh khớp định kỳ đóng cửa (14:30 - 14:45)</option>
             </select>
-          </label>
+          </div>
           <label>
             Số lượng cổ phiếu
             <input
@@ -408,7 +468,7 @@ function PaperOrderDialogContent({
               required
             />
           </label>
-          {orderType === "LO" && (activeExecutionMode === "exchange_hours" || useOrderbookDepth) && (
+          {orderType === "LO" && (activeExecutionMode === "exchange_hours" || useOrderbookDepth) ? (
             <label>
               Giá đặt giới hạn (VND)
               <input
@@ -421,6 +481,17 @@ function PaperOrderDialogContent({
                   idempotencyKeyRef.current = null;
                   setCustomLimitPrice(event.target.value);
                 }}
+              />
+            </label>
+          ) : (
+            <label>
+              Giá khớp tham chiếu
+              <input
+                aria-label="Giá khớp tham chiếu"
+                type="text"
+                disabled
+                readOnly
+                value={executionPrice ? `${money(executionPrice)} (Thị trường)` : "Chưa có giá"}
               />
             </label>
           )}
@@ -438,30 +509,116 @@ function PaperOrderDialogContent({
           </label>
           {side === "buy" && (
             <div className="paper-order-conditional-grid">
-              <label>
-                Cắt lỗ tự động (Stop-Loss)
-                <input
-                  aria-label="Cắt lỗ tự động (Stop-Loss)"
-                  type="number"
-                  min="0"
-                  step="any"
-                  placeholder="Tùy chọn (VND)"
-                  value={stopLossPrice}
-                  onChange={(event) => setStopLossPrice(event.target.value)}
-                />
-              </label>
-              <label>
-                Chốt lời tự động (Take-Profit)
-                <input
-                  aria-label="Chốt lời tự động (Take-Profit)"
-                  type="number"
-                  min="0"
-                  step="any"
-                  placeholder="Tùy chọn (VND)"
-                  value={takeProfitPrice}
-                  onChange={(event) => setTakeProfitPrice(event.target.value)}
-                />
-              </label>
+              <div className="paper-conditional-header">
+                <span>Thiết lập Cắt lỗ &amp; Chốt lời tự động</span>
+                <small>Hỗ trợ nhập % hoặc VND</small>
+              </div>
+              <div className="paper-conditional-col">
+                <label htmlFor="paper-stop-loss-input">
+                  Cắt lỗ tự động (Stop-Loss)
+                </label>
+                <div className="paper-conditional-input-wrap">
+                  <input
+                    id="paper-stop-loss-input"
+                    aria-label="Cắt lỗ tự động (Stop-Loss)"
+                    type="text"
+                    placeholder="VD: -7% hoặc 18.950"
+                    value={stopLossInput}
+                    onChange={(event) => setStopLossInput(event.target.value)}
+                  />
+                  {stopLossInput && (
+                    <button
+                      type="button"
+                      className="paper-conditional-clear"
+                      aria-label="Xóa cắt lỗ"
+                      onClick={() => setStopLossInput("")}
+                    >
+                      ×
+                    </button>
+                  )}
+                </div>
+                <div className="paper-quick-pills">
+                  <button
+                    type="button"
+                    className={stopLossInput === "-5%" || stopLossInput === "5" ? "active" : ""}
+                    onClick={() => setStopLossInput("-5%")}
+                  >
+                    -5%
+                  </button>
+                  <button
+                    type="button"
+                    className={stopLossInput === "-7%" || stopLossInput === "7" ? "active" : ""}
+                    onClick={() => setStopLossInput("-7%")}
+                  >
+                    -7%
+                  </button>
+                  <button
+                    type="button"
+                    className={stopLossInput === "-10%" || stopLossInput === "10" ? "active" : ""}
+                    onClick={() => setStopLossInput("-10%")}
+                  >
+                    -10%
+                  </button>
+                </div>
+                {resolvedStopLoss.displayHint && (
+                  <span className="paper-conditional-hint loss">
+                    {resolvedStopLoss.displayHint}
+                  </span>
+                )}
+              </div>
+              <div className="paper-conditional-col">
+                <label htmlFor="paper-take-profit-input">
+                  Chốt lời tự động (Take-Profit)
+                </label>
+                <div className="paper-conditional-input-wrap">
+                  <input
+                    id="paper-take-profit-input"
+                    aria-label="Chốt lời tự động (Take-Profit)"
+                    type="text"
+                    placeholder="VD: +15% hoặc 23.500"
+                    value={takeProfitInput}
+                    onChange={(event) => setTakeProfitInput(event.target.value)}
+                  />
+                  {takeProfitInput && (
+                    <button
+                      type="button"
+                      className="paper-conditional-clear"
+                      aria-label="Xóa chốt lời"
+                      onClick={() => setTakeProfitInput("")}
+                    >
+                      ×
+                    </button>
+                  )}
+                </div>
+                <div className="paper-quick-pills">
+                  <button
+                    type="button"
+                    className={takeProfitInput === "+10%" || takeProfitInput === "10" ? "active" : ""}
+                    onClick={() => setTakeProfitInput("+10%")}
+                  >
+                    +10%
+                  </button>
+                  <button
+                    type="button"
+                    className={takeProfitInput === "+15%" || takeProfitInput === "15" ? "active" : ""}
+                    onClick={() => setTakeProfitInput("+15%")}
+                  >
+                    +15%
+                  </button>
+                  <button
+                    type="button"
+                    className={takeProfitInput === "+20%" || takeProfitInput === "20" ? "active" : ""}
+                    onClick={() => setTakeProfitInput("+20%")}
+                  >
+                    +20%
+                  </button>
+                </div>
+                {resolvedTakeProfit.displayHint && (
+                  <span className="paper-conditional-hint profit">
+                    {resolvedTakeProfit.displayHint}
+                  </span>
+                )}
+              </div>
             </div>
           )}
           <dl className="paper-order-totals">

@@ -1,5 +1,32 @@
 # Current Task
 
+## Paper Trading Order Dialog Redesign (% Stop-Loss/Take-Profit, Order Type Grid Polish) & 503 Route Proxy Fix - 2026-11-08 (completed)
+- **User Request**:
+  1. Sửa lỗi Ảnh 1 & 2: Khi nhấn chuyển sang "Giờ sàn thật HOSE/HNX", hệ thống báo lỗi `"Không thể chuyển chế độ khớp lệnh"` và console xuất hiện lỗi HTTP `503 Service Unavailable` tại `/portfolio-api/execution-mode`.
+  2. Sửa lỗi Ảnh 3: Ô chọn "Loại lệnh sàn HOSE/HNX" bị tràn và đè lên ô "Số lượng cổ phiếu" trong popup đặt lệnh.
+  3. Giải đáp thắc mắc: Tại sao người dùng phải chọn loại lệnh (LO, MP, ATO, ATC)?
+  4. Hỗ trợ chuyển Cắt lỗ (Stop-Loss) và Chốt lời (Take-Profit) sang dạng nhập tỷ lệ `%` thay vì bắt buộc gõ số tiền VND.
+- **Branch**: `refactor/paper-trading`
+- **Changes**:
+  - `frontend/src/lib/server/paper-trading-api.ts`:
+    - Mở rộng regex `allowedPath` cho phép đầy đủ các endpoint mới: `execution-mode`, `advance-cash`, `conditional-triggers`, và `orders/[id]/fill`. Triệt tiêu hoàn toàn lỗi 503 khi chuyển chế độ hoặc ứng tiền bán.
+  - `frontend/src/app/globals.css`:
+    - Thêm `min-width: 0; width: 100%; box-sizing: border-box;` cho tất cả các thẻ `label`, `input`, `select` trong `.paper-order-dialog form` để chống tràn ô trong CSS Grid.
+    - Tạo class `.paper-order-type-group` chiếm trọn 1 dòng riêng (`grid-column: 1 / -1;`), giúp dropdown loại lệnh có không gian rộng rãi (không bao giờ đè lên ô số lượng).
+    - Bổ sung CSS cho khối Cắt lỗ / Chốt lời: `.paper-conditional-header`, `.paper-conditional-col`, `.paper-conditional-input-wrap`, `.paper-conditional-clear`, `.paper-quick-pills` (nút bấm nhanh), và `.paper-conditional-hint` (màu đỏ khi cắt lỗ, xanh khi chốt lời).
+  - `frontend/src/components/portfolio/paper-order-dialog.tsx`:
+    - Thêm hàm `roundToTickSize(price)` làm tròn bước giá chuẩn HOSE/HNX (10đ, 50đ, 100đ).
+    - Thêm hàm `resolveTriggerPrice(rawInput, basePrice, isStopLoss)` hỗ trợ thông minh cả 2 chế độ:
+      - Nhập `%` (hoặc click nút nhanh `[-5%]`, `[-7%]`, `[-10%]`, `[+10%]`, `[+15%]`, `[+20%]`): tự động quy đổi ra giá VND hợp lệ theo bước giá sàn và hiển thị dòng chú thích trực quan theo thời gian thực (ví dụ: `Kích hoạt khi ≤ 27.100 ₫ (-7.0%)`).
+      - Nhập trực tiếp số tiền VND (ví dụ `27000`): tự động tính phần trăm chênh lệch so với giá đặt.
+    - Thiết kế lại layout form đặt lệnh chuẩn app chứng khoán chuyên nghiệp:
+      - Hàng 1: Loại lệnh (`LO`, `MP`, `ATO`, `ATC`) với gợi ý rõ ràng: *"Mặc định: LO (Khớp theo giá quan sát)"*.
+      - Hàng 2: Hai cột đối xứng cân bằng — Cột 1 là `Số lượng cổ phiếu`, Cột 2 là `Giá đặt giới hạn (VND)` (khi chọn LO) hoặc `Giá khớp tham chiếu` (khi chọn MP/ATO/ATC).
+  - `frontend/src/components/portfolio/paper-trading-dashboard.test.tsx`:
+    - Cập nhật test case kiểm tra thao tác click nút `%` cắt lỗ/chốt lời và kiểm tra hiển thị mức giá quy đổi.
+- **Verification**:
+  - Full Quality Gate `./scripts/check-pr.ps1`: 6/6 passed 100% (Git diff whitespace, Frontend ESLint, TypeScript tsc, Vitest 186/186 tests, Backend Ruff & Mypy, Pytest 177/177 tests).
+
 ## Paper Trading CSS Layout Polish, 117 Turbopack React Key Red Issue Fixes & High-Speed Multi-Tier Caching - 2026-11-07 (completed)
 - **User Request**:
   1. Sửa lỗi không nhận CSS và layout bị vỡ trên giao diện Paper Trading:

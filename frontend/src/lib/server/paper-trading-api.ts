@@ -3,7 +3,8 @@ import "server-only";
 import { resolveApiBase } from "@/lib/api-base";
 import { authenticatedSession } from "@/lib/server/user-auth";
 
-const allowedPath = /^(?:|orders|orders\/[a-f0-9-]{1,64}|visibility|leaderboard|public\/[0-9a-f-]{36}|daily-report\/subscription|daily-report\/send-now)$/;
+const allowedPath =
+  /^(?:|orders|orders\/[a-f0-9-]{1,64}|orders\/[a-f0-9-]{1,64}\/fill|execution-mode|advance-cash|conditional-triggers|conditional-triggers\/[a-f0-9-]{1,64}|visibility|leaderboard|public\/[0-9a-f-]{36}|daily-report\/subscription|daily-report\/send-now)$/;
 
 export async function paperTradingRequest(pathWithQuery: string, init?: RequestInit) {
   const [path, search] = pathWithQuery.split("?");
