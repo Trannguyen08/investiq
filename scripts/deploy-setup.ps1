@@ -1,7 +1,7 @@
 <#
 .SYNOPSIS
     Deploy Setup & Cloud Configuration Generator for InvestIQ
-    Ho tro cau hinh va trien khai he thong theo Phuong an 1 (Vercel + Koyeb/Render + Neon.tech)
+    Ho tro cau hinh va trien khai he thong (Vercel Frontend + Render Backend + Neon.tech DB)
 #>
 
 $ErrorActionPreference = "Stop"
@@ -9,7 +9,7 @@ $rootDir = (Get-Item $PSScriptRoot).Parent.FullName
 Set-Location $rootDir
 
 Write-Host "==========================================================" -ForegroundColor Cyan
-Write-Host "   INVESTIQ CLOUD DEPLOYMENT SETUP (Vercel + Koyeb + Neon) " -ForegroundColor Cyan
+Write-Host "   INVESTIQ CLOUD DEPLOYMENT SETUP (Vercel + Render + Neon) " -ForegroundColor Cyan
 Write-Host "==========================================================" -ForegroundColor Cyan
 
 # 1. Kiem tra cac cong cu CLI san co
@@ -61,8 +61,8 @@ $adminSecret = New-CryptoSecret 32
 
 Write-Host "  -> Da tao bo key ngau nhien dat chuan cryptographic security." -ForegroundColor Green
 
-# 3. Mau bien moi truong cho Backend (Koyeb / Render)
-Write-Host "`n[3/4] Danh sach bien moi truong cho BACKEND (Koyeb / Render):" -ForegroundColor Cyan
+# 3. Mau bien moi truong cho Backend (Render Web Service)
+Write-Host "`n[3/4] Danh sach bien moi truong cho BACKEND (Render Web Service):" -ForegroundColor Cyan
 Write-Host @"
 --------------------------------------------------------------------------------
 APP_ENV=production
@@ -87,10 +87,10 @@ Write-Host "[4/4] Danh sach bien moi truong cho FRONTEND (Vercel):" -ForegroundC
 Write-Host @"
 --------------------------------------------------------------------------------
 NODE_ENV=production
-API_INTERNAL_BASE_URL=https://<TEN-BACKEND>.koyeb.app/api
-INTERNAL_API_URL=https://<TEN-BACKEND>.koyeb.app/api
+API_INTERNAL_BASE_URL=https://<TEN-BACKEND>.onrender.com/api
+INTERNAL_API_URL=https://<TEN-BACKEND>.onrender.com/api
 NEXT_PUBLIC_API_URL=/api
-NEXT_PUBLIC_MARKET_WS_URL=wss://<TEN-BACKEND>.koyeb.app/ws/v1/market
+NEXT_PUBLIC_MARKET_WS_URL=wss://<TEN-BACKEND>.onrender.com/ws/v1/market
 AUTH_BFF_SECRET=$bffSecret
 AUTH_SESSION_ENCRYPTION_KEY=$sessionKey
 ADMIN_UI_PASSWORD=Admin@InvestIQ2026!
@@ -98,4 +98,4 @@ ADMIN_SESSION_SECRET=$adminSecret
 --------------------------------------------------------------------------------
 "@ -ForegroundColor Gray
 
-Write-Host "Hoan tat chuan bi. Xem huong dan chi tiet tung buoc tai docs/deploy-vercel-koyeb.md" -ForegroundColor Green
+Write-Host "Hoan tat chuan bi. Xem huong dan chi tiet tung buoc tai docs/deploy-vercel.md" -ForegroundColor Green

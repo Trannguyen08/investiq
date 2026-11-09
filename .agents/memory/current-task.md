@@ -1,31 +1,30 @@
 # Current Task
 
-## Cloud Deployment Option 1: Vercel (Frontend) + Koyeb (Backend) + Neon.tech (PostgreSQL) 100% Free & Always-On 24/7 - 2026-11-09 (completed)
+## Cloud Deployment: Vercel (Frontend) + Render (Backend) + Neon.tech (PostgreSQL) 100% Free & Always-On 24/7 - 2026-11-09 (completed)
 - **User Request**:
-  1. Chuyển nhánh mới (`deploy/vercel-koyeb`) và thực hiện cấu hình deploy theo Phương án 1 (Vercel cho Frontend + Koyeb/Render cho Backend + Neon.tech cho Database PostgreSQL).
-  2. Bổ sung các biến môi trường cần thiết vào `.env` và `.env.example` với hướng dẫn rõ ràng để người dùng tự lấy key và điền vào.
-  3. Hỗ trợ thao tác qua CLI và cung cấp tài liệu hướng dẫn triển khai chi tiết từng bước.
-  4. **RÀNG BUỘC NGHIÊM NGẶT**: Tuyệt đối **KHÔNG commit vào nhánh `dev` hay `main`**. Chỉ làm việc và commit trên nhánh riêng `deploy/vercel-koyeb`.
-- **Branch**: `deploy/vercel-koyeb` (tạo từ `refactor/paper-trading`)
+  1. Xóa các code về Koyeb (do Koyeb đã bị Mistral mua lại và ngưng self-serve free).
+  2. Đổi tên nhánh sang `feature/deploy-vercel-render`.
+  3. Merge vào `dev` trước, rồi từ `dev` merge vào `main`, đảm bảo pass tất cả kiểm tra mới được phép merge.
+- **Branch**: `feature/deploy-vercel-render` (chuyển từ `deploy/vercel-koyeb`)
 - **Changes**:
   - `backend/app/main.py`:
-    - Mở rộng regex `allow_origin_regex` trong `CORSMiddleware`: `r"^https://.*(vercel\.app|onrender\.com|koyeb\.app)$"`, cho phép frontend Vercel và backend Koyeb giao tiếp không gặp bất kỳ lỗi CORS nào.
+    - Giữ `allow_origin_regex = r"^https://.*(vercel\.app|onrender\.com)$"` cho phép frontend Vercel và backend Render giao tiếp mượt mà.
   - `backend/Dockerfile`:
-    - Bổ sung lệnh tự động chạy migration trước khi khởi động uvicorn khi `$AUTO_MIGRATE = "true"`: `if [ "$AUTO_MIGRATE" = "true" ]; then python -m app.infrastructure.db.base; fi && exec uvicorn ...`, giúp hệ thống tự áp dụng toàn bộ schema SQL migration khi deploy mà không cần thao tác thủ công.
+    - Bổ sung lệnh tự động chạy migration trước khi khởi động uvicorn khi `$AUTO_MIGRATE = "true"`: `if [ "$AUTO_MIGRATE" = "true" ]; then python -m app.infrastructure.db.base; fi && exec uvicorn ...`.
   - `backend/app/infrastructure/config/settings.py`:
     - Khai báo trường cấu hình `auto_migrate: bool = False` trong `Settings`.
   - `frontend/next.config.ts`:
-    - Cấu hình Next.js `rewrites()` tự động chuyển tiếp các truy vấn client `/api/:path*` sang địa chỉ backend (`API_INTERNAL_BASE_URL` hoặc `INTERNAL_API_URL`), giải quyết triệt để vấn đề CORS trình duyệt.
+    - Cấu hình Next.js `rewrites()` tự động chuyển tiếp các truy vấn client `/api/:path*` sang địa chỉ backend (`API_INTERNAL_BASE_URL` hoặc `INTERNAL_API_URL`).
   - `frontend/vercel.json`:
-    - Tạo tệp cấu hình triển khai Vercel với framework `nextjs`, build command `npm run build`, và các security headers (`X-Content-Type-Options: nosniff`, `X-Frame-Options: SAMEORIGIN`, `Referrer-Policy: strict-origin-when-cross-origin`).
+    - Tạo tệp cấu hình triển khai Vercel với framework `nextjs`, build command `npm run build`, và các security headers (`nosniff`, `SAMEORIGIN`, `strict-origin-when-cross-origin`).
   - `.env.example` & `.env`:
-    - Bổ sung nhóm biến Cloud Deployment (`AUTO_MIGRATE`, `KOYEB_API_URL`, `VERCEL_URL`, `UPSTASH_REDIS_URL`) với chú thích rõ ràng và placeholder an toàn, không chứa secret thực tế.
+    - Bổ sung nhóm biến Cloud Deployment (`AUTO_MIGRATE`, `VERCEL_URL`, `UPSTASH_REDIS_URL`) với chú thích rõ ràng và placeholder an toàn, không chứa secret thực tế.
   - `scripts/deploy-setup.ps1`:
-    - Xây dựng script PowerShell tự động kiểm tra công cụ CLI (`vercel`, `neonctl`), sinh trọn bộ các khóa mã hóa bảo mật chuẩn mật mã học (`SECRET_KEY`, `AUTH_BFF_SECRET`, `AUTH_JWT_SECRET`, `AUTH_OTP_HMAC_KEY`, `AUTH_SESSION_ENCRYPTION_KEY`, `AUTH_PAYLOAD_ENCRYPTION_KEY`, `ADMIN_SESSION_SECRET`), và xuất khối biến môi trường tương ứng sẵn sàng copy-paste vào Koyeb và Vercel.
-  - `docs/deploy-vercel-koyeb.md`:
-    - Biên soạn hướng dẫn triển khai toàn diện, chi tiết từng click chuột trên giao diện web và từng lệnh CLI cho Neon.tech, Koyeb và Vercel kèm checklist kiểm thử sau deploy.
+    - Xây dựng script PowerShell tự động kiểm tra công cụ CLI (`vercel`, `neonctl`), sinh trọn bộ các khóa mã hóa bảo mật chuẩn mật mã học (`SECRET_KEY`, `AUTH_BFF_SECRET`, `AUTH_JWT_SECRET`, `AUTH_OTP_HMAC_KEY`, `AUTH_SESSION_ENCRYPTION_KEY`, `AUTH_PAYLOAD_ENCRYPTION_KEY`, `ADMIN_SESSION_SECRET`), và xuất khối biến môi trường tương ứng sẵn sàng copy-paste vào Render và Vercel.
+  - `docs/deploy-vercel.md`:
+    - Biên soạn hướng dẫn triển khai chi tiết từng bước cho Neon.tech, Render (kèm Anti-Sleep UptimeRobot / GitHub Actions Keep-Alive giữ luôn thức 24/7) và Vercel.
   - `README.md`:
-    - Cập nhật mục 7 và cấu trúc thư mục tài liệu hóa Phương án 1 (Vercel + Koyeb + Neon.tech), tuân thủ tuyệt đối quy tắc Zero Leading Icons.
+    - Cập nhật mục 7 và cấu trúc thư mục tài liệu hóa Vercel + Render + Neon.tech, tuân thủ tuyệt đối quy tắc Zero Leading Icons.
 - **Verification**:
   - Full Quality Gate `./scripts/check-pr.ps1`: 6/6 bước Passed 100% (Git diff whitespace, Frontend ESLint, Frontend TypeScript tsc, Vitest 192/192 tests, Backend Ruff & Mypy, Backend Pytest 179/179 tests).
 

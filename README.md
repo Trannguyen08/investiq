@@ -188,7 +188,7 @@ investiq/
 ├── infra/                         # Reverse Proxy (Nginx) & Log Viewer Profiles
 ├── docs/                          # Detailed Technical Documentation
 │   ├── deploy.md                  # Hướng dẫn Triển khai Cloud (Render, Neon, Vercel) & CI/CD
-│   ├── deploy-vercel-koyeb.md     # Hướng dẫn Triển khai Phương án 1 (Vercel + Koyeb + Neon) 100% Free Always-On
+│   ├── deploy-vercel.md           # Hướng dẫn Triển khai Vercel + Render + Neon 100% Free Always-On
 │   └── plan/                      # Tài liệu Đặc tả Yêu cầu & Kiến trúc Chi tiết
 ├── scripts/                       # Automation Scripts & Quality Gate
 │   └── check-pr.ps1               # Pre-PR / Pre-Push Local CI Quality Gate
@@ -287,13 +287,13 @@ KẾT QUẢ: TẤT CẢ KIỂM TRA ĐỀU XANH (READY FOR PR / MERGE)!
 
 InvestIQ hỗ trợ các mô hình triển khai đám mây tối ưu chi phí và hiệu năng:
 
-### Phương án 1 (Khuyên dùng): Frontend Vercel + Backend Koyeb + Neon.tech DB (100% Free & Always-On 24/7)
+### Mô hình Khuyên dùng: Frontend Vercel + Backend Render + Neon.tech DB (100% Free & Always-On 24/7)
 - **Frontend (Vercel)**: Tận dụng Edge Network toàn cầu của Vercel cho Next.js, loại bỏ 100% hiện tượng cold-start, tốc độ tải trang tức thì (< 50ms).
-- **Backend (Koyeb)**: Chạy Web Service FastAPI (gói Free Eco Always-On 24/7, không bao giờ ngủ đông/spin-down, không cần ping keep-alive).
+- **Backend (Render.com)**: Chạy Web Service FastAPI máy chủ Singapore `ap-southeast-1`, kết hợp UptimeRobot hoặc GitHub Actions Keep-Alive ping định kỳ để hệ thống luôn thức 24/7, loại bỏ hoàn toàn độ trễ khởi động lại.
 - **Database (Neon.tech)**: PostgreSQL Serverless máy chủ Singapore `aws-ap-southeast-1` cho độ trễ cực thấp 5–15ms, miễn phí vĩnh viễn kèm connection pooling.
 
 > [!TIP]
-> Xem hướng dẫn cấu hình chi tiết từng bước cho Phương án 1 tại tài liệu: [`docs/deploy-vercel-koyeb.md`](docs/deploy-vercel-koyeb.md), và hướng dẫn triển khai Render tại [`docs/deploy.md`](docs/deploy.md).
+> Xem hướng dẫn cấu hình chi tiết từng bước tại tài liệu: [`docs/deploy-vercel.md`](docs/deploy-vercel.md), và tài liệu tổng quan tại [`docs/deploy.md`](docs/deploy.md).
 
 ---
 
