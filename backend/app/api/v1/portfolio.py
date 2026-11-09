@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from decimal import Decimal
+from functools import lru_cache
 from typing import Annotated, Any
 from uuid import UUID
 
@@ -53,6 +54,7 @@ router = APIRouter(
 )
 
 
+@lru_cache
 def get_paper_trading_service() -> PaperTradingService:
     return PaperTradingService(SqlPortfolioRepository(get_pool()), get_market_provider())
 

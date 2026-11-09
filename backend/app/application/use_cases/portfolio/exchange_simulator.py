@@ -113,12 +113,49 @@ class ExchangeSimulationStore:
 
     def get_mode(self, user_id: str) -> ExecutionMode:
         with self._lock:
-            return self._user_modes.get(user_id, "instant")
+            if user_id in self._user_modes:
+                return self._user_modes[user_id]
+
+        # Query persistent preference from database
+        try:
+            from app.infrastructure.db.session import get_pool
+
+            pool = get_pool()
+            with pool.connection() as conn, conn.cursor() as cur:
+                cur.execute(
+                    "SELECT COALESCE(execution_mode, 'instant') FROM paper_portfolios WHERE user_id = %s",
+                    (user_id,),
+                )
+                row = cur.fetchone()
+                if row and row[0] in ("instant", "exchange_hours"):
+                    mode: ExecutionMode = row[0]
+                    with self._lock:
+                        self._user_modes[user_id] = mode
+                    return mode
+        except Exception:
+            pass
+
+        return "instant"
 
     def set_mode(self, user_id: str, mode: ExecutionMode) -> ExecutionMode:
         with self._lock:
             self._user_modes[user_id] = mode
-            return mode
+
+        # Persist preference to database for user account
+        try:
+            from app.infrastructure.db.session import get_pool
+
+            pool = get_pool()
+            with pool.connection() as conn, conn.cursor() as cur:
+                cur.execute(
+                    "UPDATE paper_portfolios SET execution_mode = %s, updated_at = now() WHERE user_id = %s",
+                    (mode, user_id),
+                )
+                conn.commit()
+        except Exception:
+            pass
+
+        return mode
 
     def save_order_meta(self, meta: OrderExtendedMeta) -> None:
         with self._lock:
@@ -126,7 +163,18 @@ class ExchangeSimulationStore:
 
     def get_order_meta(self, order_id: str) -> OrderExtendedMeta | None:
         with self._lock:
-            return self._order_meta.get(order_id)
+            meta = self._order_meta.get(order_id)
+            if meta is not None:
+                return meta
+        # Return sensible default meta if not in memory (e.g. after server reboot)
+        return OrderExtendedMeta(
+            order_id=order_id,
+            display_order_type="LO",
+            lot_type="even",
+            slippage_vnd=Decimal("0"),
+            slippage_bps=Decimal("0"),
+            pending_reason="Ngoài khung giờ giao dịch (09:00 - 11:30 & 13:00 - 14:45). Lệnh được lưu chờ phiên kế tiếp.",
+        )
 
     def upsert_trigger(
         self,

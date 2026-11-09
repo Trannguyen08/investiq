@@ -7,9 +7,10 @@ import json
 import math
 import unicodedata
 from collections.abc import Callable
-from datetime import UTC, datetime, timedelta
-from decimal import Decimal
+from datetime import UTC, date, datetime, timedelta
+from decimal import ROUND_HALF_UP, Decimal
 from typing import Any
+from zoneinfo import ZoneInfo
 
 from app.domain.entities.market import (
     Candle,
@@ -160,19 +161,38 @@ def decode_cursor(value: str | None) -> int:
 
 
 
+_MARKET_TZ = ZoneInfo("Asia/Ho_Chi_Minh")
+
+
+def _round_to_tick(price: Decimal, exchange: str = "HOSE") -> Decimal:
+    """Round price according to official Vietnamese stock exchange rules."""
+    if price <= 0:
+        return Decimal("1000")
+    if price >= Decimal("50000"):
+        tick = Decimal("100")
+    elif price >= Decimal("10000"):
+        tick = Decimal("50") if exchange.upper() in {"HOSE", "VN30"} else Decimal("100")
+    else:
+        tick = Decimal("10") if exchange.upper() in {"HOSE", "VN30"} else Decimal("100")
+    return (price / tick).quantize(Decimal("1"), rounding=ROUND_HALF_UP) * tick
+
+
 def _synthesize_intraday_from_daily(
     daily_candles: tuple[Candle, ...],
     interval: str,
+    exchange: str = "HOSE",
 ) -> tuple[Candle, ...]:
-    """Generate representative intraday candles from daily bars if intraday series is unavailable."""
+    """Generate representative intraday candles strictly within HOSE/HNX trading hours."""
     if not daily_candles:
         return ()
     step_minutes = 5 if interval == "5m" else (30 if interval == "30m" else 60)
     session_offsets: list[int] = []
+    # Session 1: 09:15 to 11:30
     curr = 9 * 60 + 15
     while curr <= 11 * 60 + 30:
         session_offsets.append(curr)
         curr += step_minutes
+    # Session 2: 13:00 to 14:45
     curr = 13 * 60
     while curr <= 14 * 60 + 45:
         session_offsets.append(curr)
@@ -181,23 +201,33 @@ def _synthesize_intraday_from_daily(
     total_steps = max(1, len(session_offsets))
     res: list[Candle] = []
     for day in daily_candles[-10:]:
-        d_open = day.open
-        d_close = day.close
-        d_high = day.high
-        d_low = day.low
+        day_vn = day.timestamp.astimezone(_MARKET_TZ).date()
+        if day_vn.weekday() >= 5:
+            continue
+        d_open = _round_to_tick(day.open, exchange)
+        d_close = _round_to_tick(day.close, exchange)
+        d_high = max(d_open, d_close, _round_to_tick(day.high, exchange))
+        d_low = max(Decimal("1000"), min(d_open, d_close, _round_to_tick(day.low, exchange)))
         d_vol = max(Decimal("100"), day.volume)
         step_vol = max(Decimal("10"), (d_vol / Decimal(str(total_steps))).quantize(Decimal("1")))
 
+        prev_close = d_open
         for idx, offset in enumerate(session_offsets):
             minute = offset % 60
             hour = offset // 60
-            ts = day.timestamp.replace(hour=hour, minute=minute, second=0, microsecond=0)
+            local_dt = datetime(day_vn.year, day_vn.month, day_vn.day, hour, minute, 0, tzinfo=_MARKET_TZ)
+            ts = local_dt.astimezone(UTC)
+
             progress = Decimal(str(idx + 1)) / Decimal(str(total_steps))
-            osc = Decimal(str(math.sin(idx * 0.8) * 0.005))
-            bar_close = (d_open + (d_close - d_open) * progress + (d_high - d_low) * osc).quantize(Decimal("10"))
-            bar_open = (d_open if not res else res[-1].close).quantize(Decimal("10"))
-            bar_high = max(bar_open, bar_close, min(d_high, max(bar_open, bar_close) + Decimal("50")))
-            bar_low = min(bar_open, bar_close, max(d_low, min(bar_open, bar_close) - Decimal("50")))
+            osc = Decimal(str(math.sin(idx * 0.45) * 0.003))
+            raw_close = d_open + (d_close - d_open) * progress + (d_high - d_low) * osc
+            bar_close = _round_to_tick(min(d_high, max(d_low, raw_close)), exchange)
+            bar_open = prev_close
+            step_spread = _round_to_tick(max(Decimal("50"), (d_high - d_low) / Decimal("6")), exchange)
+            bar_high = max(bar_open, bar_close, min(d_high, max(bar_open, bar_close) + step_spread))
+            bar_low = min(bar_open, bar_close, max(d_low, min(bar_open, bar_close) - step_spread))
+            prev_close = bar_close
+
             res.append(Candle(
                 timestamp=ts,
                 open=bar_open,
@@ -214,24 +244,48 @@ def _synthesize_candles_from_instrument(
     interval: str,
     count: int,
 ) -> tuple[Candle, ...]:
-    """Generate deterministic historical candles for an instrument when provider returns empty."""
-    base_price = instrument.price if instrument.price > 0 else (
-        instrument.reference_price if instrument.reference_price > 0 else Decimal("20000")
+    """Generate deterministic historical candles strictly adhering to Vietnam exchange rules."""
+    exchange = instrument.exchange or "HOSE"
+    base_price = _round_to_tick(
+        instrument.price if instrument.price > 0 else (
+            instrument.reference_price if instrument.reference_price > 0 else Decimal("20000")
+        ),
+        exchange,
     )
     base_vol = instrument.volume if instrument.volume > 0 else Decimal("50000")
-    now = datetime.now(UTC)
+    now_vn = datetime.now(_MARKET_TZ)
     res: list[Candle] = []
 
     if interval in {"5m", "30m", "1h"}:
         step_minutes = 5 if interval == "5m" else (30 if interval == "30m" else 60)
-        curr_ts = now.replace(second=0, microsecond=0)
-        for i in range(count):
-            factor = Decimal(str(1.0 + math.sin(i * 0.35 + len(instrument.symbol)) * 0.015))
-            c_price = (base_price * factor).quantize(Decimal("10"))
-            o_price = (base_price * Decimal(str(1.0 + math.sin((i - 1) * 0.35 + len(instrument.symbol)) * 0.015))).quantize(Decimal("10"))
-            h_price = max(o_price, c_price) + Decimal("50")
-            l_price = max(Decimal("100"), min(o_price, c_price) - Decimal("50"))
-            ts = curr_ts - timedelta(minutes=(count - i) * step_minutes)
+        trading_slots: list[datetime] = []
+        d = now_vn.date()
+        while len(trading_slots) < count:
+            if d.weekday() < 5:
+                day_slots: list[datetime] = []
+                curr = 9 * 60 + 15
+                while curr <= 11 * 60 + 30:
+                    day_slots.append(datetime(d.year, d.month, d.day, curr // 60, curr % 60, 0, tzinfo=_MARKET_TZ))
+                    curr += step_minutes
+                curr = 13 * 60
+                while curr <= 14 * 60 + 45:
+                    day_slots.append(datetime(d.year, d.month, d.day, curr // 60, curr % 60, 0, tzinfo=_MARKET_TZ))
+                    curr += step_minutes
+                day_slots.sort()
+                trading_slots = day_slots + trading_slots
+            d -= timedelta(days=1)
+
+        valid_slots = trading_slots[-count:]
+        prev_close = base_price
+        for i, slot_dt in enumerate(valid_slots):
+            factor = Decimal(str(1.0 + math.sin(i * 0.15 + len(instrument.symbol)) * 0.012))
+            c_price = _round_to_tick(base_price * factor, exchange)
+            o_price = prev_close
+            spread = _round_to_tick(max(Decimal("50"), c_price * Decimal("0.003")), exchange)
+            h_price = max(o_price, c_price) + spread
+            l_price = max(Decimal("1000"), min(o_price, c_price) - spread)
+            prev_close = c_price
+            ts = slot_dt.astimezone(UTC)
             res.append(Candle(
                 timestamp=ts,
                 open=o_price,
@@ -241,23 +295,26 @@ def _synthesize_candles_from_instrument(
                 volume=max(Decimal("100"), (base_vol / Decimal("10")).quantize(Decimal("1"))),
             ))
     else:
-        curr_date = now.date()
-        dates: list[datetime] = []
+        curr_date = now_vn.date()
+        dates: list[date] = []
         d = curr_date
         while len(dates) < count:
             if d.weekday() < 5:
-                dates.append(datetime(d.year, d.month, d.day, 8, 0, 0, tzinfo=UTC))
+                dates.append(d)
             d -= timedelta(days=1)
         dates.reverse()
 
+        prev_close = base_price
         for i, dt in enumerate(dates):
-            factor = Decimal(str(1.0 + math.sin(i * 0.2 + len(instrument.symbol)) * 0.04))
-            c_price = (base_price * factor).quantize(Decimal("10"))
-            o_price = (base_price * Decimal(str(1.0 + math.sin((i - 1) * 0.2 + len(instrument.symbol)) * 0.04))).quantize(Decimal("10"))
-            h_price = max(o_price, c_price) + Decimal("100")
-            l_price = max(Decimal("100"), min(o_price, c_price) - Decimal("100"))
+            factor = Decimal(str(1.0 + math.sin(i * 0.12 + len(instrument.symbol)) * 0.035))
+            c_price = _round_to_tick(base_price * factor, exchange)
+            o_price = prev_close
+            h_price = max(o_price, c_price, _round_to_tick(max(o_price, c_price) * Decimal("1.01"), exchange))
+            l_price = max(Decimal("1000"), min(o_price, c_price), _round_to_tick(min(o_price, c_price) * Decimal("0.99"), exchange))
+            prev_close = c_price
+            ts = datetime(dt.year, dt.month, dt.day, 8, 0, 0, tzinfo=UTC)
             res.append(Candle(
-                timestamp=dt,
+                timestamp=ts,
                 open=o_price,
                 high=h_price,
                 low=l_price,
@@ -466,17 +523,33 @@ class MarketService:
         return {"data": _index(value), "meta": self.meta()} if value else None
 
     def candles(self, symbol: str, interval: str, limit: int) -> dict[str, object]:
+        instrument = self._provider.instrument(symbol, include_fundamentals=False)
+        exchange = instrument.exchange if instrument else "HOSE"
         values = list(self._provider.candles(symbol, interval))
         if not values and interval in {"5m", "30m", "1h"}:
             daily_candles = self._provider.candles(symbol, "1d")
             if daily_candles:
-                values = list(_synthesize_intraday_from_daily(daily_candles, interval))
-        if not values:
-            instrument = self._provider.instrument(symbol, include_fundamentals=False)
-            if instrument:
-                values = list(_synthesize_candles_from_instrument(instrument, interval, max(limit, 70)))
+                values = list(_synthesize_intraday_from_daily(daily_candles, interval, exchange))
+        if not values and instrument:
+            values = list(_synthesize_candles_from_instrument(instrument, interval, max(limit, 70)))
 
-        limited_values = values[-limit:]
+        # Sanitize and ensure tick size conformance & candle geometry consistency
+        sanitized_values: list[Candle] = []
+        for c in values:
+            o = _round_to_tick(c.open, exchange)
+            cl = _round_to_tick(c.close, exchange)
+            high_val = max(o, cl, _round_to_tick(c.high, exchange))
+            low_val = max(Decimal("100"), min(o, cl, _round_to_tick(c.low, exchange)))
+            sanitized_values.append(Candle(
+                timestamp=c.timestamp,
+                open=o,
+                high=high_val,
+                low=low_val,
+                close=cl,
+                volume=max(Decimal("0"), c.volume),
+            ))
+
+        limited_values = sanitized_values[-limit:]
         return {
             "data": [_candle(item) for item in limited_values],
             "instrument": symbol.upper(),

@@ -208,14 +208,73 @@ export function UserHeader() {
   );
 }
 
+const shownAuthKeys = new Set<string>();
+
 function AuthMessage() {
   const search = useSearchParams();
-  const message = search.get("auth") === "register-success"
+  const authParam = search.get("auth");
+  const rawMessage = authParam === "register-success"
     ? "Đăng ký thành công. Email xác nhận đã được gửi."
-    : search.get("auth") === "login-success" ? "Đăng nhập thành công." : "";
-  return message ? (
-    <div className="global-toast fixed bottom-4 right-4 z-50 bg-emerald-600 text-white text-xs font-bold px-4 py-2.5 rounded-xl shadow-2xl" role="status">
-      {message}
+    : authParam === "login-success" ? "Đăng nhập thành công." : "";
+
+  const [visible, setVisible] = useState(false);
+  const [closing, setClosing] = useState(false);
+  const [currentMessage, setCurrentMessage] = useState("");
+
+  useEffect(() => {
+    if (!rawMessage || !authParam) return;
+    if (shownAuthKeys.has(authParam)) return;
+    shownAuthKeys.add(authParam);
+
+    setCurrentMessage(rawMessage);
+    setVisible(true);
+    setClosing(false);
+
+    // Xóa ?auth=... khỏi URL để giữ URL sạch và không bị hiện lại khi refresh
+    if (typeof window !== "undefined") {
+      const url = new URL(window.location.href);
+      url.searchParams.delete("auth");
+      window.history.replaceState({}, "", url.pathname + (url.search ? url.search : "") + url.hash);
+    }
+
+    // Tự động ẩn chính xác sau 3 giây (3000ms), hiệu ứng fade-out mượt mà
+    const fadeTimer = setTimeout(() => {
+      setClosing(true);
+    }, 2800);
+
+    const removeTimer = setTimeout(() => {
+      setVisible(false);
+      setClosing(false);
+      setCurrentMessage("");
+    }, 3200);
+
+    return () => {
+      clearTimeout(fadeTimer);
+      clearTimeout(removeTimer);
+    };
+  }, [rawMessage, authParam]);
+
+  if (!visible || !currentMessage) return null;
+
+  return (
+    <div
+      className={`global-toast fixed bottom-4 right-4 z-50 flex items-center justify-between gap-3 text-xs font-bold px-4 py-2.5 rounded-xl shadow-2xl transition-all duration-300 ease-in-out ${
+        closing ? "opacity-0 translate-y-2 pointer-events-none" : "opacity-100 translate-y-0"
+      }`}
+      role="status"
+    >
+      <span>{currentMessage}</span>
+      <button
+        type="button"
+        onClick={() => {
+          setClosing(true);
+          setTimeout(() => setVisible(false), 200);
+        }}
+        className="ml-2 text-current opacity-70 hover:opacity-100 transition cursor-pointer text-sm font-bold leading-none"
+        aria-label="Đóng thông báo"
+      >
+        ×
+      </button>
     </div>
-  ) : null;
+  );
 }

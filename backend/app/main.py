@@ -53,10 +53,12 @@ from app.infrastructure.db.session import close_pool
 from app.infrastructure.security.jwt_handler import JwtError
 from app.middleware.request_logging import RequestLoggingMiddleware
 from app.workers.events_ingestion_worker import run_events_ingestion_cycle
+from app.workers.link_integrity_worker import run_link_integrity_cycle
 from app.workers.news_ingestion_worker import run_direct_ingestion_cycle
 
 logger = logging.getLogger("investiq.news.lifecycle")
 events_logger = logging.getLogger("investiq.events.lifecycle")
+link_integrity_logger = logging.getLogger("investiq.links.lifecycle")
 
 
 async def _news_background_loop() -> None:
@@ -186,14 +188,29 @@ async def _events_background_loop() -> None:
         await asyncio.sleep(1800)
 
 
+async def _link_integrity_background_loop() -> None:
+    await asyncio.sleep(15)
+    while True:
+        try:
+            link_integrity_logger.info("Executing link integrity verification background cycle")
+            await asyncio.to_thread(run_link_integrity_cycle)
+        except asyncio.CancelledError:
+            break
+        except Exception as exc:
+            link_integrity_logger.error("Error during background link integrity cycle: %s", exc)
+        await asyncio.sleep(1800)
+
+
 @asynccontextmanager
 async def lifespan(_: FastAPI) -> AsyncIterator[None]:
     await start_market_provider()
     news_task = None
     events_task = None
+    link_integrity_task = None
     if settings.news_ingestion_enabled:
         news_task = asyncio.create_task(_news_background_loop())
     events_task = asyncio.create_task(_events_background_loop())
+    link_integrity_task = asyncio.create_task(_link_integrity_background_loop())
     try:
         yield
     finally:
@@ -205,6 +222,10 @@ async def lifespan(_: FastAPI) -> AsyncIterator[None]:
             events_task.cancel()
             with contextlib.suppress(asyncio.CancelledError):
                 await events_task
+        if link_integrity_task:
+            link_integrity_task.cancel()
+            with contextlib.suppress(asyncio.CancelledError):
+                await link_integrity_task
         await close_market_provider()
         close_pool()
 

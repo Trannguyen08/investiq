@@ -87,6 +87,7 @@ function Sparkline({ points, label }: { points: PaperPricePoint[]; label: string
 }
 
 function EquityChart({ dashboard }: { dashboard: PaperDashboard }) {
+  const [hoveredIndex, setHoveredIndex] = useState<number | null>(null);
   const points = dashboard.equity_curve;
   if (points.length < 2) {
     return (
@@ -96,32 +97,198 @@ function EquityChart({ dashboard }: { dashboard: PaperDashboard }) {
       </div>
     );
   }
-  const values = points.map((item) => Number(item.value));
-  const min = Math.min(...values);
-  const max = Math.max(...values);
-  const range = max - min || 1;
-  const line = values
-    .map((value, index) => {
-      const x = 10 + (index / (values.length - 1)) * 580;
-      const y = 170 - ((value - min) / range) * 140;
-      return `${x},${y}`;
-    })
-    .join(" ");
+
+  const startingCapital = Number(dashboard.account.starting_cash || "100000000");
+  const liveTotalValue = Number(dashboard.account.total_value || startingCapital);
+  const values = points.map((item, idx) => {
+    if (idx === points.length - 1 && liveTotalValue > 0) {
+      return liveTotalValue;
+    }
+    return Number(item.value);
+  });
+  const latestValue = liveTotalValue > 0 ? liveTotalValue : (values[values.length - 1] || startingCapital);
+  const totalReturnVnd = latestValue - startingCapital;
+  const totalReturnPercent = startingCapital > 0 ? ((totalReturnVnd / startingCapital) * 100).toFixed(2) : "0.00";
+
+  let minVal = values[0];
+  let minIdx = 0;
+  let maxVal = values[0];
+  let maxIdx = 0;
+  values.forEach((v, i) => {
+    if (v < minVal) {
+      minVal = v;
+      minIdx = i;
+    }
+    if (v > maxVal) {
+      maxVal = v;
+      maxIdx = i;
+    }
+  });
+
+  const chartMin = Math.min(minVal, startingCapital) * 0.995;
+  const chartMax = Math.max(maxVal, startingCapital) * 1.005;
+  const range = chartMax - chartMin || 1;
+
+  const width = 1000;
+  const height = 260;
+  const padLeft = 24;
+  const padRight = 24;
+  const padTop = 18;
+  const padBottom = 28;
+  const plotW = width - padLeft - padRight;
+  const plotH = height - padTop - padBottom;
+
+  const baselineY = padTop + plotH - ((startingCapital - chartMin) / range) * plotH;
+
+  const coords = values.map((val, i) => {
+    const x = padLeft + (i / (values.length - 1)) * plotW;
+    const y = padTop + plotH - ((val - chartMin) / range) * plotH;
+    return { x, y, val, timestamp: points[i].timestamp };
+  });
+
+  const polylinePoints = coords.map((c) => `${c.x.toFixed(1)},${c.y.toFixed(1)}`).join(" ");
+  const areaPoints = `${coords[0].x},${padTop + plotH} ${polylinePoints} ${coords[coords.length - 1].x},${padTop + plotH}`;
+
+  const hoveredPoint = hoveredIndex !== null ? coords[hoveredIndex] : null;
+
+  const formatDate = (iso: string) => {
+    try {
+      const d = new Date(iso);
+      return `${d.getDate()}/${d.getMonth() + 1}/${d.getFullYear()}`;
+    } catch {
+      return iso;
+    }
+  };
 
   return (
-    <div className="paper-equity-chart">
-      <svg viewBox="0 0 600 190" role="img" aria-label="Biểu đồ giá trị danh mục mô phỏng">
-        <line x1="10" y1="170" x2="590" y2="170" />
-        <line x1="10" y1="100" x2="590" y2="100" />
-        <line x1="10" y1="30" x2="590" y2="30" />
-        <polyline points={line} fill="none" />
-      </svg>
-      <div>
-        <span>{money(min)}</span>
-        <span>{money(max)}</span>
+    <div className="paper-equity-remake space-y-3.5">
+      {/* 4 Thẻ KPI Tóm tắt tài sản trực quan */}
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 text-xs">
+        <div className="bg-slate-900/90 border border-slate-800 p-3 rounded-xl shadow-sm">
+          <span className="text-slate-400 block text-xs font-bold uppercase tracking-wider">Vốn ban đầu</span>
+          <strong className="text-white text-base sm:text-lg font-extrabold">{money(startingCapital)}</strong>
+          <small className="text-slate-500 block text-xs mt-0.5">Mốc khởi điểm</small>
+        </div>
+        <div className="bg-slate-900/90 border border-slate-800 p-3 rounded-xl shadow-sm">
+          <span className="text-slate-400 block text-xs font-bold uppercase tracking-wider">Giá trị hiện tại</span>
+          <strong className="text-sky-300 text-base sm:text-lg font-extrabold">{money(latestValue)}</strong>
+          <small className={`block text-xs font-semibold mt-0.5 ${totalReturnVnd >= 0 ? "text-emerald-400" : "text-rose-400"}`}>
+            {totalReturnVnd >= 0 ? "+" : ""}{money(totalReturnVnd)} ({totalReturnVnd >= 0 ? "+" : ""}{totalReturnPercent}%)
+          </small>
+        </div>
+        <div className="bg-slate-900/90 border border-slate-800 p-3 rounded-xl shadow-sm">
+          <span className="text-slate-400 block text-xs font-bold uppercase tracking-wider">Đỉnh cao nhất</span>
+          <strong className="text-emerald-400 text-base sm:text-lg font-extrabold">{money(maxVal)}</strong>
+          <small className="text-slate-400 block text-xs mt-0.5">{formatDate(points[maxIdx].timestamp)}</small>
+        </div>
+        <div className="bg-slate-900/90 border border-slate-800 p-3 rounded-xl shadow-sm">
+          <span className="text-slate-400 block text-xs font-bold uppercase tracking-wider">Đáy thấp nhất</span>
+          <strong className="text-amber-400 text-base sm:text-lg font-extrabold">{money(minVal)}</strong>
+          <small className="text-slate-400 block text-xs mt-0.5">{formatDate(points[minIdx].timestamp)}</small>
+        </div>
       </div>
-      <p>
-        Ước tính bằng cách phát lại danh mục hiện tại trên giá đóng cửa có sẵn; không phải NAV lịch sử đã kiểm toán.
+
+      {/* Khung biểu đồ tương tác */}
+      <div className="relative bg-slate-950/95 border border-slate-850 rounded-xl p-3 shadow-inner">
+        <svg
+          viewBox={`0 0 ${width} ${height}`}
+          preserveAspectRatio="none"
+          className="w-full h-[260px] overflow-visible cursor-crosshair block"
+          onMouseLeave={() => setHoveredIndex(null)}
+          onMouseMove={(e) => {
+            const rect = e.currentTarget.getBoundingClientRect();
+            if (rect.width <= 0) return;
+            const clientX = e.clientX - rect.left;
+            const svgX = (clientX / rect.width) * width;
+            let closestIdx = 0;
+            let closestDist = Math.abs(coords[0].x - svgX);
+            coords.forEach((c, idx) => {
+              const dist = Math.abs(c.x - svgX);
+              if (dist < closestDist) {
+                closestDist = dist;
+                closestIdx = idx;
+              }
+            });
+            setHoveredIndex(closestIdx);
+          }}
+        >
+          <defs>
+            <linearGradient id="equityGradient" x1="0" y1="0" x2="0" y2="1">
+              <stop offset="0%" stopColor="#52dbae" stopOpacity="0.35" />
+              <stop offset="100%" stopColor="#52dbae" stopOpacity="0.0" />
+            </linearGradient>
+          </defs>
+
+          {/* Đường gióng ngang chuẩn (Gridlines trơn không đứt nét) */}
+          <line x1={padLeft} y1={padTop} x2={width - padRight} y2={padTop} stroke="#1e293b" strokeWidth="1" />
+          <line x1={padLeft} y1={padTop + plotH / 2} x2={width - padRight} y2={padTop + plotH / 2} stroke="#1e293b" strokeWidth="1" />
+          <line x1={padLeft} y1={padTop + plotH} x2={width - padRight} y2={padTop + plotH} stroke="#1e293b" strokeWidth="1" />
+
+          {/* Đường Baseline 100M VND chuẩn (Đường liền trơn không đứt nét) */}
+          <line
+            x1={padLeft}
+            y1={baselineY}
+            x2={width - padRight}
+            y2={baselineY}
+            stroke="#475569"
+            strokeWidth="1.2"
+          />
+          <text x={padLeft + 6} y={baselineY - 6} fill="#94a3b8" fontSize="11" fontWeight="bold">
+            Vốn gốc {money(startingCapital)}
+          </text>
+
+          {/* Vùng đổ màu gradient */}
+          <polygon points={areaPoints} fill="url(#equityGradient)" />
+
+          {/* Đường polyline giá trị */}
+          <polyline points={polylinePoints} fill="none" stroke="#52dbae" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" />
+
+          {/* Điểm hover và đường gióng đứng (Liền trơn) */}
+          {hoveredPoint && (
+            <>
+              <line
+                x1={hoveredPoint.x}
+                y1={padTop}
+                x2={hoveredPoint.x}
+                y2={padTop + plotH}
+                stroke="#38bdf8"
+                strokeWidth="1.5"
+              />
+              <circle cx={hoveredPoint.x} cy={hoveredPoint.y} r="5" fill="#38bdf8" stroke="#0f172a" strokeWidth="2" />
+            </>
+          )}
+        </svg>
+
+        {/* Tooltip khi di chuột */}
+        {hoveredPoint && (
+          <div
+            className="absolute top-4 pointer-events-none bg-slate-900/95 border border-sky-500/60 shadow-2xl rounded-lg p-3 text-xs text-slate-200 z-10"
+            style={{
+              left: `${Math.min(85, Math.max(15, (hoveredPoint.x / width) * 100))}%`,
+              transform: "translateX(-50%)",
+            }}
+          >
+            <div className="font-bold text-sky-300 text-xs mb-1">{formatDate(hoveredPoint.timestamp)}</div>
+            <div>Giá trị danh mục: <strong className="text-white font-extrabold text-sm">{money(hoveredPoint.val)}</strong></div>
+            <div className="text-xs mt-1">
+              So với vốn ban đầu:{" "}
+              <span className={hoveredPoint.val >= startingCapital ? "text-emerald-400 font-bold" : "text-rose-400 font-bold"}>
+                {hoveredPoint.val >= startingCapital ? "+" : ""}{money(hoveredPoint.val - startingCapital)} ({(((hoveredPoint.val - startingCapital) / startingCapital) * 100).toFixed(2)}%)
+              </span>
+            </div>
+          </div>
+        )}
+
+        {/* Mốc thời gian trục X */}
+        <div className="flex justify-between items-center text-xs text-slate-400 px-2 pt-2 border-t border-slate-800/80">
+          <span>{formatDate(points[0].timestamp)}</span>
+          <span className="text-slate-500 font-medium">Chu kỳ 90 phiên</span>
+          <span>{formatDate(points[points.length - 1].timestamp)}</span>
+        </div>
+      </div>
+
+      <p className="text-xs text-slate-400 m-0 leading-relaxed italic">
+        Đường thẳng màu ghi biểu thị mốc vốn khởi điểm 100.000.000 ₫ để đối chiếu tăng trưởng tài sản. Bạn có thể di chuột trên biểu đồ để xem giá trị chi tiết và tỷ lệ lãi/lỗ theo từng phiên.
       </p>
     </div>
   );
@@ -133,14 +300,16 @@ export function PaperTradingDashboard({
   positiveNews,
   marketInstruments,
   marketLoadError = false,
+  initialDashboard = null,
 }: {
   positiveNews: PositivePaperNews[];
   marketInstruments: MarketInstrument[];
   marketLoadError?: boolean;
+  initialDashboard?: PaperDashboard | null;
 }) {
   const router = useRouter();
   const auth = useAuth();
-  const [dashboard, setDashboard] = useState<PaperDashboard | null>(() => getCachedPaperDashboard());
+  const [dashboard, setDashboard] = useState<PaperDashboard | null>(() => initialDashboard ?? getCachedPaperDashboard());
   const [error, setError] = useState("");
   const [notice, setNotice] = useState("");
   const [side, setSide] = useState<"buy" | "sell">("buy");
@@ -154,6 +323,7 @@ export function PaperTradingDashboard({
   const [orderSide, setOrderSide] = useState("all");
   const [orderSymbol, setOrderSymbol] = useState("");
   const [pnlDialog, setPnlDialog] = useState<"unrealized" | "realized" | null>(null);
+  const [isTogglingMode, setIsTogglingMode] = useState(false);
   const stream = useMarketStreamState();
 
   // Merge market instruments with live stream in real time (identical to /market/stocks)
@@ -212,18 +382,36 @@ export function PaperTradingDashboard({
     return () => clearInterval(interval);
   }, [auth.status]);
 
+  const exchangeSim = dashboard?.exchange_simulation;
+  const activeExecutionMode: PaperExecutionMode = exchangeSim?.execution_mode ?? "instant";
+  const t2Summary = exchangeSim?.t2_settlement;
+
+  // Auto-dismiss notice toast after 3 seconds
+  useEffect(() => {
+    if (!notice) return;
+    const timer = setTimeout(() => {
+      setNotice("");
+    }, 3000);
+    return () => clearTimeout(timer);
+  }, [notice]);
+
   // Dynamically re-evaluate holdings with real-time market prices
   const liveHoldings = useMemo(() => {
     if (!dashboard?.holdings) return [];
     return dashboard.holdings.map((holding) => {
       const activePrice = activePriceMap.get(holding.symbol) ?? holding.current_price;
-      if (!activePrice) return holding;
+      const pendingBuyQty = activeExecutionMode === "exchange_hours"
+        ? (t2Summary?.pending_buy_shares_by_symbol?.[holding.symbol] ?? 0)
+        : 0;
+      const liveAvailableQty = Math.max(0, holding.available_quantity - pendingBuyQty);
+
+      if (!activePrice) return { ...holding, available_quantity: liveAvailableQty };
 
       const numPrice = Number(activePrice);
       const numAvgCost = Number(holding.average_cost);
       const qty = Number(holding.quantity);
 
-      if (numPrice <= 0 || qty <= 0) return { ...holding, current_price: activePrice };
+      if (numPrice <= 0 || qty <= 0) return { ...holding, available_quantity: liveAvailableQty, current_price: activePrice };
 
       const marketVal = Math.round(numPrice * qty);
       const costBasis = numAvgCost > 0 ? Math.round(numAvgCost * qty) : Number(holding.total_cost_basis);
@@ -235,6 +423,7 @@ export function PaperTradingDashboard({
 
       return {
         ...holding,
+        available_quantity: liveAvailableQty,
         current_price: activePrice,
         market_value: String(marketVal),
         unrealized_pnl: String(unrealizedPnl),
@@ -242,7 +431,7 @@ export function PaperTradingDashboard({
         daily_change_percent: dailyChange,
       };
     });
-  }, [dashboard, activePriceMap, rows]);
+  }, [dashboard, activePriceMap, rows, activeExecutionMode, t2Summary]);
 
   const holdingBySymbol = useMemo(
     () => new Map(liveHoldings.map((holding) => [holding.symbol, holding])),
@@ -283,6 +472,28 @@ export function PaperTradingDashboard({
       ),
     [dashboard, orderSide, orderSymbol]
   );
+
+  const pendingBuyEntries = useMemo(() => {
+    if (!t2Summary?.pending_buy_shares_by_symbol || activeExecutionMode === "instant") return [];
+    return Object.entries(t2Summary.pending_buy_shares_by_symbol).filter(([, qty]) => qty > 0);
+  }, [t2Summary, activeExecutionMode]);
+
+  const hasActionableOrders = useMemo(
+    () =>
+      activeExecutionMode === "exchange_hours" &&
+      filteredOrders.some((order) => order.status === "open" || order.status === "pending"),
+    [activeExecutionMode, filteredOrders]
+  );
+
+  const nextSettlementDate = useMemo(() => {
+    const firstPending = t2Summary?.pending_buy_settlements?.[0];
+    if (!firstPending?.settles_at) return null;
+    try {
+      return timeFormat.format(new Date(firstPending.settles_at));
+    } catch {
+      return null;
+    }
+  }, [t2Summary]);
 
   const isUnauthenticated =
     auth.status === "anonymous" ||
@@ -379,10 +590,6 @@ export function PaperTradingDashboard({
     });
   }
 
-  const exchangeSim = dashboard.exchange_simulation;
-  const activeExecutionMode: PaperExecutionMode = exchangeSim?.execution_mode ?? "instant";
-  const t2Summary = exchangeSim?.t2_settlement;
-
   async function fetchCsrfToken(): Promise<string> {
     const res = await fetch("/auth-api/csrf", { cache: "no-store" });
     const body = await res.json().catch(() => null) as { csrf_token?: string } | null;
@@ -391,43 +598,11 @@ export function PaperTradingDashboard({
   }
 
   async function toggleExecutionMode(nextMode: PaperExecutionMode) {
-    if (!dashboard) return;
+    if (!dashboard || isTogglingMode) return;
     const previousDashboard = dashboard;
-    // Optimistic instantaneous UI update (0ms response)
-    const optimistic: PaperDashboard = {
-      ...dashboard,
-      exchange_simulation: {
-        ...(dashboard.exchange_simulation || {
-          session_active: true,
-          session_message: "",
-          supported_order_types: ["LO", "MP", "ATO", "ATC"],
-          price_bands: { HOSE: "7%", HNX: "10%", UPCoM: "15%" },
-          t2_settlement: {
-            cycle_rule: "T+2 (Chuẩn VSDC)",
-            advance_fee_rate_per_day: "0.0003",
-            pending_buy_shares_by_symbol: {},
-            pending_buy_settlements: [],
-            pending_sell_settlements: [],
-            receivable_cash_t2: "0",
-            already_advanced_cash: "0",
-            advanceable_cash: "0",
-            estimated_advance_fee: "0",
-            net_advance_available: "0",
-            recent_advances: [],
-          },
-          conditional_triggers: [],
-          order_meta: {},
-        }),
-        execution_mode: nextMode,
-      },
-    };
-    setDashboard(optimistic);
+    setIsTogglingMode(true);
     setError("");
-    setNotice(
-      nextMode === "exchange_hours"
-        ? "Đã chuyển sang chế độ Giờ sàn thật HOSE/HNX (09:00-11:30 & 13:00-14:45, kiểm tra biên độ Trần/Sàn & sổ lệnh 3 bước giá)."
-        : "Đã chuyển sang chế độ Khớp tức thì 24/7 (tự động khớp toàn bộ theo giá quan sát mới nhất)."
-    );
+    const startTime = Date.now();
 
     try {
       const csrf = await fetchCsrfToken();
@@ -444,11 +619,24 @@ export function PaperTradingDashboard({
       if (!res.ok || !body?.account) {
         throw new Error(body?.detail ?? "Không thể chuyển chế độ khớp lệnh.");
       }
+      if (process.env.NODE_ENV !== "test") {
+        const elapsed = Date.now() - startTime;
+        if (elapsed < 350) {
+          await new Promise((resolve) => setTimeout(resolve, 350 - elapsed));
+        }
+      }
       invalidatePaperDashboardCache();
       setDashboard(body);
+      setNotice(
+        nextMode === "exchange_hours"
+          ? "Đã chuyển sang chế độ Giờ sàn thật HOSE/HNX (09:00-11:30 & 13:00-14:45, kiểm tra biên độ Trần/Sàn & sổ lệnh 3 bước giá)."
+          : "Đã chuyển sang chế độ Khớp tức thì 24/7 (tự động khớp toàn bộ theo giá quan sát mới nhất)."
+      );
     } catch (reason) {
       setDashboard(previousDashboard);
       setError(reason instanceof Error ? reason.message : "Không thể chuyển chế độ khớp lệnh.");
+    } finally {
+      setIsTogglingMode(false);
     }
   }
 
@@ -622,17 +810,19 @@ export function PaperTradingDashboard({
               type="button"
               className={activeExecutionMode === "instant" ? "active" : ""}
               aria-pressed={activeExecutionMode === "instant"}
+              disabled={isTogglingMode}
               onClick={() => toggleExecutionMode("instant")}
             >
-              Khớp tức thì 24/7
+              {isTogglingMode && activeExecutionMode !== "instant" ? "Đang đồng bộ..." : "Khớp tức thì 24/7"}
             </button>
             <button
               type="button"
               className={activeExecutionMode === "exchange_hours" ? "active" : ""}
               aria-pressed={activeExecutionMode === "exchange_hours"}
+              disabled={isTogglingMode}
               onClick={() => toggleExecutionMode("exchange_hours")}
             >
-              Giờ sàn thật HOSE/HNX
+              {isTogglingMode && activeExecutionMode !== "exchange_hours" ? "Đang đồng bộ..." : "Giờ sàn thật HOSE/HNX"}
             </button>
           </div>
         </div>
@@ -641,13 +831,19 @@ export function PaperTradingDashboard({
             <div>
               <span>Cổ phiếu mua chờ về (T+2)</span>
               <strong>
-                {Object.keys(t2Summary.pending_buy_shares_by_symbol).length > 0
-                  ? Object.entries(t2Summary.pending_buy_shares_by_symbol)
+                {pendingBuyEntries.length > 0
+                  ? pendingBuyEntries
                       .map(([sym, qty]) => `${sym}: ${numberFormat.format(qty)} CP`)
                       .join(", ")
                   : "0 CP"}
               </strong>
-              <small>Về tài khoản lúc 13:00 ngày T+2</small>
+              <small>
+                {pendingBuyEntries.length > 0
+                  ? nextSettlementDate
+                    ? `Dự kiến về tài khoản: ${nextSettlementDate} (T+2)`
+                    : "Về tài khoản lúc 13:00 ngày T+2"
+                  : "Tất cả cổ phiếu đã về tài khoản và sẵn sàng giao dịch"}
+              </small>
             </div>
             <div>
               <span>Tiền bán chờ về (T+2)</span>
@@ -669,7 +865,14 @@ export function PaperTradingDashboard({
       </section>
 
       {error && <p className="paper-inline-message error" role="alert">{error}</p>}
-      {notice && <p className="paper-trade-toast" role="status">{notice}</p>}
+      {notice && (
+        <div className="paper-trade-toast" role="status">
+          <span>{notice}</span>
+          <button type="button" aria-label="Đóng thông báo" onClick={() => setNotice("")}>
+            ×
+          </button>
+        </div>
+      )}
 
       <section className="paper-card paper-chart-card">
         <header>
@@ -831,47 +1034,47 @@ export function PaperTradingDashboard({
             <table aria-label="Bảng quản lý cổ phiếu đã mua">
               <thead>
                 <tr>
-                  <th>Mã &amp; công ty</th>
-                  <th>Sở hữu / khả dụng</th>
-                  <th>Giá vốn TB</th>
-                  <th>Giá hiện tại</th>
-                  <th>Giá trị</th>
-                  <th>Hôm nay</th>
-                  <th>Lãi/lỗ chưa chốt</th>
-                  <th>Tỷ trọng</th>
-                  <th>Xu hướng</th>
-                  <th>Thao tác</th>
+                  <th className="text-left">Mã &amp; công ty</th>
+                  <th className="text-center">Sở hữu / khả dụng</th>
+                  <th className="text-center">Giá vốn TB</th>
+                  <th className="text-center">Giá hiện tại</th>
+                  <th className="text-center">Giá trị</th>
+                  <th className="text-center">Hôm nay</th>
+                  <th className="text-center">Lãi/lỗ chưa chốt</th>
+                  <th className="text-center">Tỷ trọng</th>
+                  <th className="text-center">Xu hướng</th>
+                  <th className="text-center">Thao tác</th>
                 </tr>
               </thead>
               <tbody>
                 {liveHoldings.map((holding) => (
                   <tr key={holding.symbol}>
-                    <td>
+                    <td className="text-left">
                       <Link href={`/market/stocks/${holding.symbol}?from=${encodeURIComponent("/portfolio#paper-market-table")}`} prefetch={false}>
                         {holding.symbol}
                       </Link>
                       <span>{holding.name}</span>
                       <small>{holding.exchange} · {holding.sector ?? "Chưa phân loại"}</small>
                     </td>
-                    <td data-label="Sở hữu / khả dụng">
+                    <td className="text-center" data-label="Sở hữu / khả dụng">
                       {numberFormat.format(holding.quantity)} / {numberFormat.format(holding.available_quantity)} CP
                     </td>
-                    <td data-label="Giá vốn TB">{money(holding.average_cost)}</td>
-                    <td data-label="Giá hiện tại">{holding.current_price ? money(holding.current_price) : "Chưa có"}</td>
-                    <td data-label="Giá trị">{moneyOrUnavailable(holding.market_value)}</td>
-                    <td data-label="Hôm nay" className={tone(holding.daily_change_percent ?? 0)}>
+                    <td className="text-center" data-label="Giá vốn TB">{money(holding.average_cost)}</td>
+                    <td className="text-center" data-label="Giá hiện tại">{holding.current_price ? money(holding.current_price) : "Chưa có"}</td>
+                    <td className="text-center" data-label="Giá trị">{moneyOrUnavailable(holding.market_value)}</td>
+                    <td className={`text-center ${tone(holding.daily_change_percent ?? 0)}`} data-label="Hôm nay">
                       {holding.daily_change_percent === null ? "—" : `${Number(holding.daily_change_percent) > 0 ? "+" : ""}${holding.daily_change_percent}%`}
                     </td>
-                    <td data-label="Lãi/lỗ" className={tone(holding.unrealized_pnl ?? 0)}>
+                    <td className={`text-center ${tone(holding.unrealized_pnl ?? 0)}`} data-label="Lãi/lỗ">
                       {holding.unrealized_pnl === null ? "Chưa đủ giá" : `${money(holding.unrealized_pnl)} · ${holding.unrealized_pnl_percent}%`}
                     </td>
-                    <td data-label="Tỷ trọng">
+                    <td className="text-center" data-label="Tỷ trọng">
                       {holding.portfolio_weight_percent === null ? "Chưa đủ giá" : `${holding.portfolio_weight_percent}%`}
                     </td>
-                    <td data-label="Xu hướng">
+                    <td className="text-center" data-label="Xu hướng">
                       <Sparkline points={holding.price_history} label={`Lịch sử giá ${holding.symbol}`} />
                     </td>
-                    <td data-label="Thao tác">
+                    <td className="text-center" data-label="Thao tác">
                       <div className="paper-stock-actions">
                         <button type="button" onClick={() => prepareOrder("buy", holding.symbol)} aria-label={`Mua thêm ${holding.symbol}`}>
                           Mua thêm
@@ -930,32 +1133,39 @@ export function PaperTradingDashboard({
             <table aria-label="Danh sách lệnh mô phỏng">
               <thead>
                 <tr>
-                  <th>Thời gian</th>
-                  <th>Chiều</th>
-                  <th>Mã</th>
-                  <th>Kết quả</th>
-                  <th>Giá mô phỏng</th>
-                  <th>Số lượng</th>
-                  {activeExecutionMode === "exchange_hours" && <th>Thao tác</th>}
+                  <th className="text-left">Thời gian đặt</th>
+                  <th className="text-center">Chiều</th>
+                  <th className="text-center">Mã</th>
+                  <th className="text-center">Thời gian khớp</th>
+                  <th className="text-center">Kết quả</th>
+                  <th className="text-center">Giá mô phỏng</th>
+                  <th className="text-center">Số lượng</th>
+                  {hasActionableOrders && <th className="text-center">Thao tác</th>}
                 </tr>
               </thead>
               <tbody>
                 {filteredOrders.map((order) => {
                   const meta = exchangeSim?.order_meta?.[order.id];
                   const displayType = meta?.display_order_type ?? order.order_type;
-                  const canAct =
-                    activeExecutionMode === "exchange_hours" &&
-                    (order.status === "open" || order.status === "pending");
                   return (
                     <tr key={order.id}>
-                      <td>{timeFormat.format(new Date(order.created_at))}</td>
-                      <td>
+                      <td className="text-left">{timeFormat.format(new Date(order.created_at))}</td>
+                      <td className="text-center">
                         <span className={`paper-side ${order.side}`}>
                           {order.side === "buy" ? "Mua" : "Bán"} ({displayType})
                         </span>
                       </td>
-                      <td><strong>{order.symbol}</strong></td>
-                      <td>
+                      <td className="text-center"><strong>{order.symbol}</strong></td>
+                      <td className="text-center">
+                        {order.status === "filled" ? (
+                          <span className="text-slate-200">
+                            {timeFormat.format(new Date(order.updated_at || order.created_at))}
+                          </span>
+                        ) : (
+                          <span className="text-slate-500">—</span>
+                        )}
+                      </td>
+                      <td className="text-center">
                         <span
                           className={`paper-order-status ${order.status}`}
                           title={meta?.pending_reason || undefined}
@@ -973,30 +1183,29 @@ export function PaperTradingDashboard({
                             : "Đang đồng bộ"}
                         </span>
                       </td>
-                      <td>{money(order.limit_price)}</td>
-                      <td>{numberFormat.format(order.filled_quantity || order.quantity)} CP</td>
-                      {activeExecutionMode === "exchange_hours" && (
-                        <td>
-                          {canAct ? (
-                            <div className="paper-stock-actions">
+                      <td className="text-center">{money(order.limit_price)}</td>
+                      <td className="text-center">{numberFormat.format(order.filled_quantity || order.quantity)} CP</td>
+                      {hasActionableOrders && (
+                        <td className="text-center">
+                          {order.status === "open" || order.status === "pending" ? (
+                            <div className="flex items-center justify-center gap-1.5">
                               <button
                                 type="button"
+                                className="paper-order-btn fill text-xs px-2 py-1 rounded bg-sky-600 hover:bg-sky-500 text-white font-medium"
                                 onClick={() => handleForceFillWaitingOrder(order.id)}
-                                aria-label={`Khớp nhanh ${order.symbol}`}
                               >
-                                Khớp nhanh
+                                Khớp nhanh {order.symbol}
                               </button>
                               <button
                                 type="button"
-                                className="sell"
+                                className="paper-order-btn cancel text-xs px-2 py-1 rounded bg-rose-600/80 hover:bg-rose-500 text-white font-medium"
                                 onClick={() => handleCancelWaitingOrder(order.id)}
-                                aria-label="Hủy lệnh"
                               >
                                 Hủy lệnh
                               </button>
                             </div>
                           ) : (
-                            "—"
+                            <span className="text-slate-500">—</span>
                           )}
                         </td>
                       )}
@@ -1044,27 +1253,27 @@ export function PaperTradingDashboard({
             <table>
               <thead>
                 <tr>
-                  <th>Thời gian</th>
-                  <th>Lệnh</th>
-                  <th>Mã</th>
-                  <th>Số lượng</th>
-                  <th>Giá khớp</th>
-                  <th>Phí + thuế</th>
-                  <th>Tiền vào/ra</th>
-                  <th>Lãi/lỗ chốt</th>
+                  <th className="text-left">Thời gian</th>
+                  <th className="text-center">Lệnh</th>
+                  <th className="text-center">Mã</th>
+                  <th className="text-center">Số lượng</th>
+                  <th className="text-center">Giá khớp</th>
+                  <th className="text-center">Phí + thuế</th>
+                  <th className="text-center">Tiền vào/ra</th>
+                  <th className="text-center">Lãi/lỗ chốt</th>
                 </tr>
               </thead>
               <tbody>
                 {dashboard.trades.map((trade) => (
                   <tr key={trade.id}>
-                    <td>{timeFormat.format(new Date(trade.created_at))}</td>
-                    <td><span className={`paper-side ${trade.side}`}>{trade.side === "buy" ? "Mua" : "Bán"}</span></td>
-                    <td><strong>{trade.symbol}</strong></td>
-                    <td>{numberFormat.format(trade.quantity)}</td>
-                    <td>{money(trade.execution_price)}</td>
-                    <td>{money(roundVnd(trade.fee_amount) + roundVnd(trade.tax_amount))}</td>
-                    <td className={tone(trade.cash_effect)}>{money(trade.cash_effect)}</td>
-                    <td className={tone(trade.realized_pnl ?? 0)}>
+                    <td className="text-left">{timeFormat.format(new Date(trade.created_at))}</td>
+                    <td className="text-center"><span className={`paper-side ${trade.side}`}>{trade.side === "buy" ? "Mua" : "Bán"}</span></td>
+                    <td className="text-center"><strong>{trade.symbol}</strong></td>
+                    <td className="text-center">{numberFormat.format(trade.quantity)}</td>
+                    <td className="text-center">{money(trade.execution_price)}</td>
+                    <td className="text-center">{money(roundVnd(trade.fee_amount) + roundVnd(trade.tax_amount))}</td>
+                    <td className={`text-center ${tone(trade.cash_effect)}`}>{money(trade.cash_effect)}</td>
+                    <td className={`text-center ${tone(trade.realized_pnl ?? 0)}`}>
                       {trade.realized_pnl === null ? "—" : money(trade.realized_pnl)}
                     </td>
                   </tr>

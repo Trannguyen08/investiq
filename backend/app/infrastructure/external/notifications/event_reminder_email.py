@@ -16,7 +16,11 @@ from app.infrastructure.config.settings import settings
 
 logger = logging.getLogger(__name__)
 
-PREVIEWS_DIR = Path("app/storage/mail_preview")
+PREVIEWS_DIR = (
+    Path("backend/app/storage/mail_preview")
+    if Path("backend/app").exists()
+    else Path("app/storage/mail_preview")
+)
 
 WEEKDAY_VI = {
     0: "Thứ Hai",
@@ -287,6 +291,254 @@ def is_dummy_or_test_email(email: str) -> bool:
         or cleaned.startswith("tester@")
         or cleaned.startswith("dummy@")
     )
+
+
+def render_event_cancellation_html(
+    symbol: str,
+    event_title: str,
+    event_type: str,
+    source_url: str | None = None,
+    reason: str = "Trang tin hoặc đường dẫn công bố không còn tồn tại (404/410).",
+    app_url: str = "http://localhost:3000",
+) -> str:
+    """Renders an alert HTML email informing the investor that a scheduled event was cancelled/removed."""
+    safe_symbol = escape(symbol.upper())
+    safe_title = escape(event_title)
+    event_type_vi = format_event_type_vi(event_type)
+    safe_type = escape(event_type_vi)
+    safe_reason = escape(reason)
+    safe_source_url = escape(source_url or "Không xác định")
+    stock_link = f"{app_url}/market/stocks/{safe_symbol}"
+
+    return f"""<!DOCTYPE html>
+<html lang="vi">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>InvestIQ - Hủy nhắc lịch: {safe_symbol}</title>
+</head>
+<body style="margin: 0; padding: 0; background-color: #06101d; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; color: #e2e8f0;">
+  <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="background-color: #06101d; padding: 32px 16px;">
+    <tr>
+      <td align="center">
+        <!-- Main Container -->
+        <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="max-width: 600px; background-color: #0b1f33; border: 1px solid #331d24; border-radius: 16px; overflow: hidden; box-shadow: 0 12px 40px rgba(0,0,0,0.5);">
+
+          <!-- Header Banner -->
+          <tr>
+            <td style="padding: 28px 32px; background: linear-gradient(135deg, #1c0e13 0%, #2a151b 100%); border-bottom: 1px solid #4a1f29;">
+              <table width="100%" cellspacing="0" cellpadding="0">
+                <tr>
+                  <td>
+                    <span style="font-size: 22px; font-weight: 800; color: #fb7185; letter-spacing: -0.02em;">InvestIQ</span>
+                    <span style="font-size: 11px; font-weight: 700; color: #f43f5e; background-color: rgba(244, 63, 94, 0.15); padding: 3px 8px; border-radius: 6px; margin-left: 8px; vertical-align: middle; border: 1px solid rgba(244, 63, 94, 0.3);">EVENT CANCELLED</span>
+                  </td>
+                  <td align="right">
+                    <span style="font-size: 12px; color: #fda4af;">Kiểm duyệt dữ liệu</span>
+                  </td>
+                </tr>
+              </table>
+            </td>
+          </tr>
+
+          <!-- Notification Hero -->
+          <tr>
+            <td style="padding: 32px 32px 20px;">
+              <!-- Urgent Badge -->
+              <div style="display: inline-block; padding: 6px 14px; background-color: rgba(244, 63, 94, 0.15); border: 1px solid rgba(244, 63, 94, 0.4); border-radius: 20px; color: #fb7185; font-size: 12px; font-weight: 700; margin-bottom: 18px;">
+                ĐÃ GỠ KHỎI HỆ THỐNG THEO DÕI
+              </div>
+
+              <!-- Main Title -->
+              <h1 style="margin: 0 0 16px; font-size: 21px; line-height: 1.4; color: #f8fafc; font-weight: 750;">
+                Thông báo hủy nhắc lịch: {safe_symbol} · {safe_title}
+              </h1>
+
+              <!-- Warning Box -->
+              <table width="100%" cellspacing="0" cellpadding="0" style="background: linear-gradient(135deg, #241117 0%, #170b0e 100%); border: 1.5px solid #e11d48; border-radius: 12px; margin-bottom: 24px; box-shadow: 0 4px 18px rgba(225, 29, 72, 0.2);">
+                <tr>
+                  <td style="padding: 18px 20px;">
+                    <span style="font-size: 11px; font-weight: 800; color: #fb7185; text-transform: uppercase; letter-spacing: 0.08em; display: block; margin-bottom: 6px;">
+                      LÝ DO HỦY THEO DÕI
+                    </span>
+                    <strong style="font-size: 15px; font-weight: 700; color: #ffffff; display: block; line-height: 1.5;">
+                      {safe_reason}
+                    </strong>
+                    <span style="font-size: 12px; color: #fda4af; display: block; margin-top: 6px; word-break: break-all;">
+                      Đường dẫn nguồn kiểm tra: {safe_source_url}
+                    </span>
+                  </td>
+                </tr>
+              </table>
+
+              <p style="margin: 0 0 24px; font-size: 14px; line-height: 1.6; color: #94a3b8;">
+                Bộ phận rà soát liên kết tự động của InvestIQ phát hiện liên kết nguồn của sự kiện trên đã bị gỡ hoặc không thể truy cập (mã lỗi 404/410 Not Found). Nhằm đảm bảo dữ liệu luôn chính xác và tránh gây nhầm lẫn trong quyết định đầu tư, sự kiện này đã được tự động loại bỏ khỏi lịch thị trường và hủy lượt nhắc nhở đã đặt của bạn.
+              </p>
+
+              <!-- Event Details Box -->
+              <table width="100%" cellspacing="0" cellpadding="0" style="background-color: #071726; border: 1px solid #1a3854; border-radius: 12px; margin-bottom: 24px;">
+                <tr>
+                  <td style="padding: 14px 20px; border-bottom: 1px solid #142a3f;">
+                    <table width="100%" cellspacing="0" cellpadding="0">
+                      <tr>
+                        <td width="45%" style="font-size: 12px; color: #64748b; font-weight: 600; text-transform: uppercase;">Mã chứng khoán</td>
+                        <td width="55%" align="right" style="font-size: 16px; font-weight: 800; color: #38e1b0;">{safe_symbol}</td>
+                      </tr>
+                    </table>
+                  </td>
+                </tr>
+                <tr>
+                  <td style="padding: 14px 20px; border-bottom: 1px solid #142a3f;">
+                    <table width="100%" cellspacing="0" cellpadding="0">
+                      <tr>
+                        <td width="45%" style="font-size: 12px; color: #64748b; font-weight: 600; text-transform: uppercase;">Loại sự kiện</td>
+                        <td width="55%" align="right" style="font-size: 14px; font-weight: 700; color: #38bdf8;">{safe_type}</td>
+                      </tr>
+                    </table>
+                  </td>
+                </tr>
+                <tr>
+                  <td style="padding: 14px 20px;">
+                    <table width="100%" cellspacing="0" cellpadding="0">
+                      <tr>
+                        <td width="45%" style="font-size: 12px; color: #64748b; font-weight: 600; text-transform: uppercase;">Trạng thái hệ thống</td>
+                        <td width="55%" align="right" style="font-size: 13px; font-weight: 700; color: #fb7185;">Đã hủy & Ngừng theo dõi</td>
+                      </tr>
+                    </table>
+                  </td>
+                </tr>
+              </table>
+
+              <!-- Action CTA Button -->
+              <table width="100%" cellspacing="0" cellpadding="0">
+                <tr>
+                  <td align="center">
+                    <a href="{stock_link}" target="_blank" style="display: inline-block; padding: 14px 32px; background: linear-gradient(135deg, #334155 0%, #1e293b 100%); color: #ffffff; text-decoration: none; font-size: 14px; font-weight: 700; border-radius: 10px; border: 1px solid #475569; letter-spacing: 0.02em;">
+                      Kiểm tra thông tin mã {safe_symbol} trên InvestIQ &rarr;
+                    </a>
+                  </td>
+                </tr>
+              </table>
+            </td>
+          </tr>
+
+          <!-- Footer -->
+          <tr>
+            <td style="padding: 24px 32px; background-color: #071524; border-top: 1px solid #142a3f; text-align: center;">
+              <p style="margin: 0 0 8px; font-size: 12px; color: #64748b; line-height: 1.5;">
+                Bạn nhận được thông báo này vì đã cài đặt nhận thông tin sự kiện trên nền tảng InvestIQ.
+              </p>
+              <p style="margin: 0; font-size: 11px; color: #475569;">
+                &copy; 2026 InvestIQ Financial Intelligence. Mọi quyền được bảo lưu.
+              </p>
+            </td>
+          </tr>
+
+        </table>
+      </td>
+    </tr>
+  </table>
+</body>
+</html>
+"""
+
+
+def send_event_cancellation_email(
+    to_email: str,
+    symbol: str,
+    event_title: str,
+    event_type: str,
+    source_url: str | None = None,
+    reason: str = "Link nguồn không còn tồn tại hoặc trang công bố đã bị gỡ (404/410).",
+    app_url: str = "http://localhost:3000",
+) -> tuple[bool, str]:
+    """Sends a formatted cancellation email to users who had pending reminders for a deleted/invalid event."""
+    event_type_vi = format_event_type_vi(event_type)
+    html_content = render_event_cancellation_html(
+        symbol=symbol,
+        event_title=event_title,
+        event_type=event_type,
+        source_url=source_url,
+        reason=reason,
+        app_url=app_url,
+    )
+
+    text_body = (
+        f"InvestIQ - Thông báo hủy nhắc lịch sự kiện: {symbol}\n\n"
+        f"Mã chứng khoán: {symbol}\n"
+        f"Sự kiện: {event_title}\n"
+        f"Loại: {event_type_vi}\n"
+        f"Lý do: {reason}\n"
+        f"Liên kết kiểm tra: {source_url or 'Không xác định'}\n\n"
+        f"Hệ thống đã tự động gỡ sự kiện này khỏi lịch để đảm bảo an toàn thông tin đầu tư.\n"
+        f"Chi tiết mã {symbol}: {app_url}/market/stocks/{symbol}\n"
+    )
+
+    # 1. Chặn gửi SMTP với email dummy/test để không bị Mail Delivery Subsystem bounce
+    if is_dummy_or_test_email(to_email):
+        logger.info("Skipping cancellation SMTP delivery for dummy/test email: %s", to_email)
+        try:
+            PREVIEWS_DIR.mkdir(parents=True, exist_ok=True)
+            filename = f"cancellation_{symbol}_{datetime.now().strftime('%Y%m%d_%H%M%S')}.html"
+            (PREVIEWS_DIR / filename).write_text(html_content, encoding="utf-8")
+        except Exception:
+            pass
+        return (
+            True,
+            f"Bản xem trước thông báo hủy sự kiện đã lưu cho {to_email} (Test/Dev mode).",
+        )
+
+    # 2. Gửi qua SMTP cấu hình thực tế
+    if settings.auth_smtp_host and settings.auth_mail_from:
+        try:
+            message = EmailMessage()
+            raw_name, raw_address = parseaddr(settings.auth_mail_from or "")
+            sender_address = raw_address if raw_address else "no-reply@investiq.vn"
+            display_name = raw_name if raw_name else "InvestIQ"
+            formatted_from = formataddr((display_name, sender_address))
+            sender_domain = sender_address.rpartition("@")[2] or "investiq.vn"
+
+            now_utc = datetime.now(UTC)
+
+            message["Subject"] = f"[InvestIQ] Thông báo hủy nhắc lịch: {symbol} - {event_title}"
+            message["From"] = formatted_from
+            message["To"] = to_email
+            message["Reply-To"] = formataddr(("InvestIQ Support", sender_address))
+            message["Date"] = format_datetime(now_utc)
+            message["Message-ID"] = make_msgid(domain=sender_domain)
+            message["X-Mailer"] = "InvestIQ Notification Service 1.0"
+            message["Auto-Submitted"] = "auto-generated"
+            message["Precedence"] = "bulk"
+            message.set_content(text_body)
+            message.add_alternative(html_content, subtype="html")
+
+            with smtplib.SMTP(settings.auth_smtp_host, settings.auth_smtp_port, timeout=8) as smtp:
+                if settings.auth_smtp_starttls:
+                    smtp.starttls(context=ssl.create_default_context())
+                if settings.auth_smtp_username and settings.auth_smtp_password:
+                    smtp.login(
+                        settings.auth_smtp_username,
+                        settings.auth_smtp_password.get_secret_value(),
+                    )
+                smtp.send_message(message, from_addr=sender_address, to_addrs=[to_email])
+
+            logger.info("event_cancellation_email_sent_smtp", extra={"to": to_email, "symbol": symbol})
+            return True, "Email thông báo hủy đã được gửi thành công qua SMTP"
+        except Exception as exc:
+            logger.warning(
+                "event_cancellation_smtp_failed_fallback_log",
+                extra={"to": to_email, "error": str(exc)},
+            )
+
+    # 3. Fallback lưu bản xem trước
+    try:
+        PREVIEWS_DIR.mkdir(parents=True, exist_ok=True)
+        filename = f"cancellation_{symbol}_{datetime.now().strftime('%Y%m%d_%H%M%S')}.html"
+        (PREVIEWS_DIR / filename).write_text(html_content, encoding="utf-8")
+        return True, f"Bản xem trước thông báo hủy đã được lưu tại {filename}"
+    except Exception as exc:
+        logger.error("event_cancellation_preview_failed", extra={"error": str(exc)})
+        return False, str(exc)
 
 
 def send_event_reminder_email(

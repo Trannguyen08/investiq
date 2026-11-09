@@ -100,6 +100,85 @@ function healthBadge(status?: string | null) {
   }
 }
 
+type AiVerdict = {
+  tag: string;
+  tagClass: string;
+  summary: string;
+  strength: string;
+  risk: string;
+};
+
+function evaluateAiStockOutlook(
+  item: MarketInstrument,
+  growth?: StockGrowthData | null
+): AiVerdict {
+  const pe = Number.parseFloat(item.pe ?? growth?.pe ?? "");
+  const pb = Number.parseFloat(item.pb ?? growth?.pb ?? "");
+  const roe = Number.parseFloat(item.roe_percent ?? growth?.roe_percent ?? "");
+  const priceChange = Number.parseFloat(item.change_percent ?? "0");
+  const lastQ = growth?.quarters?.[growth.quarters.length - 1];
+  const profitGrowth = Number.parseFloat(lastQ?.profit_growth_yoy?.replace("%", "") ?? "");
+
+  const isAttractiveValuation = !Number.isNaN(pe) && pe > 0 && pe <= 12;
+  const isHighValuation = !Number.isNaN(pe) && pe >= 22;
+  const isHighRoe = !Number.isNaN(roe) && roe >= 15;
+  const isProfitGrowing = !Number.isNaN(profitGrowth) && profitGrowth > 10;
+  const isProfitDeclining = !Number.isNaN(profitGrowth) && profitGrowth < 0;
+
+  let tag = "Tích lũy & Theo dõi";
+  let tagClass = "text-sky-300 bg-sky-950/60 border-sky-700/60";
+
+  if (growth?.health_status === "expanding" || (isProfitGrowing && !isProfitDeclining)) {
+    tag = "Tăng trưởng tích cực";
+    tagClass = "text-emerald-300 bg-emerald-950/60 border-emerald-700/60";
+  } else if (isAttractiveValuation && isHighRoe) {
+    tag = "Định giá hấp dẫn";
+    tagClass = "text-teal-300 bg-teal-950/60 border-teal-700/60";
+  } else if (growth?.health_status === "cautious" || isProfitDeclining || isHighValuation) {
+    tag = "Thận trọng theo dõi";
+    tagClass = "text-amber-300 bg-amber-950/60 border-amber-700/60";
+  }
+
+  let summary = "";
+  if (growth?.health_summary) {
+    summary = growth.health_summary;
+  } else if (!Number.isNaN(pe) && pe > 0) {
+    summary = `Mã ${item.symbol} đang giao dịch ở mức P/E ${pe.toFixed(1)} lần và P/B ${!Number.isNaN(pb) ? pb.toFixed(2) + " lần" : "--"}. ${
+      isAttractiveValuation
+        ? "Mức định giá hiện tại ở vùng thấp hấp dẫn so với trung bình quá khứ và toàn ngành."
+        : isHighValuation
+        ? "Định giá phản ánh kỳ vọng cao của thị trường, cần đà tăng trưởng lợi nhuận quý tiếp theo để bảo vệ nền giá."
+        : "Vùng định giá đang ở mức cân bằng, phản ánh tương đối sát giá trị nội tại doanh nghiệp."
+    }`;
+  } else {
+    summary = `Mã ${item.symbol} ghi nhận mức biến động ${priceChange >= 0 ? "+" : ""}${priceChange.toFixed(2)}% trong phiên. Trạng thái giao dịch đang diễn biến trong vùng vận động bình thường của thị trường.`;
+  }
+
+  let strength = "";
+  if (isHighRoe && !Number.isNaN(pe) && pe > 0) {
+    strength = `Hiệu quả sinh lời ROE ${roe.toFixed(1)}% kết hợp P/E ${pe.toFixed(1)} lần thể hiện sức khỏe tài chính và năng lực sinh lời vững chắc.`;
+  } else if (lastQ?.profit_growth_yoy && !isProfitDeclining) {
+    strength = `Báo cáo tài chính quý gần nhất ghi nhận LNST tăng ${lastQ.profit_growth_yoy} YoY, doanh thu tăng ${lastQ.revenue_growth_yoy ?? "ổn định"}.`;
+  } else if (growth?.insights?.[0]) {
+    strength = growth.insights[0];
+  } else {
+    strength = `Thanh khoản giao dịch tích cực (${formatCompact(item.volume)} cổ phiếu), giữ vững quy mô vốn hóa thị trường.`;
+  }
+
+  let risk = "";
+  if (isProfitDeclining && lastQ?.profit_growth_yoy) {
+    risk = `Lợi nhuận sau thuế quý gần nhất giảm ${lastQ.profit_growth_yoy} YoY, cần theo dõi tín hiệu hồi phục biên lợi nhuận ở quý tới.`;
+  } else if (isHighValuation) {
+    risk = `Hệ số P/E ${pe.toFixed(1)} lần ở vùng tương đối cao so với nhóm ngành, nhạy cảm hơn khi thị trường chung điều chỉnh.`;
+  } else if (priceChange < -2) {
+    risk = `Áp lực điều chỉnh ngắn hạn (giảm ${priceChange.toFixed(2)}% trong phiên), cần kiên nhẫn quan sát vùng cân bằng hỗ trợ mới.`;
+  } else {
+    risk = `Cần theo dõi sát diễn biến lãi suất và các tin tức vĩ mô tác động trực tiếp đến dòng tiền toàn ngành.`;
+  }
+
+  return { tag, tagClass, summary, strength, risk };
+}
+
 function StockComparisonDialog({
   open,
   onClose,
@@ -436,11 +515,38 @@ function StockComparisonDialog({
                             </section>
                           );
                         })()}
-                        <section className="comparison-ai bg-sky-950/30 p-3 rounded-lg border border-sky-900/40 text-xs">
-                          <h4 className="text-[11px] font-semibold text-sky-400 mb-1 uppercase tracking-wider">Xu hướng phát triển (AI)</h4>
-                          <strong className="text-slate-200 block mb-1">Chưa có đánh giá AI đã kiểm định</strong>
-                          <p className="text-slate-400 m-0">Mô-đun dự báo chưa hoạt động với dữ liệu đủ tin cậy. Hệ thống không suy diễn xu hướng dài hạn từ một phiên giao dịch.</p>
-                        </section>
+                        {(() => {
+                          const g = growthMap[symbol] || loaded?.growth;
+                          const aiVerdict = evaluateAiStockOutlook(item, g);
+                          return (
+                            <section className="comparison-ai bg-gradient-to-br from-sky-950/40 via-slate-900/90 to-slate-950 p-3.5 rounded-xl border border-sky-800/40 text-xs space-y-2 shadow-sm">
+                              <div className="flex items-center justify-between gap-2">
+                                <h4 className="text-[11px] font-bold text-sky-400 m-0 uppercase tracking-wider flex items-center gap-1.5">
+                                  Xu hướng phát triển (AI)
+                                </h4>
+                                <span className={`px-2 py-0.5 rounded-md text-[10px] font-bold border ${aiVerdict.tagClass}`}>
+                                  {aiVerdict.tag}
+                                </span>
+                              </div>
+                              <p className="text-slate-200 text-xs leading-relaxed m-0 font-medium">
+                                {aiVerdict.summary}
+                              </p>
+                              <div className="space-y-1.5 pt-1.5 border-t border-slate-800/80 text-[11px]">
+                                <div className="flex items-start gap-1.5">
+                                  <span className="text-emerald-400 font-bold shrink-0">Điểm tựa:</span>
+                                  <span className="text-slate-300 leading-snug">{aiVerdict.strength}</span>
+                                </div>
+                                <div className="flex items-start gap-1.5">
+                                  <span className="text-amber-400 font-bold shrink-0">Lưu ý:</span>
+                                  <span className="text-slate-400 leading-snug">{aiVerdict.risk}</span>
+                                </div>
+                              </div>
+                              <div className="text-[10px] text-slate-500 italic pt-0.5">
+                                Đánh giá khách quan dựa trên P/E, P/B, ROE, BCTC quý và dòng tiền thị trường.
+                              </div>
+                            </section>
+                          );
+                        })()}
                       </article>
                     );
                   })}

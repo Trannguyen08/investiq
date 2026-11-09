@@ -238,7 +238,7 @@ describe("PaperTradingDashboard", () => {
 
   });
 
-  it("opens a read-only unrealized P&L scenario and recalculates only from quantity", async () => {
+  it("opens a read-only unrealized P&L scenario with fixed non-editable quantity text", async () => {
 
     render(<PaperTradingDashboard positiveNews={[]} marketInstruments={marketInstruments} />);
 
@@ -248,25 +248,17 @@ describe("PaperTradingDashboard", () => {
 
     const dialog = screen.getByRole("dialog", { name: "Lãi/lỗ dự kiến nếu bán" });
 
-    const quantity = screen.getByRole("spinbutton", { name: "Khối lượng bán giả định FPT" });
-
     expect(dialog).toHaveTextContent("Chỉ đọc, không bán");
 
     expect(dialog).toHaveTextContent("159.500 ₫");
 
     expect(dialog).toHaveTextContent("+1,59%");
 
-    expect(quantity).toHaveValue(100);
+    expect(dialog).toHaveTextContent("100 CP");
 
-    expect(quantity).toHaveAttribute("max", "100");
+    expect(screen.queryByRole("spinbutton")).not.toBeInTheDocument();
 
     expect(screen.queryByRole("button", { name: /xác nhận bán/i })).not.toBeInTheDocument();
-
-    fireEvent.change(quantity, { target: { value: "50" } });
-
-    expect(quantity).toHaveValue(50);
-
-    expect(dialog).toHaveTextContent("79.750 ₫");
 
     fireEvent.keyDown(document, { key: "Escape" });
 

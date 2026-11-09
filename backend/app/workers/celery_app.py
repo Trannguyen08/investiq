@@ -10,7 +10,11 @@ celery_app = Celery(
     "investiq",
     broker=settings.celery_broker_url,
     backend=settings.celery_result_backend,
-    include=("app.workers.news_ingestion_worker", "app.workers.auth_email_worker"),
+    include=(
+        "app.workers.news_ingestion_worker",
+        "app.workers.auth_email_worker",
+        "app.workers.link_integrity_worker",
+    ),
 )
 celery_app.conf.update(
     accept_content=["json"],
@@ -83,6 +87,7 @@ celery_app.conf.update(
     task_routes={
         "investiq.news.*": {"queue": "news-ingestion"},
         "investiq.auth.email.*": {"queue": "notifications"},
+        "investiq.links.*": {"queue": "news-ingestion"},
     },
     worker_prefetch_multiplier=1,
 )

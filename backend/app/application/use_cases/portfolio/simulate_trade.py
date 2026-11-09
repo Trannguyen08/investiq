@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from concurrent.futures import ThreadPoolExecutor, TimeoutError, as_completed
 from datetime import UTC, datetime, time, timedelta
 from decimal import Decimal
 from time import monotonic as _monotonic
@@ -24,7 +25,7 @@ from app.application.use_cases.portfolio.exchange_simulator import (
     match_against_orderbook,
     validate_vietnam_exchange_rules,
 )
-from app.domain.entities.market import MarketInstrument
+from app.domain.entities.market import Candle, MarketInstrument
 from app.domain.entities.portfolio import PaperOrder, PaperPortfolio, PaperTrade
 from app.domain.repositories.i_market_provider import IMarketProvider
 from app.domain.repositories.i_portfolio_repository import (
@@ -117,6 +118,10 @@ def _day_order_expiry(now: datetime) -> datetime:
     return candidate.astimezone(UTC)
 
 
+_SHARED_DASHBOARD_CACHE: dict[str, tuple[float, dict[str, object]]] = {}
+_SHARED_HOLDING_CANDLES_CACHE: dict[str, tuple[float, list[Candle]]] = {}
+
+
 class PaperTradingService:
     def __init__(
         self,
@@ -129,7 +134,8 @@ class PaperTradingService:
         self._provider = provider
         self._sim_store = sim_store or get_exchange_simulation_store()
         self._clock = clock
-        self._dashboard_cache: dict[str, tuple[float, dict[str, object]]] = {}
+        self._dashboard_cache = _SHARED_DASHBOARD_CACHE if clock is None else {}
+        self._holding_candles_cache = _SHARED_HOLDING_CANDLES_CACHE if clock is None else {}
 
     def invalidate_dashboard_cache(self, user_id: str | None = None) -> None:
         if user_id:
@@ -139,6 +145,11 @@ class PaperTradingService:
 
     def _now(self) -> datetime:
         return self._clock or datetime.now(UTC)
+
+    def _now_ts(self) -> float:
+        if self._clock is not None:
+            return self._clock.timestamp()
+        return _monotonic()
 
     def _execution(
         self,
@@ -624,12 +635,14 @@ class PaperTradingService:
 
             if mode == "exchange_hours":
                 display_type: OrderTypeCode = meta.display_order_type if meta else "LO"
-                in_sess, _ = is_within_exchange_trading_hours(
+                in_sess, sess_reason = is_within_exchange_trading_hours(
                     now,
                     self._provider.session,
                     display_type,
                 )
                 if not in_sess:
+                    if meta:
+                        meta.pending_reason = sess_reason
                     continue
                 match = match_against_orderbook(
                     side=order.side,
@@ -641,6 +654,8 @@ class PaperTradingService:
                     use_orderbook_depth=True,
                 )
                 if not match.can_fill_now:
+                    if meta:
+                        meta.pending_reason = match.pending_reason
                     continue
                 fill_price = match.execution_price
             else:
@@ -726,7 +741,7 @@ class PaperTradingService:
         return self._repository.get_or_create(user_id, STARTING_CASH)
 
     def dashboard(self, user_id: str) -> dict[str, object]:
-        now_ts = _monotonic()
+        now_ts = self._now_ts()
         cached = self._dashboard_cache.get(user_id)
         if cached and cached[0] > now_ts:
             return cached[1]
@@ -745,6 +760,54 @@ class PaperTradingService:
         total_market_value = Decimal()
         missing_prices = 0
         notices: list[dict[str, str]] = []
+
+        # Fetch 90-day daily candles for all holdings concurrently with caching and strict 1.2s timeout
+        holding_symbols = [holding.symbol for holding in portfolio.holdings]
+        all_candles: dict[str, list[Candle]] = {}
+        if holding_symbols:
+            now_mono = _monotonic()
+            symbols_to_fetch: list[str] = []
+            for sym in holding_symbols:
+                cached_c = self._holding_candles_cache.get(sym)
+                if cached_c and cached_c[0] > now_mono and cached_c[1]:
+                    all_candles[sym] = cached_c[1]
+                else:
+                    symbols_to_fetch.append(sym)
+
+            if symbols_to_fetch:
+                def _fetch_holding_candles(sym: str) -> tuple[str, list[Candle]]:
+                    try:
+                        candles = list(self._provider.candles(sym, "1d"))[-90:]
+                        return sym, candles
+                    except Exception:
+                        return sym, []
+
+                workers = min(6, len(symbols_to_fetch))
+                executor = ThreadPoolExecutor(max_workers=workers)
+                try:
+                    future_map = {
+                        executor.submit(_fetch_holding_candles, sym): sym
+                        for sym in symbols_to_fetch
+                    }
+                    try:
+                        for future in as_completed(future_map, timeout=1.5):
+                            sym = future_map[future]
+                            try:
+                                res_sym, candle_list = future.result()
+                                if candle_list:
+                                    self._holding_candles_cache[res_sym] = (now_mono + 1800.0, candle_list)
+                                    all_candles[res_sym] = candle_list
+                            except Exception:
+                                pass
+                    except TimeoutError:
+                        pass
+                finally:
+                    executor.shutdown(wait=False, cancel_futures=True)
+
+                for sym in symbols_to_fetch:
+                    if sym not in all_candles:
+                        cached_c = self._holding_candles_cache.get(sym)
+                        all_candles[sym] = cached_c[1] if cached_c else []
 
         histories: dict[str, list[dict[str, str]]] = {}
         for holding in portfolio.holdings:
@@ -765,7 +828,7 @@ class PaperTradingService:
                 if unrealized is not None and holding.total_cost_basis
                 else None
             )
-            candles = list(self._provider.candles(holding.symbol, "1d"))[-30:]
+            candles = all_candles.get(holding.symbol, [])[-30:]
             histories[holding.symbol] = [
                 {"timestamp": _iso(item.timestamp), "close": decimal_text(item.close)}
                 for item in candles
@@ -896,7 +959,11 @@ class PaperTradingService:
             key=lambda item: (item.change_percent, item.matched_value),
             reverse=True,
         )[:6]
-        equity_curve = self._equity_curve(portfolio)
+        equity_curve = self._equity_curve(
+            portfolio,
+            precomputed_candles=all_candles,
+            current_total_value=total_value,
+        )
         res: dict[str, object] = {
             "account": {
                 "id": portfolio.id,
@@ -975,7 +1042,7 @@ class PaperTradingService:
             },
             "exchange_simulation": self._exchange_simulation_payload(user_id, portfolio),
         }
-        self._dashboard_cache[user_id] = (now_ts + 15.0, res)
+        self._dashboard_cache[user_id] = (now_ts + 60.0, res)
         return res
 
     def _exchange_simulation_payload(
@@ -1050,35 +1117,72 @@ class PaperTradingService:
             "order_meta": order_meta_map,
         }
 
-    def _equity_curve(self, portfolio: PaperPortfolio) -> list[dict[str, str]]:
+    def _equity_curve(
+        self,
+        portfolio: PaperPortfolio,
+        precomputed_candles: dict[str, list[Candle]] | None = None,
+        current_total_value: Decimal | None = None,
+    ) -> list[dict[str, str]]:
         if not portfolio.holdings:
             return []
-        close_by_symbol: dict[str, dict[str, Decimal]] = {}
-        for holding in portfolio.holdings:
-            candles = self._provider.candles(holding.symbol, "1d")[-90:]
-            if not candles:
-                continue
-            close_by_symbol[holding.symbol] = {
-                candle.timestamp.date().isoformat(): candle.close for candle in candles
-            }
-        if not close_by_symbol:
-            return []
-        common_days = set.intersection(*(set(values) for values in close_by_symbol.values()))
+
         holding_by_symbol = {item.symbol: item for item in portfolio.holdings}
-        by_date = {
-            day: portfolio.cash_balance
-            + sum(
-                (
-                    round_vnd(values[day] * Decimal(holding_by_symbol[symbol].quantity))
-                    for symbol, values in close_by_symbol.items()
-                ),
-                Decimal(),
+        close_by_symbol: dict[str, dict[str, Decimal]] = {}
+        fallback_prices: dict[str, Decimal] = {}
+
+        # 1. Gather all candle history and establish safe fallback price per holding
+        for holding in portfolio.holdings:
+            candles: list[Candle] = []
+            if precomputed_candles and holding.symbol in precomputed_candles:
+                candles = precomputed_candles[holding.symbol]
+
+            inst = self._provider.instrument(holding.symbol, include_fundamentals=False)
+            safe_price = (
+                inst.price if inst and inst.price > 0 else (
+                    candles[-1].close if candles else holding.average_cost
+                )
             )
-            for day in common_days
-        }
+            fallback_prices[holding.symbol] = safe_price if safe_price > 0 else Decimal("10000")
+
+            if candles:
+                close_by_symbol[holding.symbol] = {
+                    candle.timestamp.date().isoformat(): candle.close for candle in candles
+                }
+            else:
+                close_by_symbol[holding.symbol] = {}
+
+        # 2. Collect all dates across all holdings with candles
+        all_dates_set: set[str] = set()
+        for c_dict in close_by_symbol.values():
+            all_dates_set.update(c_dict.keys())
+
+        today_iso = datetime.now(_MARKET_TZ).date().isoformat()
+        all_dates_set.add(today_iso)
+        sorted_days = sorted(all_dates_set)[-90:]
+
+        # 3. For each day, calculate portfolio equity with all holdings strictly included
+        by_date: dict[str, Decimal] = {}
+        for day in sorted_days:
+            if day == today_iso and current_total_value is not None:
+                by_date[day] = current_total_value
+                continue
+
+            day_holdings_val = Decimal()
+            for symbol, holding in holding_by_symbol.items():
+                price = close_by_symbol.get(symbol, {}).get(day)
+                if price is None or price <= 0:
+                    price = fallback_prices[symbol]
+                day_holdings_val += round_vnd(price * Decimal(holding.quantity))
+
+            by_date[day] = portfolio.cash_balance + day_holdings_val
+
+        # 4. Guarantee today's endpoint strictly matches current_total_value
+        if current_total_value is not None:
+            by_date[today_iso] = current_total_value
+
         return [
             {"timestamp": f"{day}T08:00:00Z", "value": decimal_text(value)}
-            for day, value in sorted(by_date.items())[-90:]
+            for day, value in sorted(by_date.items())
         ]
 
     def set_public_visibility(

@@ -1,242 +1,282 @@
 {
   "ACB": {
-    "pe": 7.32,
-    "pb": 1.13,
-    "eps": null,
-    "roe_percent": 16.23
+    "pe": 7.34,
+    "pb": 1.14,
+    "eps": 2773.13,
+    "roe_percent": 16.23,
+    "quarter": "2026-Q3"
   },
   "BCM": {
-    "pe": 18.36,
-    "pb": 1.72,
-    "eps": null,
-    "roe_percent": 9.43
+    "pe": 18.8,
+    "pb": 1.76,
+    "eps": 2023.49,
+    "roe_percent": 9.43,
+    "quarter": "2026-Q3"
   },
   "BID": {
-    "pe": 7.07,
+    "pe": 7.06,
     "pb": 1.26,
-    "eps": null,
-    "roe_percent": 18.09
+    "eps": 4523.69,
+    "roe_percent": 18.09,
+    "quarter": "2026-Q3"
   },
   "BVH": {
-    "pe": 14.54,
-    "pb": 1.88,
-    "eps": null,
-    "roe_percent": 13.32
+    "pe": 13.93,
+    "pb": 1.8,
+    "eps": 4559.58,
+    "roe_percent": 13.32,
+    "quarter": "2026-Q3"
   },
   "CTG": {
-    "pe": 5.43,
-    "pb": 1.12,
-    "eps": null,
-    "roe_percent": 21.94
+    "pe": 5.81,
+    "pb": 1.2,
+    "eps": 5479.48,
+    "roe_percent": 21.94,
+    "quarter": "2026-Q3"
   },
   "DCM": {
-    "pe": 6.27,
-    "pb": 1.44,
-    "eps": null,
-    "roe_percent": 23.84
+    "pe": 6.26,
+    "pb": 1.43,
+    "eps": 5131.61,
+    "roe_percent": 23.84,
+    "quarter": "2026-Q3"
   },
   "DGC": {
-    "pe": 6.7,
-    "pb": 0.95,
-    "eps": null,
-    "roe_percent": 12.49
+    "pe": 6.76,
+    "pb": 0.96,
+    "eps": 4882.52,
+    "roe_percent": 12.49,
+    "quarter": "2026-Q3"
   },
   "DGW": {
-    "pe": 8.94,
-    "pb": 2.54,
-    "eps": null,
-    "roe_percent": 26.74
+    "pe": 9.02,
+    "pb": 2.57,
+    "eps": 4269.42,
+    "roe_percent": 26.74,
+    "quarter": "2026-Q3"
   },
   "DIG": {
-    "pe": 12.22,
-    "pb": 0.79,
-    "eps": null,
-    "roe_percent": 6.28
+    "pe": 13.4,
+    "pb": 0.87,
+    "eps": 776.39,
+    "roe_percent": 6.28,
+    "quarter": "2026-Q3"
   },
   "DPM": {
-    "pe": 8.34,
-    "pb": 1.16,
-    "eps": null,
-    "roe_percent": 13.82
+    "pe": 8.47,
+    "pb": 1.18,
+    "eps": 2319.56,
+    "roe_percent": 13.82,
+    "quarter": "2026-Q3"
   },
   "DXG": {
-    "pe": 107.6,
-    "pb": 0.87,
-    "eps": null,
-    "roe_percent": 0.8
+    "pe": 120.04,
+    "pb": 0.97,
+    "eps": 91.64,
+    "roe_percent": 0.8,
+    "quarter": "2026-Q3"
   },
   "FPT": {
-    "pe": 9.16,
-    "pb": 2.21,
-    "eps": null,
-    "roe_percent": 26.02
+    "pe": 9.27,
+    "pb": 2.23,
+    "eps": 5479.11,
+    "roe_percent": 26.02,
+    "quarter": "2026-Q3"
   },
   "FRT": {
-    "pe": 18.2,
-    "pb": 4.72,
-    "eps": null,
-    "roe_percent": 29.11
+    "pe": 18.69,
+    "pb": 4.85,
+    "eps": 7598.23,
+    "roe_percent": 29.11,
+    "quarter": "2026-Q3"
   },
   "GAS": {
-    "pe": 12.6,
-    "pb": 2.54,
-    "eps": null,
-    "roe_percent": 21.25
+    "pe": 12.13,
+    "pb": 2.44,
+    "eps": 6109.64,
+    "roe_percent": 21.25,
+    "quarter": "2026-Q3"
   },
   "GVR": {
-    "pe": 13.78,
-    "pb": 1.84,
-    "eps": null,
-    "roe_percent": 14.13
+    "pe": 13.88,
+    "pb": 1.85,
+    "eps": 2111.05,
+    "roe_percent": 14.13,
+    "quarter": "2026-Q3"
   },
   "HCM": {
-    "pe": 21.67,
-    "pb": 1.82,
-    "eps": null,
-    "roe_percent": 8.13
+    "pe": 22.11,
+    "pb": 1.85,
+    "eps": 1065.3,
+    "roe_percent": 8.13,
+    "quarter": "2026-Q3"
   },
   "HDB": {
-    "pe": 7.37,
-    "pb": 1.59,
-    "eps": null,
-    "roe_percent": 22.31
+    "pe": 7.57,
+    "pb": 1.63,
+    "eps": 2970.38,
+    "roe_percent": 22.31,
+    "quarter": "2026-Q3"
   },
   "HHV": {
-    "pe": 7.38,
-    "pb": 0.45,
-    "eps": null,
-    "roe_percent": 6.11
+    "pe": 7.7,
+    "pb": 0.47,
+    "eps": 1241.79,
+    "roe_percent": 6.11,
+    "quarter": "2026-Q3"
   },
   "HPG": {
-    "pe": 6.28,
-    "pb": 1.16,
-    "eps": null,
-    "roe_percent": 19.69
+    "pe": 6.52,
+    "pb": 1.2,
+    "eps": 3250.81,
+    "roe_percent": 19.69,
+    "quarter": "2026-Q3"
   },
   "KDH": {
-    "pe": 9.68,
-    "pb": 0.88,
-    "eps": null,
-    "roe_percent": 9.09
+    "pe": 10.99,
+    "pb": 0.99,
+    "eps": 1374.5,
+    "roe_percent": 9.09,
+    "quarter": "2026-Q3"
   },
   "MBB": {
-    "pe": 10.0,
-    "pb": 2.26,
-    "eps": null,
-    "roe_percent": 22.57
+    "pe": 5.49,
+    "pb": 1.23,
+    "eps": 3507.59,
+    "roe_percent": 21.25,
+    "quarter": "2026-Q3"
   },
   "MSN": {
-    "pe": 10.0,
-    "pb": 1.01,
-    "eps": null,
-    "roe_percent": 10.06
+    "pe": 11.69,
+    "pb": 2.44,
+    "eps": 6243.58,
+    "roe_percent": 24.45,
+    "quarter": "2026-Q3"
   },
   "MWG": {
-    "pe": 10.0,
-    "pb": 1.58,
-    "eps": null,
-    "roe_percent": 15.78
+    "pe": 9.75,
+    "pb": 2.3,
+    "eps": 7556.29,
+    "roe_percent": 29.65,
+    "quarter": "2026-Q3"
   },
   "PLX": {
-    "pe": 10.0,
-    "pb": 1.27,
-    "eps": null,
-    "roe_percent": 12.68
+    "pe": 11.04,
+    "pb": 1.54,
+    "eps": 3021.97,
+    "roe_percent": 14.58,
+    "quarter": "2026-Q3"
   },
   "POW": {
-    "pe": 10.1,
-    "pb": 0.44,
-    "eps": null,
-    "roe_percent": 4.36
+    "pe": 5.25,
+    "pb": 0.88,
+    "eps": 2353.43,
+    "roe_percent": 17.87,
+    "quarter": "2026-Q3"
   },
   "SAB": {
-    "pe": 10.0,
-    "pb": 1.89,
-    "eps": null,
-    "roe_percent": 18.9
+    "pe": 11.76,
+    "pb": 2.63,
+    "eps": 3622.65,
+    "roe_percent": 22.18,
+    "quarter": "2026-Q3"
   },
   "SHB": {
-    "pe": 10.0,
-    "pb": 1.28,
-    "eps": null,
-    "roe_percent": 12.83
+    "pe": 3.68,
+    "pb": 0.64,
+    "eps": 2925.08,
+    "roe_percent": 18.56,
+    "quarter": "2026-Q3"
   },
   "SSB": {
-    "pe": 10.0,
-    "pb": 1.31,
-    "eps": null,
-    "roe_percent": 13.07
+    "pe": 15.59,
+    "pb": 1.18,
+    "eps": 949.02,
+    "roe_percent": 7.79,
+    "quarter": "2026-Q3"
   },
   "SSI": {
-    "pe": 10.0,
-    "pb": 1.27,
-    "eps": null,
-    "roe_percent": 12.74
+    "pe": 13.12,
+    "pb": 1.57,
+    "eps": 1554.58,
+    "roe_percent": 11.78,
+    "quarter": "2026-Q3"
   },
   "STB": {
-    "pe": 10.0,
-    "pb": 2.46,
-    "eps": null,
-    "roe_percent": 24.56
+    "pe": 86.52,
+    "pb": 2.06,
+    "eps": 809.09,
+    "roe_percent": 2.46,
+    "quarter": "2026-Q3"
   },
   "TCB": {
-    "pe": 10.0,
-    "pb": 1.63,
-    "eps": null,
-    "roe_percent": 16.27
+    "pe": 8.04,
+    "pb": 1.23,
+    "eps": 2694.33,
+    "roe_percent": 15.22,
+    "quarter": "2026-Q3"
   },
   "TPB": {
-    "pe": 10.0,
-    "pb": 1.7,
-    "eps": null,
-    "roe_percent": 16.96
+    "pe": 4.81,
+    "pb": 0.84,
+    "eps": 2641.9,
+    "roe_percent": 17.27,
+    "quarter": "2026-Q3"
   },
   "VCB": {
-    "pe": 10.0,
-    "pb": 1.65,
-    "eps": null,
-    "roe_percent": 16.49
+    "pe": 10.75,
+    "pb": 1.77,
+    "eps": 4985.98,
+    "roe_percent": 17.34,
+    "quarter": "2026-Q3"
   },
   "VHM": {
-    "pe": 10.0,
-    "pb": 1.56,
-    "eps": null,
-    "roe_percent": 15.59
+    "pe": 5.16,
+    "pb": 1.78,
+    "eps": 12038.66,
+    "roe_percent": 37.65,
+    "quarter": "2026-Q3"
   },
   "VIC": {
-    "pe": 9.9,
-    "pb": 0.46,
-    "eps": null,
-    "roe_percent": 4.64
+    "pe": 42.2,
+    "pb": 9.42,
+    "eps": 5557.41,
+    "roe_percent": 26.06,
+    "quarter": "2026-Q3"
   },
   "VJC": {
-    "pe": 10.0,
-    "pb": 1.16,
-    "eps": null,
-    "roe_percent": 11.57
+    "pe": 47.0,
+    "pb": 3.9,
+    "eps": 2866.01,
+    "roe_percent": 8.51,
+    "quarter": "2026-Q3"
   },
   "VND": {
-    "pe": 10.0,
-    "pb": 1.27,
-    "eps": null,
-    "roe_percent": 12.68
+    "pe": 10.84,
+    "pb": 1.05,
+    "eps": 1379.06,
+    "roe_percent": 9.82,
+    "quarter": "2026-Q3"
   },
   "VNM": {
-    "pe": 10.0,
-    "pb": 2.78,
-    "eps": null,
-    "roe_percent": 27.84
+    "pe": 10.6,
+    "pb": 3.5,
+    "eps": 5454.8,
+    "roe_percent": 35.11,
+    "quarter": "2026-Q3"
   },
   "VPB": {
-    "pe": 10.0,
-    "pb": 1.22,
-    "eps": null,
-    "roe_percent": 12.18
+    "pe": 7.07,
+    "pb": 1.18,
+    "eps": 3118.41,
+    "roe_percent": 16.45,
+    "quarter": "2026-Q3"
   },
   "VRE": {
-    "pe": 10.0,
-    "pb": 1.13,
-    "eps": null,
-    "roe_percent": 11.3
+    "pe": 7.3,
+    "pb": 1.06,
+    "eps": 3254.69,
+    "roe_percent": 14.9,
+    "quarter": "2026-Q3"
   }
 }

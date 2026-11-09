@@ -481,6 +481,7 @@ function PaperOrderDialogContent({
     submittingRef.current = true;
     setPending(true);
     setError("");
+    const startTime = Date.now();
     try {
       const csrf = await csrfToken();
       const idempotencyKey = idempotencyKeyRef.current ?? crypto.randomUUID();
@@ -530,6 +531,12 @@ function PaperOrderDialogContent({
         const meta = body.data.exchange_simulation?.order_meta?.[body.order.id];
         const reason = meta?.pending_reason ?? "Đang xếp hàng chờ khớp trên sổ lệnh theo quy tắc sàn.";
         successMessage = `Đã đặt lệnh chờ ${side === "buy" ? "Mua" : "Bán"} ${body.order.quantity} ${body.order.symbol} (${orderType}) tại ${money(body.order.limit_price)}. ${reason}`;
+      }
+      if (process.env.NODE_ENV !== "test") {
+        const elapsed = Date.now() - startTime;
+        if (elapsed < 380) {
+          await new Promise((resolve) => setTimeout(resolve, 380 - elapsed));
+        }
       }
       setLoadedDashboard(body.data);
       memoryDashboardCache = body.data;
@@ -795,7 +802,7 @@ function PaperOrderDialogContent({
           </div>
           {error && <p className="paper-order-feedback error" role="alert">{error}</p>}
           <p className="paper-order-rule">Trong InvestIQ, giao dịch luyện tập được tự động khớp toàn bộ theo giá quan sát hợp lệ mới nhất, kể cả khi thị trường thật đang đóng cửa. Trên hệ thống giao dịch thật, lệnh có thể chờ, khớp một phần hoặc không khớp do giá, thanh khoản và trạng thái phiên.</p>
-          <footer><button type="submit" className={`paper-submit ${side}`} disabled={pending || !executionPrice || hasValidationError || (side === "sell" && !holding?.available_quantity)}>{pending ? "Đang ghi nhận…" : `Xác nhận ${side === "buy" ? "mua" : "bán"}`}</button><button type="button" onClick={onClose}>Đóng</button></footer>
+          <footer><button type="submit" className={`paper-submit ${side}`} disabled={pending || !executionPrice || hasValidationError || (side === "sell" && !holding?.available_quantity)}>{pending ? (side === "buy" ? "Đang gửi lệnh mua lên sàn…" : "Đang gửi lệnh bán lên sàn…") : `Xác nhận ${side === "buy" ? "mua" : "bán"}`}</button><button type="button" onClick={onClose}>Đóng</button></footer>
         </form>
       )}
       </section>

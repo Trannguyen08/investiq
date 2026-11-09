@@ -58,23 +58,67 @@ const marketDateFormatter = new Intl.DateTimeFormat("en-CA", {
   day: "2-digit",
 });
 
+const marketDateTimeFormatter = new Intl.DateTimeFormat("en-US", {
+  timeZone: "Asia/Ho_Chi_Minh",
+  year: "numeric",
+  month: "numeric",
+  day: "numeric",
+  hour: "numeric",
+  minute: "numeric",
+  hourCycle: "h23",
+});
+
+function roundToTick(price: number): number {
+  if (price >= 50000) return Math.round(price / 100) * 100;
+  if (price >= 10000) return Math.round(price / 50) * 50;
+  if (price >= 1000) return Math.round(price / 10) * 10;
+  return price;
+}
+
 function numericCandles(candles: MarketCandle[]): NumericCandle[] {
   return candles.flatMap((source) => {
-    const values = {
-      source,
-      open: Number(source.open),
-      high: Number(source.high),
-      low: Number(source.low),
-      close: Number(source.close),
-      volume: Number(source.volume),
-    };
-    return Object.values(values).slice(1).every((value) => Number.isFinite(value)) &&
-      values.open > 0 &&
-      values.high > 0 &&
-      values.low > 0 &&
-      values.close > 0
-      ? [values]
-      : [];
+    const rawOpen = Number(source.open);
+    const rawHigh = Number(source.high);
+    const rawLow = Number(source.low);
+    const rawClose = Number(source.close);
+    const rawVol = Number(source.volume);
+
+    if (
+      !Number.isFinite(rawOpen) ||
+      !Number.isFinite(rawHigh) ||
+      !Number.isFinite(rawLow) ||
+      !Number.isFinite(rawClose) ||
+      !Number.isFinite(rawVol) ||
+      rawOpen <= 0 ||
+      rawHigh <= 0 ||
+      rawLow <= 0 ||
+      rawClose <= 0
+    ) {
+      return [];
+    }
+
+    const open = roundToTick(rawOpen);
+    const close = roundToTick(rawClose);
+    const high = Math.max(open, close, roundToTick(rawHigh));
+    const minFloor = rawLow < 1000 ? 0.01 : 100;
+    const low = Math.max(minFloor, Math.min(open, close, roundToTick(rawLow)));
+    const volume = Math.max(0, Math.round(rawVol));
+
+    return [{
+      source: {
+        timestamp: source.timestamp,
+        open: String(open),
+        high: String(high),
+        low: String(low),
+        close: String(close),
+        volume: String(volume),
+      },
+      open,
+      high,
+      low,
+      close,
+      volume,
+    }];
   });
 }
 
@@ -99,7 +143,21 @@ function initialWindowStart(values: NumericCandle[], range?: ChartRange) {
   const latest = marketDate(values.at(-1)!.source.timestamp);
   const latestSerial = Date.UTC(latest.year, latest.month - 1, latest.day);
   let cutoff = latestSerial;
-  if (range === "week") cutoff = latestSerial - 7 * 24 * 60 * 60 * 1000;
+  if (range === "day") {
+    const dayFound = values.findIndex((item) => marketDateSerial(item.source.timestamp) >= latestSerial);
+    if (dayFound >= 0 && values.length - dayFound < 25) {
+      return Math.max(0, values.length - 50);
+    }
+    return Math.max(0, dayFound >= 0 ? dayFound : values.length - 50);
+  }
+  if (range === "week") {
+    cutoff = latestSerial - 7 * 24 * 60 * 60 * 1000;
+    const weekFound = values.findIndex((item) => marketDateSerial(item.source.timestamp) >= cutoff);
+    if (weekFound >= 0 && values.length - weekFound < 35) {
+      return Math.max(0, values.length - 45);
+    }
+    return Math.max(0, weekFound >= 0 ? weekFound : values.length - 45);
+  }
   if (range === "month") cutoff = Date.UTC(latest.year, latest.month - 2, 1);
   if (range === "year") cutoff = Date.UTC(latest.year - 1, latest.month - 1, 1);
   const found = values.findIndex((item) => marketDateSerial(item.source.timestamp) >= cutoff);
@@ -308,14 +366,15 @@ function nextZoomWindow({
 
 function marketDateTime(timestamp: string) {
   const date = new Date(timestamp);
-  const utc = date.getTime() + date.getTimezoneOffset() * 60000;
-  const vn = new Date(utc + 7 * 3600000);
+  const parts = Object.fromEntries(
+    marketDateTimeFormatter.formatToParts(date).map((part) => [part.type, part.value]),
+  );
   return {
-    year: vn.getFullYear(),
-    month: vn.getMonth() + 1,
-    day: vn.getDate(),
-    hour: vn.getHours(),
-    minute: vn.getMinutes(),
+    year: Number(parts.year),
+    month: Number(parts.month),
+    day: Number(parts.day),
+    hour: Number(parts.hour),
+    minute: Number(parts.minute),
   };
 }
 

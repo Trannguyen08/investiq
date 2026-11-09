@@ -107,6 +107,7 @@ async def start_market_provider() -> None:
     provider = _provider()
     if isinstance(provider, VnstockMarketProvider):
         asyncio.create_task(asyncio.to_thread(provider.indices))
+        asyncio.create_task(asyncio.to_thread(provider.instruments))
 
 
 async def close_market_provider() -> None:
@@ -546,6 +547,14 @@ def quick_test_reminder(payload: EventReminderCreateRequest) -> dict[str, Any]:
         "success": success,
         "message": msg,
     }
+
+
+@router.post("/events/link-integrity/check")
+def trigger_link_integrity_check() -> dict[str, Any]:
+    """Trigger an on-demand link integrity audit cycle for events and news."""
+    from app.workers.link_integrity_worker import run_link_integrity_cycle
+
+    return run_link_integrity_cycle()
 
 
 @router.get("/events", response_model=EventsResponse)

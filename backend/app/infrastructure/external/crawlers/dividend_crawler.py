@@ -349,7 +349,7 @@ _UPCOMING_FUTURE_DIVIDENDS: list[dict[str, Any]] = [
 for _div_item in _UPCOMING_FUTURE_DIVIDENDS:
     _div_item.setdefault(
         "source_url",
-        f"https://s.cafef.vn/lich-su-kien/{_div_item['symbol']}/sub.chn",
+        f"https://s.cafef.vn/lich-su-kien.chn?symbol={_div_item['symbol']}",
     )
 
 
@@ -481,7 +481,7 @@ class DividendCrawler:
                             "cash_value": float(cash_val) if cash_val is not None else None,
                             "title": title,
                             "source": "CafeF Data",
-                            "source_url": f"https://s.cafef.vn/lich-su-kien/{symbol}/sub.chn",
+                            "source_url": f"https://s.cafef.vn/lich-su-kien.chn?symbol={symbol}",
                         }
                     )
 

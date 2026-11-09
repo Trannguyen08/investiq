@@ -150,12 +150,25 @@ def _latest_vci_fundamental_rows(
     if latest is None:
         return []
     period = f"{_integer(latest.get('year'))}-Q{_integer(latest.get('quarter'))}"
+    pe = _optional_decimal(latest.get("pe"))
+    pb = _optional_decimal(latest.get("pb"))
     roe = _optional_decimal(latest.get("roe"))
-    return [
-        {"item_id": "pe_ratio", period: latest.get("pe")},
-        {"item_id": "pb_ratio", period: latest.get("pb")},
+
+    eps = None
+    if pe is not None and pe > 0:
+        mkt_cap = _optional_decimal(latest.get("market_cap"))
+        shares = _optional_decimal(latest.get("number_of_shares_mkt_cap"))
+        if mkt_cap and shares and shares > 0:
+            eps = (mkt_cap / shares) / pe
+
+    result: list[dict[str, object]] = [
+        {"item_id": "pe_ratio", period: pe},
+        {"item_id": "pb_ratio", period: pb},
         {"item_id": "roe", period: roe * Decimal("100") if roe is not None else None},
     ]
+    if eps is not None:
+        result.append({"item_id": "trailing_eps", period: eps})
+    return result
 
 
 
@@ -193,46 +206,20 @@ def _load_bundled_fundamentals() -> dict[str, dict[str, object]]:
 _BUNDLED_SECTORS = _load_bundled_sectors()
 _BUNDLED_FUNDAMENTALS = _load_bundled_fundamentals()
 
-_SECTOR_VALUATION_BENCHMARKS: dict[str, dict[str, Decimal]] = {
-    "Ngân hàng": {"pe": Decimal("9.5"), "pb": Decimal("1.4"), "roe": Decimal("18.2")},
-    "Bất động sản": {"pe": Decimal("13.8"), "pb": Decimal("1.3"), "roe": Decimal("9.5")},
-    "Tài nguyên Cơ bản": {"pe": Decimal("10.8"), "pb": Decimal("1.4"), "roe": Decimal("13.0")},
-    "Công nghệ Thông tin": {"pe": Decimal("22.5"), "pb": Decimal("4.8"), "roe": Decimal("24.5")},
-    "Dịch vụ tài chính": {"pe": Decimal("15.2"), "pb": Decimal("1.7"), "roe": Decimal("12.8")},
-    "Bán lẻ": {"pe": Decimal("18.0"), "pb": Decimal("2.6"), "roe": Decimal("15.2")},
-    "Thực phẩm và đồ uống": {"pe": Decimal("16.2"), "pb": Decimal("2.2"), "roe": Decimal("16.8")},
-    "Xây dựng và Vật liệu": {"pe": Decimal("12.4"), "pb": Decimal("1.2"), "roe": Decimal("10.1")},
-    "Dầu khí": {"pe": Decimal("12.0"), "pb": Decimal("1.5"), "roe": Decimal("13.5")},
-    "Hóa chất": {"pe": Decimal("11.5"), "pb": Decimal("1.4"), "roe": Decimal("12.2")},
-    "Điện, nước & xăng dầu khí đốt": {"pe": Decimal("12.8"), "pb": Decimal("1.6"), "roe": Decimal("13.2")},
-    "Y tế": {"pe": Decimal("16.5"), "pb": Decimal("2.1"), "roe": Decimal("14.5")},
-    "Hàng cá nhân & Gia dụng": {"pe": Decimal("14.2"), "pb": Decimal("1.8"), "roe": Decimal("13.0")},
-    "Hàng & Dịch vụ Công nghiệp": {"pe": Decimal("13.5"), "pb": Decimal("1.5"), "roe": Decimal("12.0")},
-    "Viễn thông": {"pe": Decimal("15.0"), "pb": Decimal("2.0"), "roe": Decimal("14.0")},
-    "Du lịch và Giải trí": {"pe": Decimal("18.0"), "pb": Decimal("1.9"), "roe": Decimal("11.0")},
-    "Bảo hiểm": {"pe": Decimal("12.5"), "pb": Decimal("1.3"), "roe": Decimal("11.5")},
-    "Ôtô và phụ tùng": {"pe": Decimal("11.0"), "pb": Decimal("1.2"), "roe": Decimal("11.0")},
-    "Phương tiện truyền thông": {"pe": Decimal("14.0"), "pb": Decimal("1.5"), "roe": Decimal("12.0")},
-}
-_DEFAULT_BENCHMARK = {"pe": Decimal("13.5"), "pb": Decimal("1.5"), "roe": Decimal("13.0")}
-
-
 def _fallback_fundamental_rows(symbol: str) -> list[dict[str, object]]:
-    bundled = _BUNDLED_FUNDAMENTALS.get(symbol)
-    period = "2026-Q2"
-    if bundled:
-        return [
-            {"item_id": "pe_ratio", period: bundled.get("pe")},
-            {"item_id": "pb_ratio", period: bundled.get("pb")},
-            {"item_id": "trailing_eps", period: bundled.get("eps")},
-            {"item_id": "roe", period: bundled.get("roe_percent")},
-        ]
-    sector = _BUNDLED_SECTORS.get(symbol, "Thị trường chung")
-    benchmark = _SECTOR_VALUATION_BENCHMARKS.get(sector, _DEFAULT_BENCHMARK)
+    bundled = _BUNDLED_FUNDAMENTALS.get(symbol.upper())
+    if not bundled:
+        return []
+    period = str(bundled.get("quarter") or "2026-Q3")
+    pe = _optional_decimal(bundled.get("pe"))
+    pb = _optional_decimal(bundled.get("pb"))
+    eps = _optional_decimal(bundled.get("eps"))
+    roe = _optional_decimal(bundled.get("roe_percent"))
     return [
-        {"item_id": "pe_ratio", period: float(benchmark["pe"])},
-        {"item_id": "pb_ratio", period: float(benchmark["pb"])},
-        {"item_id": "roe", period: float(benchmark["roe"])},
+        {"item_id": "pe_ratio", period: pe},
+        {"item_id": "pb_ratio", period: pb},
+        {"item_id": "trailing_eps", period: eps},
+        {"item_id": "roe", period: roe},
     ]
 
 
@@ -359,7 +346,7 @@ class OfficialVnstockGateway:
                 future = executor.submit(
                     self._company_type(source="vci", symbol=symbol).ratio_summary
                 )
-                frame = future.result(timeout=2.0)
+                frame = future.result(timeout=5.0)
             rows = _frame_records(frame)
             latest = _latest_vci_fundamental_rows(rows)
             if latest:
@@ -604,12 +591,16 @@ def _candle(row: dict[str, object], symbol: str, fallback: datetime) -> Candle |
     if not all(value > 0 for value in (opened, high, low, close)):
         return None
     multiplier = Decimal("1") if symbol in _INDEX_EXCHANGE else Decimal("1000")
+    p_open = opened * multiplier
+    p_close = close * multiplier
+    p_high = max(p_open, p_close, high * multiplier)
+    p_low = max(Decimal("100"), min(p_open, p_close, low * multiplier))
     return Candle(
         timestamp=_timestamp(row.get("time"), fallback),
-        open=opened * multiplier,
-        high=high * multiplier,
-        low=low * multiplier,
-        close=close * multiplier,
+        open=p_open,
+        high=p_high,
+        low=p_low,
+        close=p_close,
         volume=_decimal(row.get("volume")),
     )
 
@@ -1067,6 +1058,12 @@ class VnstockMarketProvider:
             if _price(quote.get(f"ask_price_{level}")) > 0
             and _decimal(quote.get(f"ask_vol_{level}")) > 0
         )
+        bundled = _BUNDLED_FUNDAMENTALS.get(symbol.upper())
+        bundled_pe = _optional_decimal(bundled.get("pe")) if bundled else None
+        bundled_pb = _optional_decimal(bundled.get("pb")) if bundled else None
+        bundled_eps = _optional_decimal(bundled.get("eps")) if bundled else None
+        bundled_roe = _optional_decimal(bundled.get("roe_percent")) if bundled else None
+
         return MarketInstrument(
             symbol=symbol,
             name=_text(metadata.get("organ_name")) or symbol,
@@ -1083,10 +1080,10 @@ class VnstockMarketProvider:
             matched_value=matched_value,
             foreign_net_value=foreign_delta * price,
             market_cap=listed_shares * price,
-            pe=None,
-            pb=None,
-            eps=None,
-            roe_percent=None,
+            pe=bundled_pe,
+            pb=bundled_pb,
+            eps=bundled_eps,
+            roe_percent=bundled_roe,
             volume_vs_20d=Decimal(),
             interest_score=matched_value,
             interest_reasons=tuple(reasons),

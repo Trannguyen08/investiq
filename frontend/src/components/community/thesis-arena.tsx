@@ -67,6 +67,14 @@ export function ThesisArena({ initialTheses = [], initialLeaderboard = [] }: The
   const [upvotingId, setUpvotingId] = useState<string | null>(null);
   const [message, setMessage] = useState<{ text: string; type: "success" | "error" } | null>(null);
 
+  useEffect(() => {
+    if (!message) return;
+    const timer = setTimeout(() => {
+      setMessage(null);
+    }, 3000);
+    return () => clearTimeout(timer);
+  }, [message]);
+
   // Form state
   const [formSymbol, setFormSymbol] = useState("");
   const [showSymbolSuggestions, setShowSymbolSuggestions] = useState(false);

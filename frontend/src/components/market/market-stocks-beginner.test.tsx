@@ -256,7 +256,7 @@ describe("StocksView navigation", () => {
     fireEvent.click(screen.getByRole("button", { name: "Thêm HPG vào so sánh" }));
 
     expect(screen.getByText("Đã chọn 2/2")).toBeInTheDocument();
-    expect(screen.getAllByText("Chưa có đánh giá AI đã kiểm định")).toHaveLength(2);
+    expect(screen.getAllByText("Xu hướng phát triển (AI)")).toHaveLength(2);
     expect(screen.getAllByText("Chưa có").length).toBeGreaterThan(0);
     const metricGroups = document.querySelectorAll(".comparison-metrics");
     expect(metricGroups).toHaveLength(2);
