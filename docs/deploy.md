@@ -14,6 +14,7 @@ Tài liệu này hướng dẫn chi tiết từng bước cách đưa toàn bộ
 6. [Bước 4: Triển Khai Tự Động Bằng Render Blueprint (`render.yaml`)](#6-bước-4-triển-khai-tự-động-bằng-render-blueprint-renderyaml)
 7. [Bước 5: Xây Dựng Pipeline CI/CD Toàn Diện Với GitHub Actions](#7-bước-5-xây-dựng-pipeline-cicd-toàn-diện-với-github-actions)
 8. [Bước 6: Khắc Phục Sự Cố & Best Practices Vận Hành](#8-bước-6-khắc-phục-sự-cố--best-practices-vận-hành)
+9. [Tùy Chọn Mở Rộng: Triển Khai Frontend Qua Vercel & Backend Render](#9-tùy-chọn-mở-rộng-triển-khai-frontend-qua-vercel--backend-render)
 
 ---
 
@@ -628,3 +629,40 @@ jobs:
 1. **Never Commit Secrets**: Tuyệt đối không đưa file `.env` chứa mật khẩu thật lên Git. Mọi thông tin nhạy cảm phải quản lý qua **GitHub Secrets** và **Render Environment Variables**.
 2. **Health Check Endpoints Là Cốt Lõi**: Một hệ thống chuyên nghiệp luôn cần endpoint `/healthz` (kiểm tra tiến trình còn sống) và `/readyz` (kiểm tra các phụ thuộc DB/Redis đã sẵn sàng). Render dựa vào đây để xác định thời điểm chuyển traffic an toàn sang phiên bản mới mà không làm gián đoạn người dùng (Zero Downtime Deployment).
 3. **Giám Sát Bằng Log**: Khi có sự cố, hãy truy cập mục **Logs** của từng service trên Render để quan sát traceback thời gian thực.
+
+---
+
+## 9. Tùy Chọn Mở Rộng: Triển Khai Frontend Qua Vercel & Backend Render
+
+Để khắc phục hoàn toàn hiện tượng **Cold Start (chờ Render thức dậy sau 15 phút không dùng)** và nâng cao trải nghiệm người dùng tức thì (< 50ms), mô hình **Frontend Vercel (Edge CDN) + Backend Render (FastAPI)** là phương án tối ưu nhất.
+
+### 9.1. Các Bước Cấu Hình Trên Vercel
+1. Đăng nhập vào **[Vercel Dashboard](https://vercel.com/)** -> Chọn **Add New Project** -> Import repository `Trannguyen08/investiq`.
+2. **Cấu hình Project Settings**:
+   - **Framework Preset**: `Next.js`
+   - **Root Directory**: Chọn `frontend` (bắt buộc).
+   - **Build Command**: `npm run build` (mặc định của Vercel).
+   - **Output Directory**: `.next` (mặc định của Vercel).
+3. **Cấu hình Environment Variables trên Vercel**:
+   - `NEXT_PUBLIC_API_URL`: `/api`
+   - `API_INTERNAL_BASE_URL`: `https://<ten-backend-cua-ban>.onrender.com`
+   - `INTERNAL_API_URL`: `https://<ten-backend-cua-ban>.onrender.com`
+   - `AUTH_BFF_SECRET`: `<Secret chuỗi ngẫu nhiên giống backend>`
+   - `AUTH_SESSION_ENCRYPTION_KEY`: `<Key mã hóa session giống backend>`
+   - `AUTH_GOOGLE_CLIENT_ID`: `<Google OAuth Client ID nếu dùng auth>`
+   - `AUTH_GOOGLE_REDIRECT_URI`: `https://<domain-vercel-cua-ban>.vercel.app/auth-api/google/callback`
+
+### 9.2. Cấu Hình CORS Trên Backend Render
+Backend FastAPI đã được cấu hình tự động cho phép mọi domain từ Vercel (`allow_origin_regex=r"^https://.*(vercel\.app|onrender\.com)$"`).
+Nếu dùng domain tùy biến riêng (custom domain), chỉ cần thêm biến môi trường trên Render:
+```env
+BACKEND_CORS_ORIGINS=https://investiq.vn,https://www.investiq.vn
+```
+
+### 9.3. Giữ Backend Render Luôn "Ấm" (Anti-Sleep)
+Trên gói Free của Render, backend sẽ ngủ sau 15 phút nếu không có request. Để backend luôn sẵn sàng phục vụ tức thì cho Vercel:
+1. Đăng ký tài khoản miễn phí tại **[UptimeRobot.com](https://uptimerobot.com)**.
+2. Tạo một **HTTP(s) Monitor**:
+   - **URL**: `https://<ten-backend-cua-ban>.onrender.com/healthz`
+   - **Interval**: 5 đến 10 phút.
+   - Nhờ vậy, backend Render luôn được ping định kỳ và duy trì hoạt động 24/7.

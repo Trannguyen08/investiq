@@ -140,6 +140,42 @@ async def test_ai_chat_endpoint_vn30_active_and_upcoming_events() -> None:
 
 
 @pytest.mark.anyio
+async def test_ai_chat_endpoint_leader_queries() -> None:
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
+        # Specific leader query
+        resp_leader = await client.post(
+            "/api/v1/ai/chat",
+            json={"message": "phạm nhật vượng là ai"},
+        )
+        assert resp_leader.status_code == 200
+        msg_leader = resp_leader.json()["message"]
+        assert "Thông tin doanh nhân: Phạm Nhật Vượng" in msg_leader["content"]
+        assert "Vingroup" in msg_leader["content"]
+        assert any("/market/people" in s["url"] for s in msg_leader["sources"])
+
+        # Leader rankings query
+        resp_rankings = await client.post(
+            "/api/v1/ai/chat",
+            json={"message": "top người giàu sàn chứng khoán"},
+        )
+        assert resp_rankings.status_code == 200
+        msg_rankings = resp_rankings.json()["message"]
+        assert "Top doanh nhân & tỷ phú nổi bật trên sàn chứng khoán:" in msg_rankings["content"]
+        assert any("/market/people" in s["url"] for s in msg_rankings["sources"])
+
+        # Company & ecosystem query
+        resp_eco = await client.post(
+            "/api/v1/ai/chat",
+            json={"message": "hệ sinh thái hòa phát"},
+        )
+        assert resp_eco.status_code == 200
+        msg_eco = resp_eco.json()["message"]
+        assert "Hệ sinh thái doanh nghiệp: Hệ sinh thái Hòa Phát" in msg_eco["content"]
+        assert "Trần Đình Long" in msg_eco["content"]
+        assert "HPG" in msg_eco["content"]
+
+
+@pytest.mark.anyio
 async def test_ai_metrics_endpoint() -> None:
     async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
         response = await client.get("/api/v1/ai/metrics")

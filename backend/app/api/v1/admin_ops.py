@@ -28,6 +28,8 @@ from app.schemas.admin_ops import (
     AdminAnalyticsResponse,
     AdminAuditLogItem,
     AdminAuditLogPage,
+    AdminCancelOrderRequest,
+    AdminCancelOrderResponse,
     AdminCrawlerStatusItem,
     AdminInstrumentStatusUpdate,
     AdminMarketInstrumentItem,
@@ -195,6 +197,38 @@ def get_admin_portfolio_detail(
             detail="Portfolio not found",
         )
     return detail
+
+
+@router.post(
+    "/portfolios/{portfolio_id}/orders/{order_id}/cancel",
+    response_model=AdminCancelOrderResponse,
+)
+def cancel_admin_portfolio_order(
+    portfolio_id: UUID,
+    order_id: UUID,
+    payload: AdminCancelOrderRequest,
+    request: Request,
+    actor_id: Annotated[str, Depends(require_admin_user)],
+    repository: Annotated[SqlAdminRepository, Depends(get_admin_repository)],
+) -> AdminCancelOrderResponse:
+    req_id = str(getattr(request.state, "request_id", "unknown"))
+    success, msg = repository.cancel_paper_order(
+        portfolio_id=str(portfolio_id),
+        order_id=str(order_id),
+        actor_id=actor_id,
+        reason=payload.reason,
+        request_id=req_id,
+    )
+    if not success:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=msg,
+        )
+    return AdminCancelOrderResponse(
+        status="ok",
+        message=msg,
+        order_id=str(order_id),
+    )
 
 
 # Audit logs

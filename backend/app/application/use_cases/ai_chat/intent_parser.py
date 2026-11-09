@@ -8,6 +8,9 @@ from dataclasses import dataclass
 from typing import Any, Literal
 
 from app.application.use_cases.ai_chat.guardrails import fold_text
+from app.application.use_cases.ai_chat.ticker_resolver import (
+    extract_tickers_with_typo_handling,
+)
 
 AiIntent = Literal[
     "blocked",
@@ -15,6 +18,7 @@ AiIntent = Literal[
     "dividend",
     "stock_analysis",
     "market_overview",
+    "leader",
     "news",
     "knowledge",
     "external",
@@ -54,7 +58,7 @@ _NON_TICKER_WORDS = frozenset(
         "LOI", "MAT", "TIM", "CAU", "CHON", "MO", "SUN", "TOI", "HNX", "VNI", "UPC",
         "GDP", "CPI", "FED", "ETF", "NAV", "RSI", "OBV", "SMA", "EMA", "ATR", "ADX",
         "VAI", "XIN", "NOI", "MOT", "NAO", "CUA", "SAU", "DAU", "CAO", "TOT", "GAN",
-        "VUA", "KHA", "NHI", "LOC", "VAO", "BEN",
+        "VUA", "KHA", "NHI", "LOC", "VAO", "BEN", "CHU",
     }
 )
 
@@ -71,6 +75,318 @@ class DetectedIntent:
     is_gold_bank: bool
     is_forensics: bool
     is_market_general: bool
+    is_leader: bool = False
+    leader_id: str | None = None
+    leader_name: str | None = None
+    is_leader_rankings: bool = False
+    is_ecosystem: bool = False
+    ecosystem_id: str | None = None
+    comparison_mode: str | None = None
+    comparison_exceeded_limit: bool = False
+    invalid_tickers: tuple[str, ...] = ()
+
+
+# Map of known entrepreneur and market leader aliases: (aliases, leader_id, leader_name, default_symbols)
+_LEADER_ALIASES: tuple[tuple[tuple[str, ...], str, str, tuple[str, ...]], ...] = (
+    (
+        (
+            "pham nhat vuong",
+            "nhat vuong",
+            "ong vuong",
+            "vuong vin",
+            "chu tich vingroup",
+            "chu tich vinfast",
+            "chu tich vic",
+            "chu tich vhm",
+            "ty phu vuong",
+            "sang lap vin",
+            "ong chu vingroup",
+            "vingroup la ai",
+            "he sinh thai vingroup",
+            "he sinh thai vin",
+            "he sinh thai pham nhat vuong",
+            "su nghiep pham nhat vuong",
+            "su nghiep cua pham nhat vuong",
+            "tap doan vingroup",
+            "cong ty vingroup",
+        ),
+        "person-1",
+        "Phạm Nhật Vượng",
+        ("VIC", "VHM"),
+    ),
+    (
+        (
+            "tran dinh long",
+            "dinh long",
+            "ong long",
+            "long hoa phat",
+            "chu tich hoa phat",
+            "chu tich hpg",
+            "vua thep",
+            "ty phu tran dinh long",
+            "ong chu hoa phat",
+            "hoa phat la ai",
+            "he sinh thai hoa phat",
+            "he sinh thai tran dinh long",
+            "su nghiep tran dinh long",
+            "su nghiep cua tran dinh long",
+            "tap doan hoa phat",
+            "thep hoa phat",
+        ),
+        "person-2",
+        "Trần Đình Long",
+        ("HPG",),
+    ),
+    (
+        (
+            "nguyen thi phuong thao",
+            "phuong thao",
+            "ba thao",
+            "thao vietjet",
+            "chu tich vietjet",
+            "chu tich vjc",
+            "pho chu tich hdbank",
+            "nu ty phu",
+            "ty phu nguyen thi phuong thao",
+            "vietjet la ai",
+            "sovico la ai",
+            "he sinh thai vietjet",
+            "he sinh thai sovico",
+            "he sinh thai hdbank",
+            "he sinh thai nguyen thi phuong thao",
+            "su nghiep nguyen thi phuong thao",
+            "tap doan sovico",
+        ),
+        "person-3",
+        "Nguyễn Thị Phương Thảo",
+        ("VJC", "HDB"),
+    ),
+    (
+        ("do anh tuan", "anh tuan sunshine", "chu tich sunshine", "chu tich ksfinance"),
+        "person-4",
+        "Đỗ Anh Tuấn",
+        ("KSF", "SSH"),
+    ),
+    (
+        (
+            "ho hung anh",
+            "hung anh techcombank",
+            "chu tich techcombank",
+            "chu tich tcb",
+            "techcombank la ai",
+            "he sinh thai techcombank",
+            "he sinh thai ho hung anh",
+            "su nghiep ho hung anh",
+            "ngan hang techcombank",
+        ),
+        "person-5",
+        "Hồ Hùng Anh",
+        ("TCB", "MSN"),
+    ),
+    (
+        (
+            "nguyen dang quang",
+            "dang quang",
+            "quang masan",
+            "chu tich masan",
+            "chu tich msn",
+            "masan la ai",
+            "he sinh thai masan",
+            "he sinh thai nguyen dang quang",
+            "su nghiep nguyen dang quang",
+            "tap doan masan",
+        ),
+        "person-6",
+        "Nguyễn Đăng Quang",
+        ("MSN", "TCB"),
+    ),
+    (
+        (
+            "truong gia binh",
+            "gia binh",
+            "ong binh",
+            "binh fpt",
+            "chu tich fpt",
+            "sang lap fpt",
+            "fpt la ai",
+            "tap doan fpt",
+            "he sinh thai fpt",
+            "he sinh thai truong gia binh",
+            "su nghiep truong gia binh",
+            "su nghiep cua truong gia binh",
+        ),
+        "person-7",
+        "Trương Gia Bình",
+        ("FPT", "FOX"),
+    ),
+    (
+        (
+            "bui thanh nhon",
+            "thanh nhon",
+            "nhon novaland",
+            "chu tich novaland",
+            "chu tich nvl",
+            "novaland la ai",
+            "he sinh thai novaland",
+            "he sinh thai bui thanh nhon",
+            "tap doan novaland",
+        ),
+        "person-8",
+        "Bùi Thành Nhơn",
+        ("NVL",),
+    ),
+    (
+        (
+            "nguyen duc tai",
+            "duc tai",
+            "tai the gioi di dong",
+            "tai mwg",
+            "chu tich the gioi di dong",
+            "chu tich mwg",
+            "the gioi di dong la ai",
+            "mwg la ai",
+            "he sinh thai the gioi di dong",
+            "he sinh thai mwg",
+            "he sinh thai nguyen duc tai",
+        ),
+        "person-9",
+        "Nguyễn Đức Tài",
+        ("MWG",),
+    ),
+    (
+        ("dang thanh tam", "thanh tam", "tam kbc", "chu tich kinh bac", "chu tich kbc", "kinh bac la ai"),
+        "person-10",
+        "Đặng Thành Tâm",
+        ("KBC", "SGT"),
+    ),
+    (
+        ("nguyen van dat", "van dat", "dat phat dat", "dat pdr", "chu tich phat dat", "chu tich pdr", "phat dat la ai"),
+        "person-11",
+        "Nguyễn Văn Đạt",
+        ("PDR",),
+    ),
+    (
+        (
+            "doan nguyen duc",
+            "nguyen duc",
+            "bau duc",
+            "ong duc",
+            "duc hagl",
+            "chu tich hagl",
+            "chu tich hoang anh gia lai",
+            "hagl la ai",
+            "hoang anh gia lai la ai",
+            "he sinh thai hagl",
+            "he sinh thai bau duc",
+            "su nghiep bau duc",
+        ),
+        "person-12",
+        "Đoàn Nguyên Đức (Bầu Đức)",
+        ("HAG", "HNG"),
+    ),
+    (
+        ("ho xuan nang", "xuan nang", "nang do thai", "chu tich vicostone", "chu tich phenikaa"),
+        "person-13",
+        "Hồ Xuân Năng (Năng Do Thái)",
+        ("VCS",),
+    ),
+    (
+        (
+            "nguyen duy hung",
+            "duy hung",
+            "hung ssi",
+            "chu tich ssi",
+            "chu tich pan",
+            "ssi la ai",
+            "pan group la ai",
+            "he sinh thai ssi",
+            "he sinh thai pan",
+            "he sinh thai nguyen duy hung",
+        ),
+        "person-14",
+        "Nguyễn Duy Hưng",
+        ("SSI", "PAN"),
+    ),
+    (
+        ("dang van thanh", "van thanh", "thanh ttc", "chu tich ttc"),
+        "person-15",
+        "Đặng Văn Thành",
+        ("SBT", "GEG"),
+    ),
+    (
+        ("nguyen thi mai thanh", "mai thanh ree", "ba thanh ree", "chu tich ree"),
+        "person-16",
+        "Nguyễn Thị Mai Thanh",
+        ("REE",),
+    ),
+    (
+        ("le viet hai", "viet hai", "hai hoa binh", "hai hbc", "chu tich hoa binh", "chu tich hbc"),
+        "person-17",
+        "Lê Viết Hải",
+        ("HBC",),
+    ),
+    (
+        ("johnathan hanh nguyen", "hanh nguyen", "vua hang hieu", "chu tich ippg", "chu tich sasco"),
+        "person-18",
+        "Johnathan Hạnh Nguyễn",
+        ("SAS",),
+    ),
+    (
+        ("truong anh tuan", "tuan hoang quan", "tuan hqc", "chu tich hoang quan", "chu tich hqc"),
+        "person-19",
+        "Trương Anh Tuấn",
+        ("HQC",),
+    ),
+    (
+        ("dao hong tuyen", "hong tuyen", "chua dao tuan chau", "ong tuyen tuan chau", "chu tich tuan chau"),
+        "person-20",
+        "Đào Hồng Tuyển",
+        (),
+    ),
+    (
+        ("nguyen canh son", "canh son", "chu tich eurowindow"),
+        "person-21",
+        "Nguyễn Cảnh Sơn",
+        ("TCB",),
+    ),
+    (
+        ("huynh uy dung", "uy dung", "dung lo voi", "ong dung lo voi", "chu tich dai nam"),
+        "person-22",
+        "Huỳnh Uy Dũng (Dũng Lò Vôi)",
+        (),
+    ),
+    # International financial legends
+    (
+        ("warren buffett", "buffett", "nha tien tri omaha", "chu tich berkshire", "berkshire hathaway"),
+        "global-1",
+        "Warren Buffett",
+        (),
+    ),
+    (
+        ("charlie munger", "munger"),
+        "global-2",
+        "Charlie Munger",
+        (),
+    ),
+    (
+        ("peter lynch",),
+        "global-3",
+        "Peter Lynch",
+        (),
+    ),
+    (
+        ("george soros", "soros"),
+        "global-4",
+        "George Soros",
+        (),
+    ),
+    (
+        ("elon musk", "musk", "ceo tesla"),
+        "global-5",
+        "Elon Musk",
+        (),
+    ),
+)
 
 
 def normalize_user_input(text: str) -> str:
@@ -108,6 +424,10 @@ def normalize_user_input(text: str) -> str:
         ("sukien", "su kien"),
         ("sắptới", "sắp tới"),
         ("saptoi", "sap toi"),
+        ("doanhnhân", "doanh nhân"),
+        ("doanhnhan", "doanh nhan"),
+        ("chủtịch", "chủ tịch"),
+        ("chutich", "chu tich"),
     ]
     res = text
     for wrong, right in replacements:
@@ -211,6 +531,15 @@ def detect_intent(user_message: str) -> DetectedIntent:
     """Analyze user message and classify primary financial/market intent."""
     norm_message = normalize_user_input(user_message)
     tickers = _extract_tickers(norm_message)
+    valid_resolved, invalid_resolved = extract_tickers_with_typo_handling(
+        norm_message, _NON_TICKER_WORDS
+    )
+    for sym in valid_resolved:
+        if sym not in tickers:
+            tickers.append(sym)
+    for sym in invalid_resolved:
+        if sym not in tickers:
+            tickers.append(sym)
     query_lower = norm_message.lower()
     query_folded = fold_text(norm_message)
 
@@ -274,12 +603,108 @@ def detect_intent(user_message: str) -> DetectedIntent:
         ]
     )
 
+    is_criteria_followup = (
+        len(tickers) == 0
+        and not is_dividend
+        and not is_news
+        and query_folded.strip()
+        in [
+            "thong so",
+            "theo thong so",
+            "ve thong so",
+            "bao cao tang truong",
+            "tang truong",
+            "theo bao cao tang truong",
+            "ve tang truong",
+            "ca hai",
+            "ca 2",
+            "toan dien",
+            "ca hai tieu chi",
+        ]
+    )
+
     is_comparison = (
         not is_dividend
         and not is_news
-        and any(kw in query_lower for kw in ["so sánh", "hay là", "vs", "hơn", "chọn mã nào"])
-        and len(tickers) >= 2
+        and (
+            (
+                any(
+                    kw in query_folded
+                    for kw in [
+                        "so sanh",
+                        "so voi",
+                        "hay la",
+                        " vs ",
+                        "vs.",
+                        " hon ",
+                        "chon ma nao",
+                        "doi dau",
+                        "giua hai",
+                        "giua 2",
+                        "giua 3",
+                    ]
+                )
+                and len(tickers) >= 2
+            )
+            or is_criteria_followup
+        )
     )
+
+    comparison_mode: str | None = None
+    comparison_exceeded_limit = False
+
+    if is_comparison:
+        if len(tickers) > 3:
+            comparison_exceeded_limit = True
+            tickers = tickers[:3]
+
+        if any(
+            kw in query_folded
+            for kw in [
+                "ca hai",
+                "ca 2",
+                "tat ca",
+                "toan dien",
+                "day du",
+                "ca thong so va tang truong",
+                "ca hai tieu chi",
+                "ca hai mat",
+            ]
+        ):
+            comparison_mode = "both"
+        elif any(
+            kw in query_folded
+            for kw in [
+                "bao cao tang truong",
+                "tang truong",
+                "growth",
+                "doanh thu",
+                "loi nhuan",
+                "kqkd",
+                "ket qua kinh doanh",
+                "theo bao cao tang truong",
+                "ve mat tang truong",
+            ]
+        ):
+            comparison_mode = "growth"
+        elif any(
+            kw in query_folded
+            for kw in [
+                "thong so",
+                "chi so",
+                "dinh gia",
+                "p/e",
+                "p/b",
+                "roe",
+                "co ban",
+                "ky thuat",
+                "theo thong so",
+                "ve mat thong so",
+            ]
+        ):
+            comparison_mode = "metrics"
+        else:
+            comparison_mode = "ask"
     is_gold_bank = any(
         kw in query_lower for kw in ["vàng", "ngân hàng", "tiết kiệm", "gửi tiền"]
     )
@@ -302,10 +727,136 @@ def detect_intent(user_message: str) -> DetectedIntent:
             ]
         )
     )
+
+    # Leader / Entrepreneur / Ecosystem intent detection
+    is_leader = False
+    leader_id: str | None = None
+    leader_name: str | None = None
+    is_leader_rankings = False
+    is_ecosystem = any(
+        kw in query_folded
+        for kw in [
+            "he sinh thai",
+            "chuoi gia tri",
+            "cong ty con",
+            "cong ty me",
+            "cac cong ty thanh vien",
+            "he thong doanh nghiep",
+            "tap doan va cac cong ty",
+        ]
+    )
+    ecosystem_id: str | None = None
+
+    if is_ecosystem:
+        is_leader = True
+        if any(w in query_folded for w in ["vin", "vic", "vhm", "vre", "vuong"]):
+            ecosystem_id = "vingroup"
+            leader_id = "person-1"
+            leader_name = "Phạm Nhật Vượng"
+            if not tickers:
+                tickers = ["VIC", "VHM", "VRE"]
+        elif any(w in query_folded for w in ["hoa phat", "hpg", "dinh long"]):
+            ecosystem_id = "hoaphat"
+            leader_id = "person-2"
+            leader_name = "Trần Đình Long"
+            if not tickers:
+                tickers = ["HPG"]
+        elif any(w in query_folded for w in ["fpt", "fox", "frt", "gia binh"]):
+            ecosystem_id = "fpt"
+            leader_id = "person-7"
+            leader_name = "Trương Gia Bình"
+            if not tickers:
+                tickers = ["FPT", "FOX", "FRT"]
+        elif any(w in query_folded for w in ["masan", "techcombank", "msn", "tcb", "dang quang", "hung anh"]):
+            ecosystem_id = "masan-techcombank"
+            leader_id = "person-6"
+            leader_name = "Nguyễn Đăng Quang & Hồ Hùng Anh"
+            if not tickers:
+                tickers = ["MSN", "TCB", "MCH"]
+        elif any(w in query_folded for w in ["vietjet", "sovico", "hdbank", "vjc", "hdb", "phuong thao"]):
+            ecosystem_id = "sovico"
+            leader_id = "person-3"
+            leader_name = "Nguyễn Thị Phương Thảo"
+            if not tickers:
+                tickers = ["VJC", "HDB"]
+        elif any(w in query_folded for w in ["ssi", "pan", "duy hung"]):
+            ecosystem_id = "ssi-pan"
+            leader_id = "person-14"
+            leader_name = "Nguyễn Duy Hưng"
+            if not tickers:
+                tickers = ["SSI", "PAN"]
+
+    # 1. Check general rankings / billionaires list
+    if not is_ecosystem and any(
+        kw in query_folded
+        for kw in [
+            "top nguoi giau",
+            "danh sach ty phu",
+            "dai gia chung khoan",
+            "doanh nhan noi bat",
+            "nhung nguoi giau nhat",
+            "xep hang nguoi giau",
+            "top doanh nhan",
+            "cac ty phu",
+            "tai san cac ty phu",
+            "nguoi giau nhat viet nam",
+            "top dai gia",
+            "dai gia san chung khoan",
+            "nhung ty phu",
+            "danh sach nguoi giau",
+        ]
+    ):
+        is_leader = True
+        is_leader_rankings = True
+
+    # 2. Check alias matches for specific leaders
+    if not is_leader_rankings and not ecosystem_id:
+        for aliases, lid, lname, def_syms in _LEADER_ALIASES:
+            if any(alias in query_folded for alias in aliases):
+                is_leader = True
+                leader_id = lid
+                leader_name = lname
+                if def_syms and (not tickers or not any(s in tickers for s in def_syms)):
+                    tickers = list(def_syms)
+                break
+
+    # 3. Check generic leadership / entrepreneur question patterns ("... là ai", "chủ tịch ...", "doanh nhân ...")
+    if (
+        not is_leader
+        and not is_dividend
+        and not is_news
+        and not any(
+            kw in query_folded for kw in ["thi truong la", "vnindex la", "vn30 la", "co phieu la gi"]
+        )
+        and any(
+            kw in query_folded
+            for kw in [
+                "doanh nhan",
+                "chu tich",
+                "tong giam doc",
+                "ban lanh dao",
+                "la ai",
+                "ong la ai",
+                "ba la ai",
+                "ai la chu tich",
+                "ai la ceo",
+                "tai san cua",
+                "tieu su",
+                "su nghiep",
+                "con duong su nghiep",
+                "tap doan",
+                "doanh nghiep",
+            ]
+        )
+    ):
+        is_leader = True
+        is_leader_rankings = any(kw in query_folded for kw in ["danh sach", "cac", "nhung", "top"])
+
     is_market_general = (
         not is_dividend
         and not is_news
         and not is_comparison
+        and not is_leader
         and any(
             kw in query_folded
             for kw in [
@@ -354,6 +905,10 @@ def detect_intent(user_message: str) -> DetectedIntent:
         )
     )
 
+    active_invalid = (
+        () if (is_leader or is_news or is_market_general) else tuple(invalid_resolved)
+    )
+
     return DetectedIntent(
         normalized_message=norm_message,
         query_lower=query_lower,
@@ -365,4 +920,13 @@ def detect_intent(user_message: str) -> DetectedIntent:
         is_gold_bank=is_gold_bank,
         is_forensics=is_forensics,
         is_market_general=is_market_general,
+        is_leader=is_leader,
+        leader_id=leader_id,
+        leader_name=leader_name,
+        is_leader_rankings=is_leader_rankings,
+        is_ecosystem=is_ecosystem,
+        ecosystem_id=ecosystem_id,
+        comparison_mode=comparison_mode,
+        comparison_exceeded_limit=comparison_exceeded_limit,
+        invalid_tickers=active_invalid,
     )

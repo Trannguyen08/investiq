@@ -40,12 +40,26 @@ class StockComparisonItem(BaseModel):
     roe: float | str | None = None
     pros: list[str] = Field(default_factory=list)
     cons: list[str] = Field(default_factory=list)
+    health_status: str | None = None
+    health_title: str | None = None
+    health_summary: str | None = None
+    market_cap_growth_1m: str | None = None
+    market_cap_growth_3m: str | None = None
+    market_cap_growth_6m: str | None = None
+    market_cap_growth_1y: str | None = None
+    revenue_growth_yoy: str | None = None
+    profit_growth_yoy: str | None = None
+    revenue_ttm: str | None = None
+    profit_ttm: str | None = None
+    volume_growth_20d: str | None = None
+    growth_insights: list[str] = Field(default_factory=list)
 
 
 class StockComparisonWidgetData(BaseModel):
     title: str
     items: list[StockComparisonItem]
     summary_verdict: str
+    mode: str = "metrics"  # "metrics" | "growth" | "both"
 
 
 class RedFlagItem(BaseModel):

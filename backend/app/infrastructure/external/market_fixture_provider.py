@@ -540,7 +540,13 @@ class FixtureMarketProvider:
         return self._events
 
     def people(self) -> tuple[MarketPerson, ...]:
-        return self._people
+        from app.infrastructure.external.crawlers.leader_crawler import get_leader_crawler
+
+        try:
+            crawler = get_leader_crawler()
+            return crawler.get_prominent_leaders(self.instruments())
+        except Exception:
+            return self._people
 
     def candles(self, symbol: str, interval: str) -> tuple[Candle, ...]:
         if interval not in {"1d", "1h", "30m", "5m"}:

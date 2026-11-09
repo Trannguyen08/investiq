@@ -145,6 +145,22 @@ export type AdminPortfolioItem = {
   updated_at: string;
 };
 
+export type PortfolioOrderItem = {
+  id: string;
+  symbol: string;
+  side: "buy" | "sell";
+  order_type: string;
+  status: "pending" | "open" | "filled" | "cancelled" | "rejected" | "expired";
+  quantity: number;
+  filled_quantity: number;
+  limit_price: number;
+  reserved_cash: number;
+  reserved_quantity: number;
+  created_at: string;
+  expires_at: string;
+  cancelled_at?: string | null;
+};
+
 export type AdminPortfolioPage = {
   items: AdminPortfolioItem[];
   total: number;
@@ -157,6 +173,7 @@ export type AdminPortfolioDetail = {
   portfolio: AdminPortfolioItem;
   holdings: PortfolioHoldingItem[];
   recent_trades: PortfolioTradeItem[];
+  orders: PortfolioOrderItem[];
 };
 
 export type AdminAuditLogItem = {
@@ -407,6 +424,16 @@ export function getAdminPortfolios(params: {
 
 export function getAdminPortfolioDetail(id: string) {
   return adminFetch<AdminPortfolioDetail>(`/portfolios/${encodeURIComponent(id)}`);
+}
+
+export function cancelAdminPaperOrder(portfolioId: string, orderId: string, reason: string) {
+  return adminFetch<{ status: string; message: string; order_id: string }>(
+    `/portfolios/${encodeURIComponent(portfolioId)}/orders/${encodeURIComponent(orderId)}/cancel`,
+    {
+      method: "POST",
+      body: JSON.stringify({ reason }),
+    }
+  );
 }
 
 export function getAdminAuditLogs(params: {

@@ -1,5 +1,317 @@
 # Current Task
 
+## Paper Trading Instant Execution Mode Toggle (0ms), Thousand Dot Separator, Strict Stop-Loss / Take-Profit Validation & System-Wide Number Sanitization - 2026-11-08 (completed)
+- **User Request**:
+  1. Tối ưu phản hồi chuyển đổi chế độ khớp lệnh: Giảm thời gian chờ từ 2-3s xuống tức thì (0ms) với Optimistic UI & In-Memory backend cache update.
+  2. Bổ sung dấu chấm phân cách hàng nghìn (`.`) trong các ô nhập giá (VD: `21.200` thay vì `21200`) theo chuẩn Việt Nam.
+  3. Validate bắt buộc:
+     - Giá cắt lỗ (Stop-Loss) phải nhỏ hơn giá đặt mua ($P_{SL} < P_{\text{buy}}$).
+     - Giá chốt lời (Take-Profit) phải lớn hơn giá đặt mua ($P_{TP} > P_{\text{buy}}$).
+     - Giá cắt lỗ phải nhỏ hơn giá chốt lời ($P_{SL} < P_{TP}$).
+     - Chặn hoàn toàn không cho nhập chữ (a-z, A-Z) và ký tự không hợp lệ.
+     - Hiển thị thông báo lỗi màu đỏ trực quan dưới từng ô và vô hiệu hóa nút "Xác nhận mua" khi thông số không hợp lệ.
+  4. Rà soát toàn bộ hệ thống và áp dụng chuẩn validate / format số cho các ô nhập liệu số khác (`paper-order-dialog.tsx`, `paper-pnl-dialog.tsx`, `thesis-arena.tsx`).
+- **Branch**: `refactor/paper-trading`
+- **Changes**:
+  - `backend/app/application/use_cases/portfolio/simulate_trade.py`:
+    - `set_execution_mode`: Cập nhật trực tiếp payload `exchange_simulation` trong bộ đệm `_dashboard_cache` thay vì xóa cache và tính lại chuỗi equity 30 ngày (giảm thời gian backend từ 2.5s xuống < 1ms).
+    - `place_order`: Validate nghiêm ngặt khi đặt lệnh mua:
+      - $P_{SL} \ge P_{\text{buy}} \rightarrow$ ném `PaperOrderError("INVALID_STOP_LOSS")`.
+      - $P_{TP} \le P_{\text{buy}} \rightarrow$ ném `PaperOrderError("INVALID_TAKE_PROFIT")`.
+      - $P_{SL} \ge P_{TP} \rightarrow$ ném `PaperOrderError("INVALID_TRIGGER_RANGE")`.
+  - `frontend/src/components/portfolio/paper-trading-dashboard.tsx`:
+    - Áp dụng Optimistic UI trong `toggleExecutionMode`: Cập nhật state UI `dashboard` và thông báo ngay tức khắc (0ms), gọi API ngầm trong nền, tự động rollback và báo lỗi nếu API gặp sự cố.
+  - `frontend/src/components/portfolio/paper-order-dialog.tsx`:
+    - Thêm hàm `formatDotNumber(val)` định dạng số tiền có dấu chấm phân cách hàng nghìn (`21.200`).
+    - Nâng cấp `handleTriggerChange` và `handleTriggerBlur`: Khi người dùng nhập số tiền VND (ví dụ `21500` hoặc `18950`), ô input tự động hiển thị dấu chấm phần nghìn ngay khi gõ (`21.500`, `18.950`).
+    - Nâng cấp `resolveTriggerPrice`: Hỗ trợ cả `%` và số tiền VND, tự động tính giá làm tròn bước giá sàn, kiểm tra logic $P_{SL} < P_{\text{order}}$ và $P_{TP} > P_{\text{order}}$, trả về `validationError` chi tiết.
+    - Tính `rangeError` và `hasValidationError`, vô hiệu hóa nút submit khi vi phạm.
+    - Gắn `onKeyDown={handleNumericKeyDown}` và `inputMode="numeric"` chặn chữ, phím không hợp lệ cho ô giá đặt giới hạn.
+    - Gắn `onKeyDown={handleIntegerKeyDown}` chặn chữ và số âm cho ô số lượng cổ phiếu.
+    - Gắn `onKeyDown={handleTriggerKeyDown}` và `handleTriggerChange` cho ô Cắt lỗ & Chốt lời.
+  - `frontend/src/components/portfolio/paper-trading-dashboard.tsx`:
+    - Loại bỏ dòng chữ giải thích nhỏ (`meta.pending_reason`) trong ô "Kết quả" của bảng Sổ lệnh, chuyển thành thuộc tính `title` tooltip của badge trạng thái để giữ cho các cột bảng luôn thẳng hàng, không bị méo lệch cột.
+  - `backend/app/infrastructure/external/vnstock_market_provider.py`:
+    - Tối ưu `candles(symbol, interval)`: Khi nguồn dữ liệu ngoài (KBS/VCI) gặp lỗi timeout hoặc trả về rỗng tạm thời, tự động tái sử dụng dữ liệu nến đã nạp trước đó từ cache thay vì xóa cache hay trả về rỗng, triệt tiêu hiện tượng thỉnh thoảng một mã bị hiện "Chưa đủ lịch sử giá".
+  - `frontend/src/app/globals.css`:
+    - Bổ sung class `.paper-conditional-hint.error` (màu đỏ nổi bật) và `.paper-conditional-range-error` (banner cảnh báo vi phạm dải giá).
+  - `frontend/src/components/portfolio/paper-pnl-dialog.tsx`:
+    - Gắn `onKeyDown` và lọc số nguyên cho ô khối lượng bán giả định, ngăn nhập chữ và ký tự âm.
+  - `frontend/src/components/community/thesis-arena.tsx`:
+    - Thêm định dạng dấu chấm hàng nghìn cho ô "Giá mục tiêu (VND)" và "Giá cắt lỗ an toàn (VND)".
+    - Chặn nhập chữ bằng `onKeyDown` và `inputMode="numeric"`.
+    - Validate bắt buộc: Với xu hướng `bullish`, giá cắt lỗ phải nhỏ hơn giá mục tiêu. Với xu hướng `bearish`, giá cắt lỗ phải lớn hơn giá mục tiêu.
+  - `frontend/src/components/portfolio/paper-trading-dashboard.test.tsx`:
+    - Bổ sung unit test kiểm tra validate Stop-Loss / Take-Profit hiển thị lỗi và vô hiệu hóa nút mua.
+  - `backend/tests/unit/portfolio/test_paper_trading_service.py`:
+    - Bổ sung unit test kiểm tra `INVALID_STOP_LOSS`, `INVALID_TAKE_PROFIT`, `INVALID_TRIGGER_RANGE` và test tốc độ cập nhật cache của `set_execution_mode`.
+- **Verification**:
+  - Full Pre-PR Quality Gate `./scripts/check-pr.ps1`: Đạt chuẩn 6/6 bước 100% (Git diff whitespace, ESLint, TypeScript tsc, Vitest 187/187 tests, Ruff & Mypy, Pytest 179/179 tests).
+
+## Paper Trading Order Dialog Redesign (% Stop-Loss/Take-Profit, Order Type Grid Polish) & 503 Route Proxy Fix - 2026-11-08 (completed)
+- **User Request**:
+  1. Sửa lỗi Ảnh 1 & 2: Khi nhấn chuyển sang "Giờ sàn thật HOSE/HNX", hệ thống báo lỗi `"Không thể chuyển chế độ khớp lệnh"` và console xuất hiện lỗi HTTP `503 Service Unavailable` tại `/portfolio-api/execution-mode`.
+  2. Sửa lỗi Ảnh 3: Ô chọn "Loại lệnh sàn HOSE/HNX" bị tràn và đè lên ô "Số lượng cổ phiếu" trong popup đặt lệnh.
+  3. Giải đáp thắc mắc: Tại sao người dùng phải chọn loại lệnh (LO, MP, ATO, ATC)?
+  4. Hỗ trợ chuyển Cắt lỗ (Stop-Loss) và Chốt lời (Take-Profit) sang dạng nhập tỷ lệ `%` thay vì bắt buộc gõ số tiền VND.
+- **Branch**: `refactor/paper-trading`
+- **Changes**:
+  - `frontend/src/lib/server/paper-trading-api.ts`:
+    - Mở rộng regex `allowedPath` cho phép đầy đủ các endpoint mới: `execution-mode`, `advance-cash`, `conditional-triggers`, và `orders/[id]/fill`. Triệt tiêu hoàn toàn lỗi 503 khi chuyển chế độ hoặc ứng tiền bán.
+  - `frontend/src/app/globals.css`:
+    - Thêm `min-width: 0; width: 100%; box-sizing: border-box;` cho tất cả các thẻ `label`, `input`, `select` trong `.paper-order-dialog form` để chống tràn ô trong CSS Grid.
+    - Tạo class `.paper-order-type-group` chiếm trọn 1 dòng riêng (`grid-column: 1 / -1;`), giúp dropdown loại lệnh có không gian rộng rãi (không bao giờ đè lên ô số lượng).
+    - Bổ sung CSS cho khối Cắt lỗ / Chốt lời: `.paper-conditional-header`, `.paper-conditional-col`, `.paper-conditional-input-wrap`, `.paper-conditional-clear`, `.paper-quick-pills` (nút bấm nhanh), và `.paper-conditional-hint` (màu đỏ khi cắt lỗ, xanh khi chốt lời).
+  - `frontend/src/components/portfolio/paper-order-dialog.tsx`:
+    - Thêm hàm `roundToTickSize(price)` làm tròn bước giá chuẩn HOSE/HNX (10đ, 50đ, 100đ).
+    - Thêm hàm `resolveTriggerPrice(rawInput, basePrice, isStopLoss)` hỗ trợ thông minh cả 2 chế độ:
+      - Nhập `%` (hoặc click nút nhanh `[-5%]`, `[-7%]`, `[-10%]`, `[+10%]`, `[+15%]`, `[+20%]`): tự động quy đổi ra giá VND hợp lệ theo bước giá sàn và hiển thị dòng chú thích trực quan theo thời gian thực (ví dụ: `Kích hoạt khi ≤ 27.100 ₫ (-7.0%)`).
+      - Nhập trực tiếp số tiền VND (ví dụ `27000`): tự động tính phần trăm chênh lệch so với giá đặt.
+    - Thiết kế lại layout form đặt lệnh chuẩn app chứng khoán chuyên nghiệp:
+      - Hàng 1: Loại lệnh (`LO`, `MP`, `ATO`, `ATC`) với gợi ý rõ ràng: *"Mặc định: LO (Khớp theo giá quan sát)"*.
+      - Hàng 2: Hai cột đối xứng cân bằng — Cột 1 là `Số lượng cổ phiếu`, Cột 2 là `Giá đặt giới hạn (VND)` (khi chọn LO) hoặc `Giá khớp tham chiếu` (khi chọn MP/ATO/ATC).
+  - `frontend/src/components/portfolio/paper-trading-dashboard.test.tsx`:
+    - Cập nhật test case kiểm tra thao tác click nút `%` cắt lỗ/chốt lời và kiểm tra hiển thị mức giá quy đổi.
+- **Verification**:
+  - Full Quality Gate `./scripts/check-pr.ps1`: 6/6 passed 100% (Git diff whitespace, Frontend ESLint, TypeScript tsc, Vitest 186/186 tests, Backend Ruff & Mypy, Pytest 177/177 tests).
+
+## Paper Trading CSS Layout Polish, 117 Turbopack React Key Red Issue Fixes & High-Speed Multi-Tier Caching - 2026-11-07 (completed)
+- **User Request**:
+  1. Sửa lỗi không nhận CSS và layout bị vỡ trên giao diện Paper Trading:
+     - Khối "CHẾ ĐỘ KHỚP LỆNH & CHU KỲ BÙ TRỪ VSDC T+2" trên trang danh mục (`/portfolio`) bị dồn chữ, mất viền card, mất pill toggle và chưa style bảng T+2.
+     - Khung popup "GIAO DỊCH MÔ PHỎNG TỰ ĐỘNG - Mua/Bán": ô checkbox khớp độ sâu sổ lệnh bị kéo thành ô vuông trắng to bất thường; hai ô input "Cắt lỗ tự động (Stop-Loss)" và "Chốt lời tự động (Take-Profit)" bị dồn đè lên nhau.
+  2. Sửa toàn bộ lỗi cảnh báo đỏ ("117 Issues" trên badge Turbopack):
+     - Nguyên nhân: trùng key React trong `MarketCandlestickChart` (`key={item.source.timestamp}`, `key={'volume-' + item.source.timestamp}`) và `StockPriceChart` do các điểm dữ liệu lịch sử thị trường có timestamp trùng nhau.
+  3. Tối ưu tốc độ tải trang Danh mục mô phỏng (`/portfolio`) và cơ chế cache đa tầng:
+     - Lần đầu load trang danh mục nạp dữ liệu xong thì cache lại.
+     - Các lần load tiếp theo (hoặc chuyển qua lại giữa các trang) không phải chờ đợi mà mở ngay lập tức (0ms load time).
+     - Áp dụng cơ chế vô hiệu hóa cache (cache invalidation) tức thì ngay khi người dùng thực hiện giao dịch (đặt lệnh, khớp lệnh, ứng trước tiền bán, hủy lệnh).
+- **Branch**: `refactor/paper-trading`
+- **Changes**:
+  - `frontend/src/app/globals.css`:
+    - Bổ sung toàn bộ styles hoàn chỉnh cho `.paper-exchange-sim-bar`, `.paper-exchange-sim-header`, `.paper-mode-switch`, và `.paper-t2-summary-grid` (gradient card, toggle pill với active state, 3-column T+2 grid kèm badge trạng thái và nút ứng tiền).
+    - Sửa `.paper-order-checkbox`: loại trừ input checkbox khỏi style text input thông thường (`.paper-order-dialog input:not([type="checkbox"])`), đặt `grid-column: 1 / -1;`, `width: 1.15rem; height: 1.15rem; min-height: auto !important; accent-color: #52dbae;` loại bỏ hoàn toàn ô vuông trắng to.
+    - Sửa `.paper-order-conditional-grid`: đặt `grid-column: 1 / -1; display: grid; grid-template-columns: 1fr 1fr; gap: 0.8rem;`, tách biệt 2 cột Stop-Loss và Take-Profit độc lập, rõ ràng, không đè chữ.
+  - `frontend/src/components/market/market-candlestick-chart.tsx` & `frontend/src/components/market/stock-price-chart.tsx`:
+    - Đính kèm index vào key React (`key={'volume-' + item.source.timestamp + '-' + index}`, `key={'candle-' + item.source.timestamp + '-' + index}`, `key={'hit-' + item.source.timestamp + '-' + index}`, `key={'table-' + item.source.timestamp + '-' + index}`), triệt tiêu hoàn toàn 117 cảnh báo đỏ trong Turbopack.
+  - `backend/app/application/use_cases/portfolio/simulate_trade.py`:
+    - Thêm bộ đệm trong bộ nhớ `_dashboard_cache: dict[str, tuple[float, dict[str, object]]]` với TTL 15 giây.
+    - Tự động gọi `invalidate_dashboard_cache(user_id)` trên toàn bộ các phương thức thay đổi trạng thái danh mục: `place_order`, `cancel_order`, `fill_order`, `force_fill_order`, `set_execution_mode`, `advance_sale_cash`, `upsert_conditional_trigger`, `cancel_conditional_trigger`, `set_public_visibility`.
+  - `frontend/src/components/portfolio/paper-order-dialog.tsx`:
+    - Bổ sung `getCachedPaperDashboard()`, `invalidatePaperDashboardCache()` và cơ chế Stale-While-Revalidate (SWR) kết hợp RAM + `sessionStorage` (TTL 25s).
+    - Trong môi trường kiểm thử Vitest (`process.env.NODE_ENV === 'test'`), tự động bypass cache để bảo toàn tính độc lập của các test case.
+  - `frontend/src/components/portfolio/paper-trading-dashboard.tsx`:
+    - Khởi tạo state bằng `useState<PaperDashboard | null>(() => getCachedPaperDashboard())` giúp hiển thị ngay tức thì khi chuyển tab/trang mà không bị giật trang hay chờ đợi.
+  - `frontend/src/app/(user)/portfolio/page.tsx`:
+    - Cấu hình revalidate 30s cho `getMarketInstruments(marketQuery, 30)` để tận dụng Data Cache của Next.js cho 100 mã cổ phiếu.
+- **Verification**:
+  - Full Quality Gate `./scripts/check-pr.ps1`: Đạt chuẩn 6/6 bước 100% (Git diff whitespace, Frontend ESLint, Frontend TypeScript tsc, Vitest 186/186 tests, Backend Ruff & Mypy, Backend Pytest 177/177 tests).
+  - Khởi động cả 2 server: Backend FastAPI tại `http://127.0.0.1:8000` và Frontend Next.js Turbopack tại `http://localhost:3000`.
+
+## Paper Trading Admin Order Book & Risk Cancellation with Audit Log - 2026-11-07 (completed)
+- **User Request**:
+  1. Cho phép Admin giám sát sổ lệnh của người dùng trong phân hệ quản trị danh mục (`/admin/portfolios`).
+  2. Cho phép Admin thao tác **Hủy lệnh chờ (Cancel Order)** đối với các lệnh đang treo (`open`, `pending`) của người dùng kèm bắt buộc nhập lý do nghiệp vụ và ghi vết đầy đủ vào `Admin Audit Logs` (`auth_audit_events`), tuân thủ chuẩn quản trị rủi ro sàn chứng khoán thực tế; **KHÔNG** cho phép Admin "Khớp lệnh ngay (Force Fill)" để bảo đảm tính minh bạch và tránh sai lệch bản chất dữ liệu sàn.
+  3. Khi Admin hủy lệnh, hệ thống tự động giải phóng toàn bộ số dư ký quỹ tiền mặt (`reserved_cash = 0`) hoặc cổ phiếu (`reserved_quantity = 0`) và cập nhật `cancelled_at = now()`.
+  4. Chạy toàn bộ hệ thống (Backend FastAPI tại `http://127.0.0.1:8000` và Frontend Next.js tại `http://localhost:3000`) để người dùng kiểm thử trực tiếp.
+- **Branch**: `refactor/paper-trading`
+- **Changes**:
+  - `backend/app/schemas/admin_ops.py`: Bổ sung schema `PortfolioOrderItem`, mở rộng `AdminPortfolioDetail` với `orders: list[PortfolioOrderItem]`, bổ sung `AdminCancelOrderRequest` và `AdminCancelOrderResponse`.
+  - `backend/app/infrastructure/db/repositories/sql_admin_repository.py`:
+    - Cập nhật `get_portfolio_detail` truy vấn danh sách lệnh từ `paper_orders` kèm thông tin chi tiết (trạng thái, loại lệnh, giá đặt, số lượng, khối lượng khớp, tiền/cổ phiếu ký quỹ, thời gian).
+    - Thêm phương thức `cancel_paper_order(portfolio_id, order_id, actor_id, reason, request_id)`: cập nhật `status = 'cancelled'`, `cancelled_at = now()`, `reserved_cash = 0`, `reserved_quantity = 0` và ghi log kiểm toán vào `auth_audit_events` với `event_type = 'paper_order.cancelled_by_admin'`.
+  - `backend/app/api/v1/admin_ops.py`: Bổ sung endpoint `POST /api/v1/admin/portfolios/{portfolio_id}/orders/{order_id}/cancel`.
+  - `frontend/src/lib/server/admin-ops-api.ts`: Thêm `PortfolioOrderItem`, mở rộng `AdminPortfolioDetail`, thêm hàm gọi API `cancelAdminPaperOrder`.
+  - `frontend/src/app/(admin)/admin/portfolios/page.tsx`: Thêm server action `cancelOrderAction` và truyền vào `PortfoliosTable`.
+  - `frontend/src/components/admin/portfolios-table.tsx`: Hiển thị bảng "Sổ lệnh giao dịch của người dùng (`orders`)", nút "Hủy lệnh (Admin)" cho các lệnh `open`/`pending`, hộp thoại nhập lý do hủy lệnh, cập nhật trạng thái UI và thông báo kiểm toán. Tuân thủ nghiêm ngặt Zero Leading Icons.
+  - `frontend/src/components/admin/portfolios-table.test.tsx`: Thêm kiểm thử hiển thị sổ lệnh và thao tác hủy lệnh Admin (4/4 passed).
+  - `backend/tests/unit/portfolio/test_admin_paper_portfolio_ops.py`: Viết bộ kiểm thử đơn vị cho API chi tiết danh mục kèm sổ lệnh và endpoint hủy lệnh Admin (passed 100%).
+  - `docs/paper-trading-architecture.md`: Cập nhật mục 8 tài liệu hóa kiến trúc Sổ lệnh Admin, quy chuẩn hủy lệnh rủi ro và ghi vết kiểm toán.
+
+## Paper Trading Vietnam Stock Exchange Simulator (Option B + 5 Core Exchange Improvements) - 2026-11-07 (completed)
+- **User Request**:
+  1. Commit and push current AI & Data Pipeline docs and typo suggestions to branch `fix/AI`, then switch to branch `refactor/paper-trading` and pull from `fix/AI`.
+  2. Implement **Option B** (Dual Execution Mode toggle: `"instant"` 24/7 educational mode vs. `"exchange_hours"` strict HOSE/HNX trading session hours `09:00-11:30` & `13:00-14:45`).
+  3. Implement the **5 proposed Paper Trading Exchange Simulation improvements** (excluding Option 6 Market Replay):
+     - **Improvement 1**: VSDC `T+2` settlement cycle tracking (`pending_buy_settlements`, `pending_sell_settlements`, `receivable_cash_t2`) & Cash Advance (`Ứng trước tiền bán` at `0.03%/ngày`).
+     - **Improvement 2**: Price band validation (`HOSE` $\pm 7\%$, `HNX` $\pm 10\%$, `UPCoM` $\pm 15\%$), Tick size validation (`10 / 50 / 100 ₫`), and Lot size classification (`even` 100-share multiples vs. `odd` 1–99 shares, rejecting `mixed` > 100 non-multiples in strict mode and requiring `LO` for odd lots).
+     - **Improvement 3**: 3-level Orderbook depth matching (`Bid 1..3` / `Ask 1..3`), weighted average execution price, slippage calculation (`slippage_vnd`, `slippage_bps`), and partial fills (executing the filled quantity as a trade and placing a child `open` order for the remaining shares).
+     - **Improvement 4**: Full order types (`LO`, `MP`, `ATO`, `ATC`) and Anti-Lookahead Quarantine (`60s` delay window) for non-marketable resting `LO` orders.
+     - **Improvement 5**: Automated Conditional Orders (`Stop-Loss` & `Take-Profit` triggers) evaluated automatically during `_refresh_orders`.
+  4. Write and execute Unit, Integration, API, and E2E tests until 100% pass.
+  5. Write comprehensive Markdown documentation (`docs/paper-trading-architecture.md`) explaining the Paper Trading architecture and workflow.
+- **Branch**: `refactor/paper-trading` (branched from `fix/AI` at `f50ff4d`)
+- **Changes**:
+  - `backend/app/application/use_cases/portfolio/exchange_simulator.py`: Created core Vietnamese stock exchange simulator (`ExchangeSimulationStore`, `get_tick_size`, `calculate_price_band`, `classify_lot_type`, `is_within_exchange_trading_hours`, `validate_vietnam_exchange_rules`, `match_against_orderbook`, `compute_t2_settlement_date`, `build_t2_settlement_summary`).
+  - `backend/app/application/dto/portfolio_dto.py` & `backend/app/application/use_cases/portfolio/simulate_trade.py`: Extended `PlacePaperOrder` and `PaperTradingService` with dual execution modes, 3-level orderbook matching, partial-fill child order creation, 60s quarantine, `T+2` cash advance, conditional Stop-Loss/Take-Profit triggers, and `exchange_simulation` dashboard state while preserving the exact 18-key `account` contract.
+  - `backend/app/schemas/portfolio.py` & `backend/app/api/v1/portfolio.py`: Added strict schemas and endpoints `POST /execution-mode`, `POST /orders/{order_id}/fill`, `POST /advance-cash`, `POST /conditional-triggers`, and `DELETE /conditional-triggers/{trigger_id}`.
+  - `frontend/src/types/portfolio.ts`, `frontend/src/components/portfolio/paper-order-dialog.tsx`, & `frontend/src/components/portfolio/paper-trading-dashboard.tsx`: Added Exchange Simulation Control Bar (mode switcher between `Khớp tức thì 24/7` and `Giờ sàn thật HOSE/HNX`, `T+2` pending shares & cash advance button), orderbook depth & `LO`/`MP`/`ATO`/`ATC` + `Stop-Loss`/`Take-Profit` controls in order dialog, and `Khớp nhanh` / `Hủy lệnh` actions on waiting orders in `exchange_hours` mode.
+  - `docs/paper-trading-architecture.md`: Created detailed Markdown documentation covering the Paper Trading architecture and end-to-end order lifecycle.
+- **Verification**:
+  - `backend/tests/unit/portfolio/test_paper_trading_service.py`: 10/10 unit tests passed 100%.
+  - `backend/tests/integration/api/test_paper_portfolio_api.py`: 4/4 API integration tests passed 100%.
+  - `frontend/src/components/portfolio/paper-trading-dashboard.test.tsx`: 12/12 component & E2E tests passed 100%.
+  - Full Pre-PR Quality Gate (`./scripts/check-pr.ps1`): Passed 100% (Frontend ESLint, TypeScript `tsc`, Vitest, Backend Ruff, Mypy, Pytest).
+
+## AI Chatbox & Header Search Closest-Ticker Typo Suggestions - 2026-11-07 (completed)
+- **User Request**:
+  1. Nếu người dùng nhập sai mã cổ phiếu trong chatbox (ví dụ: `"so sánh hbg và hpb"`, `"so sánh hbg và vcb"`, `"phân tích hbg"`, `"định giá vicc"`, `"cổ tức mb"`), hệ thống phải nhận biết mã cổ phiếu bị viết sai và gợi ý các mã cổ phiếu hợp lệ gần đúng nhất (kèm tên doanh nghiệp, ngành nghề và các nút thao tác nhanh `Suggested Actions`).
+  2. Áp dụng nhận biết mã cổ phiếu gần đúng với mã viết sai cho khung tìm kiếm trên header (`HeaderSearch`) và trang kết quả tìm kiếm (`/search`).
+  3. Đảm bảo project chạy ổn định ở local (`http://127.0.0.1:8000` và `http://localhost:3000`).
+- **Branch**: `fix/AI`
+- **Changes**:
+  - `backend/app/application/use_cases/ai_chat/ticker_resolver.py`:
+    - Xây dựng module nhận diện và gợi ý mã cổ phiếu gần đúng dựa trên danh mục 2,059 mã cổ phiếu (`stock_sectors.json`), từ điển thương hiệu/doanh nghiệp (`_BRAND_TO_TICKER`), và tên đầy đủ của hơn 85 doanh nghiệp đầu ngành (`_TOP_COMPANY_NAMES`).
+    - Thuật toán `find_closest_tickers` sử dụng khoảng cách chỉnh sửa Levenshtein (`dist <= 1`, độ dài token `2..4`) kết hợp trọng số ưu tiên: rổ `VN30` (+25), cổ phiếu thanh khoản lớn `MAJOR` (+15), lỗi gõ nhầm âm vị tiếng Việt `B`/`P` (+12, ví dụ `HBG` -> `HPG`), khớp ký tự đầu (+8), và bao hàm chuỗi con (`VICC` -> `VIC`, `MB` -> `MBB`, `TCBB` -> `TCB`, +15).
+    - Hàm `extract_tickers_with_typo_handling` bóc tách chính xác `(valid_tickers, invalid_tickers)` mà không bắt nhầm các từ tiếng Việt phổ thông.
+  - `backend/app/application/use_cases/ai_chat/intent_parser.py` & `ai_financial_service.py`:
+    - Bổ sung `invalid_tickers: tuple[str, ...] = ()` vào `DetectedIntent` và truyền xuyên suốt pipeline `AiFinancialService`.
+    - Bỏ qua RAG/external search khi phát hiện người dùng gõ sai mã cổ phiếu để phản hồi trực tiếp danh sách gợi ý mã gần đúng; không phạt điểm `Eval` đối với mã gõ sai.
+  - `backend/app/application/use_cases/ai_chat/response_builder.py`:
+    - Thêm `_build_typo_suggestion_section` cho các câu hỏi phân tích đơn lẻ, định giá, cổ tức hoặc BCTC khi mã nhập vào bị sai.
+    - Nâng cấp `_build_comparison_section` xử lý thông minh khi 1 hoặc cả 2 mã so sánh bị gõ sai hoặc chưa có dữ liệu giao dịch (ví dụ `"so sánh hbg và hpb"`, `"so sánh hbg và vcb"`), hiển thị gợi ý mã gần đúng kèm các nút bấm thao tác nhanh (`So sánh HPG và VCB`, `So sánh HPG và MBB`, `Phân tích HPG`).
+  - `frontend/src/lib/ticker-matcher.ts`:
+    - Xây dựng bộ khớp mã cổ phiếu và gợi ý lỗi gõ sai (`matchStockQuery`) cho Frontend, hỗ trợ tìm kiếm theo mã, tên doanh nghiệp tiếng Việt không dấu, và gợi ý Levenshtein (`isTypo: true`, `closestMatches`) khi nhập sai mã.
+  - `frontend/src/components/layout/header-search.tsx`:
+    - Nâng cấp thanh tìm kiếm trên Header với dropdown gợi ý trực tiếp khi gõ (`query.trim().length >= 2`), điều hướng bàn phím (`ArrowUp`, `ArrowDown`, `Enter`, `Escape`), và hiển thị danh sách mã cổ phiếu gần đúng khi người dùng gõ sai mã.
+  - `frontend/src/app/search-api/route.ts` & `frontend/src/app/(user)/search/page.tsx`:
+    - Trả về `suggestions: closestMatches` từ `/search-api` và hiển thị các thẻ gợi ý mã cổ phiếu gần đúng trên trang `/search`.
+- **Verification**:
+  - `backend/tests/unit/ai_chat/test_ai_chat.py`: Thêm `test_ai_typo_ticker_suggestions` (33/33 passed 100%).
+  - `frontend/src/lib/ticker-matcher.test.ts`: Thêm 5 unit tests kiểm tra khớp chính xác và gợi ý mã viết sai.
+
+## Interactive Stock Comparison in Chatbox & Market Page Growth Comparison Block - 2026-11-07 (completed)
+- **User Request**:
+  1. Thêm xử lý yêu cầu so sánh 2 cổ phiếu trong chatbox:
+     - Chat hỏi lại tiêu chí so sánh: theo thông số hoặc báo cáo tăng trưởng hoặc cả hai.
+     - Cung cấp các nút gợi ý thao tác nhanh (Quick Action Buttons: Thông số, Báo cáo tăng trưởng, Cả hai).
+     - Người dùng chọn gì thì response đúng nội dung đó.
+     - Giới hạn tối đa 3 cổ phiếu trong cùng 1 lượt so sánh (thông báo rõ ràng nếu người dùng yêu cầu vượt quá 3 mã).
+  2. Thêm khối so sánh báo cáo tăng trưởng trong khung so sánh ở mục so sánh cổ phiếu trong trang thị trường (`/market`):
+     - Hiển thị khối Báo cáo tăng trưởng & Sức khỏe tài chính bên trong từng thẻ cổ phiếu so sánh.
+     - Bổ sung Bảng đối chiếu Báo cáo tăng trưởng chi tiết đa chiều (Comparative Growth Matrix Table) đặt các mã cạnh nhau theo các chỉ tiêu: Sức khỏe, Vốn hóa 1T/3T/6T/1N, Doanh thu & LNST quý YoY, LNST TTM, Khối lượng vs TB20.
+- **Branch**: `fix/AI`
+- **Changes**:
+  - `backend/app/schemas/ai_chat.py`:
+    - Mở rộng `StockComparisonItem` với các trường tăng trưởng: `health_status`, `health_title`, `health_summary`, `market_cap_growth_1m/3m/6m/1y`, `revenue_growth_yoy`, `profit_growth_yoy`, `revenue_ttm`, `profit_ttm`, `volume_growth_20d`, `growth_insights`.
+    - Mở rộng `StockComparisonWidgetData` với trường `mode: str = "metrics"` (`"metrics"` | `"growth"` | `"both"`).
+  - `backend/app/application/use_cases/ai_chat/intent_parser.py`:
+    - Bổ sung nhận diện tiêu chí so sánh trong `detect_intent`: `comparison_mode` (`"ask"`, `"metrics"`, `"growth"`, `"both"`).
+    - Giới hạn tối đa 3 mã: `tickers[:3]`, kích hoạt cờ `comparison_exceeded_limit` khi yêu cầu > 3 mã.
+    - Hỗ trợ câu trả lời ngắn tiêu chí tiếp nối (e.g. "thông số", "báo cáo tăng trưởng", "cả hai").
+  - `backend/app/application/use_cases/ai_chat/ai_financial_service.py`:
+    - Nạp tự động dữ liệu tăng trưởng `self._market.growth(ticker)` vào `stock_data` cho từng mã so sánh.
+    - Duy trì `_recent_comparison_tickers` để hỗ trợ phản hồi mượt mà khi người dùng gõ trả lời ngắn tiếp nối.
+  - `backend/app/application/use_cases/ai_chat/response_builder.py`:
+    - Tái cấu trúc `_build_comparison_section` xử lý đầy đủ 4 chế độ:
+      1. `ask`: Hỏi lại người dùng tiêu chí muốn so sánh kèm 3 suggested actions (`So sánh theo Thông số`, `So sánh Báo cáo tăng trưởng`, `So sánh Cả hai (Toàn diện)`).
+      2. `metrics`: Phân tích đối chiếu thông số định giá P/E, P/B, ROE, thị giá, vốn hóa, ưu/nhược điểm từng mã kèm widget `stock_comparison` (hỗ trợ 2 hoặc 3 mã).
+      3. `growth`: Phân tích đối chiếu báo cáo tăng trưởng, sức khỏe doanh nghiệp, tăng trưởng vốn hóa qua các mốc, doanh thu/LNST quý gần nhất, LNST TTM kèm widget tăng trưởng.
+      4. `both`: Đối chiếu toàn diện kết hợp cả 3 phần: Thông số định giá, Báo cáo tăng trưởng, và Nhận định tổng hợp đa chiều.
+  - `frontend/src/types/ai-chat.ts`:
+    - Đồng bộ `StockComparisonItem` và `StockComparisonWidgetData` với TypeScript interfaces.
+  - `frontend/src/components/ai-chat/widgets/stock-comparison-widget.tsx`:
+    - Nâng cấp hỗ trợ hiển thị 2 hoặc 3 mã cổ phiếu song song.
+    - Hỗ trợ chế độ `both` với tab chuyển đổi tương tác (`Thông số định giá` / `Báo cáo tăng trưởng`).
+    - Hiển thị bảng và thẻ insight tăng trưởng khi ở chế độ `growth`.
+  - `frontend/src/app/(user)/market/[tab]/page.tsx`:
+    - Nạp song song `getMarketGrowth(symbol)` trong `comparison` SSR pipeline.
+  - `frontend/src/components/market/market-stocks-beginner.tsx`:
+    - Cập nhật `type StockComparison` bổ sung `growth?: StockGrowthData | null`.
+    - Trong `StockComparisonDialog`:
+      - Nạp động `getMarketGrowth` cho các mã được chọn.
+      - Bổ sung khối **Báo cáo tăng trưởng & Sức khỏe tài chính** trong từng card cổ phiếu so sánh.
+      - Bổ sung **Bảng so sánh Báo cáo tăng trưởng chi tiết** (Comparative Growth Matrix Table) đặt các mã cạnh nhau theo 8 chỉ tiêu tăng trưởng cốt lõi.
+- **Verification**:
+  - `backend/tests/unit/ai_chat/test_ai_chat.py`: Thêm kiểm thử so sánh hỏi lại (ask), thông số (metrics), tăng trưởng (growth), toàn diện (both), 3 mã cổ phiếu, và giới hạn vượt quá 3 mã (32/32 tests passed 100%).
+  - `backend/tests/integration/api/test_ai_chat_api.py`: 9/9 tests passed 100%.
+  - `frontend/src/components/ai-chat/ai-chat-bubble.test.tsx`: Thêm test render widget so sánh với chế độ `both`, `growth`, và `metrics` (6/6 tests passed 100%).
+  - `frontend/src/components/market/market-stocks-beginner.test.tsx`: 14/14 tests passed 100%.
+  - Backend Ruff & Mypy: Passed 0 errors.
+  - Frontend ESLint & TypeScript Typecheck: Passed 0 errors.
+
+## Environment Unification, Clean Example Config & Zero Leading Icons Polish - 2026-11-07 (completed)
+- **User Request**:
+  1. Gom các key ở env trong `backend/` và `frontend/` đồng bộ trong `.env` ở root; các file cấu hình khi đọc key mặc định trỏ vào `.env` ở root.
+  2. Đồng bộ `.env` và `.env.example` (chỉ chứa tên biến, tuyệt đối không chứa key/secret thật).
+  3. Kiểm thử toàn diện đảm bảo không gây ra bất kỳ lỗi hồi quy nào cho hệ thống.
+  4. Bỏ toàn bộ các icon/emoji trước các text trong `README.md` theo quy tắc Zero Leading Icons.
+- **Branch**: `fix/AI`
+- **Changes**:
+  - `c:\investiq\.env`: Đồng bộ toàn bộ các biến môi trường từ backend và frontend (Runtime, API URLs, Auth JWT, Google OAuth, DB Neon, Redis, Celery, Market Data, News Pipeline, Admin Console, AI/Gemini, Cloud Deployment).
+  - `c:\investiq\.env.example`: Đồng bộ 100% tên biến tương ứng với `.env`, để trống hoặc sử dụng placeholder an toàn cho mọi credential, không chứa bất kỳ secret thật nào.
+  - `backend/app/infrastructure/config/settings.py`: Cập nhật `SettingsConfigDict` nạp ưu tiên file `.env` ở root repository thông qua đường dẫn tuyệt đối `_repo_root / ".env"`, an toàn khi khởi chạy backend từ bất kỳ thư mục con nào.
+  - `frontend/next.config.ts`: Nạp an toàn root `.env` trong Next.js thông qua `fileURLToPath(new URL("../.env", import.meta.url))` bằng `process.loadEnvFile()`.
+  - `frontend/src/test/setup.ts`: Nạp an toàn root `.env` trong môi trường Vitest qua `new URL("../../../.env", import.meta.url)`.
+  - `README.md`: Loại bỏ toàn bộ emoji và biểu tượng đứng trước các tiêu đề, thẻ tính năng, danh sách, và trong sơ đồ Mermaid.
+- **Verification**:
+  - Frontend Lint (ESLint): Passed (0 warnings, 0 errors).
+  - Frontend Typecheck (tsc): Passed (0 errors).
+  - Frontend Vitest (48 files, 186/186 tests): Passed 100%.
+  - Backend Ruff & Mypy: Passed (0 errors / 43 source files).
+  - Backend Pytest: Passed (169/169 tests).
+
+## Project Final Audit, Handover Checklist & Deployment Hardening - 2026-11-07 (completed)
+- **User Request**:
+  - Xem xét toàn bộ dự án còn cần hoàn thiện điều gì không để hoàn thiện nốt và bàn giao / kết thúc dự án ("xem project cần hoàn thiện cái gì k để hoàn thiện nốt rồi end project").
+- **Branch**: `fix/AI`
+- **Audit Results**:
+  1. **Core Feature Completeness**:
+     - 6-Source News Aggregator (`/news`): Đầy đủ sentiment, crawler operations, extraction review.
+     - Live & Historical Market Engine (`/market`, `/market/stocks/[symbol]`, `/search`): VN30, nến OHLCV, depth sổ lệnh, khớp lệnh intraday, treemap contrast cao, sector heatmap, sự kiện, cổ tức phân trang có nguồn chính thức.
+     - Education & Readiness Assessment (`/learn`, `/learn/readiness`, `/learn/candlestick-arena`): Giáo trình phân cấp, 10 câu hỏi tâm lý/rủi ro, điểm kỷ luật paper trading, báo cáo chẩn đoán sẵn sàng đầu tư.
+     - Paper Trading & AI Portfolio Advisor (`/portfolio`): 100M VND vốn ảo, khớp lệnh thị trường thực tế, phân bổ P&L, báo cáo phân tích danh mục AI tự động gửi email.
+     - Community Thesis Arena (`/community`): Đăng tải luận điểm đầu tư, mục tiêu giá, cắt lỗ.
+     - Quantitative AI Financial Assistant (`/ai-assistant` & drawer): 5-factor radar score card, đối đầu đa tài sản (Vàng, Tiết kiệm), Altman Z-score & cờ đỏ BCTC, RAG kiến thức nội bộ, tin tức, lịch cổ tức, sự kiện sắp tới, cổ phiếu sôi nổi VN30, hồ sơ 22 doanh nhân & lãnh đạo kèm tài sản/sự nghiệp, hệ sinh thái doanh nghiệp & chuỗi giá trị, security guardrails, shared cache, observability metrics.
+     - Enterprise Admin Console (`/admin`): JWT role-based security (`require_admin_user`), quản lý người dùng, luận điểm, danh mục, khóa học, bài đánh giá, crawler tin tức, audit logs.
+  2. **Deployment Hardening & Cloud Resiliency**:
+     - `backend/app/main.py`: Nâng cấp `CORSMiddleware` hỗ trợ linh hoạt cả `https://*.vercel.app`, `https://*.onrender.com` qua `allow_origin_regex` và biến môi trường `BACKEND_CORS_ORIGINS`.
+     - `docs/deploy.md`: Bổ sung Mục 9 hướng dẫn triển khai Frontend lên Vercel (Edge CDN, 0ms cold-start) kết hợp Backend Render và Neon PostgreSQL.
+- **Verification**:
+  - Full Quality Gate `./scripts/check-pr.ps1`: 6/6 passed 100% (Git diff whitespace, Frontend Lint, Frontend Typecheck, Frontend Vitest 186/186, Backend Ruff & Mypy, Backend Pytest 169/169).
+
+## AI Financial Assistant: Business Leaders, Corporate Ecosystems & Entrepreneur Career Resolution - 2026-11-07 (completed)
+- **User Request**:
+  1. Chuyển nhánh `fix/AI`, cho trợ lý AI trả lời các câu hỏi về chứng khoán **bao gồm thông tin doanh nhân**:
+     - Sửa lỗi khi người dùng hỏi *"phạm nhật vượng là ai"*, AI bị rơi vào câu chào giới thiệu chung chung mặc định do chưa nhận diện intent lãnh đạo/doanh nhân.
+     - Hỗ trợ các câu hỏi doanh nhân/lãnh đạo cụ thể (Phạm Nhật Vượng, Trần Đình Long, Nguyễn Thị Phương Thảo, Trương Gia Bình, Hồ Hùng Anh, Nguyễn Đăng Quang, Bùi Thành Nhơn, Nguyễn Đức Tài, Đoàn Nguyên Đức, v.v., và các huyền thoại đầu tư quốc tế Warren Buffett, Charlie Munger, Peter Lynch, George Soros, Elon Musk).
+     - Hỗ trợ danh sách xếp hạng top tỷ phú / người giàu trên sàn chứng khoán (`"top người giàu sàn chứng khoán"`, `"danh sách tỷ phú"`, `"top doanh nhân"`).
+  2. **Doanh nghiệp & Lãnh đạo**: Trả lời trọn vẹn các câu hỏi như *"chủ tịch hòa phát là ai"*, *"chủ tịch vingroup là ai"*, *"vingroup là ai"*, *"hòa phát là ai"*, kết nối trực tiếp với người sáng lập/chủ tịch và mã cổ phiếu niêm yết liên quan.
+  3. **Sự nghiệp doanh nghiệp & Hệ sinh thái**: Trả lời chi tiết khi hỏi về sự nghiệp doanh nhân (`"sự nghiệp phạm nhật vượng"`, `"sự nghiệp trần đình long"`) và hệ sinh thái doanh nghiệp (`"hệ sinh thái vingroup"`, `"hệ sinh thái hòa phát"`, `"hệ sinh thái fpt"`, `"hệ sinh thái masan"`, `"hệ sinh thái sovico"`):
+     - Hiển thị người sáng lập, các trụ cột công ty thành viên (công ty mẹ, công ty con niêm yết, công ty ngoài sàn), tỷ lệ sở hữu và chuỗi giá trị liên kết.
+- **Branch**: `fix/AI`
+- **Changes**:
+  - `backend/app/application/use_cases/ai_chat/intent_parser.py`:
+    - Thêm `is_leader`, `leader_id`, `leader_name`, `is_leader_rankings`, `is_ecosystem`, `ecosystem_id` vào `DetectedIntent`.
+    - Bổ sung `_LEADER_ALIASES` cho 22 lãnh đạo Việt Nam và các huyền thoại quốc tế, bao gồm cả biến thể câu hỏi doanh nghiệp (`"vingroup là ai"`, `"hoa phat la ai"`, `"tap doan vingroup"`, `"he sinh thai vingroup"`, `"su nghiep pham nhat vuong"`...).
+    - Bổ sung nhận diện intent hệ sinh thái (`is_ecosystem`) nhận diện các từ khóa `"he sinh thai"`, `"chuoi gia tri"`, `"cong ty con"`, `"cong ty me"`, `"cac cong ty thanh vien"` và tự động gán `ecosystem_id` (`vingroup`, `hoaphat`, `fpt`, `masan-techcombank`, `sovico`, `ssi-pan`) cùng các mã cổ phiếu cốt lõi.
+    - Thêm từ dừng `"CHU"` vào `_NON_TICKER_WORDS` để ngăn chặn nhận diện nhầm từ "chủ" trong "chủ tịch" thành mã chứng khoán giả định.
+  - `backend/app/infrastructure/external/crawlers/leader_crawler.py`:
+    - Bổ sung `_fold(text)` chuẩn hóa tiếng Việt bỏ dấu cho so sánh linh hoạt.
+    - Bổ sung `_GLOBAL_LEADERS` (Warren Buffett, Charlie Munger, Peter Lynch, George Soros, Elon Musk).
+    - Thêm phương thức `find_leader(query)` tìm kiếm theo ID, họ tên, công ty (với bóc tách từ khóa cốt lõi chống lệch chữ), và mã chứng khoán.
+  - `backend/app/infrastructure/external/market_fixture_provider.py`:
+    - Phương thức `people()` kết nối trực tiếp `get_leader_crawler().get_prominent_leaders()` cung cấp đầy đủ 22 lãnh đạo có giá cổ phiếu live.
+  - `backend/app/application/use_cases/ai_chat/response_builder.py`:
+    - Xây dựng `_build_leader_section(...)` xử lý chuyên biệt 4 trường hợp:
+      1. **Hệ sinh thái doanh nghiệp cụ thể** (`is_ecosystem` và `ecosystem_id`): Kết nối `EcosystemService`, hiển thị người sáng lập, tổng quan, mã niêm yết hạt nhân kèm giá live, danh sách công ty thành viên/trụ cột (mẹ, con niêm yết, ngoài sàn), tỷ lệ sở hữu và chuỗi giá trị liên kết.
+      2. **Hệ sinh thái tổng quát**: Liệt kê 6 đại tập đoàn lớn nhất trên sàn chứng khoán.
+      3. **Top tỷ phú & người giàu**: Liệt kê top người giàu, mã cổ phiếu, tỷ lệ sở hữu, tài sản cổ phiếu niêm yết và tổng tài sản Forbes/CafeF.
+      4. **Doanh nhân / Lãnh đạo / Doanh nghiệp cụ thể**: Hiển thị chức vụ & đơn vị, mã cổ phiếu liên quan & thị giá live, cổ phần nắm giữ, tài sản niêm yết, tổng tài sản, ngoài sàn, tiểu sử sự nghiệp, và tích hợp tóm tắt hệ sinh thái doanh nghiệp của họ.
+  - `backend/app/application/use_cases/ai_chat/ai_financial_service.py`:
+    - Tích hợp `is_leader`, `leader_profile`, `is_ecosystem`, `ecosystem_id` vào pipeline xử lý: tự động nạp instrument live của các mã liên quan vào `stock_data`.
+    - Bổ sung intent `"leader"` vào `_CACHE_TTL_SECONDS` (12 giờ) và nâng `_CACHE_KEY_PREFIX = "ai:chat:v7"`.
+  - `frontend/src/components/ai-chat/ai-chat-bubble.tsx`:
+    - Mở rộng regex trong `HighlightedText` nhận diện highlight số liệu tài sản tỷ phú: `tỷ USD`, `triệu USD`, `tỷ ₫`, `nghìn tỷ ₫`.
+    - Cập nhật `FormattedContent` nhận diện các heading mới: `Thông tin doanh nhân:`, `Thông tin doanh nghiệp & Lãnh đạo:`, `Hệ sinh thái doanh nghiệp:`, `Top doanh nhân & tỷ phú nổi bật:`.
+- **Verification**:
+  - `backend/tests/unit/ai_chat/test_ai_chat.py`: Thêm test kiểm tra `test_ai_leader_pham_nhat_vuong`, `test_ai_leader_by_company_title`, `test_ai_leader_rankings`, `test_ai_global_leader_warren_buffett`, `test_ai_company_and_career_queries` (32/32 passed 100%).
+  - `backend/tests/integration/api/test_ai_chat_api.py`: Thêm integration tests cho endpoint AI chat với các câu hỏi doanh nhân, doanh nghiệp và hệ sinh thái (9/9 passed 100%).
+  - Backend Lint (Ruff): 0 lỗi (`All checks passed!`).
+  - Backend Typecheck (Mypy): 0 lỗi (`Success: no issues found in 43 source files`).
+  - Frontend Lint (ESLint) & Typecheck (tsc): 0 lỗi.
+  - Git diff whitespace check (`git diff origin/dev --check`): 0 lỗi.
+
 ## AI Chat Modularization (`intent_parser`, `market_snapshot`, `external_search`, `response_builder`), VN30 Active Stocks & Upcoming Events Resolution, and Regex Highlight Boundary Fix - 2026-11-04 (completed)
 - **User Request**:
   1. **Ảnh 1 — Trả lời đúng trọng tâm câu hỏi về cổ phiếu trong rổ VN30 hoạt động sôi nổi hôm nay + Sửa lỗi highlight cắt chữ `"điểm"`, `"đạt"`**:

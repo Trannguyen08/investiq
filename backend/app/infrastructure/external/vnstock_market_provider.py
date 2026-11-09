@@ -799,10 +799,13 @@ class VnstockMarketProvider:
         except (RuntimeError, TypeError, ValueError):
             logger.warning("vnstock_candles_unavailable", extra={"symbol": normalized})
             return cached[1] if cached else ()
-        self._candle_cache[key] = (
-            now + self._config.candle_cache_seconds,
-            values,
-        )
+        if not values and cached and cached[1]:
+            return cached[1]
+        if values:
+            self._candle_cache[key] = (
+                now + self._config.candle_cache_seconds,
+                values,
+            )
         return self._with_current_daily_candle(normalized, values) if interval == "1d" else values
 
     def intraday_trades(self, symbol: str, limit: int) -> tuple[IntradayTrade, ...]:

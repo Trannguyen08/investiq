@@ -61,6 +61,8 @@ export type PaperTrade = {
 };
 
 export type PaperOrderStatus = "pending" | "open" | "filled" | "cancelled" | "rejected" | "expired";
+export type PaperOrderTypeCode = "LO" | "MP" | "ATO" | "ATC";
+export type PaperExecutionMode = "instant" | "exchange_hours";
 
 export type PaperOrder = {
   id: string;
@@ -84,6 +86,83 @@ export type PaperOrder = {
   expires_at: string;
   cancelled_at: string | null;
 };
+
+export type PaperPendingBuySettlement = {
+  trade_id: string;
+  symbol: string;
+  quantity: number;
+  execution_price: string;
+  trade_at: string;
+  settles_at: string;
+  cycle: string;
+};
+
+export type PaperPendingSellSettlement = {
+  trade_id: string;
+  symbol: string;
+  quantity: number;
+  net_proceeds: string;
+  trade_at: string;
+  settles_at: string;
+  days_remaining: number;
+};
+
+export type PaperT2SettlementSummary = {
+  cycle_rule: string;
+  advance_fee_rate_per_day: string;
+  pending_buy_shares_by_symbol: Record<string, number>;
+  pending_buy_settlements: PaperPendingBuySettlement[];
+  pending_sell_settlements: PaperPendingSellSettlement[];
+  receivable_cash_t2: string;
+  already_advanced_cash: string;
+  advanceable_cash: string;
+  estimated_advance_fee: string;
+  net_advance_available: string;
+  recent_advances: {
+    id: string;
+    gross_amount: string;
+    fee_amount: string;
+    net_received: string;
+    days_advanced: number;
+    created_at: string;
+  }[];
+};
+
+export type PaperConditionalTrigger = {
+  id: string;
+  symbol: string;
+  stop_loss_price: string | null;
+  take_profit_price: string | null;
+  quantity: number | null;
+  status: "active" | "triggered" | "cancelled";
+  trigger_reason: string | null;
+  triggered_trade_id: string | null;
+  created_at: string;
+  triggered_at: string | null;
+};
+
+export type PaperOrderExtendedMeta = {
+  display_order_type: PaperOrderTypeCode;
+  lot_type: "even" | "odd" | "mixed";
+  slippage_vnd: string;
+  slippage_bps: string;
+  quarantine_until: string | null;
+  pending_reason: string | null;
+  stop_loss_price: string | null;
+  take_profit_price: string | null;
+};
+
+export type PaperExchangeSimulation = {
+  execution_mode: PaperExecutionMode;
+  session_active: boolean;
+  session_message: string;
+  supported_order_types: PaperOrderTypeCode[];
+  price_bands: Record<string, string>;
+  t2_settlement: PaperT2SettlementSummary;
+  conditional_triggers: PaperConditionalTrigger[];
+  order_meta: Record<string, PaperOrderExtendedMeta>;
+};
+
 
 export type PaperNotice = {
   level: "info" | "warning";
@@ -129,6 +208,7 @@ export type PaperDashboard = {
     session: string;
     partial: boolean;
   };
+  exchange_simulation?: PaperExchangeSimulation;
 };
 
 export type PositivePaperNews = {

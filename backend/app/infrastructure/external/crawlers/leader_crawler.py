@@ -5,7 +5,9 @@ Vietnamese business leaders (Forbes Vietnam & CafeF Top Người Giàu).
 """
 
 import logging
+import re
 import threading
+import unicodedata
 import urllib.request
 from collections.abc import Sequence
 from dataclasses import dataclass
@@ -17,6 +19,12 @@ from app.domain.entities.market import MarketInstrument, MarketPerson
 logger = logging.getLogger("investiq.crawler.leader")
 
 D = Decimal
+
+
+def _fold(text: str) -> str:
+    """Normalize and strip Vietnamese diacritics for flexible fuzzy matching."""
+    decomposed = unicodedata.normalize("NFD", text.lower().replace("đ", "d"))
+    return re.sub(r"\s+", " ", "".join(ch for ch in decomposed if unicodedata.category(ch) != "Mn")).strip()
 
 
 @dataclass(frozen=True, slots=True)
@@ -498,6 +506,105 @@ _BASELINE_LEADERS: tuple[LeaderProfile, ...] = (
     ),
 )
 
+# World-renowned financial investors & tech legends
+_GLOBAL_LEADERS: tuple[LeaderProfile, ...] = (
+    LeaderProfile(
+        id="global-1",
+        full_name="Warren Buffett",
+        initials="WB",
+        role="Chủ tịch kiêm CEO",
+        company="Berkshire Hathaway",
+        symbols=(),
+        sector="Đầu tư & Tài chính",
+        disclosed_shares=D("0"),
+        ownership_percent=D("15.1"),
+        base_price=D("0"),
+        net_worth_total="~145 tỷ USD",
+        net_worth_external="Nhà tiên tri xứ Omaha, huyền thoại đầu tư giá trị vĩ đại nhất mọi thời đại.",
+        bio=(
+            "Chủ tịch Berkshire Hathaway, đệ tử xuất sắc của Benjamin Graham. Nổi tiếng với triết lý đầu tư giá trị, "
+            "lựa chọn doanh nghiệp có 'con hào kinh tế' (Economic Moats) bền vững và nắm giữ dài hạn."
+        ),
+        holding_public_date=datetime(2026, 9, 30, tzinfo=UTC),
+    ),
+    LeaderProfile(
+        id="global-2",
+        full_name="Charlie Munger",
+        initials="CM",
+        role="Cố Phó Chủ tịch",
+        company="Berkshire Hathaway",
+        symbols=(),
+        sector="Đầu tư & Tài chính",
+        disclosed_shares=D("0"),
+        ownership_percent=D("0"),
+        base_price=D("0"),
+        net_worth_total="~2.6 tỷ USD",
+        net_worth_external="Cộng sự đắc lực và bộ óc triết học đứng sau thành công của Warren Buffett.",
+        bio=(
+            "Cố Phó Chủ tịch Berkshire Hathaway, kiến trúc sư trưởng định hình triết lý "
+            "'mua công ty tuyệt vời ở mức giá hợp lý thay vì mua công ty bình thường ở mức giá hời'."
+        ),
+        holding_public_date=datetime(2026, 9, 30, tzinfo=UTC),
+    ),
+    LeaderProfile(
+        id="global-3",
+        full_name="Peter Lynch",
+        initials="PL",
+        role="Huyền thoại quản lý quỹ",
+        company="Fidelity Magellan Fund",
+        symbols=(),
+        sector="Quản lý quỹ đầu tư",
+        disclosed_shares=D("0"),
+        ownership_percent=D("0"),
+        base_price=D("0"),
+        net_worth_total="~450 triệu USD",
+        net_worth_external="Tác giả các cuốn sách kinh điển: 'Trên đỉnh Phố Wall', 'Đánh bại Phố Wall'.",
+        bio=(
+            "Nhà quản lý quỹ Fidelity Magellan đạt tỷ suất sinh lời bình quân 29.2%/năm suốt 13 năm. "
+            "Nổi tiếng với châm ngôn 'Đầu tư vào những gì bạn hiểu rõ' và khái niệm cổ phiếu Tenbagger."
+        ),
+        holding_public_date=datetime(2026, 9, 30, tzinfo=UTC),
+    ),
+    LeaderProfile(
+        id="global-4",
+        full_name="George Soros",
+        initials="GS",
+        role="Nhà sáng lập",
+        company="Soros Fund Management / Quantum Fund",
+        symbols=(),
+        sector="Quỹ đầu cơ & Vĩ mô",
+        disclosed_shares=D("0"),
+        ownership_percent=D("0"),
+        base_price=D("0"),
+        net_worth_total="~6.7 tỷ USD",
+        net_worth_external="Huyền thoại đầu cơ vĩ mô toàn cầu, người sáng lập Quantum Fund.",
+        bio=(
+            "Nhà đầu tư theo trường phái vĩ mô (Global Macro) và thuyết phản xạ (Reflexivity). "
+            "Nổi tiếng với thương vụ bán khống đồng Bảng Anh lịch sử năm 1992 thu về hơn 1 tỷ USD lợi nhuận."
+        ),
+        holding_public_date=datetime(2026, 9, 30, tzinfo=UTC),
+    ),
+    LeaderProfile(
+        id="global-5",
+        full_name="Elon Musk",
+        initials="EM",
+        role="CEO & Kiến trúc sư trưởng",
+        company="Tesla · SpaceX · xAI",
+        symbols=(),
+        sector="Xe điện & Công nghệ vũ trụ",
+        disclosed_shares=D("0"),
+        ownership_percent=D("13.0"),
+        base_price=D("0"),
+        net_worth_total="~260 tỷ USD",
+        net_worth_external="Doanh nhân giàu nhất thế giới, lãnh đạo Tesla, SpaceX, Starlink, xAI, Neuralink và mạng xã hội X.",
+        bio=(
+            "Nhà sáng lập và CEO Tesla và SpaceX, người thúc đẩy cuộc cách mạng xe điện toàn cầu "
+            "và thương mại hóa khám phá không gian."
+        ),
+        holding_public_date=datetime(2026, 9, 30, tzinfo=UTC),
+    ),
+)
+
 LEADER_REAL_AVATARS: dict[str, str] = {
     "person-1": "https://upload.wikimedia.org/wikipedia/commons/b/b7/Phamnhatvuong2024.jpg",
     "person-2": "https://cafefnew.mediacdn.vn/zoom/600_600/CEO/CEO_10089_20240829114403.png",
@@ -571,9 +678,12 @@ class LeaderCrawler:
         for profile in self._profiles:
             # Filter if requested
             if q:
-                match_name = q in profile.full_name.lower()
-                match_comp = q in profile.company.lower()
-                match_sym = any(q in sym.lower() for sym in profile.symbols)
+                q_fold = _fold(q)
+                match_name = q in profile.full_name.lower() or q_fold in _fold(profile.full_name)
+                match_comp = q in profile.company.lower() or q_fold in _fold(profile.company)
+                match_sym = any(q in sym.lower() for sym in profile.symbols) or any(
+                    q_fold in _fold(sym) for sym in profile.symbols
+                )
                 if not (match_name or match_comp or match_sym):
                     continue
 
@@ -615,6 +725,49 @@ class LeaderCrawler:
 
         results.sort(key=lambda p: p.estimated_listed_equity_value, reverse=True)
         return tuple(results)
+
+    def find_leader(self, query: str) -> LeaderProfile | None:
+        """Find the best-matching LeaderProfile by id, full_name, alias, or company."""
+        if not query:
+            return None
+        q_clean = query.strip()
+        q_fold = _fold(q_clean)
+
+        # 1. Exact or partial ID match
+        for p in self._profiles:
+            if p.id.lower() == q_clean.lower():
+                return p
+        for p in _GLOBAL_LEADERS:
+            if p.id.lower() == q_clean.lower():
+                return p
+
+        # 2. Name match (exact or substring)
+        for p in self._profiles:
+            p_fold = _fold(p.full_name)
+            if q_fold == p_fold or q_fold in p_fold or p_fold in q_fold:
+                return p
+        for p in _GLOBAL_LEADERS:
+            p_fold = _fold(p.full_name)
+            if q_fold == p_fold or q_fold in p_fold or p_fold in q_fold:
+                return p
+
+        # 3. Company match
+        for p in self._profiles:
+            c_fold = _fold(p.company)
+            c_core = " ".join(
+                w for w in c_fold.split() if w not in {"tap", "doan", "cong", "ty", "ngan", "hang"}
+            )
+            if q_fold in c_fold or c_fold in q_fold or (c_core and (c_core in q_fold or q_fold in c_core)):
+                return p
+
+        # 4. Symbol match
+        q_upper = q_clean.upper()
+        for p in self._profiles:
+            if q_upper in p.symbols:
+                return p
+
+        return None
+
 
 
 _crawler_instance: LeaderCrawler | None = None

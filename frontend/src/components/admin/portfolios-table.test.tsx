@@ -1,4 +1,4 @@
-import { fireEvent, render, screen } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
 
 import { PortfoliosTable } from "@/components/admin/portfolios-table";
@@ -45,6 +45,23 @@ const mockDetail: AdminPortfolioDetail = {
       created_at: "2026-10-20T09:30:00Z",
     },
   ],
+  orders: [
+    {
+      id: "order-999",
+      symbol: "VND",
+      side: "buy",
+      order_type: "LO",
+      status: "open",
+      quantity: 500,
+      filled_quantity: 0,
+      limit_price: 15200,
+      reserved_cash: 7600000,
+      reserved_quantity: 0,
+      created_at: "2026-10-20T10:00:00Z",
+      expires_at: "2026-10-20T15:00:00Z",
+      cancelled_at: null,
+    },
+  ],
 };
 
 describe("PortfoliosTable", () => {
@@ -58,7 +75,7 @@ describe("PortfoliosTable", () => {
     expect(screen.getByText("8 lệnh")).toBeInTheDocument();
   });
 
-  it("loads and displays portfolio detail modal with holdings and trades", async () => {
+  it("loads and displays portfolio detail modal with holdings, orders, and trades", async () => {
     const loadDetail = vi.fn().mockResolvedValue(mockDetail);
     render(<PortfoliosTable portfolios={[mockItem]} loadDetail={loadDetail} />);
 
@@ -67,8 +84,55 @@ describe("PortfoliosTable", () => {
 
     expect(loadDetail).toHaveBeenCalledWith("pf-1111-2222");
     expect(await screen.findByRole("heading", { name: /Chi tiết danh mục: Trần Nhà Đầu Tư/i })).toBeInTheDocument();
+    expect(screen.getByText(/Sổ lệnh giao dịch của người dùng/i)).toBeInTheDocument();
+    expect(screen.getByText("VND")).toBeInTheDocument();
+    expect(screen.getByText("Chờ khớp")).toBeInTheDocument();
     expect(screen.getByText(/Cổ phiếu đang nắm giữ/i)).toBeInTheDocument();
     expect(screen.getByText(/Lịch sử 20 lệnh gần nhất/i)).toBeInTheDocument();
+  });
+
+  it("allows admin to cancel an open order with reason and logs to audit", async () => {
+    const loadDetail = vi.fn().mockResolvedValue(mockDetail);
+    const cancelOrder = vi.fn().mockResolvedValue({
+      status: "ok",
+      message: "Hủy lệnh thành công.",
+      order_id: "order-999",
+    });
+
+    render(
+      <PortfoliosTable
+        portfolios={[mockItem]}
+        loadDetail={loadDetail}
+        cancelOrder={cancelOrder}
+      />
+    );
+
+    const detailBtn = screen.getByRole("button", { name: "Xem chi tiết" });
+    fireEvent.click(detailBtn);
+
+    expect(await screen.findByRole("heading", { name: /Chi tiết danh mục: Trần Nhà Đầu Tư/i })).toBeInTheDocument();
+
+    const cancelBtn = screen.getByRole("button", { name: "Hủy lệnh (Admin)" });
+    fireEvent.click(cancelBtn);
+
+    expect(screen.getByText(/Xác nhận hủy lệnh của người dùng: VND/i)).toBeInTheDocument();
+
+    const input = screen.getByPlaceholderText(/Nhập lý do hủy lệnh/i);
+    fireEvent.change(input, { target: { value: "Can thiệp rủi ro thị trường theo yêu cầu sàn" } });
+
+    const confirmBtn = screen.getByRole("button", { name: "Xác nhận hủy lệnh" });
+    fireEvent.click(confirmBtn);
+
+    await waitFor(() => {
+      expect(cancelOrder).toHaveBeenCalledWith(
+        "pf-1111-2222",
+        "order-999",
+        "Can thiệp rủi ro thị trường theo yêu cầu sàn"
+      );
+    });
+
+    expect(await screen.findByText(/Đã hủy thành công lệnh order-999/i)).toBeInTheDocument();
+    expect(screen.getByText("Đã hủy")).toBeInTheDocument();
   });
 
   it("shows empty state when no portfolios are present", () => {
