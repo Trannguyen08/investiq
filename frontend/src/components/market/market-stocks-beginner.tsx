@@ -196,8 +196,8 @@ function StockComparisonDialog({
       setError(`${symbol} đã có trong danh sách so sánh.`);
       return;
     }
-    if (symbols.length >= 3) {
-      setError("Chỉ có thể so sánh tối đa 3 mã cùng lúc.");
+    if (symbols.length >= 2) {
+      setError("Chỉ có thể so sánh tối đa 2 mã cùng lúc.");
       return;
     }
     setSymbols((current) => [...current, symbol]);
@@ -234,7 +234,7 @@ function StockComparisonDialog({
           <div>
             <p className="eyebrow text-xs font-bold text-sky-400 uppercase tracking-wider mb-1">ĐỐI CHIẾU CÙNG MỘT KHUNG</p>
             <h2 id="comparison-dialog-title" className="text-xl sm:text-2xl font-bold text-slate-100 m-0">So sánh cổ phiếu</h2>
-            <p id="comparison-dialog-description" className="text-xs sm:text-sm text-slate-400 mt-1 m-0">Chọn từ 2 đến 3 mã hoặc đối chiếu tỷ suất sinh lời với Vàng SJC và Lãi suất ngân hàng qua từng năm.</p>
+            <p id="comparison-dialog-description" className="text-xs sm:text-sm text-slate-400 mt-1 m-0">Chọn tối đa 2 mã hoặc đối chiếu tỷ suất sinh lời với Vàng SJC và Lãi suất ngân hàng qua từng năm.</p>
           </div>
           <button type="button" className="dialog-close w-8 h-8 rounded-lg flex items-center justify-center text-slate-400 hover:text-white hover:bg-slate-800 transition text-lg shrink-0 cursor-pointer" aria-label="Đóng cửa sổ so sánh" onClick={onClose}>×</button>
         </header>
@@ -276,7 +276,7 @@ function StockComparisonDialog({
           <>
             <section className="comparison-picker grid md:grid-cols-2 gap-4 bg-slate-950/60 p-4 rounded-xl border border-slate-800" aria-label="Chọn mã để so sánh">
               <div className="comparison-selected flex flex-col gap-2">
-                <strong className="text-xs font-semibold text-slate-300">Đã chọn {symbols.length}/3</strong>
+                <strong className="text-xs font-semibold text-slate-300">Đã chọn {symbols.length}/2</strong>
                 <div className="flex flex-wrap gap-2">
                   {symbols.map((symbol) => (
                     <span key={symbol} className="inline-flex items-center gap-1.5 px-3 py-1 rounded-lg bg-sky-950/80 text-sky-300 border border-sky-800 text-xs font-bold">
@@ -299,7 +299,7 @@ function StockComparisonDialog({
                     placeholder="Ví dụ: FPT, VCB, HPG"
                     className="flex-1 bg-slate-900 border border-slate-700 rounded-lg px-3 py-1.5 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-sky-500"
                   />
-                  <button type="submit" disabled={!query.trim() || symbols.length >= 3} className="px-3.5 py-1.5 rounded-lg bg-sky-600 hover:bg-sky-500 disabled:opacity-50 disabled:cursor-not-allowed text-xs font-semibold text-white transition cursor-pointer">
+                  <button type="submit" disabled={!query.trim() || symbols.length >= 2} className="px-3.5 py-1.5 rounded-lg bg-sky-600 hover:bg-sky-500 disabled:opacity-50 disabled:cursor-not-allowed text-xs font-semibold text-white transition cursor-pointer">
                     Thêm mã
                   </button>
                 </div>
@@ -308,7 +308,7 @@ function StockComparisonDialog({
                 <div className="comparison-suggestions md:col-span-2 flex flex-wrap gap-2 pt-2 border-t border-slate-850" aria-label="Mã gợi ý">
                   <span className="text-xs text-slate-400 self-center mr-1">Gợi ý:</span>
                   {candidates.map((item) => (
-                    <button key={item.symbol} type="button" disabled={symbols.length >= 3} aria-label={`Thêm ${item.symbol} vào so sánh`} onClick={() => addSymbol(item.symbol)} className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md bg-slate-800 hover:bg-slate-700 disabled:opacity-50 text-xs text-slate-200 border border-slate-700 transition cursor-pointer">
+                    <button key={item.symbol} type="button" disabled={symbols.length >= 2} aria-label={`Thêm ${item.symbol} vào so sánh`} onClick={() => addSymbol(item.symbol)} className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md bg-slate-800 hover:bg-slate-700 disabled:opacity-50 text-xs text-slate-200 border border-slate-700 transition cursor-pointer">
                       <strong className="text-sky-400 font-bold">{item.symbol}</strong>
                       <span className="text-[11px] text-slate-400 max-w-[120px] truncate">{item.name}</span>
                     </button>
@@ -331,7 +331,7 @@ function StockComparisonDialog({
                 </div>
               )}
               {symbols.length >= 2 && (
-                <div className="comparison-board grid md:grid-cols-2 lg:grid-cols-3 gap-4">
+                <div className="comparison-board grid md:grid-cols-2 gap-4">
                   {symbols.map((symbol) => {
                     const loaded = loadedBySymbol.get(symbol);
                     const item = loaded?.instrument ?? optionBySymbol.get(symbol);

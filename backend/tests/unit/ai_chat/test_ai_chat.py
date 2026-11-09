@@ -180,15 +180,15 @@ async def test_ai_financial_service_comparison() -> None:
     assert "stock_comparison" in [w["type"] for w in res_both["widgets"]]
     assert res_both["widgets"][0]["data"]["mode"] == "both"
 
-    # 5. Comparing 3 stocks
+    # 5. Comparing 3 stocks (capped at 2)
     res_three = await ai_service.process_chat("So sánh VCB, MBB và TCB theo thông số")
     assert "stock_comparison" in [w["type"] for w in res_three["widgets"]]
-    assert len(res_three["widgets"][0]["data"]["items"]) == 3
+    assert len(res_three["widgets"][0]["data"]["items"]) == 2
 
-    # 6. Exceeding 3 stocks limit (capped at 3)
+    # 6. Exceeding 2 stocks limit (capped at 2)
     res_four = await ai_service.process_chat("So sánh VCB, MBB, TCB, HPG theo thông số")
-    assert "tối đa 3 mã" in res_four["content"]
-    assert len(res_four["widgets"][0]["data"]["items"]) == 3
+    assert "tối đa 2 mã" in res_four["content"]
+    assert len(res_four["widgets"][0]["data"]["items"]) == 2
 
 
 @pytest.mark.anyio

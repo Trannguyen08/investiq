@@ -1068,11 +1068,11 @@ def _build_comparison_section(
             f"Hệ thống tiến hành đối chiếu các mã hợp lệ: {', '.join(active_tickers)}.\n"
         )
 
-    # Add limit notice if user asked for > 3 stocks
+    # Add limit notice if user asked for > 2 stocks
     if exceeded_limit:
         text_parts.append(
-            f"> [!NOTE] InvestIQ hỗ trợ so sánh tối đa 3 mã cổ phiếu trong cùng một lượt. "
-            f"Hệ thống sẽ tiến hành so sánh 3 mã: {', '.join(active_tickers)}.\n"
+            f"> [!NOTE] InvestIQ hỗ trợ so sánh tối đa 2 mã cổ phiếu trong cùng một lượt. "
+            f"Hệ thống sẽ tiến hành so sánh 2 mã: {', '.join(active_tickers)}.\n"
         )
 
     tickers_title = " vs ".join(active_tickers)

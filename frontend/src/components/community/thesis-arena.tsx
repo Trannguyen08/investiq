@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import { useAuth } from "@/hooks/use-auth";
+import { STOCK_DIRECTORY } from "@/lib/ticker-matcher";
 import type { AnalystReputationItem, InvestmentThesisItem } from "@/types/thesis";
 
 const moneyFormat = new Intl.NumberFormat("vi-VN", {
@@ -51,7 +52,7 @@ type ThesisArenaProps = {
 };
 
 export function ThesisArena({ initialTheses = [], initialLeaderboard = [] }: ThesisArenaProps) {
-  const { status: authStatus } = useAuth();
+  const { status: authStatus, user } = useAuth();
   const [theses, setTheses] = useState<InvestmentThesisItem[]>(initialTheses);
   const [myTheses, setMyTheses] = useState<InvestmentThesisItem[]>([]);
   const [leaderboard, setLeaderboard] = useState<AnalystReputationItem[]>(initialLeaderboard);
@@ -68,6 +69,7 @@ export function ThesisArena({ initialTheses = [], initialLeaderboard = [] }: The
 
   // Form state
   const [formSymbol, setFormSymbol] = useState("");
+  const [showSymbolSuggestions, setShowSymbolSuggestions] = useState(false);
   const [formStance, setFormStance] = useState<"bullish" | "bearish">("bullish");
   const [formTargetPrice, setFormTargetPrice] = useState("");
   const [formStopLossPrice, setFormStopLossPrice] = useState("");
@@ -76,6 +78,14 @@ export function ThesisArena({ initialTheses = [], initialLeaderboard = [] }: The
   const [formBody, setFormBody] = useState("");
   const [formCatalysts, setFormCatalysts] = useState("");
   const [submitting, setSubmitting] = useState(false);
+
+  const symbolSuggestions = useMemo(() => {
+    const q = formSymbol.trim().toUpperCase();
+    if (!q) return [];
+    return STOCK_DIRECTORY.filter(
+      (s) => s.symbol.startsWith(q) || s.name.toUpperCase().includes(q)
+    ).slice(0, 6);
+  }, [formSymbol]);
 
   const isFirstMount = useRef(true);
 
@@ -350,11 +360,17 @@ export function ThesisArena({ initialTheses = [], initialLeaderboard = [] }: The
             <span className="analyst-banner-sub">Dựa trên tỷ lệ dự báo chính xác và hiệu suất sinh lời kiểm chứng</span>
           </div>
           <div className="analyst-cards-scroll">
-            {leaderboard.slice(0, 6).map((analyst, idx) => (
+            {leaderboard.slice(0, 6).map((analyst, idx) => {
+              const cleanName = analyst.author_name.replace(/\s*\(Tôi\)/gi, "").trim();
+              const isMe = authStatus === "authenticated" && user && (
+                user.id === analyst.user_id ||
+                user.display_name?.trim() === cleanName
+              );
+              return (
               <div key={analyst.user_id} className="analyst-rep-card">
                 <div className="analyst-rank-number">#{idx + 1}</div>
                 <div className="analyst-info">
-                  <div className="analyst-name">{analyst.author_name}</div>
+                  <div className="analyst-name">{cleanName}{isMe ? " (Tôi)" : ""}</div>
                   <div className="analyst-tier-tag">{analyst.rank_tier.replace(/^[^\w\s\u00C0-\u1EF9]+/, "").trim()}</div>
                 </div>
                 <div className="analyst-stats">
@@ -373,7 +389,8 @@ export function ThesisArena({ initialTheses = [], initialLeaderboard = [] }: The
                   </div>
                 </div>
               </div>
-            ))}
+            );
+          })}
           </div>
         </div>
       )}
@@ -521,7 +538,19 @@ export function ThesisArena({ initialTheses = [], initialLeaderboard = [] }: The
                 <h3 className="thesis-card-title">{thesis.title}</h3>
 
                 <div className="thesis-author-row">
-                  <span className="thesis-author-name">{thesis.author_name}</span>
+                  {(() => {
+                    const cleanAuthor = thesis.author_name.replace(/\s*\(Tôi\)/gi, "").trim();
+                    const isAuthorMe = authStatus === "authenticated" && user && (
+                      user.id === thesis.user_id ||
+                      user.display_name?.trim() === cleanAuthor ||
+                      Boolean(user.email && cleanAuthor.toLowerCase().includes(user.email.split("@")[0].toLowerCase()))
+                    );
+                    return (
+                      <span className="thesis-author-name">
+                        {cleanAuthor}{isAuthorMe ? " (Tôi)" : ""}
+                      </span>
+                    );
+                  })()}
                   <span className="thesis-timestamp">
                     {new Date(thesis.created_at).toLocaleDateString("vi-VN", {
                       day: "2-digit",
@@ -623,17 +652,81 @@ export function ThesisArena({ initialTheses = [], initialLeaderboard = [] }: The
 
             <form onSubmit={handlePublishThesis} className="thesis-form">
               <div className="form-row-2">
-                <div className="form-field">
+                <div className="form-field" style={{ position: "relative" }}>
                   <label htmlFor="formSymbol">Mã cổ phiếu niêm yết *</label>
                   <input
                     id="formSymbol"
                     type="text"
                     required
+                    autoComplete="off"
                     placeholder="VD: HPG, FPT, VNM..."
                     value={formSymbol}
-                    onChange={(e) => setFormSymbol(e.target.value.toUpperCase())}
+                    onFocus={() => setShowSymbolSuggestions(true)}
+                    onBlur={() => setTimeout(() => setShowSymbolSuggestions(false), 200)}
+                    onChange={(e) => {
+                      setFormSymbol(e.target.value.toUpperCase());
+                      setShowSymbolSuggestions(true);
+                    }}
                     className="form-input"
                   />
+                  {showSymbolSuggestions && symbolSuggestions.length > 0 && formSymbol.trim() && (
+                    <div
+                      className="symbol-suggestions-dropdown"
+                      style={{
+                        position: "absolute",
+                        top: "100%",
+                        left: 0,
+                        right: 0,
+                        zIndex: 60,
+                        marginTop: "0.25rem",
+                        maxHeight: "14rem",
+                        overflowY: "auto",
+                        background: "#0a1e32",
+                        border: "1px solid #1e3a5a",
+                        borderRadius: "0.55rem",
+                        padding: "0.35rem",
+                        boxShadow: "0 10px 30px rgba(0,0,0,0.5)",
+                      }}
+                    >
+                      {symbolSuggestions.map((item) => (
+                        <button
+                          key={item.symbol}
+                          type="button"
+                          onMouseDown={(e) => {
+                            e.preventDefault();
+                            setFormSymbol(item.symbol);
+                            setShowSymbolSuggestions(false);
+                          }}
+                          style={{
+                            width: "100%",
+                            display: "flex",
+                            alignItems: "center",
+                            justifyContent: "space-between",
+                            padding: "0.45rem 0.65rem",
+                            border: "none",
+                            borderRadius: "0.4rem",
+                            background: "transparent",
+                            color: "#cbd5e1",
+                            cursor: "pointer",
+                            fontSize: "0.78rem",
+                            textAlign: "left",
+                          }}
+                          onMouseEnter={(e) => (e.currentTarget.style.background = "#132d4a")}
+                          onMouseLeave={(e) => (e.currentTarget.style.background = "transparent")}
+                        >
+                          <div style={{ display: "flex", alignItems: "center", gap: "0.5rem" }}>
+                            <strong style={{ color: "#38bdf8", fontWeight: 800 }}>{item.symbol}</strong>
+                            <span style={{ color: "#94a3b8", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", maxWidth: "160px" }}>
+                              {item.name}
+                            </span>
+                          </div>
+                          <span style={{ fontSize: "0.65rem", padding: "0.1rem 0.35rem", borderRadius: "0.25rem", background: "#0f2742", border: "1px solid #23456b", color: "#64748b" }}>
+                            {item.exchange}
+                          </span>
+                        </button>
+                      ))}
+                    </div>
+                  )}
                 </div>
 
                 <div className="form-field">

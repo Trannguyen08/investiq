@@ -244,7 +244,7 @@ describe("StocksView navigation", () => {
     expect(screen.getByLabelText("% tăng tối thiểu")).toBeInTheDocument();
   });
 
-  it("selects, removes and reloads up to three stocks in a comparison dialog", () => {
+  it("selects, removes and reloads up to two stocks in a comparison dialog", () => {
     const second = { ...instrument, symbol: "HPG", name: "Tập đoàn Hòa Phát", change_percent: "-1.2", is_vn30: false };
     const values = { ...collection, data: [instrument, second], pagination: { ...collection.pagination, total_items: 2 } };
     render(<StocksView collection={values} summary={values} sectors={sectors} filters={{ q: "", exchange: "", sort: "vn30", direction: "desc", mode: "basic" }} selected="" selectedCandles={[]} index={index} comparisonOptions={[instrument, second]} />);
@@ -255,7 +255,7 @@ describe("StocksView navigation", () => {
     fireEvent.click(screen.getByRole("button", { name: "Thêm FPT vào so sánh" }));
     fireEvent.click(screen.getByRole("button", { name: "Thêm HPG vào so sánh" }));
 
-    expect(screen.getByText("Đã chọn 2/3")).toBeInTheDocument();
+    expect(screen.getByText("Đã chọn 2/2")).toBeInTheDocument();
     expect(screen.getAllByText("Chưa có đánh giá AI đã kiểm định")).toHaveLength(2);
     expect(screen.getAllByText("Chưa có").length).toBeGreaterThan(0);
     const metricGroups = document.querySelectorAll(".comparison-metrics");
@@ -266,7 +266,7 @@ describe("StocksView navigation", () => {
     });
 
     fireEvent.click(screen.getAllByRole("button", { name: "Gỡ HPG khỏi so sánh" })[0]);
-    expect(screen.getByText("Đã chọn 1/3")).toBeInTheDocument();
+    expect(screen.getByText("Đã chọn 1/2")).toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: "Thêm HPG vào so sánh" }));
     fireEvent.click(screen.getByRole("button", { name: "Tải dữ liệu so sánh" }));
 

@@ -56,23 +56,8 @@ function AdminPortalShortcut() {
 
 function AccountMenu() {
   const { status, user, logout } = useAuth();
-  const [open, setOpen] = useState(false);
   const [error, setError] = useState("");
-  const ref = useRef<HTMLDivElement>(null);
   const router = useRouter();
-
-  useEffect(() => {
-    const close = (event: PointerEvent) => {
-      if (!ref.current?.contains(event.target as Node)) setOpen(false);
-    };
-    document.addEventListener("pointerdown", close);
-    return () => document.removeEventListener("pointerdown", close);
-  }, []);
-  useEffect(() => {
-    const close = (event: KeyboardEvent) => { if (event.key === "Escape") setOpen(false); };
-    document.addEventListener("keydown", close);
-    return () => document.removeEventListener("keydown", close);
-  }, []);
 
   if (status !== "authenticated" || !user) {
     return (
@@ -89,7 +74,6 @@ function AccountMenu() {
     setError("");
     try {
       await logout();
-      setOpen(false);
       router.push("/login?logout=success");
       router.refresh();
     } catch (value) {
@@ -97,47 +81,35 @@ function AccountMenu() {
     }
   }
 
-  const greeting = getUserGreeting(user.display_name);
+  const shortName = user.display_name.trim().includes("@")
+    ? user.display_name.trim().split("@")[0]
+    : user.display_name.trim();
 
   return (
-    <div className="account-menu relative shrink-0" ref={ref}>
-      <button
-        className="account-trigger flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl bg-slate-900 border border-slate-800 hover:border-slate-700 text-slate-200 text-xs font-semibold transition cursor-pointer whitespace-nowrap"
-        type="button"
-        onClick={() => setOpen((value) => !value)}
-        aria-haspopup="menu"
-        aria-expanded={open}
-      >
+    <div className="account-menu flex items-center gap-1.5 shrink-0">
+      <div className="flex items-center gap-2 px-2.5 py-1 rounded-xl bg-slate-900 border border-slate-800 text-slate-200 shadow-sm">
         <UserAvatar name={user.display_name} url={user.avatar_url} />
-        <span className="truncate max-w-[120px]">{greeting}</span>
-        <span aria-hidden="true" className="text-slate-400 text-xs">⌄</span>
-      </button>
-      {open && (
-        <div className="account-dropdown absolute right-0 mt-2 w-56 bg-slate-900 border border-slate-800 rounded-xl shadow-2xl py-1.5 z-50 text-xs sm:text-sm" role="menu">
-          <div className="px-4 py-2 border-b border-slate-800 text-xs text-slate-400">
-            Tài khoản: <strong className="text-slate-200">{user.display_name}</strong>
-          </div>
-          {user.role === "admin" && (
-            <Link
-              href="/admin"
-              role="menuitem"
-              onClick={() => setOpen(false)}
-              className="block px-4 py-2 text-sky-400 hover:bg-slate-800/80 font-bold border-b border-slate-800/80 transition"
-            >
-              Vào trang quản trị (Admin)
-            </Link>
-          )}
-          <button
-            type="button"
-            role="menuitem"
-            onClick={signOut}
-            className="w-full text-left px-4 py-2 text-rose-400 hover:bg-slate-800/80 font-semibold transition cursor-pointer"
-          >
-            Đăng xuất
-          </button>
-          {error && <p role="alert" className="px-4 py-1 text-xs text-rose-400 m-0">{error}</p>}
+        <div className="flex flex-col text-left leading-tight">
+          <span className="text-[10px] text-slate-400 font-medium">Xin chào</span>
+          <span className="text-xs font-bold text-slate-100 truncate max-w-[100px] sm:max-w-[130px]">
+            {shortName}
+          </span>
         </div>
-      )}
+      </div>
+      <button
+        type="button"
+        onClick={signOut}
+        title="Đăng xuất"
+        aria-label="Đăng xuất"
+        className="p-2 rounded-xl bg-slate-900 border border-slate-800 hover:border-rose-500/50 hover:bg-rose-950/40 text-slate-400 hover:text-rose-400 transition cursor-pointer flex items-center justify-center shrink-0 shadow-sm"
+      >
+        <svg xmlns="http://www.w3.org/2000/svg" className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+          <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4" />
+          <polyline points="16 17 21 12 16 7" />
+          <line x1="21" y1="12" x2="9" y2="12" />
+        </svg>
+      </button>
+      {error && <span role="alert" className="sr-only">{error}</span>}
     </div>
   );
 }

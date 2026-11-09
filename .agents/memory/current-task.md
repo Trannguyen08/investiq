@@ -1,5 +1,38 @@
 # Current Task
 
+## UI/UX Refinements: Stock Comparison Limit (max 2), Flexible Comparison Header, User Header Layout with Direct Logout, Anonymous Thesis Author Label, Auto-Suggest & Uppercase Stock Input, Centered Table Values - 2026-11-09 (completed)
+- **User Request**:
+  1. Giới hạn so sánh cổ phiếu tối đa 2 mã (thay vì 3 mã) ở cả Modal so sánh và Chatbox AI.
+  2. Khối chứa text so sánh cổ phiếu điều chỉnh lại không cố định cứng một chỗ gây che khuất nội dung.
+  3. Header người dùng: Hiển thị chữ "Xin chào" nhỏ ở trên và tên ở dưới, bỏ nút dropdown xổ xuống, thêm icon Logout trực tiếp sát cạnh để thao tác nhanh.
+  4. Cộng đồng / Luận điểm đầu tư: Sửa nhãn "(Tôi)" hiển thị ở bài viết của "Nguyên Trần" khi người dùng chưa đăng nhập hệ thống (chỉ hiển thị "(Tôi)" khi thực sự trùng với tài khoản đã đăng nhập).
+  5. Modal xuất bản luận điểm: Bỏ viền focus màu vàng ở các ô nhập, tự động viết hoa (UPPERCASE) mã cổ phiếu khi gõ, hỗ trợ dropdown gợi ý mã cổ phiếu theo thời gian thực (real-time autocomplete).
+  6. Các bảng như modal chi tiết danh mục nhà đầu tư: Căn giữa (`text-center`) tất cả các cột giá trị, chỉ giữ cột đầu tiên căn trái (`text-left`).
+- **Branch**: `fix/project`
+- **Changes**:
+  - `frontend/src/components/market/market-stocks-beginner.tsx` & `.test.tsx`:
+    - Giới hạn so sánh tối đa 2 mã cổ phiếu (chặn thêm mã khi >= 2, cập nhật nhãn `Đã chọn X/2`, thông báo lỗi và bố cục 2 cột).
+  - `frontend/src/app/globals.css`:
+    - Đổi `.stock-comparison-dialog-header` từ `sticky` sang `relative` để cuộn tự nhiên theo nội dung modal, không bị đè hay cố định một chỗ.
+    - Chuyển outline focus toàn cục từ `#f59e0b` (vàng) sang `#0284c7` (sky), loại bỏ outline mặc định trên input/select/textarea.
+  - `frontend/src/components/ai-chat/widgets/stock-comparison-widget.tsx` & backend AI (`intent_parser.py`, `response_builder.py`, `ai_financial_service.py`):
+    - Đồng bộ giới hạn so sánh tối đa 2 mã cổ phiếu trong widget chatbox và phản hồi AI Assistant.
+  - `frontend/src/components/layout/user-header.tsx`:
+    - Thiết kế lại khung người dùng trên header: Avatar + cụm text gồm "Xin chào" chữ nhỏ ở trên và tên người dùng ở dưới.
+    - Loại bỏ nút dropdown mũi tên xổ xuống; bổ sung icon button Đăng xuất (Logout) trực tiếp ngay sát bên cạnh.
+  - `backend/app/infrastructure/db/migrations/0018_seed_user_own_thesis.sql` & `0019_clean_thesis_author_name.sql`:
+    - Xóa chuỗi hardcode `(Tôi)` khỏi seed data và thêm migration dọn sạch `(Tôi)` trong cơ sở dữ liệu.
+  - `frontend/src/components/community/thesis-arena.tsx`:
+    - Tự động tách bỏ `(Tôi)` và chỉ gắn hậu tố `(Tôi)` khi người dùng thực sự đã đăng nhập và là tác giả bài viết.
+    - Tự động chuyển ký tự mã cổ phiếu thành in hoa (UPPERCASE) khi nhập.
+    - Tích hợp autocomplete gợi ý mã cổ phiếu thời gian thực từ danh mục cổ phiếu Việt Nam với tên công ty và sàn niêm yết.
+  - `frontend/src/app/styles/community-theses.css`:
+    - Loại bỏ viền vàng khi focus ở các ô nhập trong modal, thay bằng viền xanh sky hiện đại (`border-color: #38bdf8`, subtle ring).
+  - `frontend/src/components/community/social-paper-trading.tsx`:
+    - Căn giữa (`text-center`) tất cả các cột số liệu/giá trị trong bảng nắm giữ và bảng nhật ký lệnh của modal danh mục đầu tư, giữ cột đầu tiên căn trái (`text-left`).
+- **Verification**:
+  - Full Quality Gate `./scripts/check-pr.ps1`: 6/6 bước Passed 100% (Whitespace clean, ESLint passed, tsc 0 errors, Vitest 192 passed, Ruff/Mypy passed, Pytest 179 passed).
+
 ## Cloud Deployment: Vercel (Frontend) + Render (Backend) + Neon.tech (PostgreSQL) 100% Free & Always-On 24/7 - 2026-11-09 (completed)
 - **User Request**:
   1. Xóa các code về Koyeb (do Koyeb đã bị Mistral mua lại và ngưng self-serve free).

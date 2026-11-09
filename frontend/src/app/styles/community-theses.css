@@ -99,13 +99,18 @@
   padding: 0.65rem 0.85rem;
   color: #f8fafc;
   font-size: 0.88rem;
-  outline: none;
+  outline: none !important;
 }
 
 .form-input:focus,
+.form-input:focus-visible,
 .form-select:focus,
-.form-textarea:focus {
-  border-color: #38e1b0;
+.form-select:focus-visible,
+.form-textarea:focus,
+.form-textarea:focus-visible {
+  outline: none !important;
+  border-color: #38bdf8;
+  box-shadow: 0 0 0 2px rgba(56, 189, 248, 0.25);
 }
 
 .anti-cheat-alert {

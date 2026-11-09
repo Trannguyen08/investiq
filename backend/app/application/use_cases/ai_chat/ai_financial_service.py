@@ -324,7 +324,7 @@ class AiFinancialService:
                     except Exception as exc:
                         logger.warning("Failed to fetch internal data for %s: %s", ticker, exc)
                 if is_comparison and len(stock_data) >= 2:
-                    self._recent_comparison_tickers = list(stock_data.keys())[:3]
+                    self._recent_comparison_tickers = list(stock_data.keys())[:2]
                 d_step.mark("ok", passed=True, note=f"resolved={len(stock_data)}")
 
         # Step 5: Knowledge retrieval (curated internal educational content & glossary)

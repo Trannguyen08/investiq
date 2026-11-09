@@ -654,9 +654,9 @@ def detect_intent(user_message: str) -> DetectedIntent:
     comparison_exceeded_limit = False
 
     if is_comparison:
-        if len(tickers) > 3:
+        if len(tickers) > 2:
             comparison_exceeded_limit = True
-            tickers = tickers[:3]
+            tickers = tickers[:2]
 
         if any(
             kw in query_folded
