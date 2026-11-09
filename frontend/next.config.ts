@@ -18,9 +18,23 @@ function loadEnvironment() {
 
 loadEnvironment();
 
+const rawBackend =
+  process.env.API_INTERNAL_BASE_URL ||
+  process.env.INTERNAL_API_URL ||
+  "http://127.0.0.1:8000";
+const backendOrigin = rawBackend.replace(/\/+$/, "").replace(/\/api$/, "");
+
 const nextConfig: NextConfig = {
   output: "standalone",
   poweredByHeader: false,
+  async rewrites() {
+    return [
+      {
+        source: "/api/:path*",
+        destination: `${backendOrigin}/api/:path*`,
+      },
+    ];
+  },
 };
 
 export default nextConfig;

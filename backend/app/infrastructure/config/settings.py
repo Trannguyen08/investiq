@@ -31,6 +31,7 @@ class Settings(BaseSettings):
     secret_key: str = "local-development-key-change-before-deployment"
     database_pool_min_size: int = 1
     database_pool_max_size: int = 5
+    auto_migrate: bool = False
     news_ingestion_enabled: bool = True
     events_ingestion_enabled: bool = True
     news_ingestion_max_age_hours: int = Field(default=24 * 90, ge=1, le=24 * 365)
