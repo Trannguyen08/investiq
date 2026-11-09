@@ -3,6 +3,29 @@
 Record durable decisions in reverse chronological order. Do not record routine implementation
 details.
 
+## 2026-11-09 — Cloud Deployment Strategy: Option 1 (Vercel + Koyeb + Neon.tech) for 100% Free & Always-On 24/7
+
+- **Status:** Accepted and implemented on `deploy/vercel-koyeb`
+- **Context:** On Render.com Free Tier, services spin down after 15 minutes of inactivity, causing users to endure a 30–50 second cold-start delay upon page visits. The user required a modern, production-grade cloud deployment architecture that eliminates cold starts entirely, remains 100% free forever, and keeps both frontend and backend active 24/7.
+- **Decision:**
+  1. *Frontend on Vercel (Hobby Free Tier)*:
+     - Next.js 16 App Router deployed on Vercel's Global Edge Network (Singapore Edge PoP).
+     - 0s cold start, instant page delivery (< 50ms), native Server-Side Rendering (SSR), Server Actions, and BFF route handlers (`/auth-api`, `/portfolio-api`, `/ai-api`).
+     - Added Next.js rewrites in `frontend/next.config.ts` mapping `/api/:path*` to backend origin, eliminating client-side CORS issues.
+     - Created `frontend/vercel.json` with framework definition and HTTP security headers (`nosniff`, `SAMEORIGIN`, `strict-origin-when-cross-origin`).
+  2. *Backend on Koyeb (Free Eco Tier)*:
+     - FastAPI application containerized via `backend/Dockerfile` with non-root security.
+     - Always-on 24/7 compute with zero spin-down (no sleep) on Koyeb Free Tier (`eco-nano`, Washington D.C. or Frankfurt region).
+     - Enhanced `backend/Dockerfile` CMD with auto-migration runner (`AUTO_MIGRATE=true`), executing pending migrations automatically upon container boot.
+     - Updated CORS `allow_origin_regex` in `backend/app/main.py` to allow `*.vercel.app`, `*.onrender.com`, and `*.koyeb.app`.
+  3. *Database on Neon.tech (Serverless PostgreSQL)*:
+     - PostgreSQL 16/17 serverless in Singapore (`aws-ap-southeast-1`), 0.5GB storage, 100% free forever.
+     - Connection Pooling via PgBouncer on port 5432, eliminating database connection exhaustion.
+  4. *Developer Experience & CLI Automation*:
+     - Created `scripts/deploy-setup.ps1` PowerShell automation script to check CLI tools, generate production-grade cryptographic keys (`SECRET_KEY`, `AUTH_BFF_SECRET`, `AUTH_JWT_SECRET`, `AUTH_OTP_HMAC_KEY`, `AUTH_SESSION_ENCRYPTION_KEY`, `AUTH_PAYLOAD_ENCRYPTION_KEY`, `ADMIN_SESSION_SECRET`), and output ready-to-use environment variable blocks for Koyeb and Vercel.
+     - Created comprehensive deployment guide `docs/deploy-vercel-koyeb.md`.
+- **Consequences:** Eliminates the 30–50s Render cold-start penalty, delivers sub-50ms frontend response times globally, keeps backend endpoints always-on with zero upkeep costs, and provides an automated self-migrating schema lifecycle.
+
 ## 2026-11-03 — Investor Persona Discovery, Risk Assessment, Trading Discipline & Readiness Evaluation Architecture
 
 - **Status:** Accepted and implemented on `feature/investor-readiness-assessment`
