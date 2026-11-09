@@ -22,7 +22,8 @@ import { StockGoldBankComparator } from "@/components/market/stock-gold-bank-com
 import { MARKET_OVERVIEW_INDEX_CHART_LIMITS, MarketCandlestickChart } from "@/components/market/market-candlestick-chart";
 import { useMarketStreamState } from "@/hooks/use-realtime-price";
 import { useVisibleFundamentals } from "@/hooks/use-visible-fundamentals";
-import type { InstrumentCollection, MarketCandle, MarketIndex, MarketInstrument, SectorCollection } from "@/types/market";
+import { getMarketGrowth } from "@/lib/api-client";
+import type { InstrumentCollection, MarketCandle, MarketIndex, MarketInstrument, SectorCollection, StockGrowthData } from "@/types/market";
 
 type StocksViewProps = {
   collection: InstrumentCollection;
@@ -40,6 +41,7 @@ type StocksViewProps = {
 type StockComparison = {
   instrument: MarketInstrument;
   candles: MarketCandle[];
+  growth?: StockGrowthData | null;
 };
 
 const screeningPresets: { label: string; metric: string; description: string; values: Record<string, string> }[] = [
@@ -84,6 +86,20 @@ function metricValue(value: string | null | undefined, suffix = "") {
   return value === null || value === undefined || value === "" ? "Chưa có" : `${value}${suffix}`;
 }
 
+function healthBadge(status?: string | null) {
+  switch (status) {
+    case "expanding":
+      return { label: "Bứt phá tăng trưởng", cls: "bg-emerald-950/80 text-emerald-300 border-emerald-800" };
+    case "stable":
+      return { label: "Tăng trưởng ổn định", cls: "bg-sky-950/80 text-sky-300 border-sky-800" };
+    case "accumulating":
+      return { label: "Dòng tiền tích lũy", cls: "bg-amber-950/80 text-amber-300 border-amber-800" };
+    case "cautious":
+    default:
+      return { label: "Theo dõi thận trọng", cls: "bg-rose-950/80 text-rose-300 border-rose-800" };
+  }
+}
+
 function StockComparisonDialog({
   open,
   onClose,
@@ -107,11 +123,31 @@ function StockComparisonDialog({
   const [comparisonMode, setComparisonMode] = useState<"peers" | "gold_bank">("peers");
   const [query, setQuery] = useState("");
   const [error, setError] = useState("");
+  const [growthMap, setGrowthMap] = useState<Record<string, StockGrowthData | null>>({});
   const normalizedQuery = query.trim().toUpperCase();
   const candidates = options
     .filter((item) => !symbols.includes(item.symbol))
     .filter((item) => !normalizedQuery || item.symbol.includes(normalizedQuery) || item.name.toLocaleUpperCase("vi-VN").includes(normalizedQuery))
     .slice(0, 8);
+
+  useEffect(() => {
+    if (!open) return;
+    symbols.forEach(async (sym) => {
+      const loaded = comparison.find((c) => c.instrument.symbol === sym);
+      if (loaded?.growth) {
+        setGrowthMap((prev) => ({ ...prev, [sym]: loaded.growth! }));
+      } else if (!growthMap[sym]) {
+        try {
+          const res = await getMarketGrowth(sym);
+          if (res?.data) {
+            setGrowthMap((prev) => ({ ...prev, [sym]: res.data }));
+          }
+        } catch {
+          // ignore error
+        }
+      }
+    });
+  }, [open, symbols, comparison, growthMap]);
 
   useEffect(() => {
     if (!open) return;
@@ -348,6 +384,58 @@ function StockComparisonDialog({
                           <p className="text-slate-400 m-0 mb-1">{situation.liquidity}</p>
                           <small className="text-[10px] text-slate-500 block">Quan sát từ snapshot hiện tại, không phải khuyến nghị đầu tư.</small>
                         </section>
+                        {/* Khối so sánh báo cáo tăng trưởng của từng mã */}
+                        {(() => {
+                          const g = growthMap[symbol] || loaded?.growth;
+                          const b = healthBadge(g?.health_status);
+                          const lastQ = g?.quarters?.[g.quarters.length - 1];
+                          return (
+                            <section className="comparison-growth bg-teal-950/20 p-3 rounded-lg border border-teal-900/40 text-xs">
+                              <div className="flex items-center justify-between mb-1.5">
+                                <h4 className="text-[11px] font-bold text-teal-300 m-0 uppercase tracking-wider">Báo cáo tăng trưởng</h4>
+                                {g && (
+                                  <span className={`px-2 py-0.5 rounded-md text-[10px] font-bold border ${b.cls}`}>
+                                    {b.label}
+                                  </span>
+                                )}
+                              </div>
+                              {g ? (
+                                <div className="space-y-1.5">
+                                  <strong className="text-slate-200 block text-[11px]">{g.health_title}</strong>
+                                  <div className="grid grid-cols-2 gap-1.5 text-[10px]">
+                                    <div className="bg-slate-900/80 p-1.5 rounded border border-slate-800">
+                                      <span className="text-slate-400 block">Vốn hóa 1T</span>
+                                      <strong className={g.market_cap_growth_1m?.startsWith("+") ? "text-emerald-400" : "text-slate-200"}>
+                                        {g.market_cap_growth_1m || "--"}
+                                      </strong>
+                                    </div>
+                                    <div className="bg-slate-900/80 p-1.5 rounded border border-slate-800">
+                                      <span className="text-slate-400 block">Vốn hóa 1N</span>
+                                      <strong className={g.market_cap_growth_1y?.startsWith("+") ? "text-emerald-400" : "text-slate-200"}>
+                                        {g.market_cap_growth_1y || "--"}
+                                      </strong>
+                                    </div>
+                                    <div className="bg-slate-900/80 p-1.5 rounded border border-slate-800">
+                                      <span className="text-slate-400 block">DT quý YoY</span>
+                                      <strong className="text-teal-300">{lastQ?.revenue_growth_yoy || "--"}</strong>
+                                    </div>
+                                    <div className="bg-slate-900/80 p-1.5 rounded border border-slate-800">
+                                      <span className="text-slate-400 block">LNST quý YoY</span>
+                                      <strong className="text-emerald-300">{lastQ?.profit_growth_yoy || "--"}</strong>
+                                    </div>
+                                  </div>
+                                  {g.profit_ttm && (
+                                    <p className="text-[10px] text-slate-400 m-0">
+                                      LNST TTM: <strong className="text-slate-200">{g.profit_ttm}</strong>
+                                    </p>
+                                  )}
+                                </div>
+                              ) : (
+                                <p className="text-[11px] text-slate-500 m-0 italic">Đang tải số liệu tăng trưởng BCTC...</p>
+                              )}
+                            </section>
+                          );
+                        })()}
                         <section className="comparison-ai bg-sky-950/30 p-3 rounded-lg border border-sky-900/40 text-xs">
                           <h4 className="text-[11px] font-semibold text-sky-400 mb-1 uppercase tracking-wider">Xu hướng phát triển (AI)</h4>
                           <strong className="text-slate-200 block mb-1">Chưa có đánh giá AI đã kiểm định</strong>
@@ -356,6 +444,126 @@ function StockComparisonDialog({
                       </article>
                     );
                   })}
+                </div>
+              )}
+              {symbols.length >= 2 && (
+                <div className="comparison-growth-matrix mt-5 bg-slate-950/80 border border-teal-900/40 rounded-xl p-4 shadow-xl">
+                  <div className="border-b border-slate-800 pb-2.5 mb-3 flex flex-wrap items-center justify-between gap-2">
+                    <div>
+                      <span className="text-[10px] font-bold text-teal-400 uppercase tracking-wider block">ĐỐI CHIẾU DOANH NGHIỆP</span>
+                      <h3 className="text-sm sm:text-base font-bold text-white m-0">Bảng so sánh Báo cáo tăng trưởng chi tiết</h3>
+                    </div>
+                    <span className="text-xs text-slate-400">Dữ liệu chuẩn hóa từ BCTC và biến động thị giá</span>
+                  </div>
+                  <div className="overflow-x-auto rounded-xl border border-slate-800">
+                    <table className="w-full text-xs text-left border-collapse">
+                      <thead>
+                        <tr className="bg-slate-900 border-b border-slate-800 text-slate-400 font-bold uppercase tracking-wider text-[10px]">
+                          <th className="py-2.5 px-3">Chỉ tiêu tăng trưởng</th>
+                          {symbols.map((sym) => (
+                            <th key={sym} className="py-2.5 px-3 font-extrabold text-teal-300 text-center text-xs">
+                              {sym}
+                            </th>
+                          ))}
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-slate-800/60 font-medium">
+                        <tr className="hover:bg-slate-850/40 transition">
+                          <td className="py-2 px-3 text-slate-400">Trạng thái sức khỏe</td>
+                          {symbols.map((sym) => {
+                            const g = growthMap[sym] || loadedBySymbol.get(sym)?.growth;
+                            const b = healthBadge(g?.health_status);
+                            return (
+                              <td key={sym} className="py-2 px-3 text-center">
+                                <span className={`inline-block px-2 py-0.5 rounded-md text-[10px] font-bold border ${b.cls}`}>
+                                  {b.label}
+                                </span>
+                              </td>
+                            );
+                          })}
+                        </tr>
+                        <tr className="hover:bg-slate-850/40 transition">
+                          <td className="py-2 px-3 text-slate-400">Tăng trưởng vốn hóa 1 tháng</td>
+                          {symbols.map((sym) => {
+                            const g = growthMap[sym] || loadedBySymbol.get(sym)?.growth;
+                            return (
+                              <td key={sym} className="py-2 px-3 text-center font-bold text-slate-200">
+                                {g?.market_cap_growth_1m || "--"}
+                              </td>
+                            );
+                          })}
+                        </tr>
+                        <tr className="hover:bg-slate-850/40 transition">
+                          <td className="py-2 px-3 text-slate-400">Tăng trưởng vốn hóa 3 tháng</td>
+                          {symbols.map((sym) => {
+                            const g = growthMap[sym] || loadedBySymbol.get(sym)?.growth;
+                            return (
+                              <td key={sym} className="py-2 px-3 text-center font-bold text-slate-200">
+                                {g?.market_cap_growth_3m || "--"}
+                              </td>
+                            );
+                          })}
+                        </tr>
+                        <tr className="hover:bg-slate-850/40 transition">
+                          <td className="py-2 px-3 text-slate-400">Tăng trưởng vốn hóa 1 năm</td>
+                          {symbols.map((sym) => {
+                            const g = growthMap[sym] || loadedBySymbol.get(sym)?.growth;
+                            return (
+                              <td key={sym} className="py-2 px-3 text-center font-bold text-slate-200">
+                                {g?.market_cap_growth_1y || "--"}
+                              </td>
+                            );
+                          })}
+                        </tr>
+                        <tr className="hover:bg-slate-850/40 transition">
+                          <td className="py-2 px-3 text-slate-400">Tăng trưởng Doanh thu quý (YoY)</td>
+                          {symbols.map((sym) => {
+                            const g = growthMap[sym] || loadedBySymbol.get(sym)?.growth;
+                            const q = g?.quarters?.[g.quarters.length - 1];
+                            return (
+                              <td key={sym} className="py-2 px-3 text-center font-bold text-teal-400">
+                                {q?.revenue_growth_yoy || "--"}
+                              </td>
+                            );
+                          })}
+                        </tr>
+                        <tr className="hover:bg-slate-850/40 transition">
+                          <td className="py-2 px-3 text-slate-400">Tăng trưởng LNST quý (YoY)</td>
+                          {symbols.map((sym) => {
+                            const g = growthMap[sym] || loadedBySymbol.get(sym)?.growth;
+                            const q = g?.quarters?.[g.quarters.length - 1];
+                            return (
+                              <td key={sym} className="py-2 px-3 text-center font-bold text-emerald-400">
+                                {q?.profit_growth_yoy || "--"}
+                              </td>
+                            );
+                          })}
+                        </tr>
+                        <tr className="hover:bg-slate-850/40 transition">
+                          <td className="py-2 px-3 text-slate-400">Quy mô LNST TTM</td>
+                          {symbols.map((sym) => {
+                            const g = growthMap[sym] || loadedBySymbol.get(sym)?.growth;
+                            return (
+                              <td key={sym} className="py-2 px-3 text-center font-semibold text-slate-200">
+                                {g?.profit_ttm || "--"}
+                              </td>
+                            );
+                          })}
+                        </tr>
+                        <tr className="hover:bg-slate-850/40 transition">
+                          <td className="py-2 px-3 text-slate-400">Khối lượng giao dịch vs TB20</td>
+                          {symbols.map((sym) => {
+                            const g = growthMap[sym] || loadedBySymbol.get(sym)?.growth;
+                            return (
+                              <td key={sym} className="py-2 px-3 text-center font-medium text-slate-300 text-[11px]">
+                                {g?.volume_growth_20d || "Ổn định"}
+                              </td>
+                            );
+                          })}
+                        </tr>
+                      </tbody>
+                    </table>
+                  </div>
                 </div>
               )}
             </section>

@@ -262,8 +262,21 @@ export function ProfitLossDialog({
                               max={holding.available_quantity}
                               step="1"
                               value={quantity}
+                              onKeyDown={(event) => {
+                                if (
+                                  ["Backspace", "Delete", "ArrowLeft", "ArrowRight", "Tab", "Home", "End", "Enter"].includes(event.key) ||
+                                  event.ctrlKey ||
+                                  event.metaKey
+                                ) {
+                                  return;
+                                }
+                                if (!/[\d]/.test(event.key)) {
+                                  event.preventDefault();
+                                }
+                              }}
                               onChange={(event) => {
-                                const next = Number(event.target.value);
+                                const clean = event.target.value.replace(/[^\d]/g, "");
+                                const next = Number(clean);
                                 setQuantities((current) => ({
                                   ...current,
                                   [holding.symbol]: Number.isInteger(next)

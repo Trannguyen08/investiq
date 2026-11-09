@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from datetime import datetime
-from typing import Literal
+from typing import Any, Literal
 
 from pydantic import BaseModel, ConfigDict, Field
 
@@ -14,10 +14,22 @@ class StrictModel(BaseModel):
 
 class PlacePaperOrderRequest(StrictModel):
     side: Literal["buy", "sell"]
-    order_type: Literal["LO"] = "LO"
+    order_type: Literal["LO", "MP", "ATO", "ATC"] = "LO"
     symbol: str = Field(min_length=1, max_length=24, pattern=r"^[A-Za-z0-9._-]+$")
     quantity: int = Field(ge=1, le=1_000_000)
     limit_price: str = Field(pattern=r"^(?:0|[1-9][0-9]{0,23})(?:\.[0-9]{1,8})?$")
+    execution_mode: Literal["instant", "exchange_hours"] | None = None
+    use_orderbook_depth: bool = False
+    strict_rules: bool = False
+    stop_loss_price: str | None = Field(
+        default=None,
+        pattern=r"^(?:0|[1-9][0-9]{0,23})(?:\.[0-9]{1,8})?$",
+    )
+    take_profit_price: str | None = Field(
+        default=None,
+        pattern=r"^(?:0|[1-9][0-9]{0,23})(?:\.[0-9]{1,8})?$",
+    )
+
 
 
 class PaperAccountResponse(StrictModel):
@@ -161,6 +173,7 @@ class PaperDashboardResponse(StrictModel):
     opportunities: list[PaperOpportunityResponse]
     assumptions: PaperAssumptionsResponse
     market: PaperMarketMetaResponse
+    exchange_simulation: dict[str, Any] | None = None
 
 
 class PlacePaperOrderResponse(StrictModel):
@@ -172,6 +185,36 @@ class PlacePaperOrderResponse(StrictModel):
 class CancelPaperOrderResponse(StrictModel):
     order: PaperOrderResponse
     data: PaperDashboardResponse
+
+
+class SetExecutionModeRequest(StrictModel):
+    execution_mode: Literal["instant", "exchange_hours"]
+
+
+class AdvanceSaleCashRequest(StrictModel):
+    amount: str | None = Field(
+        default=None,
+        pattern=r"^(?:0|[1-9][0-9]{0,23})(?:\.[0-9]{1,8})?$",
+    )
+
+
+class AdvanceSaleCashResponse(StrictModel):
+    advance: dict[str, Any]
+    data: PaperDashboardResponse
+
+
+class UpsertConditionalTriggerRequest(StrictModel):
+    symbol: str = Field(min_length=1, max_length=24, pattern=r"^[A-Za-z0-9._-]+$")
+    stop_loss_price: str | None = Field(
+        default=None,
+        pattern=r"^(?:0|[1-9][0-9]{0,23})(?:\.[0-9]{1,8})?$",
+    )
+    take_profit_price: str | None = Field(
+        default=None,
+        pattern=r"^(?:0|[1-9][0-9]{0,23})(?:\.[0-9]{1,8})?$",
+    )
+    quantity: int | None = Field(default=None, ge=1, le=1_000_000)
+
 
 
 class PaperReportSubscriptionResponse(StrictModel):

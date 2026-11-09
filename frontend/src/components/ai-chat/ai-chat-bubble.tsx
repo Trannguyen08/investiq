@@ -66,7 +66,7 @@ function HighlightedText({ text }: { text: string }) {
   // Use negative lookbehind (?<![A-Za-zÀ-ỹ0-9]) and negative lookahead (?![A-Za-zÀ-ỹ0-9])
   // so tokens like "VN30 đạt" or "1,733.02 điểm" are never partially split into "[30 đ] ạt" or "[1,733.02 đ] iểm".
   const regex =
-    /(?<![A-Za-zÀ-ỹ0-9])([+-]?\d+(?:[.,]\d+)?%|\d+\s*:\s*\d+(?:[.,]\d+)?|\d+(?:[.,]\d{3})*(?:[.,]\d+)?\s*(?:điểm|nghìn\s*tỷ\s*đồng|nghìn\s*tỷ|tỷ\s*đồng|tỷ\s*đ|triệu\s*cp|đ\s*\/\s*cp|đ)|\d+(?:\.\d+)?x|RSI\s*\(\d+\)|MA\d+)(?![A-Za-zÀ-ỹ0-9])/g;
+    /(?<![A-Za-zÀ-ỹ0-9])([+-]?\d+(?:[.,]\d+)?%|\d+\s*:\s*\d+(?:[.,]\d+)?|\d+(?:[.,]\d{3})*(?:[.,]\d+)?\s*(?:điểm|nghìn\s*tỷ\s*đồng|nghìn\s*tỷ\s*₫|nghìn\s*tỷ|tỷ\s*đồng|tỷ\s*₫|tỷ\s*USD|triệu\s*USD|tỷ\s*đ|triệu\s*cp|đ\s*\/\s*cp|đ)|\d+(?:\.\d+)?x|RSI\s*\(\d+\)|MA\d+)(?![A-Za-zÀ-ỹ0-9])/g;
   const parts = text.split(regex);
 
   return (
@@ -103,9 +103,9 @@ function HighlightedText({ text }: { text: string }) {
           );
         }
 
-        // Price / Value in VND or Index Points (1,000 đ/cp, 19,250 đ, 15.2 tỷ đ, 1,733.02 điểm)
+        // Price / Value in VND or Index Points (1,000 đ/cp, 19,250 đ, 15.2 tỷ đ, 1,733.02 điểm, 4.5 tỷ USD)
         if (
-          /^\d+(?:[.,]\d{3})*(?:[.,]\d+)?\s*(?:điểm|nghìn\s*tỷ\s*đồng|nghìn\s*tỷ|tỷ\s*đồng|tỷ\s*đ|triệu\s*cp|đ\s*\/\s*cp|đ)$/.test(
+          /^\d+(?:[.,]\d{3})*(?:[.,]\d+)?\s*(?:điểm|nghìn\s*tỷ\s*đồng|nghìn\s*tỷ\s*₫|nghìn\s*tỷ|tỷ\s*đồng|tỷ\s*₫|tỷ\s*USD|triệu\s*USD|tỷ\s*đ|triệu\s*cp|đ\s*\/\s*cp|đ)$/.test(
             part
           )
         ) {
@@ -172,6 +172,12 @@ function FormattedContent({
     .replace(/(Lịch sự kiện[^\n]+:)/g, "$1\n\n")
     .replace(/(Điểm tin chứng khoán[^\n]+)/g, "$1\n\n")
     .replace(/(Điểm tin thị trường hôm nay:[^\n]+)/g, "$1\n\n")
+    .replace(/(Thông tin doanh nhân:[^\n]+)/g, "$1\n\n")
+    .replace(/(Thông tin doanh nhân & lãnh đạo:[^\n]+)/g, "$1\n\n")
+    .replace(/(Thông tin doanh nghiệp & Lãnh đạo:[^\n]+)/g, "$1\n\n")
+    .replace(/(Hệ sinh thái doanh nghiệp:[^\n]+)/g, "$1\n\n")
+    .replace(/(Hệ sinh thái các tập đoàn lớn[^\n]+:)/g, "$1\n\n")
+    .replace(/(Top doanh nhân & tỷ phú nổi bật[^\n]+:)/g, "$1\n\n")
     .replace(/(Các cổ phiếu rổ VN30[^\n]+:)/g, "$1\n\n")
     .replace(/(Top cổ phiếu[^\n]+:)/g, "$1\n\n")
     .replace(/(Thống kê giao dịch khối ngoại hôm nay:)/g, "$1\n\n")
@@ -205,6 +211,13 @@ function FormattedContent({
           trimmed.startsWith("Điểm tin thị trường hôm nay:") ||
           trimmed.startsWith("Điểm tin chứng khoán") ||
           trimmed.startsWith("Tin tức nổi bật hôm nay:") ||
+          trimmed.startsWith("Thông tin doanh nhân:") ||
+          trimmed.startsWith("Thông tin doanh nhân & lãnh đạo:") ||
+          trimmed.startsWith("Thông tin doanh nghiệp & Lãnh đạo:") ||
+          trimmed.startsWith("Hệ sinh thái doanh nghiệp:") ||
+          trimmed.startsWith("Hệ sinh thái các tập đoàn") ||
+          trimmed.startsWith("Top doanh nhân") ||
+          trimmed.startsWith("Top tỷ phú") ||
           trimmed.startsWith("Các cổ phiếu rổ VN30") ||
           trimmed.startsWith("Top cổ phiếu") ||
           trimmed.startsWith("Thống kê giao dịch khối ngoại hôm nay:") ||

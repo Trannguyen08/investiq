@@ -196,8 +196,10 @@ export function ThesisArena({ initialTheses = [], initialLeaderboard = [] }: The
       return;
     }
 
-    const targetPrice = Number(formTargetPrice);
-    const stopLossPrice = Number(formStopLossPrice);
+    const cleanTarget = formTargetPrice.replace(/[^\d]/g, "");
+    const cleanStopLoss = formStopLossPrice.replace(/[^\d]/g, "");
+    const targetPrice = Number(cleanTarget);
+    const stopLossPrice = Number(cleanStopLoss);
 
     if (!formSymbol.trim()) {
       setMessage({ text: "Vui lòng nhập mã cổ phiếu.", type: "error" });
@@ -209,6 +211,14 @@ export function ThesisArena({ initialTheses = [], initialLeaderboard = [] }: The
     }
     if (Number.isNaN(stopLossPrice) || stopLossPrice <= 0) {
       setMessage({ text: "Giá cắt lỗ phải là số dương lớn hơn 0.", type: "error" });
+      return;
+    }
+    if (formStance === "bullish" && stopLossPrice >= targetPrice) {
+      setMessage({ text: "Giá cắt lỗ an toàn phải nhỏ hơn giá mục tiêu kỳ vọng.", type: "error" });
+      return;
+    }
+    if (formStance === "bearish" && stopLossPrice <= targetPrice) {
+      setMessage({ text: "Với xu hướng giảm giá, giá cắt lỗ phải lớn hơn giá mục tiêu.", type: "error" });
       return;
     }
     if (formTitle.trim().length < 5) {
@@ -645,13 +655,24 @@ export function ThesisArena({ initialTheses = [], initialLeaderboard = [] }: The
                   <label htmlFor="formTargetPrice">Giá mục tiêu (VND) *</label>
                   <input
                     id="formTargetPrice"
-                    type="number"
+                    type="text"
+                    inputMode="numeric"
                     required
-                    min="100"
-                    step="100"
-                    placeholder="VD: 32000"
-                    value={formTargetPrice}
-                    onChange={(e) => setFormTargetPrice(e.target.value)}
+                    placeholder="VD: 32.000"
+                    value={formTargetPrice ? Number(formTargetPrice.replace(/[^\d]/g, "")).toLocaleString("vi-VN") : ""}
+                    onKeyDown={(event) => {
+                      if (
+                        ["Backspace", "Delete", "ArrowLeft", "ArrowRight", "Tab", "Home", "End", "Enter"].includes(event.key) ||
+                        event.ctrlKey ||
+                        event.metaKey
+                      ) {
+                        return;
+                      }
+                      if (!/[\d]/.test(event.key)) {
+                        event.preventDefault();
+                      }
+                    }}
+                    onChange={(e) => setFormTargetPrice(e.target.value.replace(/[^\d]/g, ""))}
                     className="form-input"
                   />
                 </div>
@@ -660,13 +681,24 @@ export function ThesisArena({ initialTheses = [], initialLeaderboard = [] }: The
                   <label htmlFor="formStopLossPrice">Giá cắt lỗ an toàn (VND) *</label>
                   <input
                     id="formStopLossPrice"
-                    type="number"
+                    type="text"
+                    inputMode="numeric"
                     required
-                    min="100"
-                    step="100"
-                    placeholder="VD: 26000"
-                    value={formStopLossPrice}
-                    onChange={(e) => setFormStopLossPrice(e.target.value)}
+                    placeholder="VD: 26.000"
+                    value={formStopLossPrice ? Number(formStopLossPrice.replace(/[^\d]/g, "")).toLocaleString("vi-VN") : ""}
+                    onKeyDown={(event) => {
+                      if (
+                        ["Backspace", "Delete", "ArrowLeft", "ArrowRight", "Tab", "Home", "End", "Enter"].includes(event.key) ||
+                        event.ctrlKey ||
+                        event.metaKey
+                      ) {
+                        return;
+                      }
+                      if (!/[\d]/.test(event.key)) {
+                        event.preventDefault();
+                      }
+                    }}
+                    onChange={(e) => setFormStopLossPrice(e.target.value.replace(/[^\d]/g, ""))}
                     className="form-input"
                   />
                 </div>

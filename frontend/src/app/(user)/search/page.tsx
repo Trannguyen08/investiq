@@ -71,10 +71,26 @@ type GeneralResult = {
   category: string;
 };
 
+type StockSuggestion = {
+  symbol: string;
+  name: string;
+  sector: string;
+  exchange: string;
+};
+
 type SearchResponse =
   | { type: "stock"; stock: StockData }
-  | { type: "general"; query: string; results: GeneralResult[] }
-  | { type: "empty"; message: string };
+  | {
+      type: "general";
+      query: string;
+      results: GeneralResult[];
+      suggestions?: StockSuggestion[];
+    }
+  | {
+      type: "empty";
+      message: string;
+      suggestions?: StockSuggestion[];
+    };
 
 function getPriceColorClass(price: string, ref: string, ceil = "", floor = ""): string {
   const p = Number(price);
@@ -531,50 +547,132 @@ function SearchContent() {
             </div>
           </div>
         ) : response?.type === "general" ? (
-          <div className="bg-slate-900/90 border border-slate-800 rounded-2xl p-6 shadow-xl space-y-4">
-            <h2 className="text-base font-bold text-white pb-3 border-b border-slate-800">
-              Kết quả tìm kiếm phù hợp ({response.results.length})
-            </h2>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-              {response.results.map((res, index) => (
-                <article
-                  key={index}
-                  className="p-4 rounded-xl bg-slate-950/70 border border-slate-800/80 hover:border-slate-700 transition flex flex-col justify-between"
-                >
-                  <div>
-                    <div className="flex items-center gap-2 mb-1.5">
-                      <span className="px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-wider bg-sky-950 text-sky-400 border border-sky-800">
-                        {res.category}
+          <div className="space-y-6">
+            {response.suggestions && response.suggestions.length > 0 && (
+              <div className="bg-slate-900/90 border border-amber-500/30 rounded-2xl p-6 shadow-xl space-y-4">
+                <div>
+                  <h2 className="text-base font-bold text-amber-400 m-0">
+                    Không tìm thấy mã cổ phiếu &ldquo;{currentQuery.toUpperCase()}&rdquo; — Gợi ý mã gần đúng
+                  </h2>
+                  <p className="text-xs text-slate-400 mt-1 m-0">
+                    Có phải bạn đang muốn tra cứu một trong các mã cổ phiếu niêm yết sau:
+                  </p>
+                </div>
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
+                  {response.suggestions.map((sug) => (
+                    <Link
+                      key={sug.symbol}
+                      href={`/search?q=${encodeURIComponent(sug.symbol)}`}
+                      className="p-4 rounded-xl bg-slate-950/80 border border-slate-800 hover:border-sky-500/60 transition flex flex-col justify-between group"
+                    >
+                      <div>
+                        <div className="flex items-center justify-between gap-2 mb-1.5">
+                          <span className="px-2 py-0.5 rounded text-xs font-extrabold bg-sky-500/20 text-sky-300 border border-sky-500/30">
+                            {sug.symbol}
+                          </span>
+                          <span className="text-[10px] font-semibold text-slate-400">
+                            {sug.exchange}
+                          </span>
+                        </div>
+                        <p className="text-xs font-bold text-slate-100 group-hover:text-sky-400 transition m-0 mb-1">
+                          {sug.name}
+                        </p>
+                        <p className="text-[11px] text-slate-400 m-0">
+                          Ngành: {sug.sector}
+                        </p>
+                      </div>
+                      <span className="text-[11px] font-semibold text-sky-400 mt-3 inline-block">
+                        Tra cứu mã {sug.symbol} →
                       </span>
-                    </div>
-                    <h3 className="text-sm font-bold text-white mb-1">
-                      <Link href={res.url} className="hover:text-sky-400 transition">
-                        {res.title}
-                      </Link>
-                    </h3>
-                    <p className="text-xs text-slate-300 leading-relaxed mb-3">
-                      {res.snippet}
-                    </p>
-                  </div>
-                  <Link
-                    href={res.url}
-                    className="text-xs font-semibold text-sky-400 hover:text-sky-300 inline-flex items-center gap-1 self-start"
+                    </Link>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            <div className="bg-slate-900/90 border border-slate-800 rounded-2xl p-6 shadow-xl space-y-4">
+              <h2 className="text-base font-bold text-white pb-3 border-b border-slate-800">
+                Kết quả tìm kiếm phù hợp ({response.results.length})
+              </h2>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                {response.results.map((res, index) => (
+                  <article
+                    key={index}
+                    className="p-4 rounded-xl bg-slate-950/70 border border-slate-800/80 hover:border-slate-700 transition flex flex-col justify-between"
                   >
-                    Truy cập ngay →
-                  </Link>
-                </article>
-              ))}
+                    <div>
+                      <div className="flex items-center gap-2 mb-1.5">
+                        <span className="px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-wider bg-sky-950 text-sky-400 border border-sky-800">
+                          {res.category}
+                        </span>
+                      </div>
+                      <h3 className="text-sm font-bold text-white mb-1">
+                        <Link href={res.url} className="hover:text-sky-400 transition">
+                          {res.title}
+                        </Link>
+                      </h3>
+                      <p className="text-xs text-slate-300 leading-relaxed mb-3">
+                        {res.snippet}
+                      </p>
+                    </div>
+                    <Link
+                      href={res.url}
+                      className="text-xs font-semibold text-sky-400 hover:text-sky-300 inline-flex items-center gap-1 self-start"
+                    >
+                      Truy cập ngay →
+                    </Link>
+                  </article>
+                ))}
+              </div>
             </div>
           </div>
         ) : (
-          <div className="bg-slate-900/90 border border-slate-800 rounded-2xl p-12 text-center shadow-xl">
-            <span className="text-4xl block mb-3" aria-hidden="true">🔍</span>
-            <h2 className="text-base sm:text-lg font-bold text-white mb-2">
-              Không tìm thấy thông tin
-            </h2>
-            <p className="text-xs sm:text-sm text-slate-400 max-w-md mx-auto leading-relaxed">
-              Không tìm thấy mã cổ phiếu, bài học hay nội dung nào khớp với từ khóa &ldquo;{currentQuery}&rdquo;. Vui lòng kiểm tra lại chính tả hoặc thử tìm một mã khác trên thanh tìm kiếm header.
-            </p>
+          <div className="bg-slate-900/90 border border-slate-800 rounded-2xl p-8 sm:p-10 shadow-xl space-y-6">
+            <div className="text-center">
+              <h2 className="text-base sm:text-lg font-bold text-white mb-2">
+                Không tìm thấy mã cổ phiếu &ldquo;{currentQuery.toUpperCase()}&rdquo;
+              </h2>
+              <p className="text-xs sm:text-sm text-slate-400 max-w-md mx-auto leading-relaxed">
+                Không tìm thấy mã cổ phiếu, bài học hay nội dung nào khớp chính xác với từ khóa &ldquo;{currentQuery}&rdquo;.
+              </p>
+            </div>
+
+            {response?.suggestions && response.suggestions.length > 0 && (
+              <div className="pt-4 border-t border-slate-800/80 space-y-3">
+                <p className="text-xs font-bold text-amber-400 text-center uppercase tracking-wider m-0">
+                  Có phải bạn muốn tìm một trong các mã cổ phiếu gần đúng sau:
+                </p>
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 max-w-4xl mx-auto">
+                  {response.suggestions.map((sug) => (
+                    <Link
+                      key={sug.symbol}
+                      href={`/search?q=${encodeURIComponent(sug.symbol)}`}
+                      className="p-4 rounded-xl bg-slate-950/80 border border-slate-800 hover:border-sky-500/60 transition flex flex-col justify-between text-left group"
+                    >
+                      <div>
+                        <div className="flex items-center justify-between gap-2 mb-1.5">
+                          <span className="px-2 py-0.5 rounded text-xs font-extrabold bg-sky-500/20 text-sky-300 border border-sky-500/30">
+                            {sug.symbol}
+                          </span>
+                          <span className="text-[10px] font-semibold text-slate-400">
+                            {sug.exchange}
+                          </span>
+                        </div>
+                        <p className="text-xs font-bold text-slate-100 group-hover:text-sky-400 transition m-0 mb-1">
+                          {sug.name}
+                        </p>
+                        <p className="text-[11px] text-slate-400 m-0">
+                          Ngành: {sug.sector}
+                        </p>
+                      </div>
+                      <span className="text-[11px] font-semibold text-sky-400 mt-3 inline-block">
+                        Xem báo cáo {sug.symbol} →
+                      </span>
+                    </Link>
+                  ))}
+                </div>
+              </div>
+            )}
           </div>
         )}
       </div>

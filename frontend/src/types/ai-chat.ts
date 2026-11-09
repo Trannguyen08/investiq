@@ -31,10 +31,24 @@ export type StockComparisonItem = {
   roe?: string | null;
   pros: string[];
   cons: string[];
+  health_status?: "expanding" | "stable" | "accumulating" | "cautious" | null;
+  health_title?: string | null;
+  health_summary?: string | null;
+  market_cap_growth_1m?: string | null;
+  market_cap_growth_3m?: string | null;
+  market_cap_growth_6m?: string | null;
+  market_cap_growth_1y?: string | null;
+  revenue_growth_yoy?: string | null;
+  profit_growth_yoy?: string | null;
+  revenue_ttm?: string | null;
+  profit_ttm?: string | null;
+  volume_growth_20d?: string | null;
+  growth_insights?: string[];
 };
 
 export type StockComparisonWidgetData = {
   title: string;
+  mode?: "metrics" | "growth" | "both";
   items: StockComparisonItem[];
   summary_verdict: string;
 };

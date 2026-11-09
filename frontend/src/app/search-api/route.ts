@@ -8,6 +8,7 @@ import {
   getNews,
   getRelatedStockNews,
 } from "@/lib/api-client";
+import { matchStockQuery } from "@/lib/ticker-matcher";
 
 export const dynamic = "force-dynamic";
 
@@ -251,17 +252,21 @@ export async function GET(request: Request) {
     }
   }
 
+  const { closestMatches } = matchStockQuery(q, 4);
+
   if (results.length > 0) {
     return NextResponse.json({
       type: "general",
       query: q,
       results: results.slice(0, 6),
+      suggestions: closestMatches,
     });
   }
 
-  // Không có thông tin
+  // Không có thông tin trực tiếp, trả về kèm gợi ý mã gần đúng nếu có
   return NextResponse.json({
     type: "empty",
     message: "Không có thông tin phù hợp với từ khóa này.",
+    suggestions: closestMatches,
   });
 }

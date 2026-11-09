@@ -54,13 +54,14 @@ from app.infrastructure.external.crawlers.dividend_crawler import get_dividend_c
 
 logger = logging.getLogger(__name__)
 
-_CACHE_KEY_PREFIX = "ai:chat:v6"
+_CACHE_KEY_PREFIX = "ai:chat:v7"
 
 _CACHE_TTL_SECONDS: dict[AiIntent, int] = {
     "comparison": 60,
     "dividend": 3600,
     "stock_analysis": 60,
     "market_overview": 60,
+    "leader": 12 * 3600,
     "news": 120,
     "knowledge": 6 * 3600,
     "external": 30 * 60,
@@ -97,6 +98,7 @@ class AiFinancialService:
         self._news_repo = news_repo
         self._cache = cache
         self._metrics = metrics or AiMetricsRegistry()
+        self._recent_comparison_tickers: list[str] = []
 
     @property
     def metrics(self) -> AiMetricsRegistry:
@@ -164,28 +166,71 @@ class AiFinancialService:
         with trace.step("intent_detection") as i_step:
             parsed_intent = detect_intent(user_message)
             tickers = parsed_intent.tickers
+            invalid_tickers = list(parsed_intent.invalid_tickers)
+            comparison_mode = parsed_intent.comparison_mode or "ask"
+            comparison_exceeded_limit = parsed_intent.comparison_exceeded_limit
+            is_leader = parsed_intent.is_leader
+            leader_id = parsed_intent.leader_id
+            leader_name = parsed_intent.leader_name
+            is_leader_rankings = parsed_intent.is_leader_rankings
+            is_ecosystem = parsed_intent.is_ecosystem
+            ecosystem_id = parsed_intent.ecosystem_id
             is_dividend = parsed_intent.is_dividend
             is_news = parsed_intent.is_news
             is_comparison = parsed_intent.is_comparison
             is_gold_bank = parsed_intent.is_gold_bank
             is_forensics = parsed_intent.is_forensics
             is_market_general = parsed_intent.is_market_general
+
+            # Maintain recent comparison tickers for follow-up criteria prompts
+            if is_comparison and not tickers and self._recent_comparison_tickers:
+                tickers = list(self._recent_comparison_tickers)
+
             i_step.mark(
                 "ok",
                 passed=True,
                 note=(
-                    f"tickers={len(tickers)} dividend={is_dividend} news={is_news} "
-                    f"comparison={is_comparison} forensics={is_forensics} market={is_market_general}"
+                    f"tickers={len(tickers)} leader={is_leader} eco={is_ecosystem} dividend={is_dividend} news={is_news} "
+                    f"comparison={is_comparison} mode={comparison_mode} forensics={is_forensics} market={is_market_general}"
                 ),
             )
 
-        # Step 4: Internal data retrieval (market quotes, candles, forensics, dividends/events, or news)
+        # Step 4: Internal data retrieval (market quotes, candles, forensics, dividends/events, news, or leaders)
         stock_data: dict[str, Any] = {}
         news_articles: list[dict[str, Any]] = []
         dividend_events: list[dict[str, Any]] = []
         market_events: list[dict[str, Any]] = []
+        leader_profile: Any = None
         with trace.step("internal_data_retrieval") as d_step:
-            if is_dividend:
+            if is_leader:
+                try:
+                    from app.infrastructure.external.crawlers.leader_crawler import (
+                        get_leader_crawler,
+                    )
+
+                    crawler = get_leader_crawler()
+                    lookup_key = leader_id or leader_name or user_message
+                    leader_profile = crawler.find_leader(lookup_key)
+                    if not leader_profile and tickers:
+                        leader_profile = crawler.find_leader(tickers[0])
+                    if leader_profile and not tickers and leader_profile.symbols:
+                        tickers = list(leader_profile.symbols)
+                except Exception as exc:
+                    logger.warning("Failed to lookup leader profile: %s", exc)
+
+                for ticker in tickers[:3]:
+                    try:
+                        inst = self._market.instrument(ticker, include_fundamentals=False)
+                        if inst:
+                            stock_data[ticker] = {"instrument": inst}
+                    except Exception as exc:
+                        logger.warning("Failed to fetch leader ticker %s: %s", ticker, exc)
+                d_step.mark(
+                    "ok",
+                    passed=True,
+                    note=f"leader={getattr(leader_profile, 'full_name', None)} tickers={tickers}",
+                )
+            elif is_dividend:
                 try:
                     crawler = get_dividend_crawler()
                     if tickers:
@@ -194,7 +239,7 @@ class AiFinancialService:
                         dividend_events = crawler.get_symbol_dividends(target_sym)
                         if inst:
                             stock_data[target_sym] = {"instrument": inst}
-                        elif not dividend_events:
+                        elif not dividend_events and target_sym not in invalid_tickers:
                             # Token is not a valid listed instrument or dividend symbol; fall back to market calendar
                             tickers = []
                     if not tickers:
@@ -263,14 +308,23 @@ class AiFinancialService:
                                 if isinstance(forensics_res, dict)
                                 else {}
                             )
+                            growth_res = self._market.growth(ticker)
+                            growth = (
+                                growth_res.get("data", {})
+                                if isinstance(growth_res, dict)
+                                else {}
+                            )
                             stock_data[ticker] = {
                                 "instrument": inst,
                                 "candles_count": len(candle_list),
                                 "closes": closes,
                                 "forensics": forensics,
+                                "growth": growth,
                             }
                     except Exception as exc:
                         logger.warning("Failed to fetch internal data for %s: %s", ticker, exc)
+                if is_comparison and len(stock_data) >= 2:
+                    self._recent_comparison_tickers = list(stock_data.keys())[:3]
                 d_step.mark("ok", passed=True, note=f"resolved={len(stock_data)}")
 
         # Step 5: Knowledge retrieval (curated internal educational content & glossary)
@@ -279,9 +333,11 @@ class AiFinancialService:
             if (
                 self._knowledge
                 and not stock_data
+                and not invalid_tickers
                 and not is_market_general
                 and not is_news
                 and not is_dividend
+                and not is_leader
             ):
                 knowledge_hits = self._knowledge.search(user_message, limit=2)
                 k_step.mark("ok", passed=True, note=f"hits={len(knowledge_hits)}")
@@ -291,7 +347,11 @@ class AiFinancialService:
         # Step 6: External search (crawled web data fallback ONLY if internal data/knowledge empty)
         external_snippets: list[dict[str, str]] = []
         with trace.step("external_search") as s_step:
-            if is_dividend and not dividend_events and not market_events:
+            if is_leader and not leader_profile and not is_leader_rankings:
+                search_query = f"doanh nhân {leader_name or user_message} tiểu sử sự nghiệp"
+                external_snippets = await self._search_external_info(search_query)
+                s_step.mark("ok", passed=True, note=f"leader_snippets={len(external_snippets)}")
+            elif is_dividend and not dividend_events and not market_events and not invalid_tickers:
                 search_query = (
                     f"lịch chia cổ tức {tickers[0]} mới nhất"
                     if tickers
@@ -299,7 +359,7 @@ class AiFinancialService:
                 )
                 external_snippets = await self._search_external_info(search_query)
                 s_step.mark("ok", passed=True, note=f"dividend_snippets={len(external_snippets)}")
-            elif is_news and not news_articles:
+            elif is_news and not news_articles and not invalid_tickers:
                 search_query = (
                     f"tin tức cổ phiếu {tickers[0]} mới nhất"
                     if tickers
@@ -309,9 +369,11 @@ class AiFinancialService:
                 s_step.mark("ok", passed=True, note=f"news_snippets={len(external_snippets)}")
             elif (
                 not stock_data
+                and not invalid_tickers
                 and not is_market_general
                 and not is_news
                 and not is_dividend
+                and not is_leader
                 and not knowledge_hits
             ):
                 external_snippets = await self._search_external_info(user_message)
@@ -321,13 +383,15 @@ class AiFinancialService:
 
         # Step 7: Response generation
         intent: AiIntent = "general"
-        if is_dividend:
+        if is_leader:
+            intent = "leader"
+        elif is_dividend:
             intent = "dividend"
         elif is_news:
             intent = "news"
         elif is_comparison or len(stock_data) >= 2:
             intent = "comparison"
-        elif len(stock_data) == 1:
+        elif len(stock_data) == 1 or invalid_tickers:
             intent = "stock_analysis"
         elif is_market_general:
             intent = "market_overview"
@@ -352,6 +416,16 @@ class AiFinancialService:
                 is_market_general=is_market_general,
                 is_news=is_news,
                 is_dividend=is_dividend,
+                is_leader=is_leader,
+                leader_profile=leader_profile,
+                leader_id=leader_id,
+                leader_name=leader_name,
+                is_leader_rankings=is_leader_rankings,
+                is_ecosystem=is_ecosystem,
+                ecosystem_id=ecosystem_id,
+                comparison_mode=comparison_mode,
+                exceeded_limit=comparison_exceeded_limit,
+                invalid_tickers=invalid_tickers,
             )
             gen_step.mark("ok", passed=True, note=f"intent={intent}")
 
@@ -372,7 +446,7 @@ class AiFinancialService:
             evaluation = evaluate_response(
                 content=content_safe,
                 blocked=False,
-                requested_tickers=tickers,
+                requested_tickers=[t for t in tickers if t in stock_data],
                 resolved_tickers=list(stock_data.keys()),
                 external_urls=external_urls,
                 redactions=redactions,
@@ -439,6 +513,16 @@ class AiFinancialService:
         is_market_general: bool,
         is_news: bool,
         is_dividend: bool,
+        is_leader: bool = False,
+        leader_profile: Any = None,
+        leader_id: str | None = None,
+        leader_name: str | None = None,
+        is_leader_rankings: bool = False,
+        is_ecosystem: bool = False,
+        ecosystem_id: str | None = None,
+        comparison_mode: str = "ask",
+        exceeded_limit: bool = False,
+        invalid_tickers: list[str] | None = None,
     ) -> dict[str, Any]:
         """Synthesize structured response and widgets via ``response_builder``."""
         return generate_structured_response(
@@ -457,4 +541,14 @@ class AiFinancialService:
             is_market_general=is_market_general,
             is_news=is_news,
             is_dividend=is_dividend,
+            is_leader=is_leader,
+            leader_profile=leader_profile,
+            leader_id=leader_id,
+            leader_name=leader_name,
+            is_leader_rankings=is_leader_rankings,
+            is_ecosystem=is_ecosystem,
+            ecosystem_id=ecosystem_id,
+            comparison_mode=comparison_mode,
+            exceeded_limit=exceeded_limit,
+            invalid_tickers=invalid_tickers or [],
         )

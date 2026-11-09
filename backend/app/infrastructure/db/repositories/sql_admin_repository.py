@@ -26,6 +26,7 @@ from app.schemas.admin_ops import (
     AssetAllocationSummary,
     ExchangeLiquidityItem,
     PortfolioHoldingItem,
+    PortfolioOrderItem,
     PortfolioTradeItem,
     RecentAuditItem,
     SectorThesisItem,
@@ -572,11 +573,100 @@ class SqlAdminRepository:
                 (portfolio_id,),
             ).fetchall()
 
+            orders_rows = cur.execute(
+                """
+                SELECT
+                    id::text,
+                    symbol,
+                    side,
+                    order_type,
+                    status,
+                    quantity,
+                    filled_quantity,
+                    limit_price::float,
+                    reserved_cash::float,
+                    reserved_quantity,
+                    created_at::text,
+                    expires_at::text,
+                    cancelled_at::text
+                FROM paper_orders
+                WHERE portfolio_id = %s
+                ORDER BY created_at DESC
+                LIMIT 50;
+                """,
+                (portfolio_id,),
+            ).fetchall()
+
             return AdminPortfolioDetail(
                 portfolio=AdminPortfolioItem(**portfolio_row),
                 holdings=[PortfolioHoldingItem(**r) for r in holdings_rows],
                 recent_trades=[PortfolioTradeItem(**r) for r in trades_rows],
+                orders=[PortfolioOrderItem(**r) for r in orders_rows],
             )
+
+    def cancel_paper_order(
+        self,
+        portfolio_id: str,
+        order_id: str,
+        actor_id: str,
+        reason: str,
+        request_id: str = "unknown",
+    ) -> tuple[bool, str]:
+        with (
+            self._pool.connection() as conn,
+            conn.transaction(),
+            conn.cursor(row_factory=dict_row) as cur,
+        ):
+            order_row = cur.execute(
+                """
+                SELECT id::text, symbol, side, order_type, status, quantity, limit_price
+                FROM paper_orders
+                WHERE id = %s AND portfolio_id = %s
+                FOR UPDATE;
+                """,
+                (order_id, portfolio_id),
+            ).fetchone()
+            if not order_row:
+                return False, "Không tìm thấy lệnh trong danh mục."
+            if order_row["status"] not in ("pending", "open"):
+                return False, f"Không thể hủy lệnh ở trạng thái '{order_row['status']}'."
+
+            cur.execute(
+                """
+                UPDATE paper_orders
+                SET status = 'cancelled',
+                    cancelled_at = now(),
+                    reserved_cash = 0,
+                    reserved_quantity = 0,
+                    updated_at = now()
+                WHERE id = %s;
+                """,
+                (order_id,),
+            )
+
+            cur.execute(
+                """
+                INSERT INTO auth_audit_events
+                    (actor_user_id, event_type, outcome, request_id, details)
+                VALUES (%s, 'paper_order.cancelled_by_admin', 'succeeded', %s, %s::jsonb);
+                """,
+                (
+                    actor_id,
+                    request_id,
+                    json.dumps(
+                        {
+                            "portfolio_id": portfolio_id,
+                            "order_id": order_id,
+                            "symbol": order_row["symbol"],
+                            "side": order_row["side"],
+                            "quantity": order_row["quantity"],
+                            "limit_price": float(order_row["limit_price"]),
+                            "reason": reason,
+                        }
+                    ),
+                ),
+            )
+            return True, "Hủy lệnh thành công."
 
     def list_audit_logs(
         self,

@@ -193,4 +193,67 @@ describe("AiChatBubble", () => {
     expect(screen.queryByText("30 đ")).toBeNull();
     expect(container.textContent).toContain("VN30 đạt");
   });
+
+  it("renders stock comparison widget with metrics, growth report, and tab switching", () => {
+    const compareMsg: AiMessage = {
+      id: "msg-compare-1",
+      role: "assistant",
+      content: "Đối chiếu so sánh toàn diện: VCB vs HPG",
+      widgets: [
+        {
+          type: "stock_comparison",
+          data: {
+            title: "Bảng đối chiếu toàn diện VCB và HPG",
+            mode: "both",
+            items: [
+              {
+                symbol: "VCB",
+                name: "Ngân hàng Ngoại thương",
+                price: 92000,
+                change_percent: "+1.20%",
+                pe: "14.5x",
+                pb: "2.8x",
+                roe: "21.5%",
+                pros: ["Đầu ngành ngân hàng"],
+                cons: ["Định giá P/B cao"],
+                health_status: "expanding",
+                health_title: "Bứt phá tăng trưởng",
+                market_cap_growth_1m: "+5.4%",
+                revenue_growth_yoy: "+18.2%",
+                profit_growth_yoy: "+22.5%",
+                profit_ttm: "35,000 tỷ",
+              },
+              {
+                symbol: "HPG",
+                name: "Tập đoàn Hòa Phát",
+                price: 28500,
+                change_percent: "-0.50%",
+                pe: "9.2x",
+                pb: "1.5x",
+                roe: "12.2%",
+                pros: ["P/E hấp dẫn 9.2x"],
+                cons: ["Biến động chu kỳ"],
+                health_status: "stable",
+                health_title: "Hoạt động ổn định",
+                market_cap_growth_1m: "+8.4%",
+                revenue_growth_yoy: "+14.1%",
+                profit_growth_yoy: "+39.2%",
+                profit_ttm: "20,218 tỷ",
+              },
+            ],
+            summary_verdict: "VCB dẫn đầu về hiệu quả sinh lời ROE, trong khi HPG có P/E hấp dẫn.",
+          },
+        },
+      ],
+      created_at: "2026-11-04T13:40:02Z",
+    };
+
+    render(<AiChatBubble message={compareMsg} />);
+
+    expect(screen.getByText("Bảng đối chiếu toàn diện VCB và HPG")).toBeDefined();
+    expect(screen.getByText("Thông số định giá")).toBeDefined();
+    expect(screen.getByText("Báo cáo tăng trưởng")).toBeDefined();
+    expect(screen.getByText("14.5x")).toBeDefined();
+    expect(screen.getByText("9.2x")).toBeDefined();
+  });
 });
