@@ -9,11 +9,15 @@ from typing import Any, Literal
 
 from app.application.use_cases.ai_chat.guardrails import fold_text
 from app.application.use_cases.ai_chat.ticker_resolver import (
+    _EXTRA_STOP_WORDS,
     extract_tickers_with_typo_handling,
+    is_valid_ticker,
 )
 
 AiIntent = Literal[
     "blocked",
+    "trade_order",
+    "community_post",
     "comparison",
     "dividend",
     "stock_analysis",
@@ -75,6 +79,12 @@ class DetectedIntent:
     is_gold_bank: bool
     is_forensics: bool
     is_market_general: bool
+    is_trade_order: bool = False
+    trade_side: str | None = None  # "buy" or "sell"
+    trade_quantity: int | None = None
+    trade_symbol: str | None = None
+    is_community_post: bool = False
+    community_symbol: str | None = None
     is_leader: bool = False
     leader_id: str | None = None
     leader_name: str | None = None
@@ -543,9 +553,175 @@ def detect_intent(user_message: str) -> DetectedIntent:
     query_lower = norm_message.lower()
     query_folded = fold_text(norm_message)
 
-    is_dividend = any(
+    # 0. Trade order detection (e.g. "mua giúp tao 300 cổ mbb", "đặt mua 1000 fpt", "bán 500 hpg")
+    is_trade_analysis_query = any(
         kw in query_folded
         for kw in [
+            "co nen mua",
+            "co nen ban",
+            "nen mua khong",
+            "nen ban khong",
+            "nen mua hay",
+            "nen ban hay",
+            "diem mua",
+            "diem ban",
+            "vung mua",
+            "vung ban",
+            "khuyen nghi mua",
+            "khuyen nghi ban",
+            "tu van mua",
+            "tu van ban",
+            "co mua duoc",
+            "co ban duoc",
+            "chieu mua",
+            "chieu ban",
+            "mua gia nao",
+            "ban gia nao",
+            "phan tich",
+            "danh gia",
+            "nhan dinh",
+            "xu huong",
+            "the nao",
+            "tiem nang",
+            "co tot khong",
+        ]
+    )
+
+    is_trade_order = False
+    trade_side: str | None = None
+    trade_quantity: int | None = None
+    trade_symbol: str | None = None
+
+    if not is_trade_analysis_query:
+        qty_match = re.search(
+            r"\b(\d{1,7})\s*(?:co|cp|co phieu|shares)?\b",
+            query_folded,
+        )
+        found_qty = int(qty_match.group(1)) if qty_match else None
+
+        buy_actions = [
+            "mua",
+            "dat mua",
+            "mua them",
+            "mua tiep",
+            "mua giup",
+            "mua ho",
+            "mua dum",
+            "mua cho",
+            "gom",
+            "muc",
+            "vao lenh mua",
+            "lenh mua",
+            "mua vao",
+            "gia lap mua",
+            "mua ngay",
+            "mua luon",
+        ]
+        sell_actions = [
+            "ban",
+            "dat ban",
+            "ban them",
+            "ban bot",
+            "ban tiep",
+            "ban giup",
+            "ban ho",
+            "ban dum",
+            "ban cho",
+            "ban ra",
+            "ban het",
+            "xa",
+            "chot loi",
+            "cat lo",
+            "vao lenh ban",
+            "lenh ban",
+            "gia lap ban",
+            "ban ngay",
+            "ban luon",
+        ]
+
+        has_buy = any(re.search(r"\b" + re.escape(w) + r"\b", query_folded) for w in buy_actions)
+        has_sell = any(re.search(r"\b" + re.escape(w) + r"\b", query_folded) for w in sell_actions)
+
+        # Check explicit patterns: "mua/bán [thêm/giúp/...] [qty] [symbol]" or "mua/bán [thêm/...] [symbol] [qty]"
+        direct_order_match = re.search(
+            r"\b(mua|ban)(?:\s+(?:them|tiep|giup|ho|dum|cho|ngay|luon|bot|ra|vao|het))?\s+(\d{1,7})\s*(?:co|cp|co phieu|shares)?\s+([a-z0-9]{2,5})\b",
+            query_folded,
+        ) or re.search(
+            r"\b(mua|ban)(?:\s+(?:them|tiep|giup|ho|dum|cho|ngay|luon|bot|ra|vao|het))?\s+([a-z0-9]{2,5})\s+(\d{1,7})\s*(?:co|cp|co phieu|shares)?\b",
+            query_folded,
+        )
+
+        if direct_order_match:
+            action_word = direct_order_match.group(1).lower()
+            val1 = direct_order_match.group(2)
+            val2 = direct_order_match.group(3)
+            parsed_sym = (val2 if val1.isdigit() else val1).upper()
+            parsed_qty = int(val1 if val1.isdigit() else val2)
+
+            if parsed_sym in _NON_TICKER_WORDS or parsed_sym in _EXTRA_STOP_WORDS:
+                parsed_sym = tickers[0] if tickers else None
+
+            if parsed_sym:
+                is_trade_order = True
+                trade_side = "sell" if "ban" in action_word else "buy"
+                trade_quantity = parsed_qty
+                trade_symbol = parsed_sym
+
+                if is_valid_ticker(parsed_sym):
+                    if parsed_sym not in tickers:
+                        tickers.insert(0, parsed_sym)
+                else:
+                    if parsed_sym not in invalid_resolved:
+                        invalid_resolved.append(parsed_sym)
+        elif (has_buy or has_sell) and (tickers or invalid_resolved):
+            is_trade_order = True
+            trade_side = "sell" if has_sell else "buy"
+            trade_quantity = found_qty if (found_qty and found_qty > 0) else 100
+            trade_symbol = tickers[0] if tickers else invalid_resolved[0]
+        elif (
+            ("mua" in query_folded or "ban" in query_folded)
+            and found_qty
+            and (tickers or invalid_resolved)
+            and any(
+                w in query_folded
+                for w in ["giup", "ho", "dum", "tao", "toi", "minh", "dat", "lenh", "them", "tiep", "bot", "luon"]
+            )
+        ):
+            is_trade_order = True
+            trade_side = "sell" if "ban" in query_folded else "buy"
+            trade_quantity = found_qty
+            trade_symbol = tickers[0] if tickers else invalid_resolved[0]
+
+    # 0.1 Community post / thesis draft detection
+    is_community_post = any(
+        kw in query_folded
+        for kw in [
+            "dang bai",
+            "viet bai",
+            "tao bai",
+            "tao luan diem",
+            "dang luan diem",
+            "viet luan diem",
+            "chia se luan diem",
+            "dang len cong dong",
+            "chia se len cong dong",
+            "dang bai giup",
+            "viet bai giup",
+            "soan bai",
+            "soan luan diem",
+            "dang bai ve",
+            "viet bai ve",
+            "tao bai ve",
+        ]
+    )
+    community_symbol = tickers[0] if (is_community_post and tickers) else None
+
+    is_dividend = (
+        not is_trade_order
+        and not is_community_post
+        and any(
+            kw in query_folded
+            for kw in [
             "co tuc",
             "chia co tuc",
             "lich co tuc",
@@ -574,7 +750,7 @@ def detect_intent(user_message: str) -> DetectedIntent:
             "phat hanh them",
             "niem yet moi",
         ]
-    )
+    ))
 
     is_news = not is_dividend and any(
         kw in query_folded
@@ -920,6 +1096,12 @@ def detect_intent(user_message: str) -> DetectedIntent:
         is_gold_bank=is_gold_bank,
         is_forensics=is_forensics,
         is_market_general=is_market_general,
+        is_trade_order=is_trade_order,
+        trade_side=trade_side,
+        trade_quantity=trade_quantity,
+        trade_symbol=trade_symbol,
+        is_community_post=is_community_post,
+        community_symbol=community_symbol,
         is_leader=is_leader,
         leader_id=leader_id,
         leader_name=leader_name,

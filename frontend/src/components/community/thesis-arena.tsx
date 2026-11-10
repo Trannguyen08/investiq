@@ -5,6 +5,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import { useAuth } from "@/hooks/use-auth";
 import { STOCK_DIRECTORY } from "@/lib/ticker-matcher";
+import { Pagination } from "@/components/ui/pagination";
 import type { AnalystReputationItem, InvestmentThesisItem } from "@/types/thesis";
 
 const moneyFormat = new Intl.NumberFormat("vi-VN", {
@@ -63,6 +64,8 @@ export function ThesisArena({ initialTheses = [], initialLeaderboard = [] }: The
   const [statusFilter, setStatusFilter] = useState<string>("all");
   const [stanceFilter, setStanceFilter] = useState<string>("all");
   const [searchSymbol, setSearchSymbol] = useState<string>("");
+  const [currentPage, setCurrentPage] = useState(1);
+  const THESES_PAGE_SIZE = 10;
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [upvotingId, setUpvotingId] = useState<string | null>(null);
   const [message, setMessage] = useState<{ text: string; type: "success" | "error" } | null>(null);
@@ -86,6 +89,38 @@ export function ThesisArena({ initialTheses = [], initialLeaderboard = [] }: The
   const [formBody, setFormBody] = useState("");
   const [formCatalysts, setFormCatalysts] = useState("");
   const [submitting, setSubmitting] = useState(false);
+
+  // Check for pre-filled draft from AI Chat or URL parameters
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+
+    try {
+      const pendingRaw = sessionStorage.getItem("investiq_pending_thesis");
+      if (pendingRaw) {
+        const draft = JSON.parse(pendingRaw);
+        if (draft.symbol) setFormSymbol(String(draft.symbol).toUpperCase());
+        if (draft.stance) setFormStance(draft.stance === "bearish" ? "bearish" : "bullish");
+        if (draft.targetPrice || draft.target_price) setFormTargetPrice(String(draft.targetPrice || draft.target_price));
+        if (draft.stopLossPrice || draft.stop_loss_price) setFormStopLossPrice(String(draft.stopLossPrice || draft.stop_loss_price));
+        if (draft.horizon) setFormHorizon(String(draft.horizon));
+        if (draft.title) setFormTitle(String(draft.title));
+        if (draft.body || draft.content) setFormBody(String(draft.body || draft.content));
+        if (draft.catalysts) setFormCatalysts(String(draft.catalysts));
+        setShowCreateModal(true);
+        sessionStorage.removeItem("investiq_pending_thesis");
+        return;
+      }
+
+      const urlParams = new URLSearchParams(window.location.search);
+      if (urlParams.get("action") === "new-thesis") {
+        const sym = urlParams.get("symbol");
+        if (sym) setFormSymbol(sym.toUpperCase());
+        setShowCreateModal(true);
+      }
+    } catch {
+      // Ignore JSON parse errors
+    }
+  }, []);
 
   const symbolSuggestions = useMemo(() => {
     const q = formSymbol.trim().toUpperCase();
@@ -176,6 +211,25 @@ export function ThesisArena({ initialTheses = [], initialLeaderboard = [] }: The
         return new Date(b.created_at).getTime() - new Date(a.created_at).getTime();
       });
   }, [displayedList, stanceFilter, scope, statusFilter, searchSymbol, sortOrder]);
+
+  // Reset page to 1 when filters change
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [stanceFilter, scope, statusFilter, searchSymbol, sortOrder]);
+
+  const totalTheses = filteredTheses.length;
+  const totalPages = Math.max(1, Math.ceil(totalTheses / THESES_PAGE_SIZE));
+
+  useEffect(() => {
+    if (currentPage > totalPages) {
+      setCurrentPage(totalPages);
+    }
+  }, [currentPage, totalPages]);
+
+  const paginatedTheses = useMemo(() => {
+    const start = (currentPage - 1) * THESES_PAGE_SIZE;
+    return filteredTheses.slice(start, start + THESES_PAGE_SIZE);
+  }, [filteredTheses, currentPage]);
 
   async function handleUpvote(thesisId: string) {
     if (authStatus !== "authenticated") {
@@ -510,8 +564,9 @@ export function ThesisArena({ initialTheses = [], initialLeaderboard = [] }: The
           )}
         </div>
       ) : (
-        <div className="theses-grid">
-          {filteredTheses.map((thesis) => {
+        <>
+          <div className="theses-grid">
+            {paginatedTheses.map((thesis) => {
             const isBullish = thesis.stance === "bullish";
             const isHitTarget = thesis.status === "hit_target";
             const isStopped = thesis.status === "stopped_out";
@@ -635,7 +690,20 @@ export function ThesisArena({ initialTheses = [], initialLeaderboard = [] }: The
               </div>
             );
           })}
-        </div>
+          </div>
+          <Pagination
+            currentPage={currentPage}
+            totalPages={totalPages}
+            totalItems={totalTheses}
+            pageSize={THESES_PAGE_SIZE}
+            itemLabel="luận điểm"
+            onPageChange={(page) => {
+              setCurrentPage(page);
+              document.querySelector(".community-nav-tabs")?.scrollIntoView({ behavior: "smooth", block: "start" });
+            }}
+            ariaLabel="Phân trang luận điểm đầu tư"
+          />
+        </>
       )}
 
       {/* Modal Đăng luận điểm mới */}

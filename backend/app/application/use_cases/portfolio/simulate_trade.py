@@ -2,9 +2,11 @@
 
 from __future__ import annotations
 
-from concurrent.futures import ThreadPoolExecutor, TimeoutError, as_completed
+import json
+import threading
 from datetime import UTC, datetime, time, timedelta
 from decimal import Decimal
+from pathlib import Path
 from time import monotonic as _monotonic
 from typing import cast
 from uuid import uuid4
@@ -119,7 +121,71 @@ def _day_order_expiry(now: datetime) -> datetime:
 
 
 _SHARED_DASHBOARD_CACHE: dict[str, tuple[float, dict[str, object]]] = {}
-_SHARED_HOLDING_CANDLES_CACHE: dict[str, tuple[float, list[Candle]]] = {}
+_HOLDING_CANDLES_FILE = (
+    Path(__file__).resolve().parent.parent.parent.parent / "storage" / "holding_candles_cache.json"
+)
+
+
+def _load_persisted_candles() -> dict[str, tuple[float, list[Candle]]]:
+    result: dict[str, tuple[float, list[Candle]]] = {}
+    if not _HOLDING_CANDLES_FILE.exists():
+        return result
+    try:
+        with open(_HOLDING_CANDLES_FILE, encoding="utf-8") as f:
+            raw = json.load(f)
+        far_future = _monotonic() + 86400.0 * 7
+        for sym, items in raw.items():
+            candle_list: list[Candle] = []
+            for item in items:
+                try:
+                    ts = datetime.fromisoformat(item["timestamp"].replace("Z", "+00:00"))
+                    candle_list.append(
+                        Candle(
+                            timestamp=ts,
+                            open=Decimal(str(item.get("open", 0))),
+                            high=Decimal(str(item.get("high", 0))),
+                            low=Decimal(str(item.get("low", 0))),
+                            close=Decimal(str(item.get("close", 0))),
+                            volume=Decimal(str(item.get("volume", 0))),
+                        )
+                    )
+                except Exception:
+                    pass
+            if candle_list:
+                result[sym] = (far_future, candle_list)
+    except Exception:
+        pass
+    return result
+
+
+def _persist_candles_to_disk(sym: str, candles: list[Candle]) -> None:
+    try:
+        _HOLDING_CANDLES_FILE.parent.mkdir(parents=True, exist_ok=True)
+        raw: dict[str, list[dict[str, str]]] = {}
+        if _HOLDING_CANDLES_FILE.exists():
+            try:
+                with open(_HOLDING_CANDLES_FILE, encoding="utf-8") as f:
+                    raw = json.load(f)
+            except Exception:
+                pass
+        raw[sym] = [
+            {
+                "timestamp": c.timestamp.isoformat().replace("+00:00", "Z"),
+                "open": str(c.open),
+                "high": str(c.high),
+                "low": str(c.low),
+                "close": str(c.close),
+                "volume": str(c.volume),
+            }
+            for c in candles
+        ]
+        with open(_HOLDING_CANDLES_FILE, "w", encoding="utf-8") as f:
+            json.dump(raw, f, indent=2)
+    except Exception:
+        pass
+
+
+_SHARED_HOLDING_CANDLES_CACHE: dict[str, tuple[float, list[Candle]]] = _load_persisted_candles()
 
 
 class PaperTradingService:
@@ -557,6 +623,8 @@ class PaperTradingService:
             net_received=net_received,
             days_advanced=days_advanced,
         )
+        if hasattr(self._repository, "credit_cash") and callable(self._repository.credit_cash):
+            self._repository.credit_cash(user_id, net_received)
         self.invalidate_dashboard_cache(user_id)
         return {
             "advance": {
@@ -761,7 +829,7 @@ class PaperTradingService:
         missing_prices = 0
         notices: list[dict[str, str]] = []
 
-        # Fetch 90-day daily candles for all holdings concurrently with caching and strict 1.2s timeout
+        # Gather 90-day daily candles for holdings from memory/disk cache without blocking
         holding_symbols = [holding.symbol for holding in portfolio.holdings]
         all_candles: dict[str, list[Candle]] = {}
         if holding_symbols:
@@ -775,39 +843,22 @@ class PaperTradingService:
                     symbols_to_fetch.append(sym)
 
             if symbols_to_fetch:
-                def _fetch_holding_candles(sym: str) -> tuple[str, list[Candle]]:
-                    try:
-                        candles = list(self._provider.candles(sym, "1d"))[-90:]
-                        return sym, candles
-                    except Exception:
-                        return sym, []
+                def _bg_fetch_symbols(sym_list: list[str]) -> None:
+                    for s in sym_list:
+                        try:
+                            fetched = list(self._provider.candles(s, "1d"))[-90:]
+                            if fetched:
+                                self._holding_candles_cache[s] = (_monotonic() + 86400.0 * 7, fetched)
+                                _persist_candles_to_disk(s, fetched)
+                        except Exception:
+                            pass
 
-                workers = min(6, len(symbols_to_fetch))
-                executor = ThreadPoolExecutor(max_workers=workers)
-                try:
-                    future_map = {
-                        executor.submit(_fetch_holding_candles, sym): sym
-                        for sym in symbols_to_fetch
-                    }
-                    try:
-                        for future in as_completed(future_map, timeout=1.5):
-                            sym = future_map[future]
-                            try:
-                                res_sym, candle_list = future.result()
-                                if candle_list:
-                                    self._holding_candles_cache[res_sym] = (now_mono + 1800.0, candle_list)
-                                    all_candles[res_sym] = candle_list
-                            except Exception:
-                                pass
-                    except TimeoutError:
-                        pass
-                finally:
-                    executor.shutdown(wait=False, cancel_futures=True)
+                threading.Thread(target=_bg_fetch_symbols, args=(symbols_to_fetch,), daemon=True).start()
 
                 for sym in symbols_to_fetch:
-                    if sym not in all_candles:
-                        cached_c = self._holding_candles_cache.get(sym)
-                        all_candles[sym] = cached_c[1] if cached_c else []
+                    cached_c = self._holding_candles_cache.get(sym)
+                    if cached_c and cached_c[1]:
+                        all_candles[sym] = cached_c[1]
 
         histories: dict[str, list[dict[str, str]]] = {}
         for holding in portfolio.holdings:
@@ -1123,7 +1174,7 @@ class PaperTradingService:
         precomputed_candles: dict[str, list[Candle]] | None = None,
         current_total_value: Decimal | None = None,
     ) -> list[dict[str, str]]:
-        if not portfolio.holdings:
+        if not portfolio.holdings and not portfolio.trades:
             return []
 
         holding_by_symbol = {item.symbol: item for item in portfolio.holdings}
@@ -1151,14 +1202,37 @@ class PaperTradingService:
             else:
                 close_by_symbol[holding.symbol] = {}
 
-        # 2. Collect all dates across all holdings with candles
+        # 2. Determine earliest buy trade date (or trade date / inception)
         all_dates_set: set[str] = set()
         for c_dict in close_by_symbol.values():
             all_dates_set.update(c_dict.keys())
 
+        buy_trades = [t for t in portfolio.trades if t.side == "buy"]
+        if buy_trades:
+            first_buy_date = min(t.created_at.astimezone(_MARKET_TZ).date() for t in buy_trades)
+        elif portfolio.trades:
+            first_buy_date = min(t.created_at.astimezone(_MARKET_TZ).date() for t in portfolio.trades)
+        else:
+            first_buy_date = portfolio.created_at.astimezone(_MARKET_TZ).date()
+
+        baseline_date = first_buy_date - timedelta(days=1)
+        baseline_iso = baseline_date.isoformat()
+        first_buy_iso = first_buy_date.isoformat()
         today_iso = datetime.now(_MARKET_TZ).date().isoformat()
-        all_dates_set.add(today_iso)
-        sorted_days = sorted(all_dates_set)[-90:]
+
+        # Collect candidate dates strictly from the baseline date (day before first buy) up to today
+        # This eliminates months of flat starting capital prior to the first trade.
+        eligible_days = {d for d in all_dates_set if d >= baseline_iso}
+        eligible_days.add(baseline_iso)
+        eligible_days.add(first_buy_iso)
+        eligible_days.add(today_iso)
+
+        trade_dates = [t.created_at.astimezone(_MARKET_TZ).date().isoformat() for t in portfolio.trades]
+        for td in trade_dates:
+            if td >= baseline_iso:
+                eligible_days.add(td)
+
+        sorted_days = sorted(eligible_days)
 
         # 3. For each day, calculate portfolio equity with all holdings strictly included
         by_date: dict[str, Decimal] = {}
@@ -1167,11 +1241,15 @@ class PaperTradingService:
                 by_date[day] = current_total_value
                 continue
 
+            if day <= baseline_iso:
+                by_date[day] = portfolio.starting_cash
+                continue
+
             day_holdings_val = Decimal()
             for symbol, holding in holding_by_symbol.items():
                 price = close_by_symbol.get(symbol, {}).get(day)
                 if price is None or price <= 0:
-                    price = fallback_prices[symbol]
+                    price = fallback_prices.get(symbol, holding.average_cost)
                 day_holdings_val += round_vnd(price * Decimal(holding.quantity))
 
             by_date[day] = portfolio.cash_balance + day_holdings_val
@@ -1179,6 +1257,13 @@ class PaperTradingService:
         # 4. Guarantee today's endpoint strictly matches current_total_value
         if current_total_value is not None:
             by_date[today_iso] = current_total_value
+
+        # 5. Guarantee at least 2 points for chart visualization
+        if len(by_date) < 2:
+            yesterday_iso = (datetime.now(_MARKET_TZ).date() - timedelta(days=1)).isoformat()
+            if yesterday_iso not in by_date:
+                by_date[yesterday_iso] = portfolio.starting_cash
+                by_date[yesterday_iso] = portfolio.starting_cash
 
         return [
             {"timestamp": f"{day}T08:00:00Z", "value": decimal_text(value)}

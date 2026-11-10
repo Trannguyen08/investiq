@@ -20,11 +20,15 @@ from app.workers.link_integrity_worker import (
 
 def test_check_url_integrity_status_codes() -> None:
     """Test URL checking logic with different mock HTTP response codes."""
+    import httpx
+
     # 1. 200 OK -> healthy
-    with patch("httpx.Client.head") as mock_head:
+    with patch("httpx.Client.get") as mock_get:
         mock_resp = MagicMock()
         mock_resp.status_code = 200
-        mock_head.return_value = mock_resp
+        mock_resp.url = httpx.URL("https://cafef.vn/active-link.chn")
+        mock_resp.text = "<html><head><title>Báo cáo tài chính</title></head><body><h1>Doanh nghiệp lãi lớn</h1></body></html>"
+        mock_get.return_value = mock_resp
 
         is_dead, code, reason = check_url_integrity("https://cafef.vn/active-link.chn")
         assert not is_dead
@@ -32,10 +36,12 @@ def test_check_url_integrity_status_codes() -> None:
         assert reason == "ok"
 
     # 2. 404 Not Found -> dead
-    with patch("httpx.Client.head") as mock_head:
+    with patch("httpx.Client.get") as mock_get:
         mock_resp = MagicMock()
         mock_resp.status_code = 404
-        mock_head.return_value = mock_resp
+        mock_resp.url = httpx.URL("https://cafef.vn/broken-link-404.chn")
+        mock_resp.text = "Not Found"
+        mock_get.return_value = mock_resp
 
         is_dead, code, reason = check_url_integrity("https://cafef.vn/broken-link-404.chn")
         assert is_dead
@@ -43,10 +49,12 @@ def test_check_url_integrity_status_codes() -> None:
         assert reason == "not_found"
 
     # 3. 410 Gone -> dead
-    with patch("httpx.Client.head") as mock_head:
+    with patch("httpx.Client.get") as mock_get:
         mock_resp = MagicMock()
         mock_resp.status_code = 410
-        mock_head.return_value = mock_resp
+        mock_resp.url = httpx.URL("https://vietstock.vn/gone-410.htm")
+        mock_resp.text = "Gone"
+        mock_get.return_value = mock_resp
 
         is_dead, code, reason = check_url_integrity("https://vietstock.vn/gone-410.htm")
         assert is_dead
@@ -54,22 +62,44 @@ def test_check_url_integrity_status_codes() -> None:
         assert reason == "not_found"
 
     # 4. 403 Forbidden / Cloudflare challenge -> NOT treated as dead to avoid data loss
-    with patch("httpx.Client.head") as mock_head, patch("httpx.Client.stream") as mock_stream:
-        mock_resp_head = MagicMock()
-        mock_resp_head.status_code = 403
-        mock_head.return_value = mock_resp_head
-
-        mock_stream_ctx = MagicMock()
-        mock_stream_resp = MagicMock()
-        mock_stream_resp.status_code = 403
-        mock_stream_ctx.__enter__.return_value = mock_stream_resp
-        mock_stream.return_value = mock_stream_ctx
+    with patch("httpx.Client.get") as mock_get:
+        mock_resp = MagicMock()
+        mock_resp.status_code = 403
+        mock_resp.url = httpx.URL("https://s.cafef.vn/cf-protected.chn")
+        mock_resp.text = "Cloudflare Challenge"
+        mock_get.return_value = mock_resp
 
         is_dead, code, reason = check_url_integrity("https://s.cafef.vn/cf-protected.chn")
         assert not is_dead
         assert code == 403
 
-    # 5. Malformed URL -> dead
+    # 5. Soft-404: 200 OK but page body says "bài viết không tồn tại"
+    with patch("httpx.Client.get") as mock_get:
+        mock_resp = MagicMock()
+        mock_resp.status_code = 200
+        mock_resp.url = httpx.URL("https://finance.vietstock.vn/dead-post.htm")
+        mock_resp.text = "<html><body><h1>Đường dẫn hoặc bài viết không tồn tại.</h1></body></html>"
+        mock_get.return_value = mock_resp
+
+        is_dead, code, reason = check_url_integrity("https://finance.vietstock.vn/dead-post.htm")
+        assert is_dead
+        assert code == 200
+        assert "dead_h1" in reason
+
+    # 6. Delayed redirect / 404 landing page
+    with patch("httpx.Client.get") as mock_get:
+        mock_resp = MagicMock()
+        mock_resp.status_code = 200
+        mock_resp.url = httpx.URL("https://vnexpress.net/404.html")
+        mock_resp.text = "<html><head><meta http-equiv='refresh' content='2;url=https://vnexpress.net/'></head></html>"
+        mock_get.return_value = mock_resp
+
+        is_dead, code, reason = check_url_integrity("https://vnexpress.net/old-article-123.html")
+        assert is_dead
+        assert code == 200
+        assert "redirected_to_404_path" in reason
+
+    # 7. Malformed URL -> dead
     is_dead, code, reason = check_url_integrity("not-a-valid-url")
     assert is_dead
     assert code == 400

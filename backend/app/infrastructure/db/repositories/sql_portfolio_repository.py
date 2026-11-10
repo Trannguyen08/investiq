@@ -828,3 +828,16 @@ class SqlPortfolioRepository:
             is_public=True,
             nickname=str(portfolio["nickname"]) if portfolio.get("nickname") else None,
         )
+
+    def credit_cash(self, user_id: str, amount: Decimal) -> None:
+        if amount <= 0:
+            return
+        with self._pool.connection() as connection, connection.transaction():
+            connection.execute(
+                """UPDATE paper_portfolios
+                   SET cash_balance = cash_balance + %s,
+                       version = version + 1,
+                       updated_at = now()
+                   WHERE user_id = %s""",
+                (amount, user_id),
+            )

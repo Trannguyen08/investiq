@@ -14,7 +14,9 @@ When a link returns 404 / 410 or DNS dead:
 
 from __future__ import annotations
 
+import html
 import logging
+import re
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from typing import Any
 from urllib.parse import urlparse
@@ -32,13 +34,35 @@ CHROME_USER_AGENT = (
     "Chrome/128.0.0.0 Safari/537.36"
 )
 
+DEAD_CONTENT_PATTERNS = (
+    "đường dẫn hoặc bài viết không tồn tại",
+    "bài viết không tồn tại",
+    "tin bài không tìm thấy",
+    "nội dung không tồn tại",
+    "nội dung này không tồn tại",
+    "không tìm thấy trang",
+    "trang không tìm thấy",
+    "trang bạn tìm kiếm không tồn tại",
+    "bài viết đã bị xóa",
+    "liên kết không tồn tại",
+    "trang thông báo lỗi 404",
+    "404 not found",
+    "page not found",
+    "the requested url was not found",
+    "404 - ",
+)
+
 
 def check_url_integrity(url: str, timeout: float = 6.0) -> tuple[bool, int | None, str]:
-    """Check if a source URL is definitively dead (404/410/DNS resolution failure).
+    """Check if a source URL is definitively dead (404/410/DNS/Soft 404/Redirected).
 
     Returns (is_dead: bool, status_code: int | None, reason: str).
-    Only 404, 410, and clear DNS/host resolution failures are considered dead.
-    Temporary 403, 429, 5xx, or timeouts are NOT considered dead to protect data.
+    Covers:
+    1. HTTP 404/410 status codes.
+    2. Redirected to 404/error landing paths (/404.html, /404.chn, /notfound, etc.).
+    3. Deep article/event path redirected to generic root homepage (/).
+    4. Soft 404s returning 200 OK but displaying Vietnamese not-found text.
+    5. Client-side meta-refresh or delayed JS redirects that forward away from not-found pages.
     """
     if not url or not isinstance(url, str):
         return False, None, "empty_url"
@@ -64,21 +88,59 @@ def check_url_integrity(url: str, timeout: float = 6.0) -> tuple[bool, int | Non
             verify=False,
             headers=headers,
         ) as client:
-            try:
-                resp = client.head(trimmed)
-                if resp.status_code in (404, 410):
-                    return True, resp.status_code, "not_found"
-                if resp.status_code in (403, 405):
-                    # Some news portals reject HEAD requests with 405 or Cloudflare 403; test with GET stream
-                    with client.stream("GET", trimmed) as stream_resp:
-                        if stream_resp.status_code in (404, 410):
-                            return True, stream_resp.status_code, "not_found"
-                        return False, stream_resp.status_code, "ok"
-                return False, resp.status_code, "ok"
-            except httpx.HTTPStatusError as exc:
-                if exc.response.status_code in (404, 410):
-                    return True, exc.response.status_code, "not_found"
-                return False, exc.response.status_code, "http_status_error"
+            resp = client.get(trimmed)
+            status = resp.status_code
+            if status in (404, 410):
+                return True, status, "not_found"
+            if status >= 500 or status in (401, 403, 429):
+                # Temporary server issues or Cloudflare bot challenges shouldn't delete legitimate articles
+                return False, status, "protected_or_server_error"
+
+            final_url = str(resp.url)
+            parsed_final = urlparse(final_url)
+            final_path = parsed_final.path.lower()
+
+            # 1. Redirected to known 404/error landing paths
+            if any(p in final_path for p in ("/404", "/notfound", "/error", "trang-khong-ton-tai")):
+                return True, status, f"redirected_to_404_path:{final_path}"
+
+            # 2. Deep article/event path redirected to generic root homepage
+            if len(parsed.path.strip("/")) > 5 and parsed_final.path in ("", "/"):
+                return True, status, "redirected_to_homepage"
+
+            # 3. Content inspection for Soft-404 in HTML
+            raw_text = resp.text
+            unescaped = html.unescape(raw_text).lower()
+
+            # Check title tag
+            titles = re.findall(r"<title[^>]*>(.*?)</title>", unescaped, re.DOTALL)
+            title_text = titles[0].strip() if titles else ""
+            for phrase in DEAD_CONTENT_PATTERNS:
+                if phrase in title_text:
+                    return True, status, f"dead_title:{phrase}"
+
+            # Check h1 tag
+            h1s = re.findall(r"<h1[^>]*>(.*?)</h1>", unescaped, re.DOTALL)
+            for h1 in h1s:
+                for phrase in DEAD_CONTENT_PATTERNS:
+                    if phrase in h1:
+                        return True, status, f"dead_h1:{phrase}"
+
+            # Check general body text
+            for phrase in DEAD_CONTENT_PATTERNS:
+                if phrase in unescaped:
+                    return True, status, f"dead_content:{phrase}"
+
+            # 4. Meta refresh redirect check (e.g. <meta http-equiv="refresh" content="5;url=...">)
+            for match in re.finditer(
+                r'<meta[^>]*http-equiv=["\']?refresh["\']?[^>]*content=["\']?([^"\'>]+)["\']?',
+                unescaped,
+            ):
+                mr = match.group(1).lower()
+                if "url" in mr and any(k in mr for k in ("url=/", "url=https://", "404", "error")):
+                    return True, status, f"meta_refresh_redirect:{mr}"
+
+            return False, status, "ok"
     except (httpx.ConnectError, httpx.NetworkError) as exc:
         err_msg = str(exc).lower()
         if (

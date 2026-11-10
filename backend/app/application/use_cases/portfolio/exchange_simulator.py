@@ -224,27 +224,79 @@ class ExchangeSimulationStore:
         net_received: Decimal,
         days_advanced: int,
     ) -> CashAdvanceRecord:
+        rec_id = str(uuid4())
+        rec = CashAdvanceRecord(
+            id=rec_id,
+            user_id=user_id,
+            gross_amount=gross_amount,
+            fee_amount=fee_amount,
+            net_received=net_received,
+            days_advanced=days_advanced,
+        )
         with self._lock:
-            rec = CashAdvanceRecord(
-                id=str(uuid4()),
-                user_id=user_id,
-                gross_amount=gross_amount,
-                fee_amount=fee_amount,
-                net_received=net_received,
-                days_advanced=days_advanced,
-            )
             self._advances.setdefault(user_id, []).append(rec)
-            return rec
+
+        try:
+            from app.infrastructure.db.session import get_pool
+            pool = get_pool()
+            with pool.connection() as conn, conn.cursor() as cur:
+                cur.execute(
+                    """INSERT INTO paper_cash_advances (id, user_id, gross_amount, fee_amount, net_received, days_advanced, created_at)
+                       VALUES (%s, %s, %s, %s, %s, %s, %s)""",
+                    (rec_id, user_id, gross_amount, fee_amount, net_received, days_advanced, rec.created_at),
+                )
+                conn.commit()
+        except Exception:
+            pass
+        return rec
 
     def list_cash_advances(self, user_id: str) -> list[CashAdvanceRecord]:
         with self._lock:
-            return list(self._advances.get(user_id, []))
+            if user_id in self._advances:
+                return list(self._advances[user_id])
+
+        records: list[CashAdvanceRecord] = []
+        try:
+            from app.infrastructure.db.session import get_pool
+            pool = get_pool()
+            with pool.connection() as conn, conn.cursor() as cur:
+                cur.execute(
+                    """SELECT id::text, user_id::text, gross_amount, fee_amount, net_received, days_advanced, created_at
+                       FROM paper_cash_advances WHERE user_id = %s ORDER BY created_at ASC""",
+                    (user_id,),
+                )
+                for row in cur.fetchall():
+                    records.append(
+                        CashAdvanceRecord(
+                            id=str(row[0]),
+                            user_id=str(row[1]),
+                            gross_amount=Decimal(str(row[2])),
+                            fee_amount=Decimal(str(row[3])),
+                            net_received=Decimal(str(row[4])),
+                            days_advanced=int(row[5]),
+                            created_at=row[6],
+                        )
+                    )
+        except Exception:
+            pass
+
+        with self._lock:
+            self._advances[user_id] = records
+        return list(records)
 
     def reset_user(self, user_id: str) -> None:
         with self._lock:
             self._user_modes.pop(user_id, None)
             self._triggers.pop(user_id, None)
             self._advances.pop(user_id, None)
+        try:
+            from app.infrastructure.db.session import get_pool
+            pool = get_pool()
+            with pool.connection() as conn, conn.cursor() as cur:
+                cur.execute("DELETE FROM paper_cash_advances WHERE user_id = %s", (user_id,))
+                conn.commit()
+        except Exception:
+            pass
 
 
 _GLOBAL_SIM_STORE = ExchangeSimulationStore()
@@ -305,15 +357,6 @@ def is_within_exchange_trading_hours(
     order_type: OrderTypeCode = "LO",
 ) -> tuple[bool, str]:
     """Check if the order can be matched immediately under real HOSE/HNX session hours."""
-    sess = provider_session.lower()
-    if sess == "open":
-        return True, "Đang trong phiên giao dịch khớp lệnh liên tục."
-    if sess in {"lunch_break", "intermission"}:
-        return (
-            False,
-            "Thị trường đang nghỉ giữa phiên (11:30 - 13:00). Lệnh được lưu chờ phiên chiều.",
-        )
-
     local = now.astimezone(_MARKET_TZ)
     if local.weekday() >= 5:
         return (
@@ -328,6 +371,13 @@ def is_within_exchange_trading_hours(
     afternoon_open = time(13, 0)
     atc_start = time(14, 30)
     afternoon_close = time(14, 45)
+
+    sess = provider_session.lower()
+    if sess in {"lunch_break", "intermission"} or (morning_close < t < afternoon_open):
+        return (
+            False,
+            "Thị trường đang nghỉ giữa phiên (11:30 - 13:00). Lệnh được lưu chờ phiên chiều.",
+        )
 
     if order_type == "ATO":
         if morning_open <= t <= ato_end:
@@ -349,13 +399,8 @@ def is_within_exchange_trading_hours(
                 False,
                 "Phiên giao dịch hiện tại đang đóng (Provider: closed). Lệnh được lưu vào sổ lệnh chờ.",
             )
-        return True, "Đang trong khung giờ giao dịch của Sở Giao dịch."
+        return True, "Đang trong phiên giao dịch khớp lệnh liên tục."
 
-    if morning_close < t < afternoon_open:
-        return (
-            False,
-            "Thị trường đang nghỉ trưa (11:30 - 13:00). Lệnh được giữ chờ phiên chiều 13:00.",
-        )
     return (
         False,
         "Ngoài khung giờ giao dịch (09:00 - 11:30 & 13:00 - 14:45). Lệnh được lưu chờ phiên kế tiếp.",
@@ -645,7 +690,8 @@ def build_t2_settlement_summary(
         "pending_buy_shares_by_symbol": pending_shares_by_symbol,
         "pending_buy_settlements": pending_buys[:15],
         "pending_sell_settlements": pending_sells[:15],
-        "receivable_cash_t2": decimal_text(total_receivable_cash),
+        "receivable_cash_t2": decimal_text(advanceable_cash),
+        "gross_receivable_cash_t2": decimal_text(total_receivable_cash),
         "already_advanced_cash": decimal_text(already_advanced),
         "advanceable_cash": decimal_text(advanceable_cash),
         "estimated_advance_fee": decimal_text(estimated_fee),

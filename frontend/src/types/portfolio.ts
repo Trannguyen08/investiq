@@ -114,6 +114,7 @@ export type PaperT2SettlementSummary = {
   pending_buy_settlements: PaperPendingBuySettlement[];
   pending_sell_settlements: PaperPendingSellSettlement[];
   receivable_cash_t2: string;
+  gross_receivable_cash_t2?: string;
   already_advanced_cash: string;
   advanceable_cash: string;
   estimated_advance_fee: string;

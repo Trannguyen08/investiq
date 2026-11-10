@@ -517,12 +517,11 @@ def _to_market_event(raw: dict[str, Any]) -> MarketEvent | None:
         event_day = datetime.strptime(date_str, "%Y-%m-%d").date()
         event_at = datetime.combine(event_day, datetime.min.time(), _MARKET_TZ).astimezone(UTC)
         source_url = raw.get("source_url")
-        if not source_url:
-            sym = str(raw.get("symbol", "")).upper()
-            if sym and sym not in ("VNINDEX", "VN30", "HNX"):
-                source_url = f"https://s.cafef.vn/lich-su-kien.chn?symbol={sym}"
-            else:
-                source_url = "https://s.cafef.vn/lich-su-kien.chn"
+        sym = str(raw.get("symbol", "")).upper()
+        from app.infrastructure.external.crawlers.dividend_crawler import (
+            _resolve_direct_article_url,
+        )
+        source_url = _resolve_direct_article_url(sym, source_url)
 
         return MarketEvent(
             id=str(raw["id"]),

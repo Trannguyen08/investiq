@@ -406,22 +406,25 @@ def extract_tickers_with_typo_handling(
         for g in (1, 2):
             _add_token(m.group(g))
 
-    # 3. Explicit keywords: e.g. "mã VICC", "cổ phiếu HBG", "định giá TCBB", "phân tích HBG"
+    # 3. Explicit keywords: e.g. "mã VICC", "cổ phiếu HBG", "định giá TCBB", "phân tích HBG", "mua 300 HPPG"
     explicit_pat = re.compile(
         r"(?:mã|cổ phiếu|cp|ck|chứng khoán|định giá|phân tích|bctc|cổ tức|rủi ro)\s+([A-Za-z0-9]{2,5})\b|"
+        r"(?:mua|bán|ban|lệnh|gom|múc|muc|xả|xa|khớp|khop|đặt|dat)\s+(?:thêm\s+|them\s+|tiếp\s+|tiep\s+|giúp\s+|giup\s+|hộ\s+|ho\s+|dùm\s+|dum\s+|ngay\s+|luôn\s+|luon\s+|bớt\s+|bot\s+|hết\s+|het\s+)?(?:\d{1,7}\s*(?:co|cp|co phieu|shares)?\s+)?([A-Za-z0-9]{2,5})\b|"
+        r"\b(?:\d{1,7})\s*(?:co|cp|co phieu|shares)\s+([A-Za-z0-9]{2,5})\b|"
+        r"\b([A-Za-z0-9]{2,5})\s+(?:\d{1,7})\s*(?:co|cp|co phieu|shares)\b|"
         r"\b([A-Za-z0-9]{2,5})\s+(?:tăng|giảm|trần|sàn|hôm nay|thế nào)\b|"
         r"\(([A-Za-z0-9]{2,5})\)",
         re.IGNORECASE,
     )
     for m in explicit_pat.finditer(text):
-        for g in (1, 2, 3):
+        for g in range(1, 7):
             tok = m.group(g)
             if tok:
                 _add_token(tok)
 
-    # 4. General 3-letter tokens in uppercase text
-    ticker_pat = re.compile(r"\b([A-Z]{3})\b")
-    for m in ticker_pat.finditer(text.upper()):
+    # 4. General tokens in uppercase text (3-4 letters e.g. HPG, HPPG, FPTT)
+    ticker_pat = re.compile(r"\b([A-Z]{3,4})\b")
+    for m in ticker_pat.finditer(text):
         _add_token(m.group(1))
 
     return valid, invalid

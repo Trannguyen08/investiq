@@ -20,7 +20,11 @@ parts/
 sdist/
 var/
 wheels/
+!backend/wheels/
+!backend/wheels/*.whl
 share/python-wheels/
+!backend/wheels/
+!backend/wheels/*.whl
 *.egg-info/
 .installed.cfg
 *.egg
@@ -50,6 +54,9 @@ coverage.xml
 .hypothesis/
 .pytest_cache/
 cover/
+app/storage/
+backend/storage/
+storage/
 
 # Translations
 *.mo

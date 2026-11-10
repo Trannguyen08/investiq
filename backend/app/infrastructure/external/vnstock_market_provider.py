@@ -15,7 +15,7 @@ import re
 from collections.abc import Callable
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from dataclasses import dataclass, replace
-from datetime import UTC, date, datetime, timedelta
+from datetime import UTC, date, datetime, time, timedelta
 from decimal import Decimal, InvalidOperation
 from pathlib import Path
 from threading import RLock, Thread
@@ -303,13 +303,14 @@ class OfficialVnstockGateway:
         interval: str,
         count: int,
     ) -> list[dict[str, object]]:
+        should_get_all = count is None or count > 300
         if symbol not in _INDEX_EXCHANGE:
             try:
                 frame = self._market.equity(symbol=symbol).ohlcv(
                     interval=interval,
                     count=count,
                     source="kbs",
-                    get_all=True,
+                    get_all=should_get_all,
                 )
                 rows = _frame_records(frame)
                 if rows:
@@ -324,7 +325,7 @@ class OfficialVnstockGateway:
                     interval=interval,
                     count=count,
                     source="vci",
-                    get_all=True,
+                    get_all=should_get_all,
                 )
                 return _frame_records(frame)
             except (Exception, SystemExit) as exc:
@@ -334,7 +335,7 @@ class OfficialVnstockGateway:
                 interval=interval,
                 count=count,
                 source="kbs",
-                get_all=True,
+                get_all=should_get_all,
             )
             return _frame_records(frame)
         except (Exception, SystemExit) as exc:
@@ -659,8 +660,16 @@ class VnstockMarketProvider:
         local = datetime.now(UTC).astimezone(_MARKET_TZ)
         if local.weekday() >= 5:
             return "closed"
-        minutes = local.hour * 60 + local.minute
-        return "open" if 9 * 60 <= minutes <= 15 * 60 else "closed"
+        t = local.time()
+        morning_open = time(9, 0)
+        morning_close = time(11, 30)
+        afternoon_open = time(13, 0)
+        afternoon_close = time(14, 45)
+        if morning_close < t < afternoon_open:
+            return "lunch_break"
+        if (morning_open <= t <= morning_close) or (afternoon_open <= t <= afternoon_close):
+            return "open"
+        return "closed"
 
     def instruments(self) -> tuple[MarketInstrument, ...]:
         self._ensure_snapshot()
@@ -780,7 +789,7 @@ class VnstockMarketProvider:
                 return self._with_current_daily_candle(normalized, cached[1])
             return cached[1]
         source_interval = {"1d": "1D", "1h": "1H", "30m": "30m", "5m": "5m"}[interval]
-        count = 500 if interval in {"1d", "1h"} else 200
+        count = 200 if interval in {"1d", "1h"} else 200
         try:
             rows = self._gateway.candle_rows(normalized, source_interval, count)
             fetched_at = datetime.now(UTC)

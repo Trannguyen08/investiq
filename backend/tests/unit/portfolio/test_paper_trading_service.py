@@ -151,6 +151,12 @@ class RecordingPortfolioRepository:
     def get_public_portfolio(self, portfolio_id: str) -> PaperPortfolio | None:
         return self.portfolio
 
+    def credit_cash(self, user_id: str, amount: Decimal) -> None:
+        self.portfolio = replace(
+            self.portfolio,
+            cash_balance=self.portfolio.cash_balance + amount,
+        )
+
 
 def portfolio(*holdings: PaperHolding) -> PaperPortfolio:
     now = datetime(2026, 10, 8, tzinfo=UTC)

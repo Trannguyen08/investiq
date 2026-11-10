@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import {
   changeTone,
@@ -35,6 +35,7 @@ import { ProfitLossDialog } from "./paper-pnl-dialog";
 import { PaperDailyReportSection } from "./paper-daily-report-card";
 import { PaperSocialVisibilitySection } from "./paper-social-card";
 import { TradingDisciplineCard } from "./trading-discipline-card";
+import { Pagination } from "@/components/ui/pagination";
 
 const moneyFormat = new Intl.NumberFormat("vi-VN", {
   style: "currency",
@@ -86,9 +87,148 @@ function Sparkline({ points, label }: { points: PaperPricePoint[]; label: string
   );
 }
 
+type EquityResolutionMode = "auto" | "day" | "week" | "month" | "year";
+
+function getWeekKey(iso: string): string {
+  try {
+    const d = new Date(iso);
+    const date = new Date(Date.UTC(d.getFullYear(), d.getMonth(), d.getDate()));
+    const dayNum = date.getUTCDay() || 7;
+    date.setUTCDate(date.getUTCDate() + 4 - dayNum);
+    const yearStart = new Date(Date.UTC(date.getUTCFullYear(), 0, 1));
+    const weekNo = Math.ceil((((date.getTime() - yearStart.getTime()) / 86400000) + 1) / 7);
+    return `${date.getUTCFullYear()}-W${String(weekNo).padStart(2, "0")}`;
+  } catch {
+    return iso.slice(0, 10);
+  }
+}
+
+function getMonthKey(iso: string): string {
+  return iso.slice(0, 7);
+}
+
+function getYearKey(iso: string): string {
+  return iso.slice(0, 4);
+}
+
+function formatResolutionDate(iso: string, res: "day" | "week" | "month" | "year"): string {
+  try {
+    const d = new Date(iso);
+    const day = String(d.getDate()).padStart(2, "0");
+    const month = String(d.getMonth() + 1).padStart(2, "0");
+    const year = d.getFullYear();
+    if (res === "year") return `${year}`;
+    if (res === "month") return `${month}/${year}`;
+    if (res === "week") return `${day}/${month}/${year}`;
+    return `${day}/${month}/${year}`;
+  } catch {
+    return iso;
+  }
+}
+
+function resolutionLabel(res: "day" | "week" | "month" | "year"): string {
+  switch (res) {
+    case "day":
+      return "Ngày";
+    case "week":
+      return "Tuần";
+    case "month":
+      return "Tháng";
+    case "year":
+      return "Năm";
+  }
+}
+
+function aggregatePoints(
+  rawPoints: { timestamp: string; value: string }[],
+  res: "day" | "week" | "month" | "year"
+): { timestamp: string; value: string }[] {
+  if (res === "day" || rawPoints.length <= 2) {
+    return rawPoints;
+  }
+
+  const grouped = new Map<string, { timestamp: string; value: string }>();
+  const baseline = rawPoints[0];
+  const latest = rawPoints[rawPoints.length - 1];
+
+  for (let i = 0; i < rawPoints.length; i++) {
+    const pt = rawPoints[i];
+    let key = pt.timestamp.slice(0, 10);
+    if (res === "week") key = getWeekKey(pt.timestamp);
+    else if (res === "month") key = getMonthKey(pt.timestamp);
+    else if (res === "year") key = getYearKey(pt.timestamp);
+
+    grouped.set(key, pt);
+  }
+
+  const aggregated = Array.from(grouped.values()).sort(
+    (a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime()
+  );
+
+  if (aggregated.length > 0 && aggregated[0].timestamp !== baseline.timestamp) {
+    aggregated.unshift(baseline);
+  }
+  if (aggregated.length > 0 && aggregated[aggregated.length - 1].timestamp !== latest.timestamp) {
+    aggregated.push(latest);
+  }
+
+  return aggregated.length >= 2 ? aggregated : rawPoints;
+}
+
 function EquityChart({ dashboard }: { dashboard: PaperDashboard }) {
   const [hoveredIndex, setHoveredIndex] = useState<number | null>(null);
-  const points = dashboard.equity_curve;
+  const [selectedResolution, setSelectedResolution] = useState<EquityResolutionMode>("auto");
+
+  const rawPoints = useMemo(() => {
+    const curve = dashboard.equity_curve ?? [];
+    if (curve.length >= 2) return curve;
+    const startingCapital = dashboard.account.starting_cash || "100000000";
+    const liveTotalValue = dashboard.account.total_value || startingCapital;
+    const createdAt = dashboard.account.created_at || "2026-11-01T08:00:00Z";
+    const todayIso = curve[0]?.timestamp || "2026-11-10T08:00:00Z";
+
+    if (curve.length === 1) {
+      return [
+        { timestamp: createdAt, value: startingCapital },
+        curve[0],
+      ];
+    }
+    if ((dashboard.holdings && dashboard.holdings.length > 0) || (dashboard.trades && dashboard.trades.length > 0)) {
+      return [
+        { timestamp: createdAt, value: startingCapital },
+        { timestamp: todayIso, value: liveTotalValue },
+      ];
+    }
+    return curve;
+  }, [dashboard]);
+
+  const firstBuyTrade = useMemo(() => {
+    const buys = (dashboard.trades ?? []).filter((t) => t.side === "buy");
+    if (buys.length > 0) {
+      return buys.reduce((earliest, cur) => (cur.created_at < earliest.created_at ? cur : earliest), buys[0]);
+    }
+    return null;
+  }, [dashboard.trades]);
+
+  const autoResolution = useMemo<"day" | "week" | "month" | "year">(() => {
+    if (!rawPoints || rawPoints.length < 2) return "day";
+    const first = new Date(rawPoints[0].timestamp).getTime();
+    const last = new Date(rawPoints[rawPoints.length - 1].timestamp).getTime();
+    const days = Math.max(1, Math.round((last - first) / (1000 * 60 * 60 * 24)));
+    const count = rawPoints.length;
+
+    if (days > 730 || count > 500) return "year";
+    if (days > 180 || count > 120) return "month";
+    if (days > 60 || count > 45) return "week";
+    return "day";
+  }, [rawPoints]);
+
+  const effectiveResolution = selectedResolution === "auto" ? autoResolution : selectedResolution;
+
+  const points = useMemo(() => {
+    return aggregatePoints(rawPoints, effectiveResolution);
+  }, [rawPoints, effectiveResolution]);
+
   if (points.length < 2) {
     return (
       <div className="paper-chart-empty">
@@ -151,15 +291,6 @@ function EquityChart({ dashboard }: { dashboard: PaperDashboard }) {
 
   const hoveredPoint = hoveredIndex !== null ? coords[hoveredIndex] : null;
 
-  const formatDate = (iso: string) => {
-    try {
-      const d = new Date(iso);
-      return `${d.getDate()}/${d.getMonth() + 1}/${d.getFullYear()}`;
-    } catch {
-      return iso;
-    }
-  };
-
   return (
     <div className="paper-equity-remake space-y-3.5">
       {/* 4 Thẻ KPI Tóm tắt tài sản trực quan */}
@@ -179,12 +310,90 @@ function EquityChart({ dashboard }: { dashboard: PaperDashboard }) {
         <div className="bg-slate-900/90 border border-slate-800 p-3 rounded-xl shadow-sm">
           <span className="text-slate-400 block text-xs font-bold uppercase tracking-wider">Đỉnh cao nhất</span>
           <strong className="text-emerald-400 text-base sm:text-lg font-extrabold">{money(maxVal)}</strong>
-          <small className="text-slate-400 block text-xs mt-0.5">{formatDate(points[maxIdx].timestamp)}</small>
+          <small className="text-slate-400 block text-xs mt-0.5">{formatResolutionDate(points[maxIdx].timestamp, "day")}</small>
         </div>
         <div className="bg-slate-900/90 border border-slate-800 p-3 rounded-xl shadow-sm">
           <span className="text-slate-400 block text-xs font-bold uppercase tracking-wider">Đáy thấp nhất</span>
           <strong className="text-amber-400 text-base sm:text-lg font-extrabold">{money(minVal)}</strong>
-          <small className="text-slate-400 block text-xs mt-0.5">{formatDate(points[minIdx].timestamp)}</small>
+          <small className="text-slate-400 block text-xs mt-0.5">{formatResolutionDate(points[minIdx].timestamp, "day")}</small>
+        </div>
+      </div>
+
+      {/* Thanh công cụ chọn chu kỳ hiển thị: Tự động, Ngày, Tuần, Tháng, Năm */}
+      <div className="flex flex-wrap items-center justify-between gap-2.5 px-1">
+        <div className="flex items-center gap-2 text-xs text-slate-300">
+          <span className="inline-block w-2 h-2 rounded-full bg-emerald-400"></span>
+          <span>
+            {firstBuyTrade
+              ? `Vẽ theo ngày kể từ khi mua (${formatResolutionDate(firstBuyTrade.created_at, "day")})`
+              : `Mốc khởi điểm (${formatResolutionDate(dashboard.account.created_at, "day")})`}
+          </span>
+          <span className="text-slate-600">·</span>
+          <span className="text-sky-300 font-semibold">
+            {effectiveResolution === "day" && `Hiển thị theo ngày (${points.length} phiên)`}
+            {effectiveResolution === "week" && `Hiển thị theo tuần (${points.length} tuần)`}
+            {effectiveResolution === "month" && `Hiển thị theo tháng (${points.length} tháng)`}
+            {effectiveResolution === "year" && `Hiển thị theo năm (${points.length} năm)`}
+          </span>
+        </div>
+
+        <div className="inline-flex items-center gap-1 p-1 rounded-xl bg-slate-900/90 border border-slate-800 text-xs">
+          <button
+            type="button"
+            onClick={() => setSelectedResolution("auto")}
+            className={`px-2.5 py-1 rounded-lg text-xs font-semibold transition-all ${
+              selectedResolution === "auto"
+                ? "bg-sky-500 text-slate-950 font-bold shadow-sm"
+                : "text-slate-400 hover:text-white hover:bg-slate-800/60"
+            }`}
+            title={`Tự động chuyển đổi chu kỳ (Hiện tại: Theo ${resolutionLabel(autoResolution)})`}
+          >
+            Tự động {selectedResolution === "auto" ? `(${resolutionLabel(autoResolution)})` : ""}
+          </button>
+          <button
+            type="button"
+            onClick={() => setSelectedResolution("day")}
+            className={`px-2.5 py-1 rounded-lg text-xs font-semibold transition-all ${
+              selectedResolution === "day"
+                ? "bg-sky-500 text-slate-950 font-bold shadow-sm"
+                : "text-slate-400 hover:text-white hover:bg-slate-800/60"
+            }`}
+          >
+            Ngày
+          </button>
+          <button
+            type="button"
+            onClick={() => setSelectedResolution("week")}
+            className={`px-2.5 py-1 rounded-lg text-xs font-semibold transition-all ${
+              selectedResolution === "week"
+                ? "bg-sky-500 text-slate-950 font-bold shadow-sm"
+                : "text-slate-400 hover:text-white hover:bg-slate-800/60"
+            }`}
+          >
+            Tuần
+          </button>
+          <button
+            type="button"
+            onClick={() => setSelectedResolution("month")}
+            className={`px-2.5 py-1 rounded-lg text-xs font-semibold transition-all ${
+              selectedResolution === "month"
+                ? "bg-sky-500 text-slate-950 font-bold shadow-sm"
+                : "text-slate-400 hover:text-white hover:bg-slate-800/60"
+            }`}
+          >
+            Tháng
+          </button>
+          <button
+            type="button"
+            onClick={() => setSelectedResolution("year")}
+            className={`px-2.5 py-1 rounded-lg text-xs font-semibold transition-all ${
+              selectedResolution === "year"
+                ? "bg-sky-500 text-slate-950 font-bold shadow-sm"
+                : "text-slate-400 hover:text-white hover:bg-slate-800/60"
+            }`}
+          >
+            Năm
+          </button>
         </div>
       </div>
 
@@ -268,7 +477,15 @@ function EquityChart({ dashboard }: { dashboard: PaperDashboard }) {
               transform: "translateX(-50%)",
             }}
           >
-            <div className="font-bold text-sky-300 text-xs mb-1">{formatDate(hoveredPoint.timestamp)}</div>
+            <div className="font-bold text-sky-300 text-xs mb-1">
+              {effectiveResolution === "week"
+                ? `Mốc tuần: ${formatResolutionDate(hoveredPoint.timestamp, "week")}`
+                : effectiveResolution === "month"
+                ? `Mốc tháng: ${formatResolutionDate(hoveredPoint.timestamp, "month")}`
+                : effectiveResolution === "year"
+                ? `Mốc năm: ${formatResolutionDate(hoveredPoint.timestamp, "year")}`
+                : `Phiên ngày: ${formatResolutionDate(hoveredPoint.timestamp, "day")}`}
+            </div>
             <div>Giá trị danh mục: <strong className="text-white font-extrabold text-sm">{money(hoveredPoint.val)}</strong></div>
             <div className="text-xs mt-1">
               So với vốn ban đầu:{" "}
@@ -281,20 +498,28 @@ function EquityChart({ dashboard }: { dashboard: PaperDashboard }) {
 
         {/* Mốc thời gian trục X */}
         <div className="flex justify-between items-center text-xs text-slate-400 px-2 pt-2 border-t border-slate-800/80">
-          <span>{formatDate(points[0].timestamp)}</span>
-          <span className="text-slate-500 font-medium">Chu kỳ 90 phiên</span>
-          <span>{formatDate(points[points.length - 1].timestamp)}</span>
+          <span>{formatResolutionDate(points[0].timestamp, effectiveResolution)}</span>
+          <span className="text-slate-400 font-medium">
+            {effectiveResolution === "day" && `Chu kỳ: ${points.length} phiên (Theo ngày)`}
+            {effectiveResolution === "week" && `Chu kỳ: ${points.length} mốc tuần (Theo tuần)`}
+            {effectiveResolution === "month" && `Chu kỳ: ${points.length} mốc tháng (Theo tháng)`}
+            {effectiveResolution === "year" && `Chu kỳ: ${points.length} mốc năm (Theo năm)`}
+          </span>
+          <span>{formatResolutionDate(points[points.length - 1].timestamp, effectiveResolution)}</span>
         </div>
       </div>
 
       <p className="text-xs text-slate-400 m-0 leading-relaxed italic">
-        Đường thẳng màu ghi biểu thị mốc vốn khởi điểm 100.000.000 ₫ để đối chiếu tăng trưởng tài sản. Bạn có thể di chuột trên biểu đồ để xem giá trị chi tiết và tỷ lệ lãi/lỗ theo từng phiên.
+        Biểu đồ tự động vẽ kể từ ngày mua cổ phiếu đầu tiên{firstBuyTrade ? ` (${formatResolutionDate(firstBuyTrade.created_at, "day")})` : ""}. Hệ thống tự động chuyển đổi sang hiển thị theo tuần, tháng hoặc năm khi số phiên giao dịch lớn để giữ đồ thị luôn thoáng rõ và dễ quan sát.
       </p>
     </div>
   );
 }
 
 const MARKET_PAGE_SIZE = 15;
+const HOLDINGS_PAGE_SIZE = 10;
+const ORDERS_PAGE_SIZE = 10;
+const TRADES_PAGE_SIZE = 10;
 
 export function PaperTradingDashboard({
   positiveNews,
@@ -318,12 +543,20 @@ export function PaperTradingDashboard({
     name: string;
     price: string | null;
   } | null>(null);
+  const [orderTargetQuantity, setOrderTargetQuantity] = useState<number | string | undefined>(undefined);
   const [marketQuery, setMarketQuery] = useState("");
   const [marketPage, setMarketPage] = useState(1);
+  const [holdingsPage, setHoldingsPage] = useState(1);
+  const [ordersPage, setOrdersPage] = useState(1);
+  const [tradesPage, setTradesPage] = useState(1);
   const [orderSide, setOrderSide] = useState("all");
   const [orderSymbol, setOrderSymbol] = useState("");
   const [pnlDialog, setPnlDialog] = useState<"unrealized" | "realized" | null>(null);
   const [isTogglingMode, setIsTogglingMode] = useState(false);
+  const [isAdvancingCash, setIsAdvancingCash] = useState(false);
+  const [fillingOrderId, setFillingOrderId] = useState<string | null>(null);
+  const [cancellingOrderId, setCancellingOrderId] = useState<string | null>(null);
+  const csrfTokenRef = useRef<string | null>(null);
   const stream = useMarketStreamState();
 
   // Merge market instruments with live stream in real time (identical to /market/stocks)
@@ -395,6 +628,60 @@ export function PaperTradingDashboard({
     return () => clearTimeout(timer);
   }, [notice]);
 
+  // Listen for query params or custom events to trigger paper trading order dialog
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+
+    const checkQueryParams = () => {
+      const url = new URL(window.location.href);
+      const action = url.searchParams.get("action");
+      const sym = url.searchParams.get("symbol")?.toUpperCase();
+      const sideParam = url.searchParams.get("side")?.toLowerCase();
+      const qtyParam = url.searchParams.get("qty");
+
+      if (action === "trade" && sym) {
+        const found = rows.find((r) => r.symbol === sym) || {
+          symbol: sym,
+          name: sym,
+          price: activePriceMap.get(sym) || null,
+        };
+        setSide(sideParam === "sell" ? "sell" : "buy");
+        if (qtyParam) setOrderTargetQuantity(qtyParam);
+        setSelectedInstrument(found);
+
+        url.searchParams.delete("action");
+        url.searchParams.delete("symbol");
+        url.searchParams.delete("side");
+        url.searchParams.delete("qty");
+        window.history.replaceState({}, "", url.toString());
+      }
+    };
+
+    checkQueryParams();
+
+    const handleCustomTrade = (e: Event) => {
+      const customEvent = e as CustomEvent<{
+        symbol?: string;
+        side?: "buy" | "sell";
+        quantity?: number | string;
+      }>;
+      const detail = customEvent.detail;
+      if (!detail?.symbol) return;
+      const sym = detail.symbol.toUpperCase();
+      const found = rows.find((r) => r.symbol === sym) || {
+        symbol: sym,
+        name: sym,
+        price: activePriceMap.get(sym) || null,
+      };
+      setSide(detail.side === "sell" ? "sell" : "buy");
+      if (detail.quantity) setOrderTargetQuantity(String(detail.quantity));
+      setSelectedInstrument(found);
+    };
+
+    window.addEventListener("open-stock-trade", handleCustomTrade);
+    return () => window.removeEventListener("open-stock-trade", handleCustomTrade);
+  }, [rows, activePriceMap]);
+
   // Dynamically re-evaluate holdings with real-time market prices
   const liveHoldings = useMemo(() => {
     if (!dashboard?.holdings) return [];
@@ -437,6 +724,22 @@ export function PaperTradingDashboard({
     () => new Map(liveHoldings.map((holding) => [holding.symbol, holding])),
     [liveHoldings]
   );
+  const holdingsPageCount = Math.max(1, Math.ceil(liveHoldings.length / HOLDINGS_PAGE_SIZE));
+  const visibleHoldings = useMemo(
+    () =>
+      liveHoldings.slice(
+        (holdingsPage - 1) * HOLDINGS_PAGE_SIZE,
+        holdingsPage * HOLDINGS_PAGE_SIZE
+      ),
+    [liveHoldings, holdingsPage]
+  );
+
+  useEffect(() => {
+    if (holdingsPage > holdingsPageCount) {
+      setHoldingsPage(holdingsPageCount);
+    }
+  }, [holdingsPage, holdingsPageCount]);
+
   const normalizedMarketQuery = marketQuery.trim().toLocaleUpperCase("vi-VN");
   const filteredMarket = useMemo(
     () =>
@@ -472,6 +775,38 @@ export function PaperTradingDashboard({
       ),
     [dashboard, orderSide, orderSymbol]
   );
+  const ordersPageCount = Math.max(1, Math.ceil(filteredOrders.length / ORDERS_PAGE_SIZE));
+  const visibleOrders = useMemo(
+    () =>
+      filteredOrders.slice(
+        (ordersPage - 1) * ORDERS_PAGE_SIZE,
+        ordersPage * ORDERS_PAGE_SIZE
+      ),
+    [filteredOrders, ordersPage]
+  );
+
+  useEffect(() => {
+    if (ordersPage > ordersPageCount) {
+      setOrdersPage(ordersPageCount);
+    }
+  }, [ordersPage, ordersPageCount]);
+
+  const allTrades = useMemo(() => dashboard?.trades ?? [], [dashboard?.trades]);
+  const tradesPageCount = Math.max(1, Math.ceil(allTrades.length / TRADES_PAGE_SIZE));
+  const visibleTrades = useMemo(
+    () =>
+      allTrades.slice(
+        (tradesPage - 1) * TRADES_PAGE_SIZE,
+        tradesPage * TRADES_PAGE_SIZE
+      ),
+    [allTrades, tradesPage]
+  );
+
+  useEffect(() => {
+    if (tradesPage > tradesPageCount) {
+      setTradesPage(tradesPageCount);
+    }
+  }, [tradesPage, tradesPageCount]);
 
   const pendingBuyEntries = useMemo(() => {
     if (!t2Summary?.pending_buy_shares_by_symbol || activeExecutionMode === "instant") return [];
@@ -486,14 +821,223 @@ export function PaperTradingDashboard({
   );
 
   const nextSettlementDate = useMemo(() => {
-    const firstPending = t2Summary?.pending_buy_settlements?.[0];
-    if (!firstPending?.settles_at) return null;
+    if (!t2Summary?.pending_buy_settlements?.length) return null;
+    const items = t2Summary.pending_buy_settlements;
+    if (items.length === 1) {
+      try {
+        return timeFormat.format(new Date(items[0].settles_at));
+      } catch {
+        return null;
+      }
+    }
     try {
-      return timeFormat.format(new Date(firstPending.settles_at));
+      const datesBySymbol: string[] = [];
+      const seen = new Set<string>();
+      for (const it of items) {
+        if (!seen.has(it.symbol)) {
+          seen.add(it.symbol);
+          datesBySymbol.push(`${it.symbol} (${timeFormat.format(new Date(it.settles_at))})`);
+        }
+      }
+      return datesBySymbol.join(", ");
     } catch {
       return null;
     }
   }, [t2Summary]);
+
+  const fetchCsrfToken = useCallback(async (): Promise<string> => {
+    if (csrfTokenRef.current && process.env.NODE_ENV !== "test") return csrfTokenRef.current;
+    const res = await fetch("/auth-api/csrf", { cache: "no-store" });
+    const body = (await res.json().catch(() => null)) as { csrf_token?: string } | null;
+    if (!res.ok || !body?.csrf_token) throw new Error("Không thể xác thực thao tác.");
+    csrfTokenRef.current = body.csrf_token;
+    return body.csrf_token;
+  }, []);
+
+  const toggleExecutionMode = useCallback(async (nextMode: PaperExecutionMode) => {
+    if (!dashboard || isTogglingMode) return;
+    const previousDashboard = dashboard;
+    setIsTogglingMode(true);
+    setError("");
+    const startTime = Date.now();
+
+    try {
+      let csrf = await fetchCsrfToken();
+      let res = await fetch("/portfolio-api/execution-mode", {
+        method: "POST",
+        cache: "no-store",
+        headers: {
+          "Content-Type": "application/json",
+          "X-CSRF-Token": csrf,
+        },
+        body: JSON.stringify({ execution_mode: nextMode }),
+      });
+      if (res.status === 403) {
+        csrfTokenRef.current = null;
+        csrf = await fetchCsrfToken();
+        res = await fetch("/portfolio-api/execution-mode", {
+          method: "POST",
+          cache: "no-store",
+          headers: {
+            "Content-Type": "application/json",
+            "X-CSRF-Token": csrf,
+          },
+          body: JSON.stringify({ execution_mode: nextMode }),
+        });
+      }
+      const body = await res.json().catch(() => null) as (PaperDashboard & { detail?: string }) | null;
+      if (!res.ok || !body?.account) {
+        throw new Error(body?.detail ?? "Không thể chuyển chế độ khớp lệnh.");
+      }
+      if (process.env.NODE_ENV !== "test") {
+        const elapsed = Date.now() - startTime;
+        if (elapsed < 350) {
+          await new Promise((resolve) => setTimeout(resolve, 350 - elapsed));
+        }
+      }
+      invalidatePaperDashboardCache();
+      setDashboard(body);
+      setNotice(
+        nextMode === "exchange_hours"
+          ? "Đã chuyển sang chế độ Giờ sàn thật HOSE/HNX (09:00-11:30 & 13:00-14:45, kiểm tra biên độ Trần/Sàn & sổ lệnh 3 bước giá)."
+          : "Đã chuyển sang chế độ Khớp tức thì 24/7 (tự động khớp toàn bộ theo giá quan sát mới nhất)."
+      );
+    } catch (reason) {
+      setDashboard(previousDashboard);
+      setError(reason instanceof Error ? reason.message : "Không thể chuyển chế độ khớp lệnh.");
+    } finally {
+      setIsTogglingMode(false);
+    }
+  }, [dashboard, isTogglingMode, fetchCsrfToken]);
+
+  const handleAdvanceSaleCash = useCallback(async () => {
+    if (isAdvancingCash) return;
+    setIsAdvancingCash(true);
+    setError("");
+    setNotice("");
+    try {
+      let csrf = await fetchCsrfToken();
+      let res = await fetch("/portfolio-api/advance-cash", {
+        method: "POST",
+        cache: "no-store",
+        headers: {
+          "Content-Type": "application/json",
+          "X-CSRF-Token": csrf,
+        },
+        body: JSON.stringify({}),
+      });
+      if (res.status === 403) {
+        csrfTokenRef.current = null;
+        csrf = await fetchCsrfToken();
+        res = await fetch("/portfolio-api/advance-cash", {
+          method: "POST",
+          cache: "no-store",
+          headers: {
+            "Content-Type": "application/json",
+            "X-CSRF-Token": csrf,
+          },
+          body: JSON.stringify({}),
+        });
+      }
+      const body = await res.json().catch(() => null) as {
+        advance?: { net_received: string; fee_amount: string };
+        data?: PaperDashboard;
+        detail?: string;
+      } | null;
+      if (!res.ok || !body?.data || !body?.advance) {
+        throw new Error(body?.detail ?? "Không thể ứng trước tiền bán T+2.");
+      }
+      invalidatePaperDashboardCache();
+      setDashboard(body.data);
+      setNotice(
+        `Ứng trước tiền bán T+2 thành công: Thực nhận ${money(body.advance.net_received)} (Phí ứng 0,03%/ngày: ${money(body.advance.fee_amount)}).`
+      );
+    } catch (reason) {
+      setError(reason instanceof Error ? reason.message : "Không thể ứng trước tiền bán T+2.");
+    } finally {
+      setIsAdvancingCash(false);
+    }
+  }, [isAdvancingCash, fetchCsrfToken]);
+
+  const handleCancelWaitingOrder = useCallback(async (orderId: string) => {
+    if (cancellingOrderId) return;
+    setCancellingOrderId(orderId);
+    setError("");
+    setNotice("");
+    try {
+      let csrf = await fetchCsrfToken();
+      let res = await fetch(`/portfolio-api/orders/${orderId}`, {
+        method: "DELETE",
+        cache: "no-store",
+        headers: { "X-CSRF-Token": csrf },
+      });
+      if (res.status === 403) {
+        csrfTokenRef.current = null;
+        csrf = await fetchCsrfToken();
+        res = await fetch(`/portfolio-api/orders/${orderId}`, {
+          method: "DELETE",
+          cache: "no-store",
+          headers: { "X-CSRF-Token": csrf },
+        });
+      }
+      const body = await res.json().catch(() => null) as {
+        data?: PaperDashboard;
+        order?: { symbol: string };
+        detail?: string;
+      } | null;
+      if (!res.ok || !body?.data) {
+        throw new Error(body?.detail ?? "Không thể hủy lệnh đang chờ.");
+      }
+      invalidatePaperDashboardCache();
+      setDashboard(body.data);
+      setNotice(`Đã hủy lệnh chờ ${body.order?.symbol ?? ""} và hoàn lại sức mua/cổ phiếu khả dụng.`);
+    } catch (reason) {
+      setError(reason instanceof Error ? reason.message : "Không thể hủy lệnh đang chờ.");
+    } finally {
+      setCancellingOrderId(null);
+    }
+  }, [cancellingOrderId, fetchCsrfToken]);
+
+  const handleForceFillWaitingOrder = useCallback(async (orderId: string) => {
+    if (fillingOrderId) return;
+    setFillingOrderId(orderId);
+    setError("");
+    setNotice("");
+    try {
+      let csrf = await fetchCsrfToken();
+      let res = await fetch(`/portfolio-api/orders/${orderId}/fill`, {
+        method: "POST",
+        cache: "no-store",
+        headers: { "X-CSRF-Token": csrf },
+      });
+      if (res.status === 403) {
+        csrfTokenRef.current = null;
+        csrf = await fetchCsrfToken();
+        res = await fetch(`/portfolio-api/orders/${orderId}/fill`, {
+          method: "POST",
+          cache: "no-store",
+          headers: { "X-CSRF-Token": csrf },
+        });
+      }
+      const body = await res.json().catch(() => null) as {
+        data?: PaperDashboard;
+        trade?: { symbol: string; quantity: number; execution_price: string };
+        detail?: string;
+      } | null;
+      if (!res.ok || !body?.data || !body?.trade) {
+        throw new Error(body?.detail ?? "Không thể khớp nhanh lệnh đang chờ.");
+      }
+      invalidatePaperDashboardCache();
+      setDashboard(body.data);
+      setNotice(
+        `Đã khớp nhanh ${body.trade.quantity} ${body.trade.symbol} tại giá ${money(body.trade.execution_price)}.`
+      );
+    } catch (reason) {
+      setError(reason instanceof Error ? reason.message : "Không thể khớp nhanh lệnh đang chờ.");
+    } finally {
+      setFillingOrderId(null);
+    }
+  }, [fillingOrderId, fetchCsrfToken]);
 
   const isUnauthenticated =
     auth.status === "anonymous" ||
@@ -588,142 +1132,6 @@ export function PaperTradingDashboard({
     globalThis.requestAnimationFrame?.(() => {
       document.getElementById("paper-market-table")?.scrollIntoView?.({ block: "start" });
     });
-  }
-
-  async function fetchCsrfToken(): Promise<string> {
-    const res = await fetch("/auth-api/csrf", { cache: "no-store" });
-    const body = await res.json().catch(() => null) as { csrf_token?: string } | null;
-    if (!res.ok || !body?.csrf_token) throw new Error("Không thể xác thực thao tác.");
-    return body.csrf_token;
-  }
-
-  async function toggleExecutionMode(nextMode: PaperExecutionMode) {
-    if (!dashboard || isTogglingMode) return;
-    const previousDashboard = dashboard;
-    setIsTogglingMode(true);
-    setError("");
-    const startTime = Date.now();
-
-    try {
-      const csrf = await fetchCsrfToken();
-      const res = await fetch("/portfolio-api/execution-mode", {
-        method: "POST",
-        cache: "no-store",
-        headers: {
-          "Content-Type": "application/json",
-          "X-CSRF-Token": csrf,
-        },
-        body: JSON.stringify({ execution_mode: nextMode }),
-      });
-      const body = await res.json().catch(() => null) as (PaperDashboard & { detail?: string }) | null;
-      if (!res.ok || !body?.account) {
-        throw new Error(body?.detail ?? "Không thể chuyển chế độ khớp lệnh.");
-      }
-      if (process.env.NODE_ENV !== "test") {
-        const elapsed = Date.now() - startTime;
-        if (elapsed < 350) {
-          await new Promise((resolve) => setTimeout(resolve, 350 - elapsed));
-        }
-      }
-      invalidatePaperDashboardCache();
-      setDashboard(body);
-      setNotice(
-        nextMode === "exchange_hours"
-          ? "Đã chuyển sang chế độ Giờ sàn thật HOSE/HNX (09:00-11:30 & 13:00-14:45, kiểm tra biên độ Trần/Sàn & sổ lệnh 3 bước giá)."
-          : "Đã chuyển sang chế độ Khớp tức thì 24/7 (tự động khớp toàn bộ theo giá quan sát mới nhất)."
-      );
-    } catch (reason) {
-      setDashboard(previousDashboard);
-      setError(reason instanceof Error ? reason.message : "Không thể chuyển chế độ khớp lệnh.");
-    } finally {
-      setIsTogglingMode(false);
-    }
-  }
-
-  async function handleAdvanceSaleCash() {
-    setError("");
-    setNotice("");
-    try {
-      const csrf = await fetchCsrfToken();
-      const res = await fetch("/portfolio-api/advance-cash", {
-        method: "POST",
-        cache: "no-store",
-        headers: {
-          "Content-Type": "application/json",
-          "X-CSRF-Token": csrf,
-        },
-        body: JSON.stringify({}),
-      });
-      const body = await res.json().catch(() => null) as {
-        advance?: { net_received: string; fee_amount: string };
-        data?: PaperDashboard;
-        detail?: string;
-      } | null;
-      if (!res.ok || !body?.data || !body?.advance) {
-        throw new Error(body?.detail ?? "Không thể ứng trước tiền bán T+2.");
-      }
-      invalidatePaperDashboardCache();
-      setDashboard(body.data);
-      setNotice(
-        `Ứng trước tiền bán T+2 thành công: Thực nhận ${money(body.advance.net_received)} (Phí ứng 0,03%/ngày: ${money(body.advance.fee_amount)}).`
-      );
-    } catch (reason) {
-      setError(reason instanceof Error ? reason.message : "Không thể ứng trước tiền bán T+2.");
-    }
-  }
-
-  async function handleCancelWaitingOrder(orderId: string) {
-    setError("");
-    setNotice("");
-    try {
-      const csrf = await fetchCsrfToken();
-      const res = await fetch(`/portfolio-api/orders/${orderId}`, {
-        method: "DELETE",
-        cache: "no-store",
-        headers: { "X-CSRF-Token": csrf },
-      });
-      const body = await res.json().catch(() => null) as {
-        data?: PaperDashboard;
-        order?: { symbol: string };
-        detail?: string;
-      } | null;
-      if (!res.ok || !body?.data) {
-        throw new Error(body?.detail ?? "Không thể hủy lệnh đang chờ.");
-      }
-      invalidatePaperDashboardCache();
-      setDashboard(body.data);
-      setNotice(`Đã hủy lệnh chờ ${body.order?.symbol ?? ""} và hoàn lại sức mua/cổ phiếu khả dụng.`);
-    } catch (reason) {
-      setError(reason instanceof Error ? reason.message : "Không thể hủy lệnh đang chờ.");
-    }
-  }
-
-  async function handleForceFillWaitingOrder(orderId: string) {
-    setError("");
-    setNotice("");
-    try {
-      const csrf = await fetchCsrfToken();
-      const res = await fetch(`/portfolio-api/orders/${orderId}/fill`, {
-        method: "POST",
-        cache: "no-store",
-        headers: { "X-CSRF-Token": csrf },
-      });
-      const body = await res.json().catch(() => null) as {
-        data?: PaperDashboard;
-        trade?: { symbol: string; quantity: number; execution_price: string };
-        detail?: string;
-      } | null;
-      if (!res.ok || !body?.data || !body?.trade) {
-        throw new Error(body?.detail ?? "Không thể khớp nhanh lệnh đang chờ.");
-      }
-      invalidatePaperDashboardCache();
-      setDashboard(body.data);
-      setNotice(
-        `Đã khớp nhanh ${body.trade.quantity} ${body.trade.symbol} tại giá ${money(body.trade.execution_price)}.`
-      );
-    } catch (reason) {
-      setError(reason instanceof Error ? reason.message : "Không thể khớp nhanh lệnh đang chờ.");
-    }
   }
 
   return (
@@ -848,14 +1256,32 @@ export function PaperTradingDashboard({
             <div>
               <span>Tiền bán chờ về (T+2)</span>
               <strong>{money(t2Summary.receivable_cash_t2)}</strong>
-              <small>Khả dụng ứng trước: {money(t2Summary.advanceable_cash)}</small>
+              {Number(t2Summary.receivable_cash_t2) > 0 ? (
+                <small>Khả dụng ứng trước: {money(t2Summary.advanceable_cash)}</small>
+              ) : Number(t2Summary.already_advanced_cash) > 0 ? (
+                <small className="text-emerald-400">
+                  Đã ứng trước: {money(t2Summary.already_advanced_cash)} (đã cộng vào tiền mặt)
+                </small>
+              ) : (
+                <small>Không có khoản tiền bán chờ về</small>
+              )}
             </div>
             <div>
               <span>Ứng trước tiền bán (Phí 0,03%/ngày)</span>
               {Number(t2Summary.advanceable_cash) > 0 ? (
-                <button type="button" onClick={handleAdvanceSaleCash}>
-                  Ứng trước tiền bán ({money(t2Summary.net_advance_available)})
+                <button
+                  type="button"
+                  disabled={isAdvancingCash}
+                  onClick={handleAdvanceSaleCash}
+                >
+                  {isAdvancingCash
+                    ? "Đang xử lý ứng trước..."
+                    : `Ứng trước tiền bán (${money(t2Summary.net_advance_available)})`}
                 </button>
+              ) : Number(t2Summary.already_advanced_cash) > 0 ? (
+                <small className="text-emerald-400">
+                  Toàn bộ tiền bán đã được ứng trước về tài khoản
+                </small>
               ) : (
                 <small>Chưa có khoản tiền bán chờ về cần ứng</small>
               )}
@@ -1001,17 +1427,15 @@ export function PaperTradingDashboard({
                 </tbody>
               </table>
             </div>
-            {marketPageCount > 1 && (
-              <nav className="paper-market-pagination" aria-label="Phân trang bảng cổ phiếu">
-                <button type="button" disabled={marketPage === 1} onClick={() => changeMarketPage(marketPage - 1)}>
-                  ← Trang trước
-                </button>
-                <strong>Trang {marketPage} / {marketPageCount}</strong>
-                <button type="button" disabled={marketPage === marketPageCount} onClick={() => changeMarketPage(marketPage + 1)}>
-                  Trang sau →
-                </button>
-              </nav>
-            )}
+            <Pagination
+              currentPage={marketPage}
+              totalPages={marketPageCount}
+              totalItems={filteredMarket.length}
+              pageSize={MARKET_PAGE_SIZE}
+              itemLabel="mã cổ phiếu"
+              onPageChange={(nextPage) => changeMarketPage(nextPage)}
+              ariaLabel="Phân trang bảng cổ phiếu"
+            />
           </>
         ) : (
           <div className="paper-empty compact">
@@ -1030,7 +1454,8 @@ export function PaperTradingDashboard({
           <span>{liveHoldings.length} mã</span>
         </div>
         {liveHoldings.length ? (
-          <div className="paper-holdings-wrap">
+          <>
+            <div className="paper-holdings-wrap">
             <table aria-label="Bảng quản lý cổ phiếu đã mua">
               <thead>
                 <tr>
@@ -1047,7 +1472,7 @@ export function PaperTradingDashboard({
                 </tr>
               </thead>
               <tbody>
-                {liveHoldings.map((holding) => (
+                {visibleHoldings.map((holding) => (
                   <tr key={holding.symbol}>
                     <td className="text-left">
                       <Link href={`/market/stocks/${holding.symbol}?from=${encodeURIComponent("/portfolio#paper-market-table")}`} prefetch={false}>
@@ -1095,6 +1520,16 @@ export function PaperTradingDashboard({
               </tbody>
             </table>
           </div>
+          <Pagination
+            currentPage={holdingsPage}
+            totalPages={holdingsPageCount}
+            totalItems={liveHoldings.length}
+            pageSize={HOLDINGS_PAGE_SIZE}
+            itemLabel="mã cổ phiếu"
+            onPageChange={setHoldingsPage}
+            ariaLabel="Phân trang danh mục cổ phiếu đã mua"
+          />
+        </>
         ) : (
           <div className="paper-empty">
             <strong>Chưa có cổ phiếu nào</strong>
@@ -1117,7 +1552,13 @@ export function PaperTradingDashboard({
         <div className="paper-order-filters">
           <label>
             Chiều lệnh
-            <select value={orderSide} onChange={(event) => setOrderSide(event.target.value)}>
+            <select
+              value={orderSide}
+              onChange={(event) => {
+                setOrderSide(event.target.value);
+                setOrdersPage(1);
+              }}
+            >
               <option value="all">Mua và bán</option>
               <option value="buy">Mua</option>
               <option value="sell">Bán</option>
@@ -1125,26 +1566,34 @@ export function PaperTradingDashboard({
           </label>
           <label>
             Mã cổ phiếu
-            <input value={orderSymbol} onChange={(event) => setOrderSymbol(event.target.value)} placeholder="Ví dụ: FPT" />
+            <input
+              value={orderSymbol}
+              onChange={(event) => {
+                setOrderSymbol(event.target.value);
+                setOrdersPage(1);
+              }}
+              placeholder="Ví dụ: FPT"
+            />
           </label>
         </div>
         {filteredOrders.length ? (
-          <div className="paper-trades-wrap">
-            <table aria-label="Danh sách lệnh mô phỏng">
-              <thead>
-                <tr>
-                  <th className="text-left">Thời gian đặt</th>
-                  <th className="text-center">Chiều</th>
-                  <th className="text-center">Mã</th>
-                  <th className="text-center">Thời gian khớp</th>
-                  <th className="text-center">Kết quả</th>
-                  <th className="text-center">Giá mô phỏng</th>
-                  <th className="text-center">Số lượng</th>
-                  {hasActionableOrders && <th className="text-center">Thao tác</th>}
-                </tr>
-              </thead>
-              <tbody>
-                {filteredOrders.map((order) => {
+          <>
+            <div className="paper-trades-wrap">
+              <table aria-label="Danh sách lệnh mô phỏng">
+                <thead>
+                  <tr>
+                    <th className="text-left">Thời gian đặt</th>
+                    <th className="text-center">Chiều</th>
+                    <th className="text-center">Mã</th>
+                    <th className="text-center">Thời gian khớp</th>
+                    <th className="text-center">Kết quả</th>
+                    <th className="text-center">Giá mô phỏng</th>
+                    <th className="text-center">Số lượng</th>
+                    {hasActionableOrders && <th className="text-center">Thao tác</th>}
+                  </tr>
+                </thead>
+                <tbody>
+                  {visibleOrders.map((order) => {
                   const meta = exchangeSim?.order_meta?.[order.id];
                   const displayType = meta?.display_order_type ?? order.order_type;
                   return (
@@ -1171,7 +1620,9 @@ export function PaperTradingDashboard({
                           title={meta?.pending_reason || undefined}
                         >
                           {order.status === "filled"
-                            ? "Đã tự động khớp"
+                            ? activeExecutionMode === "exchange_hours"
+                              ? "Đã khớp lệnh"
+                              : "Đã tự động khớp"
                             : order.status === "cancelled"
                             ? "Đã hủy trước đây"
                             : order.status === "expired"
@@ -1191,17 +1642,19 @@ export function PaperTradingDashboard({
                             <div className="flex items-center justify-center gap-1.5">
                               <button
                                 type="button"
-                                className="paper-order-btn fill text-xs px-2 py-1 rounded bg-sky-600 hover:bg-sky-500 text-white font-medium"
+                                disabled={Boolean(fillingOrderId || cancellingOrderId)}
+                                className="paper-order-btn fill text-xs px-2 py-1 rounded bg-sky-600 hover:bg-sky-500 disabled:opacity-50 text-white font-medium"
                                 onClick={() => handleForceFillWaitingOrder(order.id)}
                               >
-                                Khớp nhanh {order.symbol}
+                                {fillingOrderId === order.id ? "Đang khớp..." : `Khớp nhanh ${order.symbol}`}
                               </button>
                               <button
                                 type="button"
-                                className="paper-order-btn cancel text-xs px-2 py-1 rounded bg-rose-600/80 hover:bg-rose-500 text-white font-medium"
+                                disabled={Boolean(fillingOrderId || cancellingOrderId)}
+                                className="paper-order-btn cancel text-xs px-2 py-1 rounded bg-rose-600/80 hover:bg-rose-500 disabled:opacity-50 text-white font-medium"
                                 onClick={() => handleCancelWaitingOrder(order.id)}
                               >
-                                Hủy lệnh
+                                {cancellingOrderId === order.id ? "Đang hủy..." : "Hủy lệnh"}
                               </button>
                             </div>
                           ) : (
@@ -1215,6 +1668,16 @@ export function PaperTradingDashboard({
               </tbody>
             </table>
           </div>
+          <Pagination
+            currentPage={ordersPage}
+            totalPages={ordersPageCount}
+            totalItems={filteredOrders.length}
+            pageSize={ORDERS_PAGE_SIZE}
+            itemLabel="lệnh"
+            onPageChange={setOrdersPage}
+            ariaLabel="Phân trang sổ lệnh"
+          />
+        </>
         ) : (
           <div className="paper-empty compact"><p>Chưa có lệnh mua/bán phù hợp.</p></div>
         )}
@@ -1249,38 +1712,49 @@ export function PaperTradingDashboard({
           <span>Tối đa 100 lệnh gần nhất</span>
         </div>
         {dashboard.trades.length ? (
-          <div className="paper-trades-wrap">
-            <table>
-              <thead>
-                <tr>
-                  <th className="text-left">Thời gian</th>
-                  <th className="text-center">Lệnh</th>
-                  <th className="text-center">Mã</th>
-                  <th className="text-center">Số lượng</th>
-                  <th className="text-center">Giá khớp</th>
-                  <th className="text-center">Phí + thuế</th>
-                  <th className="text-center">Tiền vào/ra</th>
-                  <th className="text-center">Lãi/lỗ chốt</th>
-                </tr>
-              </thead>
-              <tbody>
-                {dashboard.trades.map((trade) => (
-                  <tr key={trade.id}>
-                    <td className="text-left">{timeFormat.format(new Date(trade.created_at))}</td>
-                    <td className="text-center"><span className={`paper-side ${trade.side}`}>{trade.side === "buy" ? "Mua" : "Bán"}</span></td>
-                    <td className="text-center"><strong>{trade.symbol}</strong></td>
-                    <td className="text-center">{numberFormat.format(trade.quantity)}</td>
-                    <td className="text-center">{money(trade.execution_price)}</td>
-                    <td className="text-center">{money(roundVnd(trade.fee_amount) + roundVnd(trade.tax_amount))}</td>
-                    <td className={`text-center ${tone(trade.cash_effect)}`}>{money(trade.cash_effect)}</td>
-                    <td className={`text-center ${tone(trade.realized_pnl ?? 0)}`}>
-                      {trade.realized_pnl === null ? "—" : money(trade.realized_pnl)}
-                    </td>
+          <>
+            <div className="paper-trades-wrap">
+              <table>
+                <thead>
+                  <tr>
+                    <th className="text-left">Thời gian</th>
+                    <th className="text-center">Lệnh</th>
+                    <th className="text-center">Mã</th>
+                    <th className="text-center">Số lượng</th>
+                    <th className="text-center">Giá khớp</th>
+                    <th className="text-center">Phí + thuế</th>
+                    <th className="text-center">Tiền vào/ra</th>
+                    <th className="text-center">Lãi/lỗ chốt</th>
                   </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
+                </thead>
+                <tbody>
+                  {visibleTrades.map((trade) => (
+                    <tr key={trade.id}>
+                      <td className="text-left">{timeFormat.format(new Date(trade.created_at))}</td>
+                      <td className="text-center"><span className={`paper-side ${trade.side}`}>{trade.side === "buy" ? "Mua" : "Bán"}</span></td>
+                      <td className="text-center"><strong>{trade.symbol}</strong></td>
+                      <td className="text-center">{numberFormat.format(trade.quantity)}</td>
+                      <td className="text-center">{money(trade.execution_price)}</td>
+                      <td className="text-center">{money(roundVnd(trade.fee_amount) + roundVnd(trade.tax_amount))}</td>
+                      <td className={`text-center ${tone(trade.cash_effect)}`}>{money(trade.cash_effect)}</td>
+                      <td className={`text-center ${tone(trade.realized_pnl ?? 0)}`}>
+                        {trade.realized_pnl === null ? "—" : money(trade.realized_pnl)}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+            <Pagination
+              currentPage={tradesPage}
+              totalPages={tradesPageCount}
+              totalItems={allTrades.length}
+              pageSize={TRADES_PAGE_SIZE}
+              itemLabel="giao dịch"
+              onPageChange={setTradesPage}
+              ariaLabel="Phân trang lịch sử mua bán"
+            />
+          </>
         ) : (
           <div className="paper-empty compact"><p>Chưa có giao dịch mô phỏng.</p></div>
         )}
@@ -1307,7 +1781,11 @@ export function PaperTradingDashboard({
         side={side}
         instrument={selectedInstrument}
         dashboard={dashboard}
-        onClose={() => setSelectedInstrument(null)}
+        initialQuantity={orderTargetQuantity}
+        onClose={() => {
+          setSelectedInstrument(null);
+          setOrderTargetQuantity(undefined);
+        }}
         onDashboard={(value) => {
           setDashboard(value);
           setError("");

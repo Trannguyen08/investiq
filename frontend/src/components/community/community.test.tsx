@@ -121,4 +121,35 @@ describe("Community & Proof-of-Thesis Components", () => {
     expect(screen.getByText("+12.5%")).toBeInTheDocument();
     expect(screen.getByText("3 mã")).toBeInTheDocument();
   });
+
+  it("paginates investment theses with 10 items per page using shared pagination", () => {
+    const elevenTheses: InvestmentThesisItem[] = Array.from({ length: 11 }, (_, i) => ({
+      ...mockTheses[0],
+      id: `thesis-${i + 1}`,
+      title: `Luận điểm số ${i + 1}`,
+      created_at: new Date(Date.now() - i * 60000).toISOString(),
+    }));
+
+    render(
+      <ThesisArena
+        initialTheses={elevenTheses}
+        initialLeaderboard={mockAnalysts}
+      />
+    );
+
+    // Page 1: shows Luận điểm số 1 to 10
+    expect(screen.getByText("Luận điểm số 1")).toBeInTheDocument();
+    expect(screen.getByText("Luận điểm số 10")).toBeInTheDocument();
+    expect(screen.queryByText("Luận điểm số 11")).not.toBeInTheDocument();
+    expect(screen.getByText(/Hiển thị/)).toBeInTheDocument();
+    expect(screen.getByText(/1 - 10/)).toBeInTheDocument();
+
+    // Click next page
+    const nextBtn = screen.getByRole("button", { name: /Trang sau/i });
+    fireEvent.click(nextBtn);
+
+    // Page 2: shows Luận điểm số 11
+    expect(screen.getByText("Luận điểm số 11")).toBeInTheDocument();
+    expect(screen.queryByText("Luận điểm số 1")).not.toBeInTheDocument();
+  });
 });

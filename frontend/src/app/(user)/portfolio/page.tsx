@@ -6,7 +6,7 @@ import type { PaperDashboard } from "@/types/portfolio";
 export const dynamic = "force-dynamic";
 
 export default async function PortfolioPage() {
-  const marketQuery = new URLSearchParams({ sort: "matched_value", direction: "desc", limit: "30" });
+  const marketQuery = new URLSearchParams({ sort: "vn30", direction: "desc", limit: "100" });
   const dashboardWithTimeout = Promise.race([
     paperTradingRequest("").then(async (res) => (res.ok ? ((await res.json()) as PaperDashboard) : null)),
     new Promise<null>((resolve) => setTimeout(() => resolve(null), 1200)),

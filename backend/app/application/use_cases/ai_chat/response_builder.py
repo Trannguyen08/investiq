@@ -14,7 +14,10 @@ from app.application.use_cases.ai_chat.intent_parser import (
 )
 from app.application.use_cases.ai_chat.knowledge_base import KnowledgeHit
 from app.application.use_cases.ai_chat.market_snapshot import build_daily_market_snapshot
-from app.application.use_cases.ai_chat.ticker_resolver import find_closest_tickers
+from app.application.use_cases.ai_chat.ticker_resolver import (
+    find_closest_tickers,
+    is_valid_ticker,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -822,6 +825,11 @@ def _build_typo_suggestion_section(
     invalid_tickers: list[str],
     is_dividend: bool,
     is_forensics: bool,
+    is_trade_order: bool = False,
+    trade_side: str = "buy",
+    trade_quantity: int = 100,
+    is_community_post: bool = False,
+    market_service: Any = None,
     text_parts: list[str],
     sources: list[dict[str, str]],
     suggested_actions: list[dict[str, Any]],
@@ -847,64 +855,182 @@ def _build_typo_suggestion_section(
                 )
 
     if suggestion_lines:
-        text_parts.append(
-            "Có phải bạn đang tìm kiếm một trong các mã cổ phiếu gần đúng sau:\n"
-            + "\n".join(suggestion_lines[:4])
-        )
-        text_parts.append(
-            "Vui lòng chọn mã gợi ý bên dưới hoặc nhập lại mã cổ phiếu chính xác để InvestIQ phân tích."
-        )
+        if is_trade_order:
+            side_clean = "buy" if trade_side.lower() == "buy" else "sell"
+            side_vi = "Mua" if side_clean == "buy" else "Bán"
+            text_parts.append(
+                f"Có phải bạn muốn đặt lệnh **{side_vi.upper()} {trade_quantity:,} cổ phiếu** cho một trong các mã cổ phiếu gần đúng sau:\n"
+                + "\n".join(suggestion_lines[:4])
+            )
+            text_parts.append(
+                "Vui lòng chọn mã gợi ý bên dưới để hoàn tất đặt lệnh mô phỏng nhanh:"
+            )
 
-        for m in all_suggestions[:3]:
-            sources.append(
+            for m in all_suggestions[:3]:
+                price_val = 20000
+                if market_service and hasattr(market_service, "instrument"):
+                    try:
+                        inst = market_service.instrument(m.symbol, include_fundamentals=False)
+                        if inst and getattr(inst, "price", None):
+                            price_val = float(inst.price)
+                    except Exception:
+                        pass
+
+                sources.append(
+                    {
+                        "kind": "internal",
+                        "title": f"Bảng giá thị trường InvestIQ: {m.symbol} ({m.name})",
+                        "url": f"/market/stocks/{m.symbol}",
+                    }
+                )
+                suggested_actions.append(
+                    {
+                        "label": f"Đặt lệnh {side_vi} {trade_quantity} {m.symbol} ngay",
+                        "action_type": "TRADE_ORDER",
+                        "symbol": m.symbol,
+                        "side": side_clean,
+                        "quantity": trade_quantity,
+                        "price": str(int(price_val)),
+                    }
+                )
+                suggested_actions.append(
+                    {
+                        "label": f"Mở phiếu lệnh {m.symbol}",
+                        "action_type": "NAVIGATE",
+                        "url": f"/portfolio?action=trade&symbol={m.symbol}&side={side_clean}&qty={trade_quantity}",
+                    }
+                )
+
+            suggested_actions.append(
                 {
-                    "kind": "internal",
-                    "title": f"Bảng giá thị trường InvestIQ: {m.symbol} ({m.name})",
-                    "url": f"/market/stocks/{m.symbol}",
+                    "label": "Vào Sổ lệnh & Danh mục",
+                    "action_type": "NAVIGATE",
+                    "url": "/portfolio",
                 }
             )
-            if is_dividend:
+            if all_suggestions:
+                top_m = all_suggestions[0]
                 suggested_actions.append(
                     {
-                        "label": f"Lịch chia cổ tức {m.symbol}",
+                        "label": f"Phân tích chuyên sâu {top_m.symbol}",
                         "action_type": "SEND_PROMPT",
-                        "prompt": f"Lịch chia cổ tức {m.symbol}",
+                        "prompt": f"Phân tích {top_m.symbol}",
                     }
                 )
-            elif is_forensics:
+        elif is_community_post:
+            text_parts.append(
+                "Có phải bạn đang muốn viết bài / đăng luận điểm đầu tư cho một trong các mã gần đúng sau:\n"
+                + "\n".join(suggestion_lines[:4])
+            )
+            text_parts.append(
+                "Vui lòng chọn mã bên dưới để InvestIQ soạn thảo luận điểm đầu tư hoàn chỉnh:"
+            )
+            for m in all_suggestions[:3]:
+                sources.append(
+                    {
+                        "kind": "internal",
+                        "title": f"Bảng giá thị trường InvestIQ: {m.symbol} ({m.name})",
+                        "url": f"/market/stocks/{m.symbol}",
+                    }
+                )
                 suggested_actions.append(
                     {
-                        "label": f"Kiểm tra rủi ro BCTC {m.symbol}",
+                        "label": f"Soạn luận điểm {m.symbol}",
                         "action_type": "SEND_PROMPT",
-                        "prompt": f"Kiểm tra BCTC {m.symbol}",
+                        "prompt": f"Đăng bài về {m.symbol}",
                     }
                 )
-            else:
-                suggested_actions.append(
+        else:
+            text_parts.append(
+                "Có phải bạn đang tìm kiếm một trong các mã cổ phiếu gần đúng sau:\n"
+                + "\n".join(suggestion_lines[:4])
+            )
+            text_parts.append(
+                "Vui lòng chọn mã gợi ý bên dưới hoặc nhập lại mã cổ phiếu chính xác để InvestIQ phân tích."
+            )
+
+            for m in all_suggestions[:3]:
+                sources.append(
                     {
-                        "label": f"Phân tích {m.symbol} ({m.name})",
-                        "action_type": "SEND_PROMPT",
-                        "prompt": f"Phân tích {m.symbol}",
+                        "kind": "internal",
+                        "title": f"Bảng giá thị trường InvestIQ: {m.symbol} ({m.name})",
+                        "url": f"/market/stocks/{m.symbol}",
                     }
                 )
+                if is_dividend:
+                    suggested_actions.append(
+                        {
+                            "label": f"Lịch chia cổ tức {m.symbol}",
+                            "action_type": "SEND_PROMPT",
+                            "prompt": f"Lịch chia cổ tức {m.symbol}",
+                        }
+                    )
+                elif is_forensics:
+                    suggested_actions.append(
+                        {
+                            "label": f"Kiểm tra rủi ro BCTC {m.symbol}",
+                            "action_type": "SEND_PROMPT",
+                            "prompt": f"Kiểm tra BCTC {m.symbol}",
+                        }
+                    )
+                else:
+                    suggested_actions.append(
+                        {
+                            "label": f"Phân tích {m.symbol} ({m.name})",
+                            "action_type": "SEND_PROMPT",
+                            "prompt": f"Phân tích {m.symbol}",
+                        }
+                    )
     else:
-        text_parts.append(
-            "Vui lòng kiểm tra lại mã chứng khoán (gồm 3 ký tự niêm yết trên HOSE, HNX hoặc UPCoM, ví dụ: HPG, VCB, FPT)."
-        )
-        suggested_actions.extend(
-            [
-                {
-                    "label": "Phân tích cổ phiếu HPG",
-                    "action_type": "SEND_PROMPT",
-                    "prompt": "Phân tích HPG",
-                },
-                {
-                    "label": "So sánh VCB và MBB",
-                    "action_type": "SEND_PROMPT",
-                    "prompt": "So sánh VCB và MBB",
-                },
-            ]
-        )
+        if is_trade_order:
+            side_clean = "buy" if trade_side.lower() == "buy" else "sell"
+            side_vi = "Mua" if side_clean == "buy" else "Bán"
+            text_parts.append(
+                "Vui lòng kiểm tra lại mã chứng khoán (gồm 3 ký tự niêm yết trên HOSE, HNX hoặc UPCoM, ví dụ: HPG, VCB, FPT, MBB) để đặt lệnh."
+            )
+            suggested_actions.extend(
+                [
+                    {
+                        "label": f"Đặt lệnh {side_vi} 100 HPG",
+                        "action_type": "TRADE_ORDER",
+                        "symbol": "HPG",
+                        "side": side_clean,
+                        "quantity": 100,
+                        "price": "21200",
+                    },
+                    {
+                        "label": f"Đặt lệnh {side_vi} 100 FPT",
+                        "action_type": "TRADE_ORDER",
+                        "symbol": "FPT",
+                        "side": side_clean,
+                        "quantity": 100,
+                        "price": "50900",
+                    },
+                    {
+                        "label": "Vào Sổ lệnh & Danh mục",
+                        "action_type": "NAVIGATE",
+                        "url": "/portfolio",
+                    },
+                ]
+            )
+        else:
+            text_parts.append(
+                "Vui lòng kiểm tra lại mã chứng khoán (gồm 3 ký tự niêm yết trên HOSE, HNX hoặc UPCoM, ví dụ: HPG, VCB, FPT)."
+            )
+            suggested_actions.extend(
+                [
+                    {
+                        "label": "Phân tích cổ phiếu HPG",
+                        "action_type": "SEND_PROMPT",
+                        "prompt": "Phân tích HPG",
+                    },
+                    {
+                        "label": "So sánh VCB và MBB",
+                        "action_type": "SEND_PROMPT",
+                        "prompt": "So sánh VCB và MBB",
+                    },
+                ]
+            )
 
 
 def _build_comparison_section(
@@ -1834,6 +1960,189 @@ def _build_market_overview_section(
         )
 
 
+def _build_trade_order_section(
+    *,
+    symbol: str,
+    side: str,
+    quantity: int,
+    stock_data: dict[str, Any],
+    market_service: Any,
+    text_parts: list[str],
+    widgets: list[dict[str, Any]],
+    sources: list[dict[str, str]],
+    suggested_actions: list[dict[str, Any]],
+) -> None:
+    del widgets  # Reserved for order ticket widget
+    inst = stock_data.get(symbol, {}).get("instrument")
+    if not inst and hasattr(market_service, "instrument"):
+        try:
+            inst = market_service.instrument(symbol, include_fundamentals=True)
+        except Exception:
+            inst = None
+
+    name = _get_val(inst, "name", symbol)
+    price_val = _get_val(inst, "price", 20000)
+    price = float(price_val or 20000)
+    change_pct = float(_get_val(inst, "change_percent", 0.0) or 0.0)
+    exchange = _get_val(inst, "exchange", "HOSE")
+    pe_raw = _get_val(inst, "pe")
+    pb_raw = _get_val(inst, "pb")
+    roe_raw = _get_val(inst, "roe_percent")
+    pe = f"{float(pe_raw):.1f}" if pe_raw not in (None, "", "—") else "—"
+    pb = f"{float(pb_raw):.1f}" if pb_raw not in (None, "", "—") else "—"
+    roe = f"{float(roe_raw):.1f}" if roe_raw not in (None, "", "—") else "—"
+
+    side_clean = "buy" if side.lower() == "buy" else "sell"
+    side_vi = "Mua" if side_clean == "buy" else "Bán"
+    order_val = price * quantity
+    fee_sim = round(order_val * 0.0015)
+    total_val = (order_val + fee_sim) if side_clean == "buy" else (order_val - fee_sim)
+
+    text_parts.append(f"Hỗ trợ đặt lệnh mô phỏng: {side_vi.upper()} {quantity:,} {symbol} ({name})")
+    text_parts.append(
+        f"Tôi đã tiếp nhận yêu cầu đặt lệnh giao dịch mô phỏng của bạn cho mã **{symbol}**:\n\n"
+        f"• **Mã cổ phiếu**: {symbol} (Sàn {exchange})\n"
+        f"• **Chiều lệnh**: **{side_vi.upper()}** (Lệnh giới hạn LO / Khớp theo thị giá)\n"
+        f"• **Khối lượng**: **{quantity:,} cổ phiếu** (Khối lượng chuẩn lô chẵn)\n"
+        f"• **Thị giá hiện tại**: **{price:,.0f} ₫** ({change_pct:+.2f}%)\n"
+        f"• **Giá trị lệnh tạm tính**: **{order_val:,.0f} ₫**\n"
+        f"• **Phí giao dịch mô phỏng (0,15%)**: ~{fee_sim:,.0f} ₫\n"
+        f"• **Tổng số tiền {'cần thanh toán' if side_clean == 'buy' else 'dự kiến nhận về'}**: **~{total_val:,.0f} ₫**\n\n"
+        f"**Định giá & Tình trạng khớp lệnh**:\n"
+        f"- Chỉ số định giá: P/E **{pe}x** | P/B **{pb}x** | ROE **{roe}%**\n"
+        f"- Quy chế khớp lệnh: Hệ thống tự động ghi nhận khớp lệnh theo giá khớp thực tế trên sàn (09:00 - 11:30 & 13:00 - 14:45). Ngoài khung giờ giao dịch, lệnh được lưu vào sổ lệnh ở trạng thái chờ khớp cho phiên tiếp theo.\n\n"
+        f"Bạn có thể bấm nút **'Đặt lệnh {side_vi} {quantity:,} {symbol} ngay'** bên dưới để mở phiếu lệnh đã điền sẵn và xác nhận giao dịch tức thì:"
+    )
+
+    sources.append(
+        {
+            "kind": "internal",
+            "title": f"Sổ lệnh & Phòng thực hành đầu tư ({symbol})",
+            "url": f"/portfolio?action=trade&symbol={symbol}&side={side_clean}&qty={quantity}",
+        }
+    )
+
+    suggested_actions.extend(
+        [
+            {
+                "label": f"Đặt lệnh {side_vi} {quantity:,} {symbol} ngay",
+                "action_type": "TRADE_ORDER",
+                "symbol": symbol,
+                "side": side_clean,
+                "quantity": quantity,
+                "price": str(int(price)),
+            },
+            {
+                "label": f"Mở phiếu lệnh {symbol}",
+                "action_type": "NAVIGATE",
+                "url": f"/portfolio?action=trade&symbol={symbol}&side={side_clean}&qty={quantity}",
+            },
+            {
+                "label": "Vào Sổ lệnh & Danh mục",
+                "action_type": "NAVIGATE",
+                "url": "/portfolio",
+            },
+            {
+                "label": f"Phân tích chuyên sâu {symbol}",
+                "action_type": "SEND_PROMPT",
+                "prompt": f"Phân tích {symbol}",
+            },
+        ]
+    )
+
+
+def _build_community_post_draft_section(
+    *,
+    symbol: str,
+    user_message: str,
+    stock_data: dict[str, Any],
+    market_service: Any,
+    text_parts: list[str],
+    widgets: list[dict[str, Any]],
+    sources: list[dict[str, str]],
+    suggested_actions: list[dict[str, Any]],
+) -> None:
+    del user_message, widgets
+    inst = stock_data.get(symbol, {}).get("instrument")
+    if not inst and hasattr(market_service, "instrument"):
+        try:
+            inst = market_service.instrument(symbol, include_fundamentals=True)
+        except Exception:
+            inst = None
+
+    name = _get_val(inst, "name", symbol)
+    price_val = _get_val(inst, "price", 20000)
+    price = float(price_val or 20000)
+    target_price = int(round(price * 1.15 / 50) * 50)
+    stop_loss_price = int(round(price * 0.93 / 50) * 50)
+    pe_raw = _get_val(inst, "pe")
+    pb_raw = _get_val(inst, "pb")
+    roe_raw = _get_val(inst, "roe_percent")
+    pe = f"{float(pe_raw):.1f}" if pe_raw not in (None, "", "—") else "6.5"
+    pb = f"{float(pb_raw):.1f}" if pb_raw not in (None, "", "—") else "1.2"
+    roe = f"{float(roe_raw):.1f}" if roe_raw not in (None, "", "—") else "20.5"
+
+    draft_title = f"Luận điểm đầu tư {symbol}: Động lực tăng trưởng và vùng định giá hấp dẫn"
+    draft_body = (
+        f"1. Tổng quan cơ hội: Cổ phiếu {symbol} ({name}) đang tích lũy ở vùng giá {price:,.0f} ₫ với định giá P/E ~{pe}x, P/B ~{pb}x và ROE đạt ~{roe}%, tạo biên an toàn hấp dẫn cho vị thế nắm giữ trung hạn.\n\n"
+        f"2. Lợi thế cốt lõi & Động lực kinh doanh: Doanh nghiệp sở hữu vị thế hàng đầu ngành, năng lực quản trị rủi ro tốt và hưởng lợi lớn từ chu kỳ phục hồi kinh tế vĩ mô cùng tăng trưởng tín dụng.\n\n"
+        f"3. Quản trị rủi ro & Sức khỏe tài chính: Cơ cấu nguồn vốn an toàn, đòn bẩy tài chính duy trì trong ngưỡng kiểm soát, chất lượng tài sản lành mạnh.\n\n"
+        f"4. Khuyến nghị hành động: Mua tích lũy tại vùng giá quanh {price:,.0f} ₫, mục tiêu kỳ vọng {target_price:,.0f} ₫ (+15%), quản trị rủi ro cắt lỗ nếu giá thủng {stop_loss_price:,.0f} ₫ (-7%)."
+    )
+    draft_catalysts = "Kết quả kinh doanh quý tới tăng trưởng tích cực, mở rộng quy mô hoạt động và dòng tiền tổ chức duy trì mua ròng."
+
+    text_parts.append(f"Bản thảo Luận điểm Đầu tư: {symbol} - {name}")
+    text_parts.append(
+        f"Tôi đã soạn sẵn bản thảo luận điểm phân tích chuyên sâu cho **{symbol}** để bạn xuất bản lên Cộng đồng InvestIQ:\n\n"
+        f"• **Tiêu đề**: {draft_title}\n"
+        f"• **Quan điểm**: MUA / Khả quan (Bullish)\n"
+        f"• **Khung thời gian**: 3 - 6 tháng\n"
+        f"• **Giá tham chiếu hiện tại**: {price:,.0f} ₫\n"
+        f"• **Giá mục tiêu (Target)**: **{target_price:,.0f} ₫** (+15.0%)\n"
+        f"• **Giá cắt lỗ (Stop-loss)**: **{stop_loss_price:,.0f} ₫** (-7.0%)\n\n"
+        f"**Tóm tắt nội dung luận điểm**:\n"
+        f"{draft_body}\n\n"
+        f"**Chất xúc tác tăng giá (Catalysts)**: {draft_catalysts}\n\n"
+        f"Bấm nút **'Đăng bài lên Cộng đồng ngay'** bên dưới để chuyển sang Đấu trường Luận điểm với 100% dữ liệu đã điền sẵn:"
+    )
+
+    sources.append(
+        {
+            "kind": "internal",
+            "title": f"Đấu trường Luận điểm Đầu tư InvestIQ ({symbol})",
+            "url": f"/community?action=new-thesis&symbol={symbol}",
+        }
+    )
+
+    suggested_actions.extend(
+        [
+            {
+                "label": "Đăng bài lên Cộng đồng ngay",
+                "action_type": "POST_COMMUNITY_THESIS",
+                "symbol": symbol,
+                "title": draft_title,
+                "stance": "bullish",
+                "target_price": target_price,
+                "stop_loss_price": stop_loss_price,
+                "horizon": 3,
+                "content": draft_body,
+                "catalysts": draft_catalysts,
+                "url": f"/community?action=new-thesis&symbol={symbol}",
+            },
+            {
+                "label": "Xem Đấu trường Luận điểm",
+                "action_type": "NAVIGATE",
+                "url": "/community",
+            },
+            {
+                "label": f"Phân tích chuyên sâu {symbol}",
+                "action_type": "SEND_PROMPT",
+                "prompt": f"Phân tích {symbol}",
+            },
+        ]
+    )
+
+
 def generate_structured_response(
     *,
     market_service: Any,
@@ -1858,6 +2167,12 @@ def generate_structured_response(
     is_leader_rankings: bool = False,
     is_ecosystem: bool = False,
     ecosystem_id: str | None = None,
+    is_trade_order: bool = False,
+    trade_side: str | None = None,
+    trade_quantity: int | None = None,
+    trade_symbol: str | None = None,
+    is_community_post: bool = False,
+    community_symbol: str | None = None,
     comparison_mode: str = "ask",
     exceeded_limit: bool = False,
     invalid_tickers: list[str] | None = None,
@@ -1870,7 +2185,72 @@ def generate_structured_response(
     sources: list[dict[str, str]] = []
     bad_tickers = list(invalid_tickers or [])
 
-    if is_leader:
+    if is_trade_order:
+        target_sym = trade_symbol or (tickers[0] if tickers else None)
+        is_bad_trade_sym = (
+            (target_sym is not None and (target_sym in bad_tickers or not is_valid_ticker(target_sym)))
+            or (target_sym is None and bool(bad_tickers))
+        )
+        if is_bad_trade_sym:
+            order_bad_tickers = list(bad_tickers)
+            if target_sym and target_sym not in order_bad_tickers:
+                order_bad_tickers.insert(0, target_sym)
+            _build_typo_suggestion_section(
+                invalid_tickers=order_bad_tickers,
+                is_dividend=False,
+                is_forensics=False,
+                is_trade_order=True,
+                trade_side=trade_side or "buy",
+                trade_quantity=trade_quantity or 100,
+                market_service=market_service,
+                text_parts=text_parts,
+                sources=sources,
+                suggested_actions=suggested_actions,
+            )
+        else:
+            _build_trade_order_section(
+                symbol=target_sym or "MBB",
+                side=trade_side or "buy",
+                quantity=trade_quantity or 100,
+                stock_data=stock_data,
+                market_service=market_service,
+                text_parts=text_parts,
+                widgets=widgets,
+                sources=sources,
+                suggested_actions=suggested_actions,
+            )
+    elif is_community_post:
+        target_sym = community_symbol or (tickers[0] if tickers else None)
+        is_bad_comm_sym = (
+            (target_sym is not None and (target_sym in bad_tickers or not is_valid_ticker(target_sym)))
+            or (target_sym is None and bool(bad_tickers))
+        )
+        if is_bad_comm_sym:
+            comm_bad_tickers = list(bad_tickers)
+            if target_sym and target_sym not in comm_bad_tickers:
+                comm_bad_tickers.insert(0, target_sym)
+            _build_typo_suggestion_section(
+                invalid_tickers=comm_bad_tickers,
+                is_dividend=False,
+                is_forensics=False,
+                is_community_post=True,
+                market_service=market_service,
+                text_parts=text_parts,
+                sources=sources,
+                suggested_actions=suggested_actions,
+            )
+        else:
+            _build_community_post_draft_section(
+                symbol=target_sym or "MBB",
+                user_message=user_message,
+                stock_data=stock_data,
+                market_service=market_service,
+                text_parts=text_parts,
+                widgets=widgets,
+                sources=sources,
+                suggested_actions=suggested_actions,
+            )
+    elif is_leader:
         _build_leader_section(
             user_message=user_message,
             tickers=tickers,
