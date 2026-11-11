@@ -94,15 +94,16 @@ investiq/
   is the shared/production default. Redis caches bounded public read
   models, while PostgreSQL migration `0011_market_foundation` owns future licensed history, events,
   public people/holding snapshots, engagement retention, and current private watchlists.
-- The Vnstock adapter now calls Vnstock 6's FHSC routes: one screener request per exchange for the
-  bounded market snapshot, FHSC index constituents for VN30 membership, `Market.equity().ohlcv()` /
-  `Market.index().ohlcv()` for candles, `Market.equity().summary()` for P/E, P/B, EPS and ROE, and
-  `Reference.company().events()` for the partial upcoming event calendar. Candles remain normalized
-  to VND and snapshots/candles/fundamentals retain their process caches and stale-data behavior.
-  The adapter does not manufacture OHLC, order-book depth or a per-execution tape when FHSC does not
-  provide those values. `VNSTOCK_API_KEY` is the Vnstock account credential; the selected FHSC data
-  source additionally requires `FHSC_API_KEY` from the host environment. Render's blueprint selects
-  `MARKET_DATA_MODE=vnstock` and declares both credentials without storing values. Vnstock quota
+- The Vnstock adapter now combines Vnstock 6 FHSC and optional DNSE routes. FHSC remains the
+  exchange/universe, company summary, fundamental statements, index membership, and company-event
+  source. When both DNSE credentials exist, DNSE is preferred for last trades, equity OHLCV, detail
+  order-book depth, and execution tape; last-trade and candle failures fall back to FHSC. Report statements
+  use FHSC income, balance-sheet, and cash-flow tables, normalized to the existing detail-page
+  contract. Candles remain normalized to VND and source reads use bounded waits, process caches, and
+  stale-data behavior. The adapter does not manufacture unavailable values. `VNSTOCK_API_KEY` is
+  separate from the selected-source credentials: FHSC needs `FHSC_API_KEY`; DNSE needs both
+  `DNSE_API_KEY` and `DNSE_API_SECRET`. Render's blueprint declares the optional DNSE credentials
+  without storing values. Vnstock quota
   `SystemExit` signals are normalized as provider failures. Because the client aggregates third-party
   sources, this adapter is not evidence of public redistribution rights and is not a production
   licensing substitute. The same evaluation adapter scans the eight highest-interest symbols with a

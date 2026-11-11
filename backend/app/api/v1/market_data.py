@@ -94,6 +94,14 @@ def _provider() -> IMarketProvider:
                 source_api_key=(
                     settings.fhsc_api_key.get_secret_value() if settings.fhsc_api_key else None
                 ),
+                dnse_api_key=(
+                    settings.dnse_api_key.get_secret_value() if settings.dnse_api_key else None
+                ),
+                dnse_api_secret=(
+                    settings.dnse_api_secret.get_secret_value()
+                    if settings.dnse_api_secret
+                    else None
+                ),
             )
         )
     raise RuntimeError("Market data is disabled until a licensed provider is configured")
@@ -383,6 +391,13 @@ def instrument_financial_statements(
     normalized = symbol.upper()
 
     def _loader() -> dict[str, object]:
+        if settings.market_data_mode == "vnstock":
+            provider = _provider()
+            if isinstance(provider, VnstockMarketProvider):
+                return {
+                    "data": provider.financial_statements(normalized, period, limit),
+                    "meta": _safe_meta(),
+                }
         from app.infrastructure.external.crawlers.financial_statements_crawler import (
             get_financial_statements_crawler,
         )

@@ -189,6 +189,20 @@ class FakeVnstockGateway:
     def fundamental_quarterly_rows(self, symbol: str) -> list[dict[str, object]]:
         return []
 
+    def financial_statement_data(
+        self, symbol: str, period_type: str, limit: int
+    ) -> dict[str, object]:
+        return {
+            "symbol": symbol,
+            "period_type": period_type,
+            "periods": [],
+            "charts": [],
+            "income_statement": [],
+            "balance_sheet": [],
+            "cash_flow": [],
+            "source": "test",
+        }
+
     def trade_rows(self, symbol: str, limit: int) -> list[dict[str, object]]:
         assert symbol == "FPT"
         assert limit >= 2
@@ -196,6 +210,9 @@ class FakeVnstockGateway:
             {"time": "2026-10-08 09:10:01", "price": 102, "volume": 200, "match_type": "buy"},
             {"time": "2026-10-08 09:10:02", "price": 101.9, "volume": 300, "match_type": "sell"},
         ]
+
+    def order_book_rows(self, symbol: str) -> list[dict[str, object]]:
+        return []
 
     def event_rows(self, symbol: str) -> list[dict[str, object]]:
         self.event_calls += 1

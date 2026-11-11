@@ -13,7 +13,7 @@ import math
 import os
 import re
 from collections.abc import Callable
-from concurrent.futures import ThreadPoolExecutor, as_completed
+from concurrent.futures import Future, ThreadPoolExecutor, as_completed
 from dataclasses import dataclass, replace
 from datetime import UTC, date, datetime, time, timedelta
 from decimal import Decimal, InvalidOperation
@@ -41,6 +41,8 @@ _MARKET_TZ = ZoneInfo("Asia/Ho_Chi_Minh")
 _STOCK_SYMBOL = re.compile(r"^[A-Z]{3}$")
 _MAX_BATCH_QUOTE_SYMBOLS = 30
 _QUOTE_BOARD_TIMEOUT_SECONDS = 5
+_DNSE_REQUEST_TIMEOUT_SECONDS = 6
+_FUNDAMENTAL_REQUEST_TIMEOUT_SECONDS = 12
 _INDEX_EXCHANGE = {
     "VNINDEX": "HOSE",
     "VN30": "VN30",
@@ -78,6 +80,8 @@ class VnstockConfig:
     fundamental_cache_seconds: int
     max_symbols: int
     source_api_key: str | None = None
+    dnse_api_key: str | None = None
+    dnse_api_secret: str | None = None
 
 
 class VnstockGateway(Protocol):
@@ -98,6 +102,12 @@ class VnstockGateway(Protocol):
 
     def fundamental_quarterly_rows(self, symbol: str) -> list[dict[str, object]]: ...
 
+    def order_book_rows(self, symbol: str) -> list[dict[str, object]]: ...
+
+    def financial_statement_data(
+        self, symbol: str, period_type: str, limit: int
+    ) -> dict[str, object]: ...
+
     def trade_rows(self, symbol: str, limit: int) -> list[dict[str, object]]: ...
 
     def event_rows(self, symbol: str) -> list[dict[str, object]]: ...
@@ -115,6 +125,26 @@ def _frame_records(value: object) -> list[dict[str, object]]:
         if isinstance(item, dict):
             rows.append({str(key): field for key, field in item.items()})
     return rows
+
+
+def _bounded_call(call: Callable[[], object], *, timeout: int, operation: str) -> object:
+    result_queue: Queue[tuple[bool, object]] = Queue(maxsize=1)
+
+    def run() -> None:
+        try:
+            result_queue.put((True, call()))
+        except BaseException as exc:
+            result_queue.put((False, exc))
+
+    Thread(target=run, name=f"vnstock-{operation}", daemon=True).start()
+    try:
+        succeeded, result = result_queue.get(timeout=timeout)
+    except Empty as exc:
+        raise TimeoutError(f"Vnstock {operation} timed out") from exc
+    if not succeeded:
+        cause = result if isinstance(result, BaseException) else None
+        raise RuntimeError(f"Vnstock {operation} failed") from cause
+    return result
 
 
 _RESOURCES_DIR = Path(__file__).resolve().parent / "resources"
@@ -141,16 +171,29 @@ class OfficialVnstockGateway:
 
     _EXCHANGES = ("HOSE", "HNX", "UPCOM")
 
-    def __init__(self, api_key: str | None, source_api_key: str | None = None) -> None:
+    def __init__(
+        self,
+        api_key: str | None,
+        source_api_key: str | None = None,
+        dnse_api_key: str | None = None,
+        dnse_api_secret: str | None = None,
+    ) -> None:
         if api_key:
             os.environ["VNSTOCK_API_KEY"] = api_key
         if source_api_key:
             os.environ["FHSC_API_KEY"] = source_api_key
+        if dnse_api_key:
+            os.environ["DNSE_API_KEY"] = dnse_api_key
+        if dnse_api_secret:
+            os.environ["DNSE_API_SECRET"] = dnse_api_secret
         from vnstock import Fundamental, Market, Reference
 
         if not os.environ.get("FHSC_API_KEY"):
             logger.warning("vnstock_fhsc_api_key_missing_source_calls_will_fail")
         self._market = Market("fhsc")
+        self._dnse_market = (
+            Market("dnse") if dnse_api_key and dnse_api_secret else None
+        )
         self._reference = Reference("fhsc")
         self._fundamental = Fundamental()
         self._screener_rows: list[dict[str, object]] = []
@@ -284,7 +327,131 @@ class OfficialVnstockGateway:
                     "time": quote.get("time") or self._market_time,
                 }
             )
-        return rows
+        dnse_market = getattr(self, "_dnse_market", None)
+        if dnse_market is None or not quote_symbols:
+            return rows
+        rows_by_symbol = {
+            _text(row.get("symbol")).upper(): row
+            for row in rows
+            if _text(row.get("symbol"))
+        }
+        futures: dict[Future[dict[str, object] | None], str] = {}
+        executor = ThreadPoolExecutor(
+            max_workers=min(6, len(quote_symbols)), thread_name_prefix="dnse-last-trade"
+        )
+        for symbol in quote_symbols:
+            quote = rows_by_symbol.get(symbol.upper(), {})
+            needs_last_trade = _positive_or(quote.get("close_price"), None) <= 0
+            needs_daily_ohlc = any(
+                _positive_or(quote.get(field), None) <= 0
+                for field in ("open_price", "high_price", "low_price")
+            )
+            if not needs_last_trade and not needs_daily_ohlc:
+                continue
+            futures[
+                executor.submit(
+                    self._dnse_last_trade_row,
+                    symbol,
+                    needs_last_trade,
+                    needs_daily_ohlc,
+                )
+            ] = symbol
+        dnse_by_symbol: dict[str, dict[str, object]] = {}
+        try:
+            for future in as_completed(futures, timeout=_DNSE_REQUEST_TIMEOUT_SECONDS):
+                symbol = futures[future]
+                try:
+                    last_trade = future.result()
+                except (Exception, SystemExit) as exc:
+                    logger.warning(
+                        "vnstock_dnse_last_trade_unavailable",
+                        extra={"symbol": symbol, "error_type": type(exc).__name__},
+                    )
+                    continue
+                if last_trade:
+                    dnse_by_symbol[symbol.upper()] = last_trade
+        except TimeoutError:
+            logger.warning("vnstock_dnse_last_trade_batch_timeout")
+        finally:
+            executor.shutdown(wait=False, cancel_futures=True)
+
+        merged_rows: list[dict[str, object]] = []
+        for row in rows:
+            symbol = _text(row.get("symbol")).upper()
+            dnse = dnse_by_symbol.get(symbol)
+            if dnse is None:
+                merged_rows.append(row)
+                continue
+            merged = dict(row)
+            last_price = _optional_decimal(dnse.get("price"))
+            if last_price is not None and last_price > 0:
+                merged["close_price"] = last_price * Decimal("1000")
+            accumulated_volume = _optional_decimal(dnse.get("accumulated_volume"))
+            if accumulated_volume is not None and accumulated_volume > 0:
+                merged["volume_accumulated"] = accumulated_volume
+            daily_ohlc = dnse.get("daily_ohlc")
+            if isinstance(daily_ohlc, dict):
+                session_time = dnse.get("time") or row.get("time")
+                session_day = _timestamp(session_time, datetime.now(UTC)).astimezone(_MARKET_TZ).date()
+                candle_day = _timestamp(daily_ohlc.get("time"), datetime.now(UTC)).astimezone(
+                    _MARKET_TZ
+                ).date()
+                if session_day == candle_day:
+                    for field in ("open", "high", "low"):
+                        value = _optional_decimal(daily_ohlc.get(field))
+                        if value is not None and value > 0:
+                            # Vnstock's v5 OHLCV prices are expressed in thousand VND.
+                            merged[f"{field}_price"] = value * Decimal("1000")
+            merged["time"] = dnse.get("time") or row.get("time")
+            merged_rows.append(merged)
+        return merged_rows
+
+    def _dnse_last_trade_row(
+        self,
+        symbol: str,
+        include_last_trade: bool = True,
+        include_daily_ohlc: bool = False,
+    ) -> dict[str, object] | None:
+        market = self._dnse_market
+        if market is None:
+            return None
+        last_trade: dict[str, object] = {}
+        if include_last_trade:
+            try:
+                frame = _bounded_call(
+                    lambda: market.equity(symbol).last_trade(),
+                    timeout=_DNSE_REQUEST_TIMEOUT_SECONDS,
+                    operation="dnse-last-trade",
+                )
+                rows = _frame_records(frame)
+            except (Exception, SystemExit) as exc:
+                logger.warning(
+                    "vnstock_dnse_last_trade_unavailable",
+                    extra={"symbol": symbol, "error_type": type(exc).__name__},
+                )
+            else:
+                if rows:
+                    last_trade = dict(rows[-1])
+        if include_daily_ohlc:
+            try:
+                candles = _frame_records(
+                    _bounded_call(
+                        lambda: market.equity(symbol).ohlcv(
+                            interval="1D", length=1, compat="v5"
+                        ),
+                        timeout=_DNSE_REQUEST_TIMEOUT_SECONDS,
+                        operation="dnse-daily-ohlc",
+                    )
+                )
+            except (Exception, SystemExit) as exc:
+                logger.warning(
+                    "vnstock_dnse_daily_ohlc_unavailable",
+                    extra={"symbol": symbol, "error_type": type(exc).__name__},
+                )
+            else:
+                if candles:
+                    last_trade["daily_ohlc"] = candles[-1]
+        return last_trade or None
 
     def _screener_quote_fallback(
         self, symbols: list[str], screener_by_symbol: dict[str, dict[str, object]]
@@ -322,6 +489,24 @@ class OfficialVnstockGateway:
         interval: str,
         count: int,
     ) -> list[dict[str, object]]:
+        dnse_market = getattr(self, "_dnse_market", None)
+        if dnse_market is not None and symbol not in _INDEX_EXCHANGE:
+            try:
+                frame = _bounded_call(
+                    lambda: dnse_market.equity(symbol).ohlcv(
+                        interval=interval, limit=count, compat="v5"
+                    ),
+                    timeout=_DNSE_REQUEST_TIMEOUT_SECONDS,
+                    operation="dnse-candles",
+                )
+                rows = _frame_records(frame)
+                if rows:
+                    return rows
+            except (Exception, SystemExit) as exc:
+                logger.warning(
+                    "vnstock_dnse_candles_unavailable_using_fhsc",
+                    extra={"symbol": symbol, "error_type": type(exc).__name__},
+                )
         try:
             asset = (
                 self._market.index(symbol)
@@ -383,9 +568,87 @@ class OfficialVnstockGateway:
             balance_rows = []
         return _quarterly_growth_rows(income_rows, balance_rows)
 
+    def financial_statement_data(
+        self, symbol: str, period_type: str, limit: int
+    ) -> dict[str, object]:
+        try:
+            equity = self._fundamental.equity(symbol)
+        except (Exception, SystemExit) as exc:
+            logger.warning(
+                "vnstock_financial_statements_unavailable",
+                extra={"symbol": symbol, "error_type": type(exc).__name__},
+            )
+            return _empty_financial_statement_data(symbol, period_type)
+
+        tables: dict[str, list[dict[str, object]]] = {}
+        for table_name, getter in (
+            (
+                "income_statement",
+                lambda: equity.income_statement(
+                    period=period_type, format="long", source="fhsc", compat="v5"
+                ),
+            ),
+            (
+                "balance_sheet",
+                lambda: equity.balance_sheet(
+                    period=period_type, format="long", source="fhsc", compat="v5"
+                ),
+            ),
+            (
+                "cash_flow",
+                lambda: equity.cash_flow(
+                    period=period_type, format="long", source="fhsc", compat="v5"
+                ),
+            ),
+        ):
+            try:
+                frame = _bounded_call(
+                    getter,
+                    timeout=_FUNDAMENTAL_REQUEST_TIMEOUT_SECONDS,
+                    operation=f"fhsc-{table_name.replace('_', '-')}",
+                )
+                tables[table_name] = _frame_records(frame)
+            except (Exception, SystemExit) as exc:
+                logger.warning(
+                    "vnstock_financial_statement_table_unavailable",
+                    extra={
+                        "symbol": symbol,
+                        "table": table_name,
+                        "error_type": type(exc).__name__,
+                    },
+                )
+                tables[table_name] = []
+        return _financial_statement_data(symbol, period_type, tables, limit)
+
     def trade_rows(self, symbol: str, limit: int) -> list[dict[str, object]]:
-        # FHSC v6 does not publish per-execution trades; its supported routes are DNSE/TCBS.
-        return []
+        dnse_market = self._dnse_market
+        if dnse_market is None:
+            return []
+        try:
+            frame = _bounded_call(
+                lambda: dnse_market.equity(symbol).trades(
+                    limit=min(limit, 1000), board="G1", compat="v5"
+                ),
+                timeout=_DNSE_REQUEST_TIMEOUT_SECONDS,
+                operation="dnse-trades",
+            )
+            return _frame_records(frame)
+        except (Exception, SystemExit) as exc:
+            raise RuntimeError("DNSE intraday trade request failed") from exc
+
+    def order_book_rows(self, symbol: str) -> list[dict[str, object]]:
+        dnse_market = self._dnse_market
+        if dnse_market is None:
+            return []
+        try:
+            frame = _bounded_call(
+                lambda: dnse_market.equity(symbol).order_book(board="G1", compat="v5"),
+                timeout=_DNSE_REQUEST_TIMEOUT_SECONDS,
+                operation="dnse-order-book",
+            )
+            return _frame_records(frame)
+        except (Exception, SystemExit) as exc:
+            raise RuntimeError("DNSE order-book request failed") from exc
 
     def event_rows(self, symbol: str) -> list[dict[str, object]]:
         try:
@@ -644,6 +907,139 @@ def _quarterly_growth_rows(
     return normalized
 
 
+def _empty_financial_statement_data(symbol: str, period_type: str) -> dict[str, object]:
+    return {
+        "symbol": symbol,
+        "period_type": period_type,
+        "periods": [],
+        "charts": [],
+        "income_statement": [],
+        "balance_sheet": [],
+        "cash_flow": [],
+        "source": "Vnstock 6 · FHSC (chưa có dữ liệu) ",
+    }
+
+
+def _financial_statement_data(
+    symbol: str,
+    period_type: str,
+    tables: dict[str, list[dict[str, object]]],
+    limit: int,
+) -> dict[str, object]:
+    period_values = {
+        _text(row.get("period"))
+        for rows in tables.values()
+        for row in rows
+        if _text(row.get("period"))
+    }
+    if not period_values:
+        return _empty_financial_statement_data(symbol, period_type)
+
+    def period_key(period: str) -> tuple[int, int]:
+        matched = re.fullmatch(r"(\d{4})(?:-Q([1-4]))?", period)
+        if matched is None:
+            return (0, 0)
+        return (int(matched.group(1)), int(matched.group(2) or 5))
+
+    periods = sorted(period_values, key=period_key)[-limit:]
+    normalized_tables: dict[str, list[dict[str, object]]] = {}
+    for table_name, rows in tables.items():
+        grouped: dict[str, dict[str, object]] = {}
+        for row in rows:
+            period = _text(row.get("period"))
+            code = _text(row.get("id") or row.get("item_id"))
+            name = _text(row.get("name") or row.get("item_name"))
+            if period not in periods or not code:
+                continue
+            metric = grouped.setdefault(
+                code,
+                {"code": code, "name": name or code, "values": [None] * len(periods)},
+            )
+            value = _optional_decimal(row.get("value"))
+            if value is not None:
+                metric_values = metric.get("values")
+                if isinstance(metric_values, list):
+                    metric_values[periods.index(period)] = float(value)
+        normalized_tables[table_name] = sorted(
+            grouped.values(), key=lambda item: _text(item.get("code"))
+        )
+
+    def metric_series(table_name: str, item_ids: tuple[str, ...]) -> list[float | None]:
+        for metric in normalized_tables.get(table_name, []):
+            if _text(metric.get("code")) in item_ids:
+                values = metric.get("values")
+                if isinstance(values, list):
+                    return [value if isinstance(value, float) else None for value in values]
+        return [None] * len(periods)
+
+    revenues = metric_series(
+        "income_statement",
+        ("IS_NET_REVENUE", "IS_REVENUE", "IS_TOTAL_OPERATING_INCOME", "IS_TOTAL_REVENUE"),
+    )
+    gross_profits = metric_series("income_statement", ("IS_GROSS_PROFIT",))
+    net_profits = metric_series(
+        "income_statement",
+        (
+            "IS_PROFIT_AFTER_TAX_FOR_SHAREHOLDERS_OF_PARENT_COMPANY",
+            "IS_NET_PROFIT_AFTER_TAX",
+            "IS_PROFIT_AFTER_TAX",
+        ),
+    )
+    assets = metric_series("balance_sheet", ("BS_TOTAL_ASSETS",))
+    liabilities = metric_series("balance_sheet", ("BS_TOTAL_LIABILITIES",))
+    equity = metric_series(
+        "balance_sheet", ("BS_TOTAL_EQUITY", "BS_TOTAL_SHAREHOLDERS_EQUITY", "BS_OWNER_EQUITY")
+    )
+    charts: list[dict[str, object]] = []
+    for index, period in enumerate(periods):
+        revenue = revenues[index]
+        gross_profit = gross_profits[index]
+        net_profit = net_profits[index]
+        total_assets = assets[index]
+        total_liabilities = liabilities[index]
+        total_equity = equity[index]
+        charts.append(
+            {
+                "period": period,
+                "revenue_billion": revenue / 1_000_000_000 if revenue is not None else None,
+                "gross_profit_billion": (
+                    gross_profit / 1_000_000_000 if gross_profit is not None else None
+                ),
+                "net_profit_billion": (
+                    net_profit / 1_000_000_000 if net_profit is not None else None
+                ),
+                "gross_margin_percent": (
+                    gross_profit * 100 / revenue
+                    if gross_profit is not None and revenue not in {None, 0}
+                    else None
+                ),
+                "net_margin_percent": (
+                    net_profit * 100 / revenue
+                    if net_profit is not None and revenue not in {None, 0}
+                    else None
+                ),
+                "total_assets_billion": (
+                    total_assets / 1_000_000_000 if total_assets is not None else None
+                ),
+                "total_debt_billion": (
+                    total_liabilities / 1_000_000_000 if total_liabilities is not None else None
+                ),
+                "equity_billion": (
+                    total_equity / 1_000_000_000 if total_equity is not None else None
+                ),
+            }
+        )
+
+    return {
+        "symbol": symbol,
+        "period_type": period_type,
+        "periods": periods,
+        "charts": charts,
+        **normalized_tables,
+        "source": "Vnstock 6 · FHSC",
+    }
+
+
 def _match_side(value: object) -> str:
     normalized = _text(value).lower()
     return normalized if normalized in {"buy", "sell", "ato", "atc"} else "unknown"
@@ -758,10 +1154,15 @@ def _candle(row: dict[str, object], symbol: str, fallback: datetime) -> Candle |
 class VnstockMarketProvider:
     """Cached Vnstock 6/FHSC snapshot normalized to InvestIQ's canonical contract."""
 
-    slug = "vnstock-fhsc"
-    display_name = "Vnstock · nguồn FHSC (có độ trễ)"
+    slug = "vnstock-multi-source"
     delay_class = "source_delayed"
     partial = True
+
+    @property
+    def display_name(self) -> str:
+        if self._config.dnse_api_key and self._config.dnse_api_secret:
+            return "Vnstock · FHSC + DNSE"
+        return "Vnstock · FHSC"
 
     def __init__(
         self,
@@ -771,7 +1172,12 @@ class VnstockMarketProvider:
         today: Callable[[], date] | None = None,
     ) -> None:
         self._config = config
-        self._gateway = gateway or OfficialVnstockGateway(config.api_key, config.source_api_key)
+        self._gateway = gateway or OfficialVnstockGateway(
+            config.api_key,
+            config.source_api_key,
+            config.dnse_api_key,
+            config.dnse_api_secret,
+        )
         self._clock = clock
         self._today = today or (lambda: datetime.now(UTC).astimezone(_MARKET_TZ).date())
         self._lock = RLock()
@@ -793,6 +1199,9 @@ class VnstockMarketProvider:
         self._event_lock = RLock()
         self._event_cache: tuple[float, tuple[MarketEvent, ...]] | None = None
         self._growth_cache: dict[str, tuple[float, list[dict[str, object]]]] = {}
+        self._financial_statement_cache: dict[
+            tuple[str, str, int], tuple[float, dict[str, object]]
+        ] = {}
 
     @property
     def market_time(self) -> str:
@@ -915,7 +1324,8 @@ class VnstockMarketProvider:
         value = next((item for item in self.instruments() if item.symbol == normalized), None)
         if value is None or not include_fundamentals:
             return value
-        return self._with_fundamentals(value)
+        value = self._with_fundamentals(value)
+        return self._with_dnse_depth(value)
 
     def index(self, symbol: str) -> MarketIndex | None:
         normalized = symbol.upper()
@@ -937,6 +1347,28 @@ class VnstockMarketProvider:
             self._growth_cache.clear()
         self._growth_cache[normalized] = (now + ttl, rows)
         return rows
+
+    def financial_statements(
+        self, symbol: str, period_type: str, limit: int
+    ) -> dict[str, object]:
+        normalized = symbol.upper()
+        key = (normalized, period_type, limit)
+        now = self._clock()
+        cached = self._financial_statement_cache.get(key)
+        if cached and cached[0] > now:
+            return cached[1]
+        try:
+            result = self._gateway.financial_statement_data(normalized, period_type, limit)
+        except (RuntimeError, TypeError, ValueError):
+            logger.warning("vnstock_financial_statements_unavailable", extra={"symbol": normalized})
+            result = _empty_financial_statement_data(normalized, period_type)
+        if len(self._financial_statement_cache) >= self._config.max_symbols:
+            self._financial_statement_cache.clear()
+        self._financial_statement_cache[key] = (
+            now + self._config.fundamental_cache_seconds,
+            result,
+        )
+        return result
 
     def candles(self, symbol: str, interval: str) -> tuple[Candle, ...]:
         normalized = symbol.upper()
@@ -1058,6 +1490,39 @@ class VnstockMarketProvider:
             self._fundamental_cache[value.symbol] = (now + ttl, fundamentals)
         pe, pb, eps, roe_percent = fundamentals
         return replace(value, pe=pe, pb=pb, eps=eps, roe_percent=roe_percent)
+
+    def _with_dnse_depth(self, value: MarketInstrument) -> MarketInstrument:
+        try:
+            rows = self._gateway.order_book_rows(value.symbol)
+        except (RuntimeError, TypeError, ValueError):
+            logger.warning("vnstock_dnse_order_book_unavailable", extra={"symbol": value.symbol})
+            return value
+        if not rows:
+            return value
+        row = rows[-1]
+        bid_levels = tuple(
+            MarketDepthLevel(
+                price=_price(row.get(f"bid_price_{level}")),
+                volume=_decimal(row.get(f"bid_vol_{level}")),
+            )
+            for level in range(1, 4)
+            if _price(row.get(f"bid_price_{level}")) > 0
+            and _decimal(row.get(f"bid_vol_{level}")) > 0
+        )
+        ask_levels = tuple(
+            MarketDepthLevel(
+                price=_price(row.get(f"ask_price_{level}")),
+                volume=_decimal(row.get(f"ask_vol_{level}")),
+            )
+            for level in range(1, 4)
+            if _price(row.get(f"ask_price_{level}")) > 0
+            and _decimal(row.get(f"ask_vol_{level}")) > 0
+        )
+        return replace(
+            value,
+            bid_levels=bid_levels or value.bid_levels,
+            ask_levels=ask_levels or value.ask_levels,
+        )
 
     def _ensure_snapshot(self) -> None:
         now = self._clock()

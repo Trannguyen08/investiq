@@ -146,11 +146,13 @@
   timestamps against the latest valid Vietnam trading session, refresh only bounded relevant caches,
   and never manufacture calendar-day candles for weekends or holidays.
 - The backend installs Vnstock 6 and `vnstock-oapi` from the official package index. The Render
-  blueprint selects `MARKET_DATA_MODE=vnstock` and the adapter uses the v6 FHSC source routes for
-  exchange screeners, company summaries, OHLCV, VN30 constituents, and company events. `VNSTOCK_API_KEY`
-  authenticates the Vnstock account; live FHSC calls also require its separate `FHSC_API_KEY` in the
-  Render environment. FHSC does not provide per-execution trades, so the adapter reports that tape
-  as unavailable.
+  blueprint selects `MARKET_DATA_MODE=vnstock`; FHSC supplies exchange screeners, company summaries,
+  fundamentals, index membership, and company events. Optional DNSE credentials enrich last trades,
+  stock candles, order-book depth, and execution tape, with FHSC as the overlapping-data fallback.
+  `VNSTOCK_API_KEY`
+  authenticates the Vnstock account; `FHSC_API_KEY` and the optional `DNSE_API_KEY` /
+  `DNSE_API_SECRET` authenticate their own sources. Public redistribution still requires provider
+  authorization.
 
 ## Local development
 

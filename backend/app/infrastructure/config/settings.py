@@ -65,6 +65,8 @@ class Settings(BaseSettings):
     market_public_cache_seconds: int = Field(default=30, ge=1, le=300)
     vnstock_api_key: SecretStr | None = None
     fhsc_api_key: SecretStr | None = None
+    dnse_api_key: SecretStr | None = None
+    dnse_api_secret: SecretStr | None = None
     vnstock_refresh_seconds: int = Field(default=60, ge=30, le=900)
     vnstock_candle_cache_seconds: int = Field(default=300, ge=60, le=3600)
     vnstock_fundamental_cache_seconds: int = Field(default=3600, ge=300, le=86400)
@@ -81,6 +83,8 @@ class Settings(BaseSettings):
         "auth_smtp_password",
         "vnstock_api_key",
         "fhsc_api_key",
+        "dnse_api_key",
+        "dnse_api_secret",
         mode="before",
     )
     @classmethod

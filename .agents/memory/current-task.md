@@ -1,5 +1,17 @@
 # Current Task
 
+## Commit FHSC + DNSE Integration and Run Pre-PR Gates - 2026-11-11 (in progress)
+- **User Request**: Run repository quality gates and `scripts/check-pr.ps1`, then commit and push the FHSC/DNSE integration.
+- **Branch**: `fix/project`; preserve the current scoped work and push this branch after gate results are reviewed.
+- **Status**: `scripts/check-pr.ps1` is green; reviewing the final diff and preparing the commit/push. The script's first whitespace subcheck caught Git's LF-to-CRLF warning as an exception, so the equivalent `git -c core.safecrlf=false diff origin/dev --check` was run directly and passed.
+- **Validation**: Frontend lint/typecheck passed; Vitest 49 files / 197 tests passed; backend Ruff and mypy passed (45 source files); backend unit tests passed (196); focused market-provider tests passed (23); Compose config validation passed. Docker image builds could not run because the Docker Desktop engine is unavailable. No live DNSE call was attempted because credentials remain pending approval.
+
+## Combine FHSC and DNSE Market Data - 2026-11-11 (completed)
+- **User Request**: Keep FHSC coverage and add DNSE OpenAPI as a complementary market-data source, with credentials supplied through environment variables after DNSE approval.
+- **Changes**: FHSC remains the universe/company/fundamental/event provider. Optional DNSE Key/Secret enrich last trades and accumulated volume during the bounded 30-symbol refresh; daily OHLC fills missing quote-board open/high/low only when its session matches the last trade; candles use DNSE with FHSC fallback; stock details gain DNSE order-book depth and executions. The existing financial-statement endpoint now uses Vnstock 6 FHSC income, balance-sheet, and cash-flow rows in the existing response contract, preserving partial results and honest empty states. Added typed secret settings, Compose and Render environment entries, source display, and adapter setup documentation.
+- **Credential handling**: Add typed empty `DNSE_API_KEY` / `DNSE_API_SECRET` configuration only. Never read or record actual secret values in task notes.
+- **Validation**: Ruff, full configured backend mypy (45 source files), backend unit suite (196), focused provider suite (23), Python compilation, and `git diff --check` passed. The first provider-suite run exposed missing optional DNSE state on legacy test fixtures; gateway access now safely treats DNSE as optional. Live provider calls were not run because the local health endpoint timed out and DNSE credentials are still pending approval.
+
 ## FHSC Quote Fallback and Data Source Assessment - 2026-11-11 (completed)
 - **User Request**: Explain why full quote-board OHLC and stock-detail fields remain missing, assess a more reliable API source, and restore screener fields lost when FHSC quote-board requests time out.
 - **Evidence**: Current local API returns 30 instruments from FHSC screeners; Vnstock 6 exposes `Reference("fhsc").equity.catalog()` for a broader symbol catalog and `Market("fhsc").equity.quote(symbols)` for batch quotes. FHSC applies weighted per-minute limits and is intended for personal-account research, not public redistribution. Quote timeouts currently fall back to screener data.

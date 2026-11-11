@@ -30,6 +30,10 @@ services:
         sync: false
       - key: FHSC_API_KEY
         sync: false
+      - key: DNSE_API_KEY
+        sync: false
+      - key: DNSE_API_SECRET
+        sync: false
       - key: VNSTOCK_REFRESH_SECONDS
         value: "60"
       - key: LOG_LEVEL
