@@ -1,5 +1,10 @@
 # Current Task
 
+## FHSC Quote Fallback and Data Source Assessment - 2026-11-11 (in progress)
+- **User Request**: Explain why full quote-board OHLC and stock-detail fields remain missing, assess a more reliable API source, and restore screener fields lost when FHSC quote-board requests time out.
+- **Evidence**: Current local API returns 30 instruments from FHSC screeners; Vnstock 6 exposes `Reference("fhsc").equity.catalog()` for a broader symbol catalog and `Market("fhsc").equity.quote(symbols)` for batch quotes. FHSC applies weighted per-minute limits and is intended for personal-account research, not public redistribution. Quote timeouts currently fall back to screener data.
+- **Changes underway**: Preserve screener total volume/value, market cap, foreign net value, listed shares, and valuation fields in the quote-timeout fallback; compare licensed alternatives for all-market and company financial coverage. No credential values are recorded.
+
 ## Portfolio Valuation and FHSC v6 Market Detail Regression - 2026-11-11 (completed)
 - **User Request**: Fix paper portfolio asset/P&L values, restore opening/high/low market prices with VND thousands formatted normally, and restore stock-detail data lost in the Vnstock 6 migration.
 - **Evidence**: Live local `/api/v1/market/instruments/SHB` returned price `11.15` and zero OHLC while Vnstock FHSC `Market.equity.quote()` returned close `11150`, OHLC `10900/11300/10800`, and quote depth in VND. Official Vnstock 6 docs specify screener and stock candles in thousands of VND while the v5-compatible quote board fields are VND. The old adapter used the batch quote board and quarterly ratio data; the new adapter used screener-only values and returned no quarterly rows.

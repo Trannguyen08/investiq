@@ -502,7 +502,20 @@ def test_fhsc_screener_fallback_converts_thousand_dong_to_vnd(
     monkeypatch.setattr(
         gateway,
         "_screener_rows",
-        [{"symbol": "ACB", "close": 20.6, "price_change_percent": 0}],
+        [
+            {
+                "symbol": "ACB",
+                "close": 20.6,
+                "price_change_percent": 0,
+                "total_volume": 12_345_000,
+                "total_value": 254_307_000_000,
+                "market_cap": 100_000_000_000_000,
+                "foreign_net_value": 1_200_000_000,
+                "pe": 8.5,
+                "pb": 1.2,
+                "eps": 2_400,
+            }
+        ],
         raising=False,
     )
 
@@ -510,6 +523,13 @@ def test_fhsc_screener_fallback_converts_thousand_dong_to_vnd(
 
     assert quote["close_price"] == 20_600
     assert quote["reference_price"] == 20_600
+    assert quote["volume_accumulated"] == 12_345_000
+    assert quote["total_value"] == 254_307_000_000
+    assert quote["market_cap"] == 100_000_000_000_000
+    assert quote["foreign_net_value"] == 1_200_000_000
+    assert quote["pe"] == 8.5
+    assert quote["pb"] == 1.2
+    assert quote["eps"] == 2_400
     assert quote.get("open_price") is None
 
 

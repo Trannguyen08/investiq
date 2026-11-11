@@ -307,6 +307,10 @@ class OfficialVnstockGateway:
                     "symbol": symbol.upper(),
                     "close_price": close * Decimal("1000") if close is not None else None,
                     "reference_price": reference,
+                    "volume_accumulated": _optional_decimal(screen.get("total_volume")),
+                    "total_value": _optional_decimal(screen.get("total_value")),
+                    "foreign_net_value": _optional_decimal(screen.get("foreign_net_value")),
+                    "listed_shares": _optional_decimal(screen.get("outstanding_shares")),
                     "time": self._market_time,
                 }
             )
