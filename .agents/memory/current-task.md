@@ -1,9 +1,10 @@
 # Current Task
 
-## FHSC Quote Fallback and Data Source Assessment - 2026-11-11 (in progress)
+## FHSC Quote Fallback and Data Source Assessment - 2026-11-11 (completed)
 - **User Request**: Explain why full quote-board OHLC and stock-detail fields remain missing, assess a more reliable API source, and restore screener fields lost when FHSC quote-board requests time out.
 - **Evidence**: Current local API returns 30 instruments from FHSC screeners; Vnstock 6 exposes `Reference("fhsc").equity.catalog()` for a broader symbol catalog and `Market("fhsc").equity.quote(symbols)` for batch quotes. FHSC applies weighted per-minute limits and is intended for personal-account research, not public redistribution. Quote timeouts currently fall back to screener data.
-- **Changes underway**: Preserve screener total volume/value, market cap, foreign net value, listed shares, and valuation fields in the quote-timeout fallback; compare licensed alternatives for all-market and company financial coverage. No credential values are recorded.
+- **Changes**: Preserve screener total volume/value, market cap, foreign net value, listed shares, and valuation fields in the quote-timeout fallback. Recommend licensed FiinGroup DataFeed for full market and financial detail at product scale; SSI FastConnect Data or DNSE WebSocket for market quotes/OHLC subject to account credentials and terms. No credential values are recorded.
+- **Validation**: Provider suite 23 passed, full backend suite 196 passed, frontend suite 197 passed, Ruff, mypy, frontend typecheck, and lint passed. The code and repository guidance were pushed to `fix/project`; live FHSC quote calls remained rate-limited, so OHLC/depth cannot be guaranteed until the upstream quote request succeeds.
 
 ## Portfolio Valuation and FHSC v6 Market Detail Regression - 2026-11-11 (completed)
 - **User Request**: Fix paper portfolio asset/P&L values, restore opening/high/low market prices with VND thousands formatted normally, and restore stock-detail data lost in the Vnstock 6 migration.
