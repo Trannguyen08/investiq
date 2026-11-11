@@ -458,6 +458,30 @@ describe("PaperTradingDashboard", () => {
 
   });
 
+  it("shows missing observed OHLC values as unavailable instead of zero", async () => {
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue({ ok: true, json: async () => dashboard }));
+    const missingIntradayPrices = {
+      ...marketInstrument,
+      open_price: "0",
+      high_price: "0",
+      low_price: "0",
+    };
+
+    render(
+      <PaperTradingDashboard
+        positiveNews={[]}
+        marketInstruments={[missingIntradayPrices]}
+      />,
+    );
+
+    const marketTable = await screen.findByRole("table", {
+      name: "Bảng cổ phiếu nâng cao để giao dịch mô phỏng",
+    });
+    const row = within(marketTable).getByRole("row", { name: /FPT/ });
+
+    expect(row.querySelector('[data-label="Mở · Cao · Thấp"]')?.textContent).toBe("— · — · —");
+  });
+
   it("loads fundamental ratios in bounded batches as each page becomes visible", async () => {
 
     const instruments = Array.from({ length: 16 }, (_, index) => ({

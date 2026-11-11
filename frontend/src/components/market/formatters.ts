@@ -23,6 +23,11 @@ export function formatChange(value: string) {
   return `${amount > 0 ? "+" : ""}${formatDecimal(value)}`;
 }
 
+export function formatObservedPrice(value: string) {
+  const amount = Number(value);
+  return Number.isFinite(amount) && amount > 0 ? formatChange(value) : "—";
+}
+
 export function changeTone(value: string) {
   const amount = Number(value);
   if (amount > 0) return "positive";

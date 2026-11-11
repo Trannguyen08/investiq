@@ -11,6 +11,7 @@ import {
   formatMoney,
   formatPercent,
   formatRatioPair,
+  formatObservedPrice,
   priceTone,
 } from "@/components/market/formatters";
 import { mergeLiveInstrument } from "@/components/market/live-market";
@@ -1385,13 +1386,13 @@ export function PaperTradingDashboard({
                         </td>
                         <td data-label="Mở · Cao · Thấp">
                           <span className={priceTone(item.open_price, item.reference_price, item.ceiling_price, item.floor_price)}>
-                            {formatChange(item.open_price)}
+                            {formatObservedPrice(item.open_price)}
                           </span> ·{" "}
                           <span className={priceTone(item.high_price, item.reference_price, item.ceiling_price, item.floor_price)}>
-                            {formatChange(item.high_price)}
+                            {formatObservedPrice(item.high_price)}
                           </span> ·{" "}
                           <span className={priceTone(item.low_price, item.reference_price, item.ceiling_price, item.floor_price)}>
-                            {formatChange(item.low_price)}
+                            {formatObservedPrice(item.low_price)}
                           </span>
                         </td>
                         <td data-label="Khối lượng">{formatCompact(item.volume)}</td>

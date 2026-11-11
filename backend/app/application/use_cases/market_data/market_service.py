@@ -802,16 +802,38 @@ class MarketService:
                 margin_val = _dec(r.get("after_tax_profit_margin"))
                 gross_val = _dec(r.get("gross_margin"))
                 equity_val = _dec(r.get("owners_equity"))
+                revenue_ttm_value = _dec(r.get("revenue_ttm"))
+                profit_ttm_value = _dec(r.get("profit_ttm"))
 
                 rev_yoy: str | None = None
                 profit_yoy: str | None = None
+
+                if prev is not None and revenue_ttm_value is not None:
+                    previous_revenue = _dec(prev.get("revenue_ttm"))
+                    if previous_revenue not in (None, Decimal("0")):
+                        revenue_growth = (
+                            (revenue_ttm_value - previous_revenue)
+                            / abs(previous_revenue)
+                            * Decimal("100")
+                        )
+                        rev_yoy = f"{'+' if revenue_growth >= 0 else ''}{revenue_growth:.1f}%"
+
+                if prev is not None and profit_ttm_value is not None:
+                    previous_profit = _dec(prev.get("profit_ttm"))
+                    if previous_profit not in (None, Decimal("0")):
+                        profit_growth = (
+                            (profit_ttm_value - previous_profit)
+                            / abs(previous_profit)
+                            * Decimal("100")
+                        )
+                        profit_yoy = f"{'+' if profit_growth >= 0 else ''}{profit_growth:.1f}%"
 
                 if prev and roe_val is not None and equity_val is not None:
                     prev_roe = _dec(prev.get("roe"))
                     prev_equity = _dec(prev.get("owners_equity"))
                     prev_margin = _dec(prev.get("after_tax_profit_margin"))
 
-                    if prev_roe is not None and prev_equity is not None:
+                    if profit_yoy is None and prev_roe is not None and prev_equity is not None:
                         cur_profit = equity_val * roe_val
                         prev_profit = prev_equity * prev_roe
                         if prev_profit != Decimal("0"):
@@ -820,7 +842,7 @@ class MarketService:
                             )
                             profit_yoy = f"{'+' if p_growth >= Decimal('0') else ''}{p_growth:.1f}%"
 
-                            if (
+                            if rev_yoy is None and (
                                 margin_val
                                 and prev_margin
                                 and margin_val > Decimal("0")
@@ -885,47 +907,24 @@ class MarketService:
                 if eb_d is not None and eb_d > Decimal("0"):
                     ebitda = f"{eb_d / Decimal('1000000000'):,.0f} tỷ"
 
+                direct_revenue = _dec(latest_ttm.get("revenue_ttm"))
+                if direct_revenue is not None:
+                    revenue_ttm = f"{direct_revenue / Decimal('1000000000'):,.0f} tỷ"
+
+                direct_profit = _dec(latest_ttm.get("profit_ttm"))
+                if direct_profit is not None:
+                    profit_ttm = f"{direct_profit / Decimal('1000000000'):,.0f} tỷ"
+
                 mcap_d = _dec(latest_ttm.get("market_cap"))
                 ps_d = _dec(latest_ttm.get("ps"))
-                if mcap_d and ps_d and ps_d > Decimal("0"):
+                if revenue_ttm is None and mcap_d and ps_d and ps_d > Decimal("0"):
                     rev_calc = (mcap_d / ps_d) / Decimal("1000000000")
                     revenue_ttm = f"{rev_calc:,.0f} tỷ"
 
                 pe_d = _dec(latest_ttm.get("pe")) or instrument.pe
-                if mcap_d and pe_d and pe_d > Decimal("0"):
+                if profit_ttm is None and mcap_d and pe_d and pe_d > Decimal("0"):
                     prof_calc = (mcap_d / pe_d) / Decimal("1000000000")
                     profit_ttm = f"{prof_calc:,.0f} tỷ"
-
-        # Tier 2 Fallback: If no ratio quarters found, synthesize 4 quarters from trend
-        if len(quarters) < 4:
-            base_roe = instrument.roe_percent or Decimal("12.5")
-            base_margin = Decimal("10.2")
-            periods = ["Q3/2025", "Q4/2025", "Q1/2026", "Q2/2026"]
-            quarters = []
-            for i, period_label in enumerate(periods):
-                mod = (i - 1) * Decimal("1.2")
-                q_roe = max(Decimal("4.0"), base_roe + mod)
-                q_margin = max(Decimal("3.0"), base_margin + (i - 1) * Decimal("0.8"))
-                p_growth = (i - 1) * Decimal("4.5") + Decimal("8.0")
-                r_growth = (i - 1) * Decimal("3.2") + Decimal("6.5")
-                p_sign = "+" if p_growth >= Decimal("0") else ""
-                r_sign = "+" if r_growth >= Decimal("0") else ""
-                quarters.append(
-                    {
-                        "period": period_label,
-                        "revenue_growth_yoy": f"{r_sign}{r_growth:.1f}%",
-                        "profit_growth_yoy": f"{p_sign}{p_growth:.1f}%",
-                        "roe": f"{q_roe:.1f}%",
-                        "net_margin": f"{q_margin:.1f}%",
-                        "gross_margin": f"{q_margin + Decimal('12.5'):.1f}%",
-                    }
-                )
-
-            roa_percent = roa_percent or f"{base_roe * Decimal('0.45'):.1f}%"
-            gross_margin_percent = gross_margin_percent or "22.8%"
-            net_margin_percent = net_margin_percent or "10.5%"
-            current_ratio = current_ratio or "1.52 lần"
-            debt_to_equity = debt_to_equity or "0.95 lần"
 
         # Derived EPS & BVPS
         if instrument.eps is not None:
@@ -939,13 +938,16 @@ class MarketService:
             bvps = f"{cur_price / instrument.pb:,.0f} ₫"
 
         # 4. Determine Health Status & Insights
-        current_roe = instrument.roe_percent or Decimal("12.0")
+        current_roe = instrument.roe_percent
         has_positive_profit = any(
             q.get("profit_growth_yoy") and not str(q.get("profit_growth_yoy")).startswith("-")
             for q in quarters[-2:]
         )
-        is_expanding = current_roe >= Decimal("15.0") or (
-            cap_1y and not cap_1y.startswith("-") and current_roe >= Decimal("11.0")
+        is_expanding = current_roe is not None and (
+            current_roe >= Decimal("15.0")
+            or (
+                cap_1y and not cap_1y.startswith("-") and current_roe >= Decimal("11.0")
+            )
         )
         is_accumulating = vol_ratio >= Decimal("1.05") and (cap_1m and not cap_1m.startswith("-"))
 
@@ -957,7 +959,7 @@ class MarketService:
                 f"trong nhóm {instrument.sector or 'thị trường'}, với hiệu quả sinh lời trên vốn "
                 "cao và vị thế kinh doanh vững chắc."
             )
-        elif current_roe >= Decimal("8.0") or has_positive_profit:
+        elif (current_roe is not None and current_roe >= Decimal("8.0")) or has_positive_profit:
             health_status = "stable"
             health_title = "Hoạt động & tài chính ổn định"
             health_summary = (
@@ -990,16 +992,28 @@ class MarketService:
         sector_name = instrument.sector or "thị trường"
         roe_evaluation = (
             "thuộc nhóm sinh lời cao vượt trội trong ngành."
-            if current_roe >= Decimal("15")
-            else "ở mức ổn định, đáp ứng tiêu chuẩn đầu tư an toàn."
+            if current_roe is not None and current_roe >= Decimal("15")
+            else (
+                "ở mức ổn định, đáp ứng tiêu chuẩn đầu tư an toàn."
+                if current_roe is not None
+                else "chưa có đủ dữ liệu nguồn để đánh giá."
+            )
         )
-        insight_1 = f"Hiệu quả vốn (ROE): Đạt {current_roe:.1f}%, {roe_evaluation}"
+        insight_1 = (
+            f"Hiệu quả vốn (ROE): Đạt {current_roe:.1f}%, {roe_evaluation}"
+            if current_roe is not None
+            else f"Hiệu quả vốn (ROE): Chưa có dữ liệu nguồn; {roe_evaluation}"
+        )
 
-        pe_str = f"{instrument.pe:.1f} lần" if instrument.pe is not None else "đang cập nhật"
+        pe_str = f"{instrument.pe:.1f} lần" if instrument.pe is not None else "chưa có dữ liệu"
         pe_eval = (
             "vùng định giá hấp dẫn so với tiềm năng tăng trưởng trung hạn."
             if instrument.pe and instrument.pe < Decimal("15")
-            else "phản ánh kỳ vọng cao từ thị trường vào chu kỳ kinh doanh mới."
+            else (
+                "phản ánh kỳ vọng cao từ thị trường vào chu kỳ kinh doanh mới."
+                if instrument.pe
+                else "chưa có đủ dữ liệu nguồn để đánh giá."
+            )
         )
         insight_2 = (
             f"Định giá P/E: Hiện ở mức {pe_str} với quy mô vốn hóa {market_cap_str}, {pe_eval}"

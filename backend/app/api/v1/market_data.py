@@ -109,8 +109,7 @@ async def start_market_provider() -> None:
         return
     provider = _provider()
     if isinstance(provider, VnstockMarketProvider):
-        asyncio.create_task(asyncio.to_thread(provider.indices))
-        asyncio.create_task(asyncio.to_thread(provider.instruments))
+        provider.warm_up()
 
 
 async def close_market_provider() -> None:

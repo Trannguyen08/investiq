@@ -18,6 +18,7 @@ from dataclasses import dataclass, replace
 from datetime import UTC, date, datetime, time, timedelta
 from decimal import Decimal, InvalidOperation
 from pathlib import Path
+from queue import Empty, Queue
 from threading import RLock, Thread
 from time import monotonic
 from typing import Protocol
@@ -38,6 +39,8 @@ logger = logging.getLogger(__name__)
 
 _MARKET_TZ = ZoneInfo("Asia/Ho_Chi_Minh")
 _STOCK_SYMBOL = re.compile(r"^[A-Z]{3}$")
+_MAX_BATCH_QUOTE_SYMBOLS = 30
+_QUOTE_BOARD_TIMEOUT_SECONDS = 5
 _INDEX_EXCHANGE = {
     "VNINDEX": "HOSE",
     "VN30": "VN30",
@@ -143,12 +146,13 @@ class OfficialVnstockGateway:
             os.environ["VNSTOCK_API_KEY"] = api_key
         if source_api_key:
             os.environ["FHSC_API_KEY"] = source_api_key
-        from vnstock import Market, Reference
+        from vnstock import Fundamental, Market, Reference
 
         if not os.environ.get("FHSC_API_KEY"):
             logger.warning("vnstock_fhsc_api_key_missing_source_calls_will_fail")
         self._market = Market("fhsc")
         self._reference = Reference("fhsc")
+        self._fundamental = Fundamental()
         self._screener_rows: list[dict[str, object]] = []
         self._market_time: str | None = None
 
@@ -200,26 +204,109 @@ class OfficialVnstockGateway:
         return references, vn30, sectors
 
     def quote_rows(self, symbols: list[str]) -> list[dict[str, object]]:
-        wanted = set(symbols)
+        quote_symbols = symbols[:_MAX_BATCH_QUOTE_SYMBOLS]
+        wanted = {symbol.upper() for symbol in quote_symbols}
+        screener_by_symbol = {
+            _text(row.get("symbol")).upper(): row
+            for row in self._screener_rows
+            if _text(row.get("symbol"))
+        }
+        try:
+            result_queue: Queue[tuple[bool, object]] = Queue(maxsize=1)
+
+            def fetch_quote_board() -> None:
+                try:
+                    result_queue.put(
+                        (True, self._market.equity.quote(quote_symbols, compat="v5"))
+                    )
+                except (Exception, SystemExit) as exc:
+                    result_queue.put((False, exc))
+
+            Thread(
+                target=fetch_quote_board,
+                name="vnstock-quote-board",
+                daemon=True,
+            ).start()
+            try:
+                succeeded, result = result_queue.get(timeout=_QUOTE_BOARD_TIMEOUT_SECONDS)
+            except Empty:
+                logger.warning("vnstock_fhsc_quote_board_timeout")
+                return self._screener_quote_fallback(quote_symbols, screener_by_symbol)
+            if not succeeded:
+                cause = result if isinstance(result, BaseException) else None
+                raise RuntimeError("FHSC quote board request failed") from cause
+            quote_rows = _frame_records(result)
+        except (Exception, SystemExit) as exc:
+            logger.warning(
+                "vnstock_fhsc_quote_board_unavailable",
+                extra={"error_type": type(exc).__name__},
+            )
+            quote_rows = []
+        quotes_by_symbol = {
+            _text(row.get("symbol")).upper(): row
+            for row in quote_rows
+            if _text(row.get("symbol"))
+        }
+
         rows: list[dict[str, object]] = []
-        for row in self._screener_rows:
-            symbol = _text(row.get("symbol")).upper()
-            if symbol not in wanted:
+        for symbol in quote_symbols:
+            normalized = symbol.upper()
+            screen = screener_by_symbol.get(normalized)
+            if normalized not in wanted or screen is None:
                 continue
-            close = _optional_decimal(row.get("close"))
-            change_percent = _optional_decimal(row.get("price_change_percent"))
+            quote = quotes_by_symbol.get(normalized, {})
+            screen_close = _optional_decimal(screen.get("close"))
+            close_fallback = screen_close * Decimal("1000") if screen_close is not None else None
+            change_percent = _optional_decimal(
+                quote.get("price_change_percent", screen.get("price_change_percent"))
+            )
+            reference_fallback = None
+            if close_fallback is not None and change_percent is not None:
+                divisor = Decimal("1") + change_percent / Decimal("100")
+                if divisor != 0:
+                    reference_fallback = close_fallback / divisor
+
+            quote_volume = _optional_decimal(quote.get("total_volume"))
+            screen_volume = _optional_decimal(screen.get("total_volume"))
+            quote_value = _optional_decimal(quote.get("total_value"))
+            screen_value = _optional_decimal(screen.get("total_value"))
+            rows.append(
+                {
+                    **screen,
+                    **quote,
+                    "symbol": normalized,
+                    "close_price": _positive_or(quote.get("close_price"), close_fallback),
+                    "reference_price": _positive_or(
+                        quote.get("reference_price"), reference_fallback
+                    ),
+                    "volume_accumulated": _positive_or(quote_volume, screen_volume),
+                    "total_value": _positive_or(quote_value, screen_value),
+                    "time": quote.get("time") or self._market_time,
+                }
+            )
+        return rows
+
+    def _screener_quote_fallback(
+        self, symbols: list[str], screener_by_symbol: dict[str, dict[str, object]]
+    ) -> list[dict[str, object]]:
+        rows: list[dict[str, object]] = []
+        for symbol in symbols:
+            screen = screener_by_symbol.get(symbol.upper())
+            if screen is None:
+                continue
+            close = _optional_decimal(screen.get("close"))
+            change_percent = _optional_decimal(screen.get("price_change_percent"))
             reference = None
             if close is not None and change_percent is not None:
                 divisor = Decimal("1") + change_percent / Decimal("100")
                 if divisor != 0:
-                    reference = close / divisor
+                    reference = close * Decimal("1000") / divisor
             rows.append(
                 {
-                    **row,
-                    "symbol": symbol,
-                    "close_price": close,
+                    **screen,
+                    "symbol": symbol.upper(),
+                    "close_price": close * Decimal("1000") if close is not None else None,
                     "reference_price": reference,
-                    "volume_accumulated": row.get("total_volume"),
                     "time": self._market_time,
                 }
             )
@@ -264,7 +351,33 @@ class OfficialVnstockGateway:
         return []
 
     def fundamental_quarterly_rows(self, symbol: str) -> list[dict[str, object]]:
-        return []
+        try:
+            equity = self._fundamental.equity(symbol)
+            income_rows = _frame_records(
+                equity.income_statement(
+                    period="quarter",
+                    format="time_series",
+                    source="fhsc",
+                )
+            )
+        except (Exception, SystemExit) as exc:
+            raise RuntimeError("Vnstock 6 quarterly income statement request failed") from exc
+
+        try:
+            balance_rows = _frame_records(
+                equity.balance_sheet(
+                    period="quarter",
+                    format="time_series",
+                    source="fhsc",
+                )
+            )
+        except (Exception, SystemExit) as exc:
+            logger.warning(
+                "vnstock_quarterly_balance_sheet_unavailable",
+                extra={"symbol": symbol, "error_type": type(exc).__name__},
+            )
+            balance_rows = []
+        return _quarterly_growth_rows(income_rows, balance_rows)
 
     def trade_rows(self, symbol: str, limit: int) -> list[dict[str, object]]:
         # FHSC v6 does not publish per-execution trades; its supported routes are DNSE/TCBS.
@@ -287,6 +400,14 @@ def _text(value: object) -> str:
         return ""
     text = str(value).strip()
     return "" if text.lower() in {"nan", "none", "nat"} else text
+
+
+def _positive_or(value: object, fallback: object | None) -> Decimal:
+    parsed = _optional_decimal(value)
+    if parsed is not None and parsed > 0:
+        return parsed
+    fallback_value = _optional_decimal(fallback)
+    return fallback_value if fallback_value is not None and fallback_value > 0 else Decimal()
 
 
 def _decimal(value: object, default: Decimal = Decimal()) -> Decimal:
@@ -372,6 +493,151 @@ def _fundamental_values(
         values.get("trailing_eps"),
         values.get("roe"),
     )
+
+
+def _statement_value(row: dict[str, object], *item_ids: str) -> Decimal | None:
+    for item_id in item_ids:
+        value = _optional_decimal(row.get(item_id))
+        if value is not None:
+            return value
+    return None
+
+
+def _period_parts(value: object) -> tuple[int, int] | None:
+    matched = re.fullmatch(r"(\d{4})-Q([1-4])", _text(value))
+    return (int(matched.group(1)), int(matched.group(2))) if matched else None
+
+
+def _quarter_index(period: tuple[int, int]) -> int:
+    year, quarter = period
+    return year * 4 + quarter - 1
+
+
+def _quarterly_growth_rows(
+    income_rows: list[dict[str, object]],
+    balance_rows: list[dict[str, object]],
+) -> list[dict[str, object]]:
+    income_by_period: dict[tuple[int, int], dict[str, object]] = {}
+    for row in income_rows:
+        period = _period_parts(row.get("period"))
+        if period is not None:
+            income_by_period[period] = row
+
+    balance_by_period: dict[tuple[int, int], dict[str, object]] = {}
+    for row in balance_rows:
+        period = _period_parts(row.get("period"))
+        if period is not None:
+            balance_by_period[period] = row
+
+    periods = sorted(income_by_period)
+    values_by_period: dict[tuple[int, int], dict[str, Decimal | None]] = {}
+    for period in periods:
+        income = income_by_period[period]
+        balance = balance_by_period.get(period, {})
+        values_by_period[period] = {
+            "revenue": _statement_value(
+                income,
+                "IS_NET_REVENUE",
+                "IS_REVENUE",
+                "IS_TOTAL_OPERATING_INCOME",
+                "IS_TOTAL_REVENUE",
+            ),
+            "profit": _statement_value(
+                income,
+                "IS_PROFIT_AFTER_TAX_FOR_SHAREHOLDERS_OF_PARENT_COMPANY",
+                "IS_NET_PROFIT_AFTER_TAX",
+                "IS_PROFIT_AFTER_TAX",
+            ),
+            "gross_profit": _statement_value(income, "IS_GROSS_PROFIT"),
+            "equity": _statement_value(
+                balance,
+                "BS_TOTAL_EQUITY",
+                "BS_TOTAL_SHAREHOLDERS_EQUITY",
+                "BS_OWNER_EQUITY",
+            ),
+            "assets": _statement_value(balance, "BS_TOTAL_ASSETS"),
+            "current_assets": _statement_value(balance, "BS_CURRENT_ASSETS"),
+            "current_liabilities": _statement_value(balance, "BS_CURRENT_LIABILITIES"),
+            "liabilities": _statement_value(balance, "BS_TOTAL_LIABILITIES"),
+        }
+
+    normalized: list[dict[str, object]] = []
+    for index, period in enumerate(periods):
+        trailing_periods = periods[max(0, index - 3) : index + 1]
+        if len(trailing_periods) != 4 or any(
+            _quarter_index(right) - _quarter_index(left) != 1
+            for left, right in zip(
+                trailing_periods[:-1], trailing_periods[1:], strict=True
+            )
+        ):
+            continue
+        trailing_values = [values_by_period[item] for item in trailing_periods]
+        revenues = [item["revenue"] for item in trailing_values]
+        profits = [item["profit"] for item in trailing_values]
+        if any(value is None for value in revenues + profits):
+            continue
+        revenue_ttm = sum((value for value in revenues if value is not None), Decimal())
+        profit_ttm = sum((value for value in profits if value is not None), Decimal())
+        gross_profits = [item["gross_profit"] for item in trailing_values]
+        gross_profit_ttm = (
+            sum((value for value in gross_profits if value is not None), Decimal())
+            if all(value is not None for value in gross_profits)
+            else None
+        )
+
+        current_balance = values_by_period[period]
+        opening_period = next(
+            (candidate for candidate in periods if _quarter_index(candidate) == _quarter_index(period) - 4),
+            None,
+        )
+        opening_balance = values_by_period.get(opening_period, {}) if opening_period else {}
+        equity = current_balance["equity"]
+        opening_equity = opening_balance.get("equity")
+        average_equity = (
+            (equity + opening_equity) / Decimal("2")
+            if equity is not None and opening_equity is not None
+            else equity
+        )
+        assets = current_balance["assets"]
+        opening_assets = opening_balance.get("assets")
+        average_assets = (
+            (assets + opening_assets) / Decimal("2")
+            if assets is not None and opening_assets is not None
+            else assets
+        )
+        current_assets = current_balance["current_assets"]
+        current_liabilities = current_balance["current_liabilities"]
+        liabilities = current_balance["liabilities"]
+        year, quarter = period
+        normalized.append(
+            {
+                "ratio_type": "RATIO_TTM",
+                "year": year,
+                "quarter": quarter,
+                "revenue_ttm": revenue_ttm,
+                "profit_ttm": profit_ttm,
+                "roe": profit_ttm / average_equity if average_equity else None,
+                "roa": profit_ttm / average_assets if average_assets else None,
+                "after_tax_profit_margin": (
+                    profit_ttm / revenue_ttm if revenue_ttm else None
+                ),
+                "gross_margin": (
+                    gross_profit_ttm / revenue_ttm
+                    if gross_profit_ttm is not None and revenue_ttm
+                    else None
+                ),
+                "owners_equity": equity,
+                "current_ratio": (
+                    current_assets / current_liabilities
+                    if current_assets is not None and current_liabilities
+                    else None
+                ),
+                "debt_to_equity": (
+                    liabilities / equity if liabilities is not None and equity else None
+                ),
+            }
+        )
+    return normalized
 
 
 def _match_side(value: object) -> str:
@@ -526,12 +792,12 @@ class VnstockMarketProvider:
 
     @property
     def market_time(self) -> str:
-        self._ensure_snapshot()
+        # This metadata is also read from the WebSocket event loop. Snapshot loading
+        # performs network I/O, so callers must not trigger it from a metadata getter.
         return self._market_time.isoformat().replace("+00:00", "Z")
 
     @property
     def freshness(self) -> str:
-        self._ensure_snapshot()
         return "stale" if self._stale else "fresh"
 
     @property
@@ -553,6 +819,18 @@ class VnstockMarketProvider:
     def instruments(self) -> tuple[MarketInstrument, ...]:
         self._ensure_snapshot()
         return self._instruments
+
+    def warm_up(self) -> None:
+        """Refresh the initial market snapshot without blocking the API event loop."""
+        with self._lock:
+            if self._refreshing or (self._instruments and self._clock() < self._expires_at):
+                return
+            self._refreshing = True
+            Thread(
+                target=self._refresh_snapshot_in_background,
+                name="vnstock-market-warmup",
+                daemon=True,
+            ).start()
 
     def indices(self) -> tuple[MarketIndex, ...]:
         self._ensure_snapshot()
@@ -781,8 +1059,12 @@ class VnstockMarketProvider:
         now = self._clock()
         if self._instruments and now < self._expires_at:
             return
+        if self._refreshing:
+            return
         with self._lock:
             if self._instruments and now < self._expires_at:
+                return
+            if self._refreshing:
                 return
             if self._instruments:
                 self._stale = True

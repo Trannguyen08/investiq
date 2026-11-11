@@ -235,6 +235,34 @@ def config() -> VnstockConfig:
     )
 
 
+def test_snapshot_metadata_does_not_trigger_network_refresh(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    provider = VnstockMarketProvider(config(), gateway=FakeVnstockGateway())
+
+    def fail_if_refreshed() -> None:
+        raise AssertionError("metadata getters must not trigger a market data refresh")
+
+    monkeypatch.setattr(provider, "_ensure_snapshot", fail_if_refreshed)
+
+    assert provider.market_time
+    assert provider.freshness == "fresh"
+
+
+def test_market_snapshot_warmup_does_not_block_first_instrument_reads() -> None:
+    gateway = FakeVnstockGateway()
+    gateway.block_quotes = True
+    provider = VnstockMarketProvider(config(), gateway=gateway)
+
+    provider.warm_up()
+    assert gateway.refresh_started.wait(timeout=1)
+
+    try:
+        assert provider.instruments() == ()
+    finally:
+        gateway.release_refresh.set()
+
+
 def test_vnstock_rows_are_normalized_without_claiming_realtime() -> None:
     provider = VnstockMarketProvider(config(), gateway=FakeVnstockGateway())
 
@@ -351,6 +379,12 @@ def test_reference_snapshot_uses_the_fhsc_index_quote_timestamp(
                 else []
             )
 
+        @staticmethod
+        def quote(symbols: list[str], *, compat: str) -> Frame:
+            assert symbols == ["FPT"]
+            assert compat == "v5"
+            return Frame([{"symbol": "FPT", "close_price": 100_000}])
+
     class IndexQuote:
         @staticmethod
         def quote(*, compat: str) -> Frame:
@@ -384,6 +418,136 @@ def test_reference_snapshot_uses_the_fhsc_index_quote_timestamp(
     quote = gateway.quote_rows(["FPT"])[0]
 
     assert quote["time"] == "2026-11-11 14:43:45+07:00"
+
+
+def test_fhsc_quote_board_restores_vnd_prices_ohlc_and_depth(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    class Frame:
+        def to_dict(self, *, orient: str) -> list[dict[str, object]]:
+            assert orient == "records"
+            return [
+                {
+                    "symbol": "SHB",
+                    "close_price": 11_150,
+                    "reference_price": 10_900,
+                    "open_price": 10_900,
+                    "high_price": 11_300,
+                    "low_price": 10_800,
+                    "ceiling_price": 11_650,
+                    "floor_price": 10_150,
+                    "total_volume": 100_000,
+                    "total_value": 1_115_000_000,
+                    "bid_price_1": 11_100,
+                    "bid_vol_1": 50_000,
+                    "ask_price_1": 11_150,
+                    "ask_vol_1": 30_000,
+                    "time": "2026-11-11 14:45:00+07:00",
+                }
+            ]
+
+    class Equity:
+        @staticmethod
+        def quote(symbols: list[str], *, compat: str) -> Frame:
+            assert symbols == ["SHB"]
+            assert compat == "v5"
+            return Frame()
+
+    class Market:
+        equity = Equity()
+
+    gateway = OfficialVnstockGateway.__new__(OfficialVnstockGateway)
+    monkeypatch.setattr(gateway, "_market", Market(), raising=False)
+    monkeypatch.setattr(gateway, "_market_time", None, raising=False)
+    monkeypatch.setattr(
+        gateway,
+        "_screener_rows",
+        [{"symbol": "SHB", "close": 11.15, "price_change_percent": 2.29}],
+        raising=False,
+    )
+
+    quote = gateway.quote_rows(["SHB"])[0]
+
+    assert quote["close_price"] == 11_150
+    assert quote["reference_price"] == 10_900
+    assert quote["open_price"] == 10_900
+    assert quote["high_price"] == 11_300
+    assert quote["low_price"] == 10_800
+    assert quote["bid_price_1"] == 11_100
+    assert quote["ask_price_1"] == 11_150
+
+
+def test_fhsc_screener_fallback_converts_thousand_dong_to_vnd(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    class EmptyFrame:
+        @staticmethod
+        def to_dict(*, orient: str) -> list[dict[str, object]]:
+            assert orient == "records"
+            return []
+
+    class Equity:
+        @staticmethod
+        def quote(symbols: list[str], *, compat: str) -> EmptyFrame:
+            assert symbols == ["ACB"]
+            assert compat == "v5"
+            return EmptyFrame()
+
+    class Market:
+        equity = Equity()
+
+    gateway = OfficialVnstockGateway.__new__(OfficialVnstockGateway)
+    monkeypatch.setattr(gateway, "_market", Market(), raising=False)
+    monkeypatch.setattr(gateway, "_market_time", None, raising=False)
+    monkeypatch.setattr(
+        gateway,
+        "_screener_rows",
+        [{"symbol": "ACB", "close": 20.6, "price_change_percent": 0}],
+        raising=False,
+    )
+
+    quote = gateway.quote_rows(["ACB"])[0]
+
+    assert quote["close_price"] == 20_600
+    assert quote["reference_price"] == 20_600
+    assert quote.get("open_price") is None
+
+
+def test_fhsc_quote_board_batch_is_bounded_to_vn30_size(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    requested_symbols: list[str] = []
+
+    class Frame:
+        @staticmethod
+        def to_dict(*, orient: str) -> list[dict[str, object]]:
+            assert orient == "records"
+            return []
+
+    class Equity:
+        @staticmethod
+        def quote(symbols: list[str], *, compat: str) -> Frame:
+            requested_symbols.extend(symbols)
+            assert compat == "v5"
+            return Frame()
+
+    class Market:
+        equity = Equity()
+
+    symbols = [f"S{index:02d}" for index in range(120)]
+    gateway = OfficialVnstockGateway.__new__(OfficialVnstockGateway)
+    monkeypatch.setattr(gateway, "_market", Market(), raising=False)
+    monkeypatch.setattr(gateway, "_market_time", None, raising=False)
+    monkeypatch.setattr(
+        gateway,
+        "_screener_rows",
+        [{"symbol": symbol, "close": 10, "price_change_percent": 0} for symbol in symbols],
+        raising=False,
+    )
+
+    gateway.quote_rows(symbols)
+
+    assert requested_symbols == symbols[:30]
 
 
 def test_stock_candles_use_v6_market_arguments(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -423,6 +587,85 @@ def test_stock_candles_use_v6_market_arguments(monkeypatch: pytest.MonkeyPatch) 
 
     assert calls == [{"interval": "1D", "limit": 500, "compat": "v5"}]
     assert rows[0]["close"] == 24.4
+
+
+def test_v6_quarterly_statements_restore_real_growth_rows(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    class Frame:
+        def __init__(self, rows: list[dict[str, object]]) -> None:
+            self.rows = rows
+
+        def to_dict(self, *, orient: str) -> list[dict[str, object]]:
+            assert orient == "records"
+            return self.rows
+
+    periods = [
+        (2024, quarter, quarter * 100, quarter * 10)
+        for quarter in range(1, 5)
+    ] + [
+        (2025, quarter, (quarter + 1) * 100, (quarter + 1) * 10)
+        for quarter in range(1, 5)
+    ]
+    income_rows = [
+        {
+            "period": f"{year}-Q{quarter}",
+            "IS_NET_REVENUE": revenue,
+            "IS_NET_PROFIT_AFTER_TAX": profit,
+            "IS_GROSS_PROFIT": revenue / 2,
+        }
+        for year, quarter, revenue, profit in periods
+    ]
+    balance_rows = [
+        {
+            "period": f"{year}-Q{quarter}",
+            "BS_TOTAL_EQUITY": equity,
+            "BS_TOTAL_ASSETS": assets,
+            "BS_CURRENT_ASSETS": 350,
+            "BS_CURRENT_LIABILITIES": 250,
+            "BS_TOTAL_LIABILITIES": 650,
+        }
+        for year, quarter, _, _ in periods
+        for equity, assets in [(1500 if year == 2025 else 1200, 10_000 if year == 2025 else 8_000)]
+    ]
+
+    class Equity:
+        def income_statement(self, **kwargs: object) -> Frame:
+            assert kwargs == {
+                "period": "quarter",
+                "format": "time_series",
+                "source": "fhsc",
+            }
+            return Frame(income_rows)
+
+        def balance_sheet(self, **kwargs: object) -> Frame:
+            assert kwargs == {
+                "period": "quarter",
+                "format": "time_series",
+                "source": "fhsc",
+            }
+            return Frame(balance_rows)
+
+    class Fundamental:
+        @staticmethod
+        def equity(symbol: str) -> Equity:
+            assert symbol == "SHB"
+            return Equity()
+
+    gateway = OfficialVnstockGateway.__new__(OfficialVnstockGateway)
+    monkeypatch.setattr(gateway, "_fundamental", Fundamental(), raising=False)
+
+    rows = gateway.fundamental_quarterly_rows("SHB")
+
+    latest = rows[-1]
+    assert latest["year"] == 2025
+    assert latest["quarter"] == 4
+    assert latest["revenue_ttm"] == Decimal("1400")
+    assert latest["profit_ttm"] == Decimal("140")
+    assert latest["after_tax_profit_margin"] == Decimal("0.1")
+    assert latest["gross_margin"] == Decimal("0.5")
+    assert latest["current_ratio"] == Decimal("1.4")
+    assert latest["debt_to_equity"] == Decimal("650") / Decimal("1500")
 
 
 def test_company_events_use_the_v6_reference_route(monkeypatch: pytest.MonkeyPatch) -> None:

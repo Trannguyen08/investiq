@@ -165,7 +165,7 @@ def test_stock_growth_returns_complete_profile_with_quarters_and_insights() -> N
     assert q["roe"] is not None
 
 
-def test_stock_growth_tier2_fallback_when_no_fundamental_rows() -> None:
+def test_stock_growth_keeps_fundamental_metrics_unavailable_without_source_rows() -> None:
     class EmptyFundamentalsProvider(FixtureMarketProvider):
         def fundamental_growth_rows(self, symbol: str) -> list[dict[str, object]]:
             return []
@@ -176,9 +176,57 @@ def test_stock_growth_tier2_fallback_when_no_fundamental_rows() -> None:
     assert result is not None
     data = cast(dict[str, Any], result["data"])
     assert data["symbol"] == "HPG"
-    assert len(data["quarters"]) == 4
-    assert all("Q" in q["period"] for q in data["quarters"])
+    assert data["quarters"] == []
+    assert data["revenue_ttm"] is None
+    assert data["profit_ttm"] is None
+    assert data["roa_percent"] is None
     assert len(data["insights"]) == 3
+
+
+def test_stock_growth_uses_reported_v6_ttm_rows_for_yoy_and_financial_metrics() -> None:
+    class StatementProvider(FixtureMarketProvider):
+        def fundamental_growth_rows(self, symbol: str) -> list[dict[str, object]]:
+            assert symbol == "FPT"
+            return [
+                {
+                    "ratio_type": "RATIO_TTM",
+                    "year": 2024,
+                    "quarter": 4,
+                    "revenue_ttm": Decimal("1000000000000"),
+                    "profit_ttm": Decimal("100000000000"),
+                    "roe": Decimal("0.08"),
+                    "roa": Decimal("0.02"),
+                    "after_tax_profit_margin": Decimal("0.1"),
+                    "gross_margin": Decimal("0.4"),
+                    "owners_equity": Decimal("1000000000000"),
+                },
+                {
+                    "ratio_type": "RATIO_TTM",
+                    "year": 2025,
+                    "quarter": 4,
+                    "revenue_ttm": Decimal("1400000000000"),
+                    "profit_ttm": Decimal("140000000000"),
+                    "roe": Decimal("0.1"),
+                    "roa": Decimal("0.025"),
+                    "after_tax_profit_margin": Decimal("0.1"),
+                    "gross_margin": Decimal("0.5"),
+                    "owners_equity": Decimal("1500000000000"),
+                    "current_ratio": Decimal("1.4"),
+                    "debt_to_equity": Decimal("0.43"),
+                },
+            ]
+
+    result = MarketService(StatementProvider()).growth("FPT")
+
+    assert result is not None
+    data = cast(dict[str, Any], result["data"])
+    assert data["revenue_ttm"] == "1,400 tỷ"
+    assert data["profit_ttm"] == "140 tỷ"
+    assert data["roa_percent"] == "2.5%"
+    assert data["current_ratio"] == "1.40 lần"
+    assert data["debt_to_equity"] == "0.43 lần"
+    assert data["quarters"][-1]["revenue_growth_yoy"] == "+40.0%"
+    assert data["quarters"][-1]["profit_growth_yoy"] == "+40.0%"
 
 
 def test_stock_growth_returns_none_for_unknown_symbol() -> None:
