@@ -91,6 +91,9 @@ def _provider() -> IMarketProvider:
                 candle_cache_seconds=settings.vnstock_candle_cache_seconds,
                 fundamental_cache_seconds=settings.vnstock_fundamental_cache_seconds,
                 max_symbols=settings.vnstock_max_symbols,
+                source_api_key=(
+                    settings.fhsc_api_key.get_secret_value() if settings.fhsc_api_key else None
+                ),
             )
         )
     raise RuntimeError("Market data is disabled until a licensed provider is configured")

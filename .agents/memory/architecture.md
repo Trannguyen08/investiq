@@ -94,32 +94,25 @@ investiq/
   is the shared/production default. Redis caches bounded public read
   models, while PostgreSQL migration `0011_market_foundation` owns future licensed history, events,
   public people/holding snapshots, engagement retention, and current private watchlists.
-- Vnstock is a local/private evaluation adapter behind the same port. It uses source-delayed KBS
-  reference/quote/OHLCV data plus VCI industry labels and current-TTM valuation statistics,
-  normalizes equity candles to VND, caches snapshots, candles, and recent KBS executions, and lazily
-  loads per-symbol VCI P/E, P/B, and ROE for stock detail or a currently visible 15-symbol table page
-  with a one-hour cache, three-call concurrency ceiling, last-observed stale fallback, and explicit
-  null fallback when the source has never supplied a ratio. Detail responses preserve up to three
-  provider-observed resting bid/ask levels; recent executions retain the source's aggressive
-  buy/sell/ATO/ATC classification, and the API derives each execution's Decimal change from the
-  canonical reference price. A fully reset pre-open KBS board is replaced by one
-  VCI batch containing the latest completed close and preceding reference, so sector moves and
-  breadth remain meaningful without per-symbol history fan-out. Vnstock quota `SystemExit` signals
-  are normalized as provider failures. It serves labeled stale price data after a transient upstream
-  failure. Live quote timestamps drive the displayed market time, snapshots refresh every minute by
-  default, and opening-auction OHLC/volume remain unavailable until the source reports an execution
-  rather than being copied from the indicative price. Its optional key stays server-side. Because the client aggregates third-party
+- The Vnstock adapter now calls Vnstock 6's FHSC routes: one screener request per exchange for the
+  bounded market snapshot, FHSC index constituents for VN30 membership, `Market.equity().ohlcv()` /
+  `Market.index().ohlcv()` for candles, `Market.equity().summary()` for P/E, P/B, EPS and ROE, and
+  `Reference.company().events()` for the partial upcoming event calendar. Candles remain normalized
+  to VND and snapshots/candles/fundamentals retain their process caches and stale-data behavior.
+  The adapter does not manufacture OHLC, order-book depth or a per-execution tape when FHSC does not
+  provide those values. `VNSTOCK_API_KEY` is the Vnstock account credential; the selected FHSC data
+  source additionally requires `FHSC_API_KEY` from the host environment. Render's blueprint selects
+  `MARKET_DATA_MODE=vnstock` and declares both credentials without storing values. Vnstock quota
+  `SystemExit` signals are normalized as provider failures. Because the client aggregates third-party
   sources, this adapter is not evidence of public redistribution rights and is not a production
-  licensing substitute.
-  The same evaluation adapter normalizes published VCI corporate-event milestones for the upcoming
-  30-day Home/Events calendar. It scans the eight highest-interest symbols in the current snapshot
-  with a six-call concurrency ceiling, caches results for 30 minutes, preserves the last observed
-  calendar across refresh failure, and labels the deliberately partial universe in the UI.
+  licensing substitute. The same evaluation adapter scans the eight highest-interest symbols with a
+  six-call concurrency ceiling, caches events for 30 minutes, preserves the last observed calendar
+  across refresh failure, and labels the deliberately partial universe in the UI.
 - Stock discovery defaults to VN30-first ordering with 15-row cursor pages and one advanced-only
   nine-column presentation; the removed Basic display mode is not part of route state. The path-addressable
   `/market/stocks/<symbol>` view aggregates documented current-session TCBS trades into five-minute,
   30-minute, or hourly candles and exposes bounded recent executions through `/api/v1/market/intraday-trades`.
-  Vnstock also maps KBS `5m`, `30m`, `1H`, and `1D` OHLCV into the canonical candle endpoint. For daily
+  Vnstock also maps FHSC `5m`, `30m`, `1H`, and `1D` OHLCV into the canonical candle endpoint. For daily
   history, an observed current-session snapshot with real OHLC and volume replaces or appends only
   that market day's candle, so a lagging cache does not hide a valid session and pre-open data is not
   fabricated. Stock-detail Day, Week, Month, and Year views choose current-session, trailing-seven-day,
@@ -140,8 +133,8 @@ investiq/
   candlestick renderer serves the Home VN-Index chart, the 100-session Index detail view, and stock
   detail pages with red/green OHLC, volume, MA5/MA20, axes, per-candle pointer/keyboard inspection,
   and a table alternative. The Vnstock adapter is instantiated during application startup so
-  concurrent cold requests share one snapshot/candle cache; stock candle reads prefer KBS and fall
-  back once to VCI when KBS fails or returns no rows. The TCBS adapter accumulates bounded five-minute
+  concurrent cold requests share one snapshot/candle cache. Stock candles use FHSC as the v6 source.
+  The TCBS adapter accumulates bounded five-minute
   VN-Index candles from real index stream ticks in process; absent historical ticks remain absent.
   Stock detail merges its subscribed quote stream into both the headline and its equal-height metric
   panel; the panel explains each metric and distinguishes no trade yet from a numeric zero. Market

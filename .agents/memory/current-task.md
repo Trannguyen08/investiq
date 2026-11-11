@@ -1,33 +1,30 @@
 # Current Task
 
-## Fix Render Deploy Build Failure with vnstock_ezchart Dependency - 2026-11-10 (completed)
-- **User Request**:
-  "fix lỗi khi vừa thêm key vnstock api key và rebuild lại bị lỗi như này"
-  - Ảnh đính kèm từ Render Dashboard (`investiq-backend` deploy `dep-dbpfvsk9v7es73bptk60`):
-    ```
-    ERROR: Could not find a version that satisfies the requirement vnstock_ezchart>=1.0.2 (from vnstock) (from versions: none)
-    ERROR: No matching distribution found for vnstock_ezchart>=1.0.2 (from vnstock)
-    ==> Build failed
-    ```
-- **Root Cause & Fixes Implemented**:
-  1. **Root Cause**:
-     - `vnstock 4.0.9` khai báo phụ thuộc `Requires-Dist: vnstock_ezchart>=1.0.2`.
-     - `vnstock_ezchart` không được phát hành lên PyPI công khai mà trước đây nằm trên kho riêng của tác giả vnstock. Tuy nhiên, vnstock hiện đã chuyển đổi sang v5/v6 và đổi tên gói đồ thị thành `vnstock-chart`, đồng thời xóa bỏ endpoint `/api/simple/` cũ (trả về 410 Gone) và xóa metadata của `vnstock_ezchart` khỏi `https://vnstocks.com/api/packages`.
-     - Khi Render thực hiện rebuild (sau khi thêm biến môi trường `VNSTOCK_API_KEY`), `pip install -r requirements.txt` trên môi trường sạch của Render tải bánh xe `vnstock-4.0.9`, đọc thấy yêu cầu `vnstock_ezchart>=1.0.2` và tìm kiếm trên PyPI. Do không tìm thấy trên PyPI, pip lập tức dừng với mã lỗi exit 1.
-  2. **Fix Implemented**:
-     - Đóng gói file bánh xe chuẩn [vnstock_ezchart-1.0.2-py3-none-any.whl](file:///c:/investiq/backend/wheels/vnstock_ezchart-1.0.2-py3-none-any.whl) (chỉ 23 KB) lưu trữ trực tiếp vào thư mục `backend/wheels/` trong mã nguồn dự án.
-     - Cập nhật [.gitignore](file:///c:/investiq/.gitignore): Mở ngoại lệ `!backend/wheels/` và `!backend/wheels/*.whl` để Git theo dõi và đưa bánh xe lên repository khi push.
-     - Cập nhật [backend/requirements.txt](file:///c:/investiq/backend/requirements.txt):
-       - Bổ sung chỉ thị `--find-links ./wheels` ở đầu file.
-       - Khai báo rõ ràng gói `vnstock_ezchart==1.0.2`.
-     - Cập nhật [render.yaml](file:///c:/investiq/render.yaml):
-       - `buildCommand: "pip install --upgrade pip && pip install --find-links=wheels -r requirements.txt"`.
-     - Cập nhật [backend/Dockerfile](file:///c:/investiq/backend/Dockerfile):
-       - Bổ sung `COPY wheels ./wheels` và `--find-links=./wheels` vào lệnh `pip install`.
-- **Verification**:
-  - Chạy thử `pip install --dry-run -r requirements.txt` từ thư mục `backend/`: Pip tự động tìm thấy bánh xe `vnstock_ezchart==1.0.2` trong `./wheels`, tải thành công và hoàn tất với mã thoát `0`.
-  - Backend Unit Tests: 17/17 portfolio unit tests passed.
+## Upgrade Retired Vnstock Wheel to Current Registry - 2026-11-11 (completed)
+- **User Request**: Replace the `vnai` wheel URL that returns 404 and use a current Vnstock release.
+- **Verified**: Official registry `https://www.vnstocks.com/api/packages` serves `vnstock==6.0.0` and `vnstock-oapi==0.1.1`; the old `vnstock 4.x` and `vnai` endpoints now return 410/404. Official Vnstock 6 removes the old VCI/KBS source APIs used by the current adapter.
+- **Configuration correction**: User confirmed Render is configured with `MARKET_DATA_MODE=vnstock` and has `VNSTOCK_API_KEY`. That account key is separate from the FHSC source credential required for live market calls.
+- **Changes**: Pin `vnstock==6.0.0` and `vnstock-oapi==0.1.1` from the official package index; remove retired `vnai`, `vnstock_ezchart`, and its bundled wheel; remove wheel-only build paths; include both requirements files in pip cache keys.
+- **Validation**: pip successfully resolved and downloaded the complete backend/dev dependency set as Linux/Python 3.13 wheels, including both Vnstock packages. Docker/Render build paths and requirements no longer reference the removed wheel directory.
+- **Runtime**: The follow-up migration below replaces the legacy VCI/KBS gateway with FHSC v6 routes and declares `FHSC_API_KEY` in the Render blueprint. Live source calls require that source credential in addition to `VNSTOCK_API_KEY`.
 
+## Vnstock 6 FHSC Gateway Migration - 2026-11-11 (completed)
+- **User Request**: Render is already intended to run `MARKET_DATA_MODE=vnstock`; migrate the backend adapter to call the current Vnstock 6 API while keeping the newer version.
+- **Implementation**: Replace v4 VCI/KBS calls with FHSC screener/summary/OHLCV and Reference VN30 constituents/company events; keep the account key as `VNSTOCK_API_KEY`; pass the distinct source credential as `FHSC_API_KEY`; mark unsupported FHSC intraday executions and absent quote depth unavailable instead of fabricating them. Set `MARKET_DATA_MODE=vnstock` in Render and update the Vnstock setup guide and existing adapter expectations.
+- **Credential state at implementation time**: FHSC key was not yet available; user later added it to the local environment and the provider was successfully verified in the Local FHSC Verification entry above.
+- **Initial validation**: Python source compilation, YAML parsing, and `git diff --check` passed; the later local verification entry records full lint, typecheck, unit suite, and live-provider results.
+
+## Backend CI Timeout and Render Pipeline Hang - 2026-11-11 (completed)
+- **User Request**: Fix backend CI and stop the Render backend CI/CD validation job from remaining in pytest until GitHub cancels it.
+- **Evidence**: The Render workflow ran backend unit tests serially with a 15-minute job timeout and no per-test timeout. GitHub's annotation for run `42971772379` confirms the job exceeded 15 minutes and canceled `Run Unit Tests (Pytest)`.
+- **Changes**: Add pinned `pytest-xdist` and `pytest-timeout` dev tools; run Render unit tests in parallel by file with 120-second per-test limits, 30-minute job cap, and slowest-test reporting; add a 120-second per-test limit to full backend CI; pin Actions to commit SHAs.
+- **Verification**: Pytest parallel/timeout smoke test passed; both workflow YAML files parse; `git diff --check` passed.
+- **Limitation at the time**: Full backend suite could not run locally because the pinned `vnai` wheel URL returned HTTP 404; the follow-up dependency migration below replaces that retired source.
+
+## Render Dependency Failure - 2026-11-10 (superseded 2026-11-11)
+- A Render build initially failed because the pinned Vnstock 4 package depended on `vnstock_ezchart`, which was not available from the configured package index.
+- A bundled wheel workaround temporarily made the old build resolve. The Vnstock 4/vnai registry was subsequently retired, so the workaround and bundled wheel were removed when dependencies moved to Vnstock 6 and `vnstock-oapi` from the current official index.
+- The follow-up changed the Render blueprint to `MARKET_DATA_MODE=vnstock` and migrated the adapter to FHSC v6; live market calls still need `FHSC_API_KEY` alongside the Vnstock account key.
 ## Dynamic Purchase-Date Equity Curve & Multi-Resolution Aggregation (Auto, Day, Week, Month, Year) - 2026-11-10 (completed)
 - **User Request**:
   "tôi muốn biểu đồ này phải vẽ theo ngày kể từ ngày mua và nó sẽ tự động thay đổi nếu ngày mua quá nhiều k thể hiển thị thì hiển thị theo tuần tháng năm"
@@ -387,7 +384,7 @@
      - `VnstockMarketProvider` cấu hình `OfficialVnstockGateway` với `api_key`.
      - Xác nhận hạn mức: `Chào mừng bạn đến với Vnstock! bản Cộng đồng (60 req/phút, tối đa 8 kỳ BCTC)`.
   2. **Kiểm toán thế hệ Vnstock**:
-     - Hệ thống hiện tại cài đặt: `vnstock 4.0.9`, `vnai 2.6.3`, `vnstock_ezchart 1.0.2`.
+     - At the time of this implementation, the environment had `vnstock 4.0.9`, `vnai 2.6.3`, and `vnstock_ezchart 1.0.2`; these packages were later retired and replaced in the dependency manifest on 2026-11-11.
      - Lộ trình Vnstock 6: Tác giả chuyển đổi sang nền tảng Open API cá nhân (`vnii` pipeline) với authentication token từ vnstocks.com. InvestIQ đã sẵn sàng tương thích khi chuyển đổi module gateway.
   3. **Lỗi chuyển chế độ và tự động khớp ACB**:
      - Cột `execution_mode` trong `paper_portfolios` đã được lưu persistent vào PostgreSQL.

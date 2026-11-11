@@ -12,7 +12,7 @@ services:
     branch: main
     autoDeployTrigger: commit
     rootDir: backend
-    buildCommand: "pip install --upgrade pip && pip install --find-links=wheels -r requirements.txt"
+    buildCommand: "pip install --upgrade pip && pip install -r requirements.txt"
     startCommand: "uvicorn app.main:app --host 0.0.0.0 --port $PORT --proxy-headers --forwarded-allow-ips=*"
     healthCheckPath: /healthz
     envVars:
@@ -25,7 +25,13 @@ services:
       - key: NEWS_INGESTION_ENABLED
         value: "false"
       - key: MARKET_DATA_MODE
-        value: fixture
+        value: vnstock
+      - key: VNSTOCK_API_KEY
+        sync: false
+      - key: FHSC_API_KEY
+        sync: false
+      - key: VNSTOCK_REFRESH_SECONDS
+        value: "60"
       - key: LOG_LEVEL
         value: INFO
       - key: AUTH_ENABLED

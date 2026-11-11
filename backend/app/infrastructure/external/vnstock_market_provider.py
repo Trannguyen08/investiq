@@ -54,9 +54,9 @@ _EVENT_CACHE_SECONDS = 30 * 60
 _EVENT_MAX_WORKERS = 6
 _EVENT_SYMBOL_LIMIT = 8
 _EVENT_WINDOW_DAYS = 30
-_EVENT_CODES = "DIV,ISS,DDIND,DDINS,DDRP,AGME,AGMR,EGME,AIS,MA,MOVE,NLIS,OTHE,RETU,SUSP"
 _EVENT_DATE_FIELDS = {
     "exright_date": "ex_right_date",
+    "ex_right_date": "ex_right_date",
     "record_date": "record_date",
     "payout_date": "payment_date",
     "issue_date": "issue_date",
@@ -74,6 +74,7 @@ class VnstockConfig:
     candle_cache_seconds: int
     fundamental_cache_seconds: int
     max_symbols: int
+    source_api_key: str | None = None
 
 
 class VnstockGateway(Protocol):
@@ -82,8 +83,6 @@ class VnstockGateway(Protocol):
     def reference_rows(self) -> tuple[list[dict[str, object]], set[str], dict[str, str]]: ...
 
     def quote_rows(self, symbols: list[str]) -> list[dict[str, object]]: ...
-
-    def previous_session_rows(self, symbols: list[str]) -> list[dict[str, object]]: ...
 
     def candle_rows(
         self,
@@ -115,66 +114,8 @@ def _frame_records(value: object) -> list[dict[str, object]]:
     return rows
 
 
-def _series_strings(value: object) -> set[str]:
-    converter = getattr(value, "tolist", None)
-    if not callable(converter):
-        raise TypeError("Vnstock returned a non-series response")
-    raw = converter()
-    if not isinstance(raw, list):
-        raise TypeError("Vnstock series did not return a list")
-    return {str(item).strip().upper() for item in raw if str(item).strip()}
-
-
-def _snake_record(row: dict[str, object]) -> dict[str, object]:
-    return {re.sub(r"(?<!^)(?=[A-Z])", "_", str(key)).lower(): value for key, value in row.items()}
-
-
-def _latest_vci_fundamental_rows(
-    rows: list[dict[str, object]],
-) -> list[dict[str, object]]:
-    """Normalize the newest VCI TTM quarter to the provider ratio-row shape."""
-
-    latest = max(
-        (
-            row
-            for row in rows
-            if _text(row.get("ratio_type")).upper() == "RATIO_TTM"
-            and 1 <= _integer(row.get("quarter")) <= 4
-        ),
-        key=lambda row: (
-            _integer(row.get("year")),
-            _integer(row.get("quarter")),
-        ),
-        default=None,
-    )
-    if latest is None:
-        return []
-    period = f"{_integer(latest.get('year'))}-Q{_integer(latest.get('quarter'))}"
-    pe = _optional_decimal(latest.get("pe"))
-    pb = _optional_decimal(latest.get("pb"))
-    roe = _optional_decimal(latest.get("roe"))
-
-    eps = None
-    if pe is not None and pe > 0:
-        mkt_cap = _optional_decimal(latest.get("market_cap"))
-        shares = _optional_decimal(latest.get("number_of_shares_mkt_cap"))
-        if mkt_cap and shares and shares > 0:
-            eps = (mkt_cap / shares) / pe
-
-    result: list[dict[str, object]] = [
-        {"item_id": "pe_ratio", period: pe},
-        {"item_id": "pb_ratio", period: pb},
-        {"item_id": "roe", period: roe * Decimal("100") if roe is not None else None},
-    ]
-    if eps is not None:
-        result.append({"item_id": "trailing_eps", period: eps})
-    return result
-
-
-
 _RESOURCES_DIR = Path(__file__).resolve().parent / "resources"
 _SECTORS_FILE = _RESOURCES_DIR / "stock_sectors.json"
-_FUNDAMENTALS_FILE = _RESOURCES_DIR / "stock_fundamentals.json"
 
 
 def _load_bundled_sectors() -> dict[str, str]:
@@ -190,112 +131,99 @@ def _load_bundled_sectors() -> dict[str, str]:
     return {}
 
 
-def _load_bundled_fundamentals() -> dict[str, dict[str, object]]:
-    if not _FUNDAMENTALS_FILE.exists():
-        return {}
-    try:
-        with open(_FUNDAMENTALS_FILE, encoding="utf-8") as file:
-            data = json.load(file)
-            if isinstance(data, dict):
-                return {str(k).upper(): v for k, v in data.items() if isinstance(v, dict)}
-    except Exception:
-        logger.warning("failed_loading_bundled_fundamentals")
-    return {}
-
-
 _BUNDLED_SECTORS = _load_bundled_sectors()
-_BUNDLED_FUNDAMENTALS = _load_bundled_fundamentals()
-
-def _fallback_fundamental_rows(symbol: str) -> list[dict[str, object]]:
-    bundled = _BUNDLED_FUNDAMENTALS.get(symbol.upper())
-    if not bundled:
-        return []
-    period = str(bundled.get("quarter") or "2026-Q3")
-    pe = _optional_decimal(bundled.get("pe"))
-    pb = _optional_decimal(bundled.get("pb"))
-    eps = _optional_decimal(bundled.get("eps"))
-    roe = _optional_decimal(bundled.get("roe_percent"))
-    return [
-        {"item_id": "pe_ratio", period: pe},
-        {"item_id": "pb_ratio", period: pb},
-        {"item_id": "trailing_eps", period: eps},
-        {"item_id": "roe", period: roe},
-    ]
-
 
 class OfficialVnstockGateway:
-    """Calls Vnstock 4's unified API and returns plain Python records."""
+    """Calls Vnstock 6's FHSC routes and returns plain Python records."""
 
-    def __init__(self, api_key: str | None) -> None:
+    _EXCHANGES = ("HOSE", "HNX", "UPCOM")
+
+    def __init__(self, api_key: str | None, source_api_key: str | None = None) -> None:
         if api_key:
             os.environ["VNSTOCK_API_KEY"] = api_key
-        from vnstock import Company, Market, Reference, Trading
-        from vnstock.core.utils.client import send_request
-        from vnstock.core.utils.user_agent import get_headers
-        from vnstock.explorer.vci.const import _VCI_EVENTS_URL
+        if source_api_key:
+            os.environ["FHSC_API_KEY"] = source_api_key
+        from vnstock import Market, Reference
 
-        self._market = Market()
-        self._reference = Reference()
-        self._company_type = Company
-        self._trading_type = Trading
-        self._event_url = _VCI_EVENTS_URL
-        self._event_headers = get_headers(data_source="VCI")
-        self._event_sender = send_request
+        if not os.environ.get("FHSC_API_KEY"):
+            logger.warning("vnstock_fhsc_api_key_missing_source_calls_will_fail")
+        self._market = Market("fhsc")
+        self._reference = Reference("fhsc")
+        self._screener_rows: list[dict[str, object]] = []
+        self._market_time: str | None = None
 
     def reference_rows(self) -> tuple[list[dict[str, object]], set[str], dict[str, str]]:
         try:
-            references = _frame_records(self._reference.equity.list_by_exchange(source="kbs"))
-            vn30 = _series_strings(self._reference.equity.list_by_group(group="VN30", source="kbs"))
+            screener_rows = [
+                row
+                for exchange in self._EXCHANGES
+                for row in _frame_records(
+                    self._market.equity.screener(exchange=exchange, compat="v5")
+                )
+            ]
+            members = _frame_records(self._reference.index("VN30").constituents())
         except (Exception, SystemExit) as exc:
-            raise RuntimeError("Vnstock reference request failed") from exc
-        sectors: dict[str, str] = dict(_BUNDLED_SECTORS)
+            raise RuntimeError("Vnstock 6 FHSC market reference request failed") from exc
+
+        self._market_time = None
         try:
-            with ThreadPoolExecutor(max_workers=1) as executor:
-                future = executor.submit(self._reference.equity.list_by_industry, source="vci")
-                rows = _frame_records(future.result(timeout=3.0))
-            for row in rows:
-                symbol = _text(row.get("symbol")).upper()
-                level = _integer(row.get("icb_level"))
-                name = _text(row.get("icb_name"))
-                if symbol and name and (level == 2 or symbol not in sectors):
-                    sectors[symbol] = name
+            index_quote = _frame_records(self._market.index("VNINDEX").quote(compat="v5"))
+            if index_quote:
+                self._market_time = _text(index_quote[0].get("time")) or None
         except (Exception, SystemExit):
-            logger.warning("vnstock_sector_reference_unavailable_using_bundled")
+            logger.warning("vnstock_fhsc_market_timestamp_unavailable")
+
+        self._screener_rows = screener_rows
+        references: list[dict[str, object]] = []
+        sectors = dict(_BUNDLED_SECTORS)
+        for row in screener_rows:
+            symbol = _text(row.get("symbol")).upper()
+            sector = _text(row.get("sector_slug"))
+            if not symbol:
+                continue
+            references.append(
+                {
+                    "symbol": symbol,
+                    "exchange": row.get("exchange"),
+                    "organ_name": row.get("name"),
+                    "listed_shares": row.get("outstanding_shares"),
+                    "sector_slug": sector,
+                }
+            )
+            if sector:
+                sectors[symbol] = sector
+        vn30 = {
+            _text(row.get("symbol")).upper()
+            for row in members
+            if _text(row.get("symbol"))
+        }
         return references, vn30, sectors
 
     def quote_rows(self, symbols: list[str]) -> list[dict[str, object]]:
-        try:
-            value = self._market.quote(symbol=symbols, source="kbs", get_all=True)
-            return _frame_records(value)
-        except (Exception, SystemExit) as exc:
-            raise RuntimeError("Vnstock quote request failed") from exc
-
-    def previous_session_rows(self, symbols: list[str]) -> list[dict[str, object]]:
-        """Load the latest completed-session prices in one batch request.
-
-        KBS resets its live board to zero before the next session. VCI keeps both
-        the new reference (the last close) and the preceding reference, avoiding
-        one historical request per stock when the live board has not opened yet.
-        """
-
-        try:
-            frame = self._trading_type(source="vci").price_board(
-                symbols,
-                flatten_columns=True,
+        wanted = set(symbols)
+        rows: list[dict[str, object]] = []
+        for row in self._screener_rows:
+            symbol = _text(row.get("symbol")).upper()
+            if symbol not in wanted:
+                continue
+            close = _optional_decimal(row.get("close"))
+            change_percent = _optional_decimal(row.get("price_change_percent"))
+            reference = None
+            if close is not None and change_percent is not None:
+                divisor = Decimal("1") + change_percent / Decimal("100")
+                if divisor != 0:
+                    reference = close / divisor
+            rows.append(
+                {
+                    **row,
+                    "symbol": symbol,
+                    "close_price": close,
+                    "reference_price": reference,
+                    "volume_accumulated": row.get("total_volume"),
+                    "time": self._market_time,
+                }
             )
-            rows = _frame_records(frame)
-        except (Exception, SystemExit) as exc:
-            raise RuntimeError("Vnstock previous-session request failed") from exc
-        return [
-            {
-                "symbol": row.get("listing_symbol"),
-                "close_price": row.get("listing_ref_price"),
-                "reference_price": row.get("match_reference_price"),
-            }
-            for row in rows
-            if _price(row.get("listing_ref_price")) > 0
-            and _price(row.get("match_reference_price")) > 0
-        ]
+        return rows
 
     def candle_rows(
         self,
@@ -303,112 +231,53 @@ class OfficialVnstockGateway:
         interval: str,
         count: int,
     ) -> list[dict[str, object]]:
-        should_get_all = count is None or count > 300
-        if symbol not in _INDEX_EXCHANGE:
-            try:
-                frame = self._market.equity(symbol=symbol).ohlcv(
-                    interval=interval,
-                    count=count,
-                    source="kbs",
-                    get_all=should_get_all,
-                )
-                rows = _frame_records(frame)
-                if rows:
-                    return rows
-            except (Exception, SystemExit):
-                logger.warning(
-                    "vnstock_kbs_candles_unavailable_using_vci",
-                    extra={"symbol": symbol, "interval": interval},
-                )
-            try:
-                frame = self._market.equity(symbol=symbol).ohlcv(
-                    interval=interval,
-                    count=count,
-                    source="vci",
-                    get_all=should_get_all,
-                )
-                return _frame_records(frame)
-            except (Exception, SystemExit) as exc:
-                raise RuntimeError("Vnstock candle request failed") from exc
         try:
-            frame = self._market.index(symbol=symbol).ohlcv(
-                interval=interval,
-                count=count,
-                source="kbs",
-                get_all=should_get_all,
+            asset = (
+                self._market.index(symbol)
+                if symbol in _INDEX_EXCHANGE
+                else self._market.equity(symbol)
             )
+            frame = asset.ohlcv(interval=interval, limit=count, compat="v5")
             return _frame_records(frame)
         except (Exception, SystemExit) as exc:
             raise RuntimeError("Vnstock candle request failed") from exc
 
     def fundamental_rows(self, symbol: str) -> list[dict[str, object]]:
         try:
-            with ThreadPoolExecutor(max_workers=1) as executor:
-                future = executor.submit(
-                    self._company_type(source="vci", symbol=symbol).ratio_summary
-                )
-                frame = future.result(timeout=5.0)
-            rows = _frame_records(frame)
-            latest = _latest_vci_fundamental_rows(rows)
-            if latest:
-                return latest
+            row = _frame_records(self._market.equity(symbol).summary())
+            if row:
+                latest = row[-1]
+                return [
+                    {"item_id": item_id, "value": latest.get(source_field)}
+                    for item_id, source_field in (
+                        ("pe_ratio", "pe"),
+                        ("pb_ratio", "pb"),
+                        ("trailing_eps", "eps"),
+                        ("roe", "roe"),
+                    )
+                ]
         except (Exception, SystemExit) as exc:
             logger.warning(
-                "vnstock_fundamental_vci_failed_using_fallback",
-                extra={"symbol": symbol, "error": str(exc)},
+                "vnstock_fundamental_summary_unavailable",
+                extra={"symbol": symbol, "error_type": type(exc).__name__},
             )
-        return _fallback_fundamental_rows(symbol)
+        return []
 
     def fundamental_quarterly_rows(self, symbol: str) -> list[dict[str, object]]:
-        try:
-            with ThreadPoolExecutor(max_workers=1) as executor:
-                future = executor.submit(
-                    self._company_type(source="vci", symbol=symbol).ratio_summary
-                )
-                frame = future.result(timeout=2.0)
-            return _frame_records(frame)
-        except (Exception, SystemExit) as exc:
-            logger.warning(
-                "vnstock_quarterly_ratios_unavailable",
-                extra={"symbol": symbol, "error": str(exc)},
-            )
-            return []
+        return []
 
     def trade_rows(self, symbol: str, limit: int) -> list[dict[str, object]]:
-        try:
-            frame = self._market.equity(symbol=symbol).trades(
-                source="kbs",
-                page_size=limit,
-                page=1,
-                get_all=True,
-            )
-            return _frame_records(frame)
-        except (Exception, SystemExit) as exc:
-            raise RuntimeError("Vnstock intraday trade request failed") from exc
+        # FHSC v6 does not publish per-execution trades; its supported routes are DNSE/TCBS.
+        return []
 
     def event_rows(self, symbol: str) -> list[dict[str, object]]:
         try:
-            now = datetime.now(UTC).astimezone(_MARKET_TZ)
-            payload = self._event_sender(
-                url=self._event_url,
-                headers=self._event_headers,
-                method="GET",
-                params={
-                    "ticker": symbol,
-                    "fromDate": (now - timedelta(days=365)).strftime("%Y%m%d"),
-                    "toDate": now.strftime("%Y%m%d"),
-                    "eventCode": _EVENT_CODES,
-                    "page": 0,
-                    "size": 50,
-                },
-                show_log=False,
-                timeout=5,
+            today = datetime.now(UTC).astimezone(_MARKET_TZ).date()
+            frame = self._reference.company(symbol).events(
+                start=today.isoformat(),
+                end=(today + timedelta(days=_EVENT_WINDOW_DAYS)).isoformat(),
             )
-            data = payload.get("data", {})
-            content = data.get("content", []) if isinstance(data, dict) else []
-            if not isinstance(content, list):
-                raise TypeError("VCI returned an invalid event page")
-            return [_snake_record(row) for row in content if isinstance(row, dict)]
+            return _frame_records(frame)
         except (Exception, SystemExit) as exc:
             raise RuntimeError("Vnstock event request failed") from exc
 
@@ -442,10 +311,6 @@ def _optional_decimal(value: object) -> Decimal | None:
     return parsed if parsed.is_finite() else None
 
 
-def _integer(value: object) -> int:
-    return int(_decimal(value))
-
-
 def _timestamp(value: object, fallback: datetime) -> datetime:
     if isinstance(value, datetime):
         parsed = value
@@ -471,12 +336,15 @@ def _timestamp(value: object, fallback: datetime) -> datetime:
 
 
 def _price(value: object) -> Decimal:
-    """KBS price-board values are VND; keep the canonical API in VND."""
+    """FHSC v5-compatible equity prices are VND; keep the API contract in VND."""
 
     return _decimal(value)
 
 
 def _latest_ratio(row: dict[str, object]) -> Decimal | None:
+    direct = _optional_decimal(row.get("value"))
+    if direct is not None:
+        return direct
     periods: list[tuple[int, int, Decimal]] = []
     for key, raw_value in row.items():
         matched = re.fullmatch(r"(\d{4})(?:-Q([1-4]))?(?:_\d+)?", key)
@@ -523,7 +391,14 @@ def _event_date(value: object) -> date | None:
 
 def _event_type(row: dict[str, object]) -> str:
     code = _text(row.get("event_code")).upper()
-    title = " ".join((_text(row.get("event_name_vi")), _text(row.get("event_title_vi")))).lower()
+    title = " ".join(
+        (
+            _text(row.get("event_name_vi")),
+            _text(row.get("event_title_vi")),
+            _text(row.get("event_title")),
+            _text(row.get("event_type")),
+        )
+    ).lower()
     if code == "DIV":
         if "cổ phiếu" in title and "tiền mặt" not in title:
             return "stock_dividend"
@@ -536,6 +411,10 @@ def _event_type(row: dict[str, object]) -> str:
         return "share_issuance"
     if code in {"AIS", "NLIS"}:
         return "additional_listing"
+    if "dividend" in title or "cổ tức" in title:
+        return "cash_dividend"
+    if "meeting" in title or "đại hội" in title:
+        return "shareholder_meeting"
     return "corporate_action"
 
 
@@ -560,14 +439,14 @@ def _market_event(
     normalized_symbol = _text(row.get("ticker")).upper() or symbol
     if not _STOCK_SYMBOL.fullmatch(normalized_symbol):
         return None
-    event_name = _text(row.get("event_name_vi"))
-    title = _text(row.get("event_title_vi")) or event_name
+    event_name = _text(row.get("event_type"))
+    title = _text(row.get("event_title_vi")) or _text(row.get("event_title")) or event_name
     if not title:
         return None
     provider_id = _text(row.get("id")) or f"{normalized_symbol}-{event_day.isoformat()}"
     event_at = datetime.combine(event_day, datetime.min.time(), _MARKET_TZ).astimezone(UTC)
     return MarketEvent(
-        id=f"vci-{provider_id}-{date_type}",
+        id=f"vnstock-{provider_id}-{date_type}",
         symbol=normalized_symbol,
         event_type=_event_type(row),
         title=title,
@@ -579,7 +458,7 @@ def _market_event(
         date_type=date_type,
         event_at=event_at,
         status="official",
-        source_name="VCI qua Vnstock",
+        source_name="FHSC qua Vnstock",
         source_url=None,
     )
 
@@ -607,10 +486,10 @@ def _candle(row: dict[str, object], symbol: str, fallback: datetime) -> Candle |
 
 
 class VnstockMarketProvider:
-    """Cached Vnstock/KBS snapshot normalized to InvestIQ's canonical contract."""
+    """Cached Vnstock 6/FHSC snapshot normalized to InvestIQ's canonical contract."""
 
-    slug = "vnstock-kbs"
-    display_name = "Vnstock · nguồn KBS/VCI (có độ trễ)"
+    slug = "vnstock-fhsc"
+    display_name = "Vnstock · nguồn FHSC (có độ trễ)"
     delay_class = "source_delayed"
     partial = True
 
@@ -622,7 +501,7 @@ class VnstockMarketProvider:
         today: Callable[[], date] | None = None,
     ) -> None:
         self._config = config
-        self._gateway = gateway or OfficialVnstockGateway(config.api_key)
+        self._gateway = gateway or OfficialVnstockGateway(config.api_key, config.source_api_key)
         self._clock = clock
         self._today = today or (lambda: datetime.now(UTC).astimezone(_MARKET_TZ).date())
         self._lock = RLock()
@@ -952,30 +831,6 @@ class VnstockMarketProvider:
         has_live_matches = any(
             _price(row.get("close_price")) > 0 for row in quote_by_symbol.values()
         )
-        if quote_by_symbol and not has_live_matches:
-            try:
-                previous_rows = self._gateway.previous_session_rows(symbols)
-                previous_by_symbol = {
-                    _text(row.get("symbol")).upper(): row
-                    for row in previous_rows
-                    if _text(row.get("symbol"))
-                }
-                quote_by_symbol = {
-                    symbol: {**quote, **previous_by_symbol.get(symbol, {})}
-                    for symbol, quote in quote_by_symbol.items()
-                }
-            except (RuntimeError, TypeError, ValueError):
-                logger.warning("vnstock_previous_session_unavailable")
-        elif has_live_matches:
-            quote_by_symbol = {
-                symbol: (
-                    {**quote, "close_price": quote.get("reference_price")}
-                    if _price(quote.get("close_price")) <= 0
-                    and _price(quote.get("reference_price")) > 0
-                    else quote
-                )
-                for symbol, quote in quote_by_symbol.items()
-            }
         instruments = tuple(
             item
             for symbol in symbols
@@ -1039,6 +894,7 @@ class VnstockMarketProvider:
         matched_value = _decimal(quote.get("total_value"))
         if matched_value <= 0:
             matched_value = price * volume
+        foreign_value = _optional_decimal(quote.get("foreign_net_value"))
         foreign_delta = _decimal(quote.get("foreign_buy_volume")) - _decimal(
             quote.get("foreign_sell_volume")
         )
@@ -1067,15 +923,13 @@ class VnstockMarketProvider:
             if _price(quote.get(f"ask_price_{level}")) > 0
             and _decimal(quote.get(f"ask_vol_{level}")) > 0
         )
-        bundled = _BUNDLED_FUNDAMENTALS.get(symbol.upper())
-        bundled_pe = _optional_decimal(bundled.get("pe")) if bundled else None
-        bundled_pb = _optional_decimal(bundled.get("pb")) if bundled else None
-        bundled_eps = _optional_decimal(bundled.get("eps")) if bundled else None
-        bundled_roe = _optional_decimal(bundled.get("roe_percent")) if bundled else None
+        pe = _optional_decimal(quote.get("pe"))
+        pb = _optional_decimal(quote.get("pb"))
+        eps = _optional_decimal(quote.get("eps"))
 
         return MarketInstrument(
             symbol=symbol,
-            name=_text(metadata.get("organ_name")) or symbol,
+            name=_text(metadata.get("organ_name") or metadata.get("name")) or symbol,
             exchange=_text(metadata.get("exchange")).upper().replace("HSX", "HOSE"),
             sector=sector,
             price=price,
@@ -1087,12 +941,12 @@ class VnstockMarketProvider:
             low_price=_price(quote.get("low_price")),
             volume=volume,
             matched_value=matched_value,
-            foreign_net_value=foreign_delta * price,
-            market_cap=listed_shares * price,
-            pe=bundled_pe,
-            pb=bundled_pb,
-            eps=bundled_eps,
-            roe_percent=bundled_roe,
+            foreign_net_value=foreign_value if foreign_value is not None else foreign_delta * price,
+            market_cap=_decimal(quote.get("market_cap"), listed_shares * price),
+            pe=pe,
+            pb=pb,
+            eps=eps,
+            roe_percent=None,
             volume_vs_20d=Decimal(),
             interest_score=matched_value,
             interest_reasons=tuple(reasons),

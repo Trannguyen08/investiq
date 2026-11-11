@@ -7,8 +7,7 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
 WORKDIR /app
 
 COPY requirements.txt ./
-COPY wheels ./wheels
-RUN pip install --disable-pip-version-check --find-links=./wheels --requirement requirements.txt \
+RUN pip install --disable-pip-version-check --requirement requirements.txt \
     && addgroup --system --gid 10001 app \
     && adduser --system --uid 10001 --ingroup app app
 
