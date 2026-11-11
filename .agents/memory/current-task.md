@@ -1,9 +1,9 @@
 # Current Task
 
-## Commit FHSC + DNSE Integration and Run Pre-PR Gates - 2026-11-11 (in progress)
+## Commit FHSC + DNSE Integration and Run Pre-PR Gates - 2026-11-11 (completed)
 - **User Request**: Run repository quality gates and `scripts/check-pr.ps1`, then commit and push the FHSC/DNSE integration.
-- **Branch**: `fix/project`; preserve the current scoped work and push this branch after gate results are reviewed.
-- **Status**: `scripts/check-pr.ps1` is green; reviewing the final diff and preparing the commit/push. The script's first whitespace subcheck caught Git's LF-to-CRLF warning as an exception, so the equivalent `git -c core.safecrlf=false diff origin/dev --check` was run directly and passed.
+- **Branch / Commit**: `fix/project`, code commit `9886df9` pushed to `origin/fix/project`; this completion note is pushed separately after the pre-push hook passes.
+- **Status**: `scripts/check-pr.ps1` is green. On its first run the whitespace subcheck caught Git's LF-to-CRLF warning as an exception, so the equivalent `git -c core.safecrlf=false diff origin/dev --check` was also run directly and passed. No PR was opened. GitHub Actions status could not be queried because GitHub CLI is unavailable.
 - **Validation**: Frontend lint/typecheck passed; Vitest 49 files / 197 tests passed; backend Ruff and mypy passed (45 source files); backend unit tests passed (196); focused market-provider tests passed (23); Compose config validation passed. Docker image builds could not run because the Docker Desktop engine is unavailable. No live DNSE call was attempted because credentials remain pending approval.
 
 ## Combine FHSC and DNSE Market Data - 2026-11-11 (completed)
