@@ -10,6 +10,7 @@ from app.infrastructure.external.vnstock_market_provider import (
     OfficialVnstockGateway,
     VnstockConfig,
     VnstockMarketProvider,
+    _financial_statement_data,
     _fundamental_values,
 )
 
@@ -22,6 +23,7 @@ class FakeVnstockGateway:
         self.pre_open = False
         self.partial_open = False
         self.fundamental_calls = 0
+        self.financial_statement_calls = 0
         self.previous_session_calls = 0
         self.event_calls = 0
         self.fail_events = False
@@ -192,6 +194,7 @@ class FakeVnstockGateway:
     def financial_statement_data(
         self, symbol: str, period_type: str, limit: int
     ) -> dict[str, object]:
+        self.financial_statement_calls += 1
         return {
             "symbol": symbol,
             "period_type": period_type,
@@ -553,7 +556,7 @@ def test_fhsc_screener_fallback_converts_thousand_dong_to_vnd(
 def test_fhsc_quote_board_batch_is_bounded_to_vn30_size(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    requested_symbols: list[str] = []
+    requested_batches: list[list[str]] = []
 
     class Frame:
         @staticmethod
@@ -564,7 +567,7 @@ def test_fhsc_quote_board_batch_is_bounded_to_vn30_size(
     class Equity:
         @staticmethod
         def quote(symbols: list[str], *, compat: str) -> Frame:
-            requested_symbols.extend(symbols)
+            requested_batches.append(symbols)
             assert compat == "v5"
             return Frame()
 
@@ -584,7 +587,9 @@ def test_fhsc_quote_board_batch_is_bounded_to_vn30_size(
 
     gateway.quote_rows(symbols)
 
-    assert requested_symbols == symbols[:30]
+    assert [symbol for batch in requested_batches for symbol in batch] == symbols[:30]
+    assert all(len(batch) <= 5 for batch in requested_batches)
+    assert len(requested_batches) == 6
 
 
 def test_stock_candles_use_v6_market_arguments(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -778,6 +783,54 @@ def test_fundamental_failure_keeps_the_quote_available() -> None:
     assert value.price == 102_000
     assert value.pe is None
     assert value.pb is None
+
+
+def test_empty_financial_statements_are_retried_after_short_negative_cache() -> None:
+    gateway = FakeVnstockGateway()
+    now = [0.0]
+    provider = VnstockMarketProvider(config(), gateway=gateway, clock=lambda: now[0])
+
+    first = provider.financial_statements("FPT", "quarter", 4)
+    now[0] = 59
+    cached = provider.financial_statements("FPT", "quarter", 4)
+    now[0] = 61
+    retried = provider.financial_statements("FPT", "quarter", 4)
+
+    assert first["periods"] == cached["periods"] == retried["periods"] == []
+    assert gateway.financial_statement_calls == 2
+
+
+def test_statement_chart_accepts_fhsc_owner_equity_codes() -> None:
+    result = _financial_statement_data(
+        "FPT",
+        "quarter",
+        {
+            "income_statement": [
+                {
+                    "period": "2026-Q3",
+                    "id": "IS_NET_REVENUE",
+                    "name": "Revenue",
+                    "value": 100_000_000_000,
+                }
+            ],
+            "balance_sheet": [
+                {
+                    "period": "2026-Q3",
+                    "id": "BS_EQUITY",
+                    "name": "Equity",
+                    "value": 60_000_000_000,
+                }
+            ],
+            "cash_flow": [],
+        },
+        4,
+    )
+
+    charts = result["charts"]
+    assert isinstance(charts, list)
+    assert charts
+    assert isinstance(charts[0], dict)
+    assert charts[0]["equity_billion"] == 60
 
 
 def test_expired_fundamentals_serve_last_observed_values_after_provider_failure() -> None:

@@ -5,7 +5,7 @@ from functools import lru_cache
 from pathlib import Path
 from typing import Literal
 
-from pydantic import Field, SecretStr, field_validator
+from pydantic import AliasChoices, Field, SecretStr, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 _repo_root = Path(__file__).resolve().parents[4]
@@ -66,7 +66,10 @@ class Settings(BaseSettings):
     vnstock_api_key: SecretStr | None = None
     fhsc_api_key: SecretStr | None = None
     dnse_api_key: SecretStr | None = None
-    dnse_api_secret: SecretStr | None = None
+    dnse_api_secret: SecretStr | None = Field(
+        default=None,
+        validation_alias=AliasChoices("DNSE_API_SECRET", "DNSE_SECRET_KEY"),
+    )
     vnstock_refresh_seconds: int = Field(default=60, ge=30, le=900)
     vnstock_candle_cache_seconds: int = Field(default=300, ge=60, le=3600)
     vnstock_fundamental_cache_seconds: int = Field(default=3600, ge=300, le=86400)

@@ -17,7 +17,7 @@ $hasError = $false
 # 1. Kiem tra Git Diff & Khoang trang (Whitespace check against dev)
 Write-Host "`n[1/6] Kiem tra Git Diff Whitespace (git diff origin/dev --check)..." -ForegroundColor Yellow
 try {
-    $diffOutput = git diff origin/dev --check 2>&1
+    $diffOutput = git -c core.safecrlf=false diff origin/dev --check 2>&1
     if ($LASTEXITCODE -ne 0) {
         Write-Host "Loi khoang trang (trailing whitespace / blank lines):" -ForegroundColor Red
         Write-Host $diffOutput
@@ -109,7 +109,10 @@ try {
 
 # 5. Backend Unit Tests (Cach ly moi truong nhu CI)
 Write-Host "`n[6/6] Kiem tra Backend Unit Tests (Pytest)..." -ForegroundColor Yellow
+$previousMarketDataMode = $env:MARKET_DATA_MODE
 try {
+    # The repository-root .env may enable live providers for local development. Keep CI tests offline.
+    $env:MARKET_DATA_MODE = "fixture"
     Push-Location "$rootDir\backend"
     $envRenamed = $false
     if (Test-Path ".env") {
@@ -130,6 +133,11 @@ try {
         }
     }
 } finally {
+    if ($null -eq $previousMarketDataMode) {
+        Remove-Item Env:MARKET_DATA_MODE -ErrorAction SilentlyContinue
+    } else {
+        $env:MARKET_DATA_MODE = $previousMarketDataMode
+    }
     Pop-Location
 }
 

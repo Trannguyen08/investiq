@@ -40,9 +40,10 @@ logger = logging.getLogger(__name__)
 _MARKET_TZ = ZoneInfo("Asia/Ho_Chi_Minh")
 _STOCK_SYMBOL = re.compile(r"^[A-Z]{3}$")
 _MAX_BATCH_QUOTE_SYMBOLS = 30
-_QUOTE_BOARD_TIMEOUT_SECONDS = 5
+_QUOTE_BOARD_TIMEOUT_SECONDS = 10
+_QUOTE_BOARD_BATCH_SIZE = 5
 _DNSE_REQUEST_TIMEOUT_SECONDS = 6
-_FUNDAMENTAL_REQUEST_TIMEOUT_SECONDS = 12
+_FUNDAMENTAL_REQUEST_TIMEOUT_SECONDS = 30
 _INDEX_EXCHANGE = {
     "VNINDEX": "HOSE",
     "VN30": "VN30",
@@ -254,37 +255,25 @@ class OfficialVnstockGateway:
             for row in self._screener_rows
             if _text(row.get("symbol"))
         }
-        try:
-            result_queue: Queue[tuple[bool, object]] = Queue(maxsize=1)
+        quote_rows: list[dict[str, object]] = []
+        for offset in range(0, len(quote_symbols), _QUOTE_BOARD_BATCH_SIZE):
+            batch = quote_symbols[offset : offset + _QUOTE_BOARD_BATCH_SIZE]
 
-            def fetch_quote_board() -> None:
-                try:
-                    result_queue.put(
-                        (True, self._market.equity.quote(quote_symbols, compat="v5"))
-                    )
-                except (Exception, SystemExit) as exc:
-                    result_queue.put((False, exc))
+            def fetch_batch(batch: list[str] = batch) -> object:
+                return self._market.equity.quote(batch, compat="v5")
 
-            Thread(
-                target=fetch_quote_board,
-                name="vnstock-quote-board",
-                daemon=True,
-            ).start()
             try:
-                succeeded, result = result_queue.get(timeout=_QUOTE_BOARD_TIMEOUT_SECONDS)
-            except Empty:
-                logger.warning("vnstock_fhsc_quote_board_timeout")
-                return self._screener_quote_fallback(quote_symbols, screener_by_symbol)
-            if not succeeded:
-                cause = result if isinstance(result, BaseException) else None
-                raise RuntimeError("FHSC quote board request failed") from cause
-            quote_rows = _frame_records(result)
-        except (Exception, SystemExit) as exc:
-            logger.warning(
-                "vnstock_fhsc_quote_board_unavailable",
-                extra={"error_type": type(exc).__name__},
-            )
-            quote_rows = []
+                result = _bounded_call(
+                    fetch_batch,
+                    timeout=_QUOTE_BOARD_TIMEOUT_SECONDS,
+                    operation="fhsc-quote-board",
+                )
+                quote_rows.extend(_frame_records(result))
+            except (Exception, SystemExit) as exc:
+                logger.warning(
+                    "vnstock_fhsc_quote_board_batch_unavailable",
+                    extra={"batch_size": len(batch), "error_type": type(exc).__name__},
+                )
         quotes_by_symbol = {
             _text(row.get("symbol")).upper(): row
             for row in quote_rows
@@ -642,7 +631,9 @@ class OfficialVnstockGateway:
             return []
         try:
             frame = _bounded_call(
-                lambda: dnse_market.equity(symbol).order_book(board="G1", compat="v5"),
+                # Vnstock 6.0.0's DNSE order_book route rejects the board argument,
+                # while its default already selects the supported board.
+                lambda: dnse_market.equity(symbol).order_book(compat="v5"),
                 timeout=_DNSE_REQUEST_TIMEOUT_SECONDS,
                 operation="dnse-order-book",
             )
@@ -988,7 +979,14 @@ def _financial_statement_data(
     assets = metric_series("balance_sheet", ("BS_TOTAL_ASSETS",))
     liabilities = metric_series("balance_sheet", ("BS_TOTAL_LIABILITIES",))
     equity = metric_series(
-        "balance_sheet", ("BS_TOTAL_EQUITY", "BS_TOTAL_SHAREHOLDERS_EQUITY", "BS_OWNER_EQUITY")
+        "balance_sheet",
+        (
+            "BS_TOTAL_EQUITY",
+            "BS_TOTAL_SHAREHOLDERS_EQUITY",
+            "BS_OWNER_EQUITY",
+            "BS_EQUITY",
+            "BS_OWNERS_EQUITY",
+        ),
     )
     charts: list[dict[str, object]] = []
     for index, period in enumerate(periods):
@@ -1362,10 +1360,19 @@ class VnstockMarketProvider:
         except (RuntimeError, TypeError, ValueError):
             logger.warning("vnstock_financial_statements_unavailable", extra={"symbol": normalized})
             result = _empty_financial_statement_data(normalized, period_type)
+        has_complete_statements = all(
+            isinstance(result.get(table), list) and bool(result[table])
+            for table in ("income_statement", "balance_sheet", "cash_flow")
+        )
+        cache_seconds = (
+            self._config.fundamental_cache_seconds
+            if has_complete_statements
+            else min(60, self._config.fundamental_cache_seconds)
+        )
         if len(self._financial_statement_cache) >= self._config.max_symbols:
             self._financial_statement_cache.clear()
         self._financial_statement_cache[key] = (
-            now + self._config.fundamental_cache_seconds,
+            now + cache_seconds,
             result,
         )
         return result
