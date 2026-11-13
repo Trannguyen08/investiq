@@ -210,19 +210,22 @@ async def _link_integrity_background_loop() -> None:
 @asynccontextmanager
 async def lifespan(_: FastAPI) -> AsyncIterator[None]:
     await start_market_provider()
-    try:
-        from app.workers.financial_statements_sync import sync_financial_statements_store
+    is_pytest = bool(os.getenv("PYTEST_CURRENT_TEST"))
+    if not is_pytest:
+        try:
+            from app.workers.financial_statements_sync import sync_financial_statements_store
 
-        await asyncio.to_thread(sync_financial_statements_store)
-    except Exception as exc:
-        logger.warning("financial_statements_prewarm_failed: %s", exc)
+            await asyncio.to_thread(sync_financial_statements_store)
+        except Exception as exc:
+            logger.warning("financial_statements_prewarm_failed: %s", exc)
     news_task = None
     events_task = None
     link_integrity_task = None
-    if settings.news_ingestion_enabled:
-        news_task = asyncio.create_task(_news_background_loop())
-    events_task = asyncio.create_task(_events_background_loop())
-    link_integrity_task = asyncio.create_task(_link_integrity_background_loop())
+    if not is_pytest:
+        if settings.news_ingestion_enabled:
+            news_task = asyncio.create_task(_news_background_loop())
+        events_task = asyncio.create_task(_events_background_loop())
+        link_integrity_task = asyncio.create_task(_link_integrity_background_loop())
     try:
         yield
     finally:
