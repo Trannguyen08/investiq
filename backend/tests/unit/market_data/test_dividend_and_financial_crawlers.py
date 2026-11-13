@@ -103,6 +103,11 @@ def test_api_dividend_calendar_and_stock_endpoints() -> None:
     client = TestClient(app)
 
     with (
+        patch("app.api.v1.market_data.settings.market_data_mode", "fixture"),
+        patch(
+            "app.api.v1.market_data._safe_meta",
+            return_value=MarketService(FixtureMarketProvider()).meta(),
+        ),
         patch(
             "app.infrastructure.external.crawlers.dividend_crawler.DividendCrawler.get_market_calendar"
         ) as mock_cal,
