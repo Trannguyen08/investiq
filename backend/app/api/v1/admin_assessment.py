@@ -98,7 +98,9 @@ def list_admin_assessment_questions(
     return results
 
 
-@router.post("/questions", response_model=AssessmentQuestionResponse, status_code=status.HTTP_201_CREATED)
+@router.post(
+    "/questions", response_model=AssessmentQuestionResponse, status_code=status.HTTP_201_CREATED
+)
 def create_admin_assessment_question(
     payload: AdminQuestionCreateRequest,
     repository: Annotated[SqlAssessmentRepository, Depends(get_assessment_repository)],

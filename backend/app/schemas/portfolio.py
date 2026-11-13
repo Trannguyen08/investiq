@@ -31,7 +31,6 @@ class PlacePaperOrderRequest(StrictModel):
     )
 
 
-
 class PaperAccountResponse(StrictModel):
     id: str
     currency: Literal["VND"]
@@ -214,7 +213,6 @@ class UpsertConditionalTriggerRequest(StrictModel):
         pattern=r"^(?:0|[1-9][0-9]{0,23})(?:\.[0-9]{1,8})?$",
     )
     quantity: int | None = Field(default=None, ge=1, le=1_000_000)
-
 
 
 class PaperReportSubscriptionResponse(StrictModel):

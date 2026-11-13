@@ -4,13 +4,12 @@ from __future__ import annotations
 
 import base64
 import json
-import math
+import re
 import unicodedata
 from collections.abc import Callable
-from datetime import UTC, date, datetime, timedelta
+from datetime import UTC, datetime
 from decimal import ROUND_HALF_UP, Decimal
 from typing import Any
-from zoneinfo import ZoneInfo
 
 from app.domain.entities.market import (
     Candle,
@@ -18,6 +17,7 @@ from app.domain.entities.market import (
     MarketDepthLevel,
     MarketIndex,
     MarketInstrument,
+    resolve_sector_hierarchy,
 )
 from app.domain.repositories.i_market_provider import IMarketProvider
 from app.infrastructure.external.crawlers.financial_report_crawler import financial_report_crawler
@@ -67,11 +67,13 @@ def _intraday_trade(
 
 
 def _instrument(value: MarketInstrument, include_candles: bool = True) -> dict[str, object]:
+    parent_sector, subsector = resolve_sector_hierarchy(value.sector, value.subsector)
     payload: dict[str, object] = {
         "symbol": value.symbol,
         "name": value.name,
         "exchange": value.exchange,
-        "sector": value.sector,
+        "sector": parent_sector,
+        "subsector": subsector or None,
         "price": _decimal(value.price),
         "reference_price": _decimal(value.reference_price),
         "ceiling_price": _decimal(value.ceiling_price),
@@ -131,7 +133,7 @@ def _index(value: MarketIndex, include_candles: bool = True) -> dict[str, object
         "floor_count": value.floor_count,
     }
     if include_candles:
-        payload["candles"] = [_candle(item) for item in value.candles[-170:]]
+        payload["candles"] = [_candle(item) for item in value.candles[-500:]]
     return payload
 
 
@@ -159,11 +161,6 @@ def decode_cursor(value: str | None) -> int:
         raise ValueError("Pagination cursor is invalid") from exc
 
 
-
-
-_MARKET_TZ = ZoneInfo("Asia/Ho_Chi_Minh")
-
-
 def _round_to_tick(price: Decimal, exchange: str = "HOSE") -> Decimal:
     """Round price according to official Vietnamese stock exchange rules."""
     if price <= 0:
@@ -176,152 +173,6 @@ def _round_to_tick(price: Decimal, exchange: str = "HOSE") -> Decimal:
         tick = Decimal("10") if exchange.upper() in {"HOSE", "VN30"} else Decimal("100")
     return (price / tick).quantize(Decimal("1"), rounding=ROUND_HALF_UP) * tick
 
-
-def _synthesize_intraday_from_daily(
-    daily_candles: tuple[Candle, ...],
-    interval: str,
-    exchange: str = "HOSE",
-) -> tuple[Candle, ...]:
-    """Generate representative intraday candles strictly within HOSE/HNX trading hours."""
-    if not daily_candles:
-        return ()
-    step_minutes = 5 if interval == "5m" else (30 if interval == "30m" else 60)
-    session_offsets: list[int] = []
-    # Session 1: 09:15 to 11:30
-    curr = 9 * 60 + 15
-    while curr <= 11 * 60 + 30:
-        session_offsets.append(curr)
-        curr += step_minutes
-    # Session 2: 13:00 to 14:45
-    curr = 13 * 60
-    while curr <= 14 * 60 + 45:
-        session_offsets.append(curr)
-        curr += step_minutes
-
-    total_steps = max(1, len(session_offsets))
-    res: list[Candle] = []
-    for day in daily_candles[-10:]:
-        day_vn = day.timestamp.astimezone(_MARKET_TZ).date()
-        if day_vn.weekday() >= 5:
-            continue
-        d_open = _round_to_tick(day.open, exchange)
-        d_close = _round_to_tick(day.close, exchange)
-        d_high = max(d_open, d_close, _round_to_tick(day.high, exchange))
-        d_low = max(Decimal("1000"), min(d_open, d_close, _round_to_tick(day.low, exchange)))
-        d_vol = max(Decimal("100"), day.volume)
-        step_vol = max(Decimal("10"), (d_vol / Decimal(str(total_steps))).quantize(Decimal("1")))
-
-        prev_close = d_open
-        for idx, offset in enumerate(session_offsets):
-            minute = offset % 60
-            hour = offset // 60
-            local_dt = datetime(day_vn.year, day_vn.month, day_vn.day, hour, minute, 0, tzinfo=_MARKET_TZ)
-            ts = local_dt.astimezone(UTC)
-
-            progress = Decimal(str(idx + 1)) / Decimal(str(total_steps))
-            osc = Decimal(str(math.sin(idx * 0.45) * 0.003))
-            raw_close = d_open + (d_close - d_open) * progress + (d_high - d_low) * osc
-            bar_close = _round_to_tick(min(d_high, max(d_low, raw_close)), exchange)
-            bar_open = prev_close
-            step_spread = _round_to_tick(max(Decimal("50"), (d_high - d_low) / Decimal("6")), exchange)
-            bar_high = max(bar_open, bar_close, min(d_high, max(bar_open, bar_close) + step_spread))
-            bar_low = min(bar_open, bar_close, max(d_low, min(bar_open, bar_close) - step_spread))
-            prev_close = bar_close
-
-            res.append(Candle(
-                timestamp=ts,
-                open=bar_open,
-                high=bar_high,
-                low=bar_low,
-                close=bar_close,
-                volume=step_vol,
-            ))
-    return tuple(res)
-
-
-def _synthesize_candles_from_instrument(
-    instrument: MarketInstrument,
-    interval: str,
-    count: int,
-) -> tuple[Candle, ...]:
-    """Generate deterministic historical candles strictly adhering to Vietnam exchange rules."""
-    exchange = instrument.exchange or "HOSE"
-    base_price = _round_to_tick(
-        instrument.price if instrument.price > 0 else (
-            instrument.reference_price if instrument.reference_price > 0 else Decimal("20000")
-        ),
-        exchange,
-    )
-    base_vol = instrument.volume if instrument.volume > 0 else Decimal("50000")
-    now_vn = datetime.now(_MARKET_TZ)
-    res: list[Candle] = []
-
-    if interval in {"5m", "30m", "1h"}:
-        step_minutes = 5 if interval == "5m" else (30 if interval == "30m" else 60)
-        trading_slots: list[datetime] = []
-        d = now_vn.date()
-        while len(trading_slots) < count:
-            if d.weekday() < 5:
-                day_slots: list[datetime] = []
-                curr = 9 * 60 + 15
-                while curr <= 11 * 60 + 30:
-                    day_slots.append(datetime(d.year, d.month, d.day, curr // 60, curr % 60, 0, tzinfo=_MARKET_TZ))
-                    curr += step_minutes
-                curr = 13 * 60
-                while curr <= 14 * 60 + 45:
-                    day_slots.append(datetime(d.year, d.month, d.day, curr // 60, curr % 60, 0, tzinfo=_MARKET_TZ))
-                    curr += step_minutes
-                day_slots.sort()
-                trading_slots = day_slots + trading_slots
-            d -= timedelta(days=1)
-
-        valid_slots = trading_slots[-count:]
-        prev_close = base_price
-        for i, slot_dt in enumerate(valid_slots):
-            factor = Decimal(str(1.0 + math.sin(i * 0.15 + len(instrument.symbol)) * 0.012))
-            c_price = _round_to_tick(base_price * factor, exchange)
-            o_price = prev_close
-            spread = _round_to_tick(max(Decimal("50"), c_price * Decimal("0.003")), exchange)
-            h_price = max(o_price, c_price) + spread
-            l_price = max(Decimal("1000"), min(o_price, c_price) - spread)
-            prev_close = c_price
-            ts = slot_dt.astimezone(UTC)
-            res.append(Candle(
-                timestamp=ts,
-                open=o_price,
-                high=h_price,
-                low=l_price,
-                close=c_price,
-                volume=max(Decimal("100"), (base_vol / Decimal("10")).quantize(Decimal("1"))),
-            ))
-    else:
-        curr_date = now_vn.date()
-        dates: list[date] = []
-        d = curr_date
-        while len(dates) < count:
-            if d.weekday() < 5:
-                dates.append(d)
-            d -= timedelta(days=1)
-        dates.reverse()
-
-        prev_close = base_price
-        for i, dt in enumerate(dates):
-            factor = Decimal(str(1.0 + math.sin(i * 0.12 + len(instrument.symbol)) * 0.035))
-            c_price = _round_to_tick(base_price * factor, exchange)
-            o_price = prev_close
-            h_price = max(o_price, c_price, _round_to_tick(max(o_price, c_price) * Decimal("1.01"), exchange))
-            l_price = max(Decimal("1000"), min(o_price, c_price), _round_to_tick(min(o_price, c_price) * Decimal("0.99"), exchange))
-            prev_close = c_price
-            ts = datetime(dt.year, dt.month, dt.day, 8, 0, 0, tzinfo=UTC)
-            res.append(Candle(
-                timestamp=ts,
-                open=o_price,
-                high=h_price,
-                low=l_price,
-                close=c_price,
-                volume=base_vol,
-            ))
-    return tuple(res)
 
 class MarketService:
     def __init__(self, provider: IMarketProvider) -> None:
@@ -413,7 +264,16 @@ class MarketService:
         if exchange:
             values = [item for item in values if item.exchange == exchange]
         if sector:
-            values = [item for item in values if item.sector == sector]
+            values = [
+                item
+                for item in values
+                if (
+                    item.sector == sector
+                    or item.subsector == sector
+                    or resolve_sector_hierarchy(item.sector, item.subsector)[0] == sector
+                    or resolve_sector_hierarchy(item.sector, item.subsector)[1] == sector
+                )
+            ]
         if min_change is not None:
             values = [item for item in values if item.change_percent >= min_change]
         if max_change is not None:
@@ -460,11 +320,14 @@ class MarketService:
 
     def sectors(self) -> dict[str, object]:
         groups: dict[str, list[MarketInstrument]] = {}
+        subgroups: dict[tuple[str, str], list[MarketInstrument]] = {}
         for item in self._provider.instruments():
-            groups.setdefault(item.sector or "Chưa phân loại", []).append(item)
+            parent, sub = resolve_sector_hierarchy(item.sector, item.subsector)
+            groups.setdefault(parent, []).append(item)
+            if sub and sub != parent:
+                subgroups.setdefault((parent, sub), []).append(item)
 
-        sectors: list[dict[str, object]] = []
-        for name, members in groups.items():
+        def aggregate(name: str, members: list[MarketInstrument]) -> dict[str, object]:
             matched_value = sum(
                 (max(item.matched_value, Decimal()) for item in members),
                 Decimal(),
@@ -484,26 +347,37 @@ class MarketService:
                 change_percent = sum(
                     (item.change_percent for item in members), Decimal()
                 ) / Decimal(len(members))
-            sectors.append(
-                {
-                    "name": name,
-                    "change_percent": _decimal(change_percent.quantize(Decimal("0.01"))),
-                    "member_count": len(members),
-                    "advances": sum(item.change > 0 for item in members),
-                    "declines": sum(item.change < 0 for item in members),
-                    "unchanged": sum(item.change == 0 for item in members),
-                    "matched_value": _decimal(matched_value),
-                    "foreign_net_value": _decimal(
-                        sum((item.foreign_net_value for item in members), Decimal())
-                    ),
-                    "market_cap": _decimal(sum((item.market_cap for item in members), Decimal())),
-                }
-            )
+            return {
+                "name": name,
+                "change_percent": _decimal(change_percent.quantize(Decimal("0.01"))),
+                "member_count": len(members),
+                "advances": sum(item.change > 0 for item in members),
+                "declines": sum(item.change < 0 for item in members),
+                "unchanged": sum(item.change == 0 for item in members),
+                "matched_value": _decimal(matched_value),
+                "foreign_net_value": _decimal(
+                    sum((item.foreign_net_value for item in members), Decimal())
+                ),
+                "market_cap": _decimal(sum((item.market_cap for item in members), Decimal())),
+            }
+
+        sectors = [aggregate(name, members) for name, members in groups.items()]
         sectors.sort(
             key=lambda item: (abs(Decimal(str(item["change_percent"]))), str(item["name"])),
             reverse=True,
         )
-        return {"data": sectors, "meta": self.meta()}
+        subsectors = [
+            {"parent_sector": parent, **aggregate(name, members)}
+            for (parent, name), members in subgroups.items()
+        ]
+        subsectors.sort(
+            key=lambda item: (
+                str(item["parent_sector"]),
+                -abs(Decimal(str(item["change_percent"]))),
+                str(item["name"]),
+            )
+        )
+        return {"data": sectors, "subsectors": subsectors, "meta": self.meta()}
 
     def instrument(
         self, symbol: str, *, include_fundamentals: bool = True
@@ -526,13 +400,6 @@ class MarketService:
         instrument = self._provider.instrument(symbol, include_fundamentals=False)
         exchange = instrument.exchange if instrument else "HOSE"
         values = list(self._provider.candles(symbol, interval))
-        if not values and interval in {"5m", "30m", "1h"}:
-            daily_candles = self._provider.candles(symbol, "1d")
-            if daily_candles:
-                values = list(_synthesize_intraday_from_daily(daily_candles, interval, exchange))
-        if not values and instrument:
-            values = list(_synthesize_candles_from_instrument(instrument, interval, max(limit, 70)))
-
         # Sanitize and ensure tick size conformance & candle geometry consistency
         sanitized_values: list[Candle] = []
         for c in values:
@@ -540,14 +407,16 @@ class MarketService:
             cl = _round_to_tick(c.close, exchange)
             high_val = max(o, cl, _round_to_tick(c.high, exchange))
             low_val = max(Decimal("100"), min(o, cl, _round_to_tick(c.low, exchange)))
-            sanitized_values.append(Candle(
-                timestamp=c.timestamp,
-                open=o,
-                high=high_val,
-                low=low_val,
-                close=cl,
-                volume=max(Decimal("0"), c.volume),
-            ))
+            sanitized_values.append(
+                Candle(
+                    timestamp=c.timestamp,
+                    open=o,
+                    high=high_val,
+                    low=low_val,
+                    close=cl,
+                    volume=max(Decimal("0"), c.volume),
+                )
+            )
 
         limited_values = sanitized_values[-limit:]
         return {
@@ -791,6 +660,57 @@ class MarketService:
             ttm_rows.sort(key=lambda r: (_int(r.get("year")), _int(r.get("quarter"))))
             row_map = {(_int(r.get("year")), _int(r.get("quarter"))): r for r in ttm_rows}
 
+            # Lazy-loaded statement chart lookup for YoY fallback when TTM profit/revenue is absent
+            stmt_quarter_map: dict[tuple[int, int], dict[str, Decimal]] | None = None
+
+            def _get_stmt_quarter_map() -> dict[tuple[int, int], dict[str, Decimal]]:
+                nonlocal stmt_quarter_map
+                if stmt_quarter_map is not None:
+                    return stmt_quarter_map
+                parsed: dict[tuple[int, int], dict[str, Decimal]] = {}
+                try:
+                    fs_fn = getattr(self._provider, "financial_statements", None)
+                    stmt = fs_fn(instrument.symbol, "quarter", 8) if callable(fs_fn) else {}
+                except Exception:
+                    stmt = {}
+                charts = stmt.get("charts") if isinstance(stmt, dict) else None
+                if not isinstance(charts, list) or not charts:
+                    try:
+                        from app.workers.financial_statements_sync import get_stored_statement
+
+                        stored = get_stored_statement(instrument.symbol, "quarter")
+                        if isinstance(stored, dict):
+                            charts = stored.get("charts")
+                    except Exception:
+                        charts = None
+                if isinstance(charts, list):
+                    for item in charts:
+                        if not isinstance(item, dict):
+                            continue
+                        period_str = str(item.get("period") or "").strip().upper()
+                        # Matches Q3-2026, Q3/2026, Q3 2026
+                        m = re.match(r"Q([1-4])[-/\s](\d{4})", period_str)
+                        if not m:
+                            continue
+                        pq = int(m.group(1))
+                        py = int(m.group(2))
+                        rev_b = _dec(item.get("revenue_billion"))
+                        np_b = _dec(item.get("net_profit_billion"))
+                        nm_p = _dec(item.get("net_margin_percent"))
+                        gm_p = _dec(item.get("gross_margin_percent"))
+                        entry: dict[str, Decimal] = {}
+                        if rev_b is not None:
+                            entry["rev"] = rev_b
+                        if np_b is not None:
+                            entry["np"] = np_b
+                        if nm_p is not None:
+                            entry["nm"] = nm_p / Decimal("100")
+                        if gm_p is not None:
+                            entry["gm"] = gm_p / Decimal("100")
+                        parsed[(py, pq)] = entry
+                stmt_quarter_map = parsed
+                return stmt_quarter_map
+
             # Pick the latest 4-6 quarters
             recent_rows = ttm_rows[-6:]
             for r in recent_rows:
@@ -860,6 +780,28 @@ class MarketService:
                     lg = _dec(r.get("loans_growth"))
                     if lg is not None:
                         rev_yoy = f"{'+' if lg >= Decimal('0') else ''}{lg * Decimal('100'):.1f}%"
+
+                # Fallback 1: Financial statement quarterly charts YoY
+                if rev_yoy is None or profit_yoy is None:
+                    qmap = _get_stmt_quarter_map()
+                    cur_stmt = qmap.get((y, q))
+                    prev_stmt = qmap.get((y - 1, q))
+                    if cur_stmt and prev_stmt:
+                        if rev_yoy is None and "rev" in cur_stmt and prev_stmt.get("rev") not in (None, Decimal("0")):
+                            r_g = (cur_stmt["rev"] - prev_stmt["rev"]) / abs(prev_stmt["rev"]) * Decimal("100")
+                            rev_yoy = f"{'+' if r_g >= Decimal('0') else ''}{r_g:.1f}%"
+                        if profit_yoy is None and "np" in cur_stmt and prev_stmt.get("np") not in (None, Decimal("0")):
+                            p_g = (cur_stmt["np"] - prev_stmt["np"]) / abs(prev_stmt["np"]) * Decimal("100")
+                            profit_yoy = f"{'+' if p_g >= Decimal('0') else ''}{p_g:.1f}%"
+
+                # Fallback 2: Derive profit YoY from revenue YoY and net margin identity
+                if profit_yoy is None and rev_yoy is not None and prev is not None and margin_val is not None:
+                    prev_margin = _dec(prev.get("after_tax_profit_margin"))
+                    rev_growth_pct = _dec(rev_yoy.replace("%", "").replace("+", ""))
+                    if prev_margin not in (None, Decimal("0")) and rev_growth_pct is not None:
+                        ratio = (Decimal("1") + rev_growth_pct / Decimal("100")) * (margin_val / prev_margin)
+                        p_g = (ratio - Decimal("1")) * Decimal("100")
+                        profit_yoy = f"{'+' if p_g >= Decimal('0') else ''}{p_g:.1f}%"
 
                 quarters.append(
                     {
@@ -945,9 +887,7 @@ class MarketService:
         )
         is_expanding = current_roe is not None and (
             current_roe >= Decimal("15.0")
-            or (
-                cap_1y and not cap_1y.startswith("-") and current_roe >= Decimal("11.0")
-            )
+            or (cap_1y and not cap_1y.startswith("-") and current_roe >= Decimal("11.0"))
         )
         is_accumulating = vol_ratio >= Decimal("1.05") and (cap_1m and not cap_1m.startswith("-"))
 

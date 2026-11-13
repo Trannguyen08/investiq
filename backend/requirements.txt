@@ -11,6 +11,8 @@ argon2-cffi==25.1.0
 cryptography==46.0.3
 PyJWT==2.15.1
 websockets==15.0.1
+dnse-sdk-openapi==2.4.1
+msgpack==1.2.4
 httpx==0.28.1
 # Vnstock 6 uses source-specific Open API credentials; vnai is no longer distributed.
 vnstock==6.0.0

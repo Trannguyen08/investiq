@@ -115,7 +115,10 @@ def test_admin_portfolio_detail_and_cancel_order() -> None:
         assert call_kwargs["reason"] == "Can thiệp rủi ro thị trường"
 
         # 3. Test cancel order failure if repo returns False (e.g. order already filled or not found)
-        mock_repo.cancel_paper_order.return_value = (False, "Không thể hủy lệnh ở trạng thái 'filled'.")
+        mock_repo.cancel_paper_order.return_value = (
+            False,
+            "Không thể hủy lệnh ở trạng thái 'filled'.",
+        )
         fail_res = client.post(
             f"/api/v1/admin/portfolios/{portfolio_id}/orders/{order_id}/cancel",
             json={"reason": "Hủy lệnh trễ"},

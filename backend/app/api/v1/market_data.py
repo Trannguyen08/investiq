@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import asyncio
 import json
+import logging
 from decimal import Decimal
 from functools import lru_cache
 from typing import Annotated, Any, Literal
@@ -66,6 +67,8 @@ from app.schemas.market import (
     WatchlistsResponse,
 )
 
+logger = logging.getLogger(__name__)
+
 router = APIRouter(prefix="/api/v1/market", tags=["market"])
 stream_router = APIRouter(tags=["market-stream"])
 watchlist_router = APIRouter(
@@ -121,7 +124,11 @@ async def start_market_provider() -> None:
 
 
 async def close_market_provider() -> None:
-    pass
+    if settings.market_data_mode != "vnstock":
+        return
+    provider = _provider()
+    if isinstance(provider, VnstockMarketProvider):
+        await asyncio.to_thread(provider.close)
 
 
 def _service() -> MarketService:
@@ -346,7 +353,9 @@ def instrument_dividends(symbol: str, response: Response) -> dict[str, object]:
 
         latest_event = events[0] if events else None
         cash_events = [e for e in events if e.get("type") == "cash" and e.get("cash_value")]
-        total_cash_recent = sum(float(e["cash_value"]) for e in cash_events[:2]) if cash_events else 0
+        total_cash_recent = (
+            sum(float(e["cash_value"]) for e in cash_events[:2]) if cash_events else 0
+        )
         yield_pct = None
         if price_val and total_cash_recent:
             denom = price_val * 1000 if price_val < 1000 else price_val
@@ -391,13 +400,54 @@ def instrument_financial_statements(
     normalized = symbol.upper()
 
     def _loader() -> dict[str, object]:
-        if settings.market_data_mode == "vnstock":
-            provider = _provider()
-            if isinstance(provider, VnstockMarketProvider):
+        # 1. ALWAYS check pre-warmed / stored statements first!
+        # Delivers <1ms instant response for all VN30 & popular stocks, eliminating 15s FHSC hangs.
+        from app.workers.financial_statements_sync import get_stored_statement
+
+        stored = get_stored_statement(normalized, period)
+        if stored:
+            charts = stored.get("charts")
+            income = stored.get("income_statement")
+            if (
+                isinstance(charts, list)
+                and len(charts) > 0
+                and isinstance(income, list)
+                and len(income) > 0
+            ):
                 return {
-                    "data": provider.financial_statements(normalized, period, limit),
+                    "data": stored,
                     "meta": _safe_meta(),
                 }
+
+        if settings.market_data_mode == "vnstock" and period == "quarter":
+            provider = _provider()
+            if isinstance(provider, VnstockMarketProvider):
+                try:
+                    data = provider.financial_statements(normalized, period, limit)
+                    periods = data.get("periods") if isinstance(data, dict) else None
+                    charts = data.get("charts") if isinstance(data, dict) else None
+                    income = data.get("income_statement") if isinstance(data, dict) else None
+                    if (
+                        isinstance(periods, list)
+                        and isinstance(charts, list)
+                        and len(charts) > 0
+                        and any(
+                            c.get("revenue_billion") is not None
+                            for c in charts
+                            if isinstance(c, dict)
+                        )
+                        and isinstance(income, list)
+                    ):
+                        return {
+                            "data": data,
+                            "meta": _safe_meta(),
+                        }
+                except Exception as exc:
+                    logger.warning(
+                        "provider_financial_statements_unavailable",
+                        extra={"symbol": normalized, "error": str(exc)},
+                    )
+
         from app.infrastructure.external.crawlers.financial_statements_crawler import (
             get_financial_statements_crawler,
         )
@@ -436,7 +486,7 @@ def index(symbol: str, response: Response) -> dict[str, object]:
 def candles(
     response: Response,
     symbol: Annotated[str, Query(min_length=1, max_length=24, pattern=r"^[A-Za-z0-9._-]+$")],
-    interval: Literal["1d", "1h", "30m", "5m"] = "1d",
+    interval: Literal["1d", "1w", "1M", "1h", "30m", "5m"] = "1d",
     limit: Annotated[int, Query(ge=1, le=500)] = 120,
 ) -> dict[str, object]:
     _public_headers(response)
@@ -845,3 +895,98 @@ def _stream_snapshots(symbols: list[str]) -> list[dict[str, object]]:
             if isinstance(data, dict):
                 snapshots.append(data)
     return snapshots
+
+
+@router.get("/health")
+def market_health() -> dict[str, object]:
+    """Return market-data freshness, staleness, and PostgreSQL candle coverage."""
+    from datetime import UTC, datetime
+
+    from app.infrastructure.db.repositories.sql_market_candles_repository import (
+        SqlMarketCandlesRepository,
+    )
+
+    mode = settings.market_data_mode
+    if mode == "disabled":
+        return {
+            "status": "disabled",
+            "mode": mode,
+            "stale": True,
+            "db_candles_count": 0,
+        }
+    try:
+        provider = _provider()
+        market_time_raw = provider.market_time
+        try:
+            market_dt = datetime.fromisoformat(market_time_raw.replace("Z", "+00:00"))
+            if market_dt.tzinfo is None:
+                market_dt = market_dt.replace(tzinfo=UTC)
+            staleness_seconds = max(0, int((datetime.now(UTC) - market_dt).total_seconds()))
+        except ValueError:
+            staleness_seconds = None
+        is_stale = bool(getattr(provider, "stale", False))
+        provider_name = str(getattr(provider, "provider_name", type(provider).__name__))
+        indices_count = len(provider.indices())
+        instruments_count = len(provider.instruments())
+        db_candles = SqlMarketCandlesRepository().count_candles()
+        return {
+            "status": "degraded" if is_stale else "ok",
+            "mode": mode,
+            "provider_name": provider_name,
+            "stale": is_stale,
+            "market_time": market_time_raw,
+            "staleness_seconds": staleness_seconds,
+            "indices_count": indices_count,
+            "instruments_count": instruments_count,
+            "db_candles_count": db_candles,
+        }
+    except Exception as exc:
+        return {
+            "status": "degraded",
+            "mode": mode,
+            "stale": True,
+            "error": str(exc),
+            "db_candles_count": SqlMarketCandlesRepository().count_candles(),
+        }
+
+
+@router.get("/instruments/{symbol}/sentiment-impact")
+def instrument_sentiment_impact(symbol: str) -> dict[str, object]:
+    """Compute ML sentiment-to-impact score from recent news and 5-day price/volume momentum."""
+    from app.application.dto.news_dto import NewsQuery
+    from app.domain.entities.market import Candle
+    from app.infrastructure.db.repositories.sql_news_repository import SqlNewsRepository
+    from app.infrastructure.db.session import get_pool
+    from app.infrastructure.ml.sentiment_impact_model import compute_sentiment_impact
+
+    normalized = symbol.upper()
+    news_items: list[dict[str, object]] = []
+    try:
+        articles, _ = SqlNewsRepository(get_pool()).list_articles(
+            NewsQuery(symbols=(normalized,), limit=20)
+        )
+        news_items = [
+            {
+                "title": a.title,
+                "sentiment": a.sentiment.label if a.sentiment else "neutral",
+                "sentiment_score": a.sentiment.score if a.sentiment else 0.0,
+                "published_at": a.published_at,
+            }
+            for a in articles
+        ]
+    except Exception:
+        news_items = []
+
+    candles: tuple[Candle, ...] = ()
+    try:
+        candles = _provider().candles(normalized, "1d")
+    except Exception:
+        candles = ()
+
+    return {
+        "data": compute_sentiment_impact(
+            symbol=normalized,
+            news_items=news_items,
+            candles=candles,
+        ).to_dict()
+    }

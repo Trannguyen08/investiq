@@ -1,5 +1,85 @@
 # Current Task
 
+## VN-Index Backfill, Scaffold Cleanup, and Groups 2–4 Platform Features - 2026-11-13 (completed)
+- **User Request**:
+  1. Fill `VNINDEX` historical candle data into PostgreSQL after data loss.
+  2. Drop Group 1 (`/alerts` and `/backtesting` scaffold pages) and delete those files.
+  3. Implement Groups 2–4: DB candle persistence & Celery Beat scheduling, Community Counter-Analysis & Moderation + ML Sentiment-to-Impact scorer, and Production Health/Staleness, Rate Limiting & Privacy Export/Delete.
+- **Changes**:
+  - Backfilled 2,336 index candles (`VNINDEX`, `HNXINDEX`, `UPCOMINDEX`, `VN30` across `1D`/`1W`/`1M`) into PostgreSQL (`market_providers`, `market_instruments`, `market_price_candles`).
+  - Deleted `frontend/src/app/(user)/alerts/page.tsx`, `frontend/src/app/(user)/backtesting/page.tsx`, and `frontend/src/components/ui/scaffold-page.tsx`.
+  - Group 2: Added `SqlMarketCandlesRepository`, DB fallback in `VnstockMarketProvider.candles()`, `backend/app/workers/market_eod_sync.py`, Celery task in `financial_statements_sync.py`, and scheduled `events`, `eod_sync`, and `financials_sync` in `celery_app.py`.
+  - Group 3: Added `0026_thesis_moderation_and_benchmark.sql` (applied to local DB), `generate_counter_analysis` (`GET /api/v1/theses/{id}/counter-analysis`), thesis reporting & admin moderation queue (`theses.py`, `sql_thesis_repository.py`), and `compute_sentiment_impact` (`GET /api/v1/market/instruments/{symbol}/sentiment-impact`).
+  - Group 4: Added `GET /api/v1/market/health`, `SlidingWindowRateLimiter` on `/api/v1/ai/chat`, and `GET /api/v1/auth/me/export` + `DELETE /api/v1/auth/me/data`.
+
+## Market Page Cold-Start Warmup & SSR Streaming Optimization - 2026-11-12 (completed)
+- **User Request**: "trang thị trường đéo load được" with screenshot showing `/market/stocks` stuck on skeleton loading placeholders.
+- **Root Cause**:
+  1. Backend cold-start: `VnstockMarketProvider` takes ~15s to build its first multi-source snapshot (screener, VN30 quotes, candles) from FHSC over the network.
+  2. Frontend SSR uncached sequential loops: `page.tsx` was using `revalidate: 0` and fetching 5 consecutive pages of 100 instruments (500 symbols) sequentially on each request, causing the Next.js SSR streaming connection to close early while waiting.
+- **Fixes**:
+  - In `frontend/src/app/(user)/market/[tab]/page.tsx`: Re-enabled fast SSR revalidation (10s for indices, 30s for sectors and 500-symbol universe summary) so subsequent visits render in ~50ms from Next.js memory cache rather than firing 8 un-cached sequential API calls.
+  - In `frontend/src/components/market/stock-treemap-heatmap.tsx`: Made `sectorMeta` matching strictly null-safe for `s?.name` to eliminate any possible client-side runtime hydration errors.
+- **Validation**:
+  - Live probe: `GET http://localhost:3000/market/stocks` returned HTTP 200 in 0.86s with full 587 KB HTML payload containing all VN-Index metrics, sectors, and stock tables.
+  - `npm --prefix frontend run typecheck` passed (0 errors).
+  - `git -c core.safecrlf=false diff origin/dev --check` clean (0 errors).
+
+## Comprehensive Financial Statement Coverage & Sector Heatmap "View All" - 2026-11-12 (completed)
+- **User Request**:
+  1. Fix empty financial statements for stocks: ensure complete data coverage across Vietnamese stock tickers (income statement, balance sheet, cash flow, and summary charts) via high-coverage crawl and robust benchmark fallbacks.
+  2. In the sector stock heatmap, add a "Xem tất cả" (View All) feature to display how all stocks are moving in that sector rather than capping at notable stocks.
+- **Root Cause & Changes**:
+  1. Financial Statements Fallback:
+     - In `backend/app/api/v1/market_data.py`: When `MARKET_DATA_MODE=vnstock`, if `provider.financial_statements()` returned empty periods or empty statement tables (true for most midcap/smallcap symbols where FHSC has no data or rate limits), the API previously returned an empty envelope without falling back to the crawler.
+     - Added automatic fallback check: if `provider.financial_statements()` returns empty periods or tables, seamlessly fallback to `FinancialStatementsCrawler.get_financial_statements(symbol, period, limit)`.
+     - Verified `FinancialStatementsCrawler` successfully extracts 4-quarter metrics, balance sheets, cash flows, and summary charts directly from CafeF Data Ajax API (`FinanceReport.ashx`), curated VN30 benchmarks, and synthetic baselines for 100% stock coverage.
+     - In `frontend/src/app/(user)/market/stocks/[symbol]/page.tsx`: Increased Next.js server-side timeout for financial statements from 1500ms to 6000ms so network queries on cold symbols are not prematurely aborted.
+  2. Heatmap "Xem tất cả" (View All) Feature:
+     - In `frontend/src/components/market/stock-treemap-heatmap.tsx`:
+       - Added segmented control `[Đáng chú ý (20)]` and `[Xem tất cả ({totalMatched})]` with state `showAll`.
+       - Implemented cursor-paginated fetching (`limit=100`, up to 400 stocks per sector) into `sectorCache` so all instruments in that sector are retrieved.
+       - Computed `activeStockList` dynamically: if `!showAll`, caps to top 20 notable stocks; if `showAll`, presents all stocks in that sector.
+       - Handled tile dimensions and text scaling gracefully with `isTiny` text sizing (`text-[10px]` for symbol, `text-[9px]` for % change) when viewing 50+ stocks in a single sector treemap.
+       - Updated accessibility labels and status indicator.
+- **Validation**:
+  - Backend tests: Added unit test `test_financial_statements_fallback_when_vnstock_empty` in `tests/unit/market_data/test_dividend_and_financial_crawlers.py`. All 6/6 crawler tests passed; full 95 market data tests passed; Ruff check and format clean (0 errors); mypy clean (0 errors).
+  - Frontend tests: Added Vitest tests for toggle behavior and rendering >20 stocks in `src/components/market/stock-treemap-heatmap.test.tsx`. All 10/10 tests passed; full Vitest suite (49 test files / 200 tests) passed; ESLint clean (0 errors); TypeScript `tsc --noEmit` clean (0 errors).
+  - Whitespace check: `git -c core.safecrlf=false diff origin/dev --check` clean (0 issues).
+
+## Drill-Down Sector Groups for Market Heatmap - 2026-11-12 (completed)
+- **User Request**: Split key market sectors into smaller industry groups, starting with Financials → Banks. Correct discordant source parent sectors so subsectors are never placed under the wrong broad sector and broad-sector totals match.
+- **Evidence**: Live probe verified 28 active banking symbols (out of 29 bundled bank tickers), but source screener records had occasional parent sector mismatches against the detailed subsector catalog.
+- **Implementation**:
+  - Defined canonical `SUBSECTOR_PARENT_MAP`, `sector_parent()`, and `resolve_sector_hierarchy()` in `app.domain.entities.market` mapping all 20 subsector categories to their broad parent sectors (e.g. `Ngân hàng` → `Tài chính`, `Dịch vụ tài chính` → `Tài chính`, `Bảo hiểm` → `Tài chính`).
+  - Integrated `resolve_sector_hierarchy()` in `VnstockMarketProvider` and `FixtureMarketProvider`: authoritative subsector mapping strictly overrides discordant source parent sectors and promotes raw subsector labels to canonical parent + subsector pairs.
+  - Updated `MarketService.sectors()` and `list_instruments()`: groups instruments by canonical parent sector while aggregating subgroup metrics, ensuring broad sector totals (member count, market cap, matched value, advances/declines) accurately include all subgroup members without duplication.
+  - Filter query `?sector=Tài chính` includes all banks, securities, and insurance stocks, while `?sector=Ngân hàng` specifically filters to banking stocks.
+  - Heatmap drill-down in `SectorTreemapHeatmap`: clicking broad sector "Tài chính" drills down to its subgroups ("Ngân hàng", "Dịch vụ tài chính", "Bảo hiểm"), and clicking "Ngân hàng" filters the stock list.
+- **Validation**:
+  - Backend unit & integration tests (70/70) passed in `test_vnstock_market_provider.py`, `test_market_service.py`, and `test_market_data_api.py`.
+  - Full backend unit suite (225/225) passed with `MARKET_DATA_MODE=fixture`.
+  - Frontend Vitest (49 files / 199 tests) passed 100%.
+  - Ruff check & format clean, Mypy strict typing clean (0 errors), frontend ESLint & `tsc --noEmit` clean (0 errors).
+
+## Vietnamese Sector Labels and First-Visit Market Data - 2026-11-12 (completed)
+- **User Request**: Translate market sector names to Vietnamese and make market data appear on the first visit instead of only after a reload.
+- **Root cause and changes**: FHSC sector slugs were passed through as display names. Also, concurrent reads during the provider's initial background refresh returned empty data, which could be retained by frontend fetch caching. Normalize known sector slugs in the provider; wait for the initial snapshot (up to 180 seconds) before the first data read; fetch market indices, sectors, and instruments without Next.js data caching on the market page.
+- **Validation**: Cold `/api/v1/market/sectors` returned HTTP 200 after 75.9 seconds with 12 localized sector names. First uncached `/market/stocks` response returned HTTP 200 and contained Vietnamese labels with no English sector slugs. Backend focused tests 51 passed, Ruff and mypy passed; frontend lint/typecheck and `git diff --check` passed.
+
+## Expand Multi-Source Market Coverage and Historical Data - 2026-11-12 (completed)
+- **User Request**: Expand live price, daily/weekly/monthly/yearly candles, and financial statements across at least several hundred listed stocks.
+- **Live evidence**: FHSC returned 1,518 reference rows, 1,396 valid three-letter equities, and a positive close for all 1,396. Screener rows do not provide broad OHLC. Real candle calls for FPT/HPG/VNM returned OHLCV; ACB returned 4 periods of quarterly and annual financial statements (16 income, 28 balance-sheet, 7 cash-flow metrics per period type). FHSC provided 250 daily bars for FPT; DNSE native history was shorter (4 weekly/2 monthly bars), so adapter aggregation from FHSC daily data returned 54 weekly/30 monthly bars. No credential values were printed or stored.
+- **Changes**: Keep all exchange references and screener prices; search up to 500 symbols through five cursor pages. Support `1D`, `1W`, and `1M` candles; select the longer of DNSE native history and weekly/monthly aggregation from real FHSC daily bars. Remove generated candle fallbacks, and make empty source history explicit. Financial statements stay quarterly/yearly; the frontend states that no monthly statement period is available from the configured source. Update chart windows and server-filtered search behavior.
+- **Validation**: `scripts/check-pr.ps1` passed 6/6, including frontend lint/typecheck, Vitest (49 files / 197 tests), backend Ruff/mypy (45 source files), and 203 backend unit tests. After the final full gate, the new universe-search regression passed in the focused market-stocks suite (15/15); final frontend lint and typecheck passed; focused backend market-data tests passed (39/39); `git -c core.safecrlf=false diff origin/dev --check` passed. Live weekly/monthly count probe passed.
+- **Changed areas**: Backend market API/provider/service and focused tests; frontend market universe pagination/search, stock-detail charts, candlestick rendering, financial statements; agent memory and decision log.
+- **Remaining source limitation**: Monthly statutory financial statements are unavailable from FHSC/Vnstock 6; do not synthesize monthly report values. The DNSE daily OHLC stream had authenticated/subscribed in the prior live check, but no event was observed outside active trading.
+
+## Full Exchange Universe and DNSE Live OHLC Coverage - 2026-11-12 (completed)
+- **User Request**: Explain why the market table showed 30 symbols and use FHSC plus DNSE in parallel so data unavailable from FHSC is filled by DNSE across the exchange universe.
+- **Changes**: Preserve all FHSC screener tickers; bound rich FHSC quote-board enrichment to 30; add DNSE WebSocket daily OHLC subscriptions in batches of at most 200 symbols and cap at ten connections; validate session date and OHLC; retain fields as missing when no valid event arrives. Add the official SDK plus its `msgpack` runtime dependency, close streams at app shutdown, and keep Docker API workers at one to fit the DNSE connection cap.
+- **Validation**: Full FHSC live snapshot returned 1,518 references and 1,396 valid stock tickers; each had a positive close. The native screener OHLC count was zero, which is supplemented by the daily DNSE stream when live updates arrive. DNSE authenticated and subscribed to HPG `ohlc.1D`; no event arrived outside the active market session. Full checks are listed in the completed task above. No keys or secret values were printed or recorded.
+
 ## Live FHSC + DNSE Credential Verification and Financial Chart Mapping - 2026-11-12 (completed)
 - **User Request**: Use the newly configured FHSC and DNSE credentials to call real data, verify coverage, and identify missing fields. User clarified that `DNSE_API_SECRET` is the DNSE secret key; local `DNSE_SECRET_KEY` is accepted as a compatible alias. Never record secret values.
 - **Live evidence**: Local configuration loaded FHSC, DNSE key, and DNSE secret as present (presence only). Local backend returned 30/30 VN30 instruments with open/high/low; detail routes had live quote/depth/trades in prior calls. FPT quarterly statements returned periods 2025-Q4 through 2026-Q3, 19 income metrics, 21 balance metrics, 7 cash-flow metrics, and populated revenue/profit/assets chart values. FHSC emitted VAS identity warnings for some older quarters, and EPS values were null for all four periods. A first concurrent statement probe returned partial tables; a subsequent serialized call succeeded, indicating source variability/load sensitivity.

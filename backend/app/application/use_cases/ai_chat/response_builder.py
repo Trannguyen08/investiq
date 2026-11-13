@@ -187,9 +187,7 @@ def _build_dividend_and_events_section(
             if ev.get("source_url"):
                 sources.append(
                     {
-                        "kind": "internal"
-                        if str(ev["source_url"]).startswith("/")
-                        else "external",
+                        "kind": "internal" if str(ev["source_url"]).startswith("/") else "external",
                         "title": f"Nguồn tin {sym}: {ev.get('source', 'Công bố')}",
                         "url": str(ev["source_url"]),
                     }
@@ -239,9 +237,7 @@ def _build_news_section(
 ) -> None:
     target_stock = tickers[0] if tickers else ""
     heading = (
-        f"Điểm tin chứng khoán {target_stock}:"
-        if target_stock
-        else "Điểm tin thị trường hôm nay:"
+        f"Điểm tin chứng khoán {target_stock}:" if target_stock else "Điểm tin thị trường hôm nay:"
     )
     text_parts.append(heading)
 
@@ -500,9 +496,7 @@ def _build_leader_section(
                 from app.infrastructure.external.crawlers.leader_crawler import get_leader_crawler
 
                 inst_list = (
-                    market_service.instruments()
-                    if hasattr(market_service, "instruments")
-                    else None
+                    market_service.instruments() if hasattr(market_service, "instruments") else None
                 )
                 raw_people = get_leader_crawler().get_prominent_leaders(inst_list)
                 for rank, p in enumerate(raw_people[:7], start=1):
@@ -592,8 +586,13 @@ def _build_leader_section(
 
         q_fold = normalize_user_input(user_message).lower()
         is_company_query = any(w in q_fold for w in ["tap doan", "cong ty", "doanh nghiep"]) or (
-            not any(w in q_fold for w in ["ong", "ba", "chu tich", "tong giam doc", "ceo", "nguoi", "tieu su"])
-            and any(w in q_fold for w in ["vingroup", "hoa phat", "fpt", "masan", "vietjet", "novaland"])
+            not any(
+                w in q_fold
+                for w in ["ong", "ba", "chu tich", "tong giam doc", "ceo", "nguoi", "tieu su"]
+            )
+            and any(
+                w in q_fold for w in ["vingroup", "hoa phat", "fpt", "masan", "vietjet", "novaland"]
+            )
         )
         heading = (
             f"Thông tin doanh nghiệp & Lãnh đạo: {company} ({name})"
@@ -850,9 +849,7 @@ def _build_typo_suggestion_section(
             if m.symbol not in seen_syms:
                 seen_syms.add(m.symbol)
                 all_suggestions.append(m)
-                suggestion_lines.append(
-                    f"- **{m.symbol}** — {m.name} (Ngành: {m.sector})"
-                )
+                suggestion_lines.append(f"- **{m.symbol}** — {m.name} (Ngành: {m.sector})")
 
     if suggestion_lines:
         if is_trade_order:
@@ -1091,14 +1088,29 @@ def _build_comparison_section(
                     for m in find_closest_tickers(valid_sym, max_results=3, allow_valid=True)
                     if m.symbol != valid_sym
                 ]
-                if valid_alts and valid_sym not in ("HPG", "VCB", "FPT", "VIC", "VHM", "MBB", "TCB", "SSI", "VNM", "MWG", "ACB", "STB"):
+                if valid_alts and valid_sym not in (
+                    "HPG",
+                    "VCB",
+                    "FPT",
+                    "VIC",
+                    "VHM",
+                    "MBB",
+                    "TCB",
+                    "SSI",
+                    "VNM",
+                    "MWG",
+                    "ACB",
+                    "STB",
+                ):
                     alt_desc = ", ".join(f"**{m.symbol}** ({m.name})" for m in valid_alts[:3])
                     suggestion_blocks.append(
                         f"- Nếu **{valid_sym}** cũng là mã nhập nhầm, gợi ý gần đúng: {alt_desc}"
                     )
 
             if suggestion_blocks:
-                text_parts.append("Gợi ý các mã cổ phiếu gần đúng:\n" + "\n".join(suggestion_blocks))
+                text_parts.append(
+                    "Gợi ý các mã cổ phiếu gần đúng:\n" + "\n".join(suggestion_blocks)
+                )
 
             if len(active_tickers) == 1:
                 valid_sym = active_tickers[0]
@@ -1141,9 +1153,7 @@ def _build_comparison_section(
                         pair_candidates.append(m.symbol)
                 if len(pair_candidates) >= 2:
                     s1, s2 = pair_candidates[0], pair_candidates[1]
-                    text_parts.append(
-                        f"Có phải bạn muốn so sánh giữa **{s1}** và **{s2}** không?"
-                    )
+                    text_parts.append(f"Có phải bạn muốn so sánh giữa **{s1}** và **{s2}** không?")
                     suggested_actions.append(
                         {
                             "label": f"So sánh {s1} và {s2}",
@@ -1237,7 +1247,9 @@ def _build_comparison_section(
         # Growth fields
         health_status = growth.get("health_status") or "stable"
         health_title = growth.get("health_title") or "Hoạt động & tài chính ổn định"
-        health_summary = growth.get("health_summary") or f"{name} duy trì cơ cấu tài chính lành mạnh."
+        health_summary = (
+            growth.get("health_summary") or f"{name} duy trì cơ cấu tài chính lành mạnh."
+        )
         cap_1m = growth.get("market_cap_growth_1m")
         cap_3m = growth.get("market_cap_growth_3m")
         cap_6m = growth.get("market_cap_growth_6m")
@@ -1355,8 +1367,13 @@ def _build_comparison_section(
         text_parts.append("\n".join(metric_lines))
 
         # Build comparison verdict
-        best_pe = min(parsed_items, key=lambda x: float(x["pe"].replace("x", "")) if "x" in x["pe"] else 999.0)
-        best_roe = max(parsed_items, key=lambda x: float(x["roe"].replace("%", "")) if "%" in x["roe"] else -999.0)
+        best_pe = min(
+            parsed_items, key=lambda x: float(x["pe"].replace("x", "")) if "x" in x["pe"] else 999.0
+        )
+        best_roe = max(
+            parsed_items,
+            key=lambda x: float(x["roe"].replace("%", "")) if "%" in x["roe"] else -999.0,
+        )
         verdict = (
             f"Về mặt định giá, **{best_pe['symbol']}** sở hữu chỉ số P/E hấp dẫn nhất ({best_pe['pe']}), "
             f"trong khi **{best_roe['symbol']}** dẫn đầu về hiệu quả sinh lời trên vốn chủ sở hữu (ROE {best_roe['roe']}). "
@@ -1405,8 +1422,16 @@ def _build_comparison_section(
         text_parts.append(f"Đối chiếu so sánh báo cáo tăng trưởng: {tickers_title}")
         growth_lines = []
         for it in parsed_items:
-            rev_txt = f"Doanh thu quý: {it['revenue_growth_yoy']}" if it['revenue_growth_yoy'] else "Doanh thu: Đang cập nhật"
-            prof_txt = f"LNST quý: {it['profit_growth_yoy']}" if it['profit_growth_yoy'] else "LNST: Đang cập nhật"
+            rev_txt = (
+                f"Doanh thu quý: {it['revenue_growth_yoy']}"
+                if it["revenue_growth_yoy"]
+                else "Doanh thu: Đang cập nhật"
+            )
+            prof_txt = (
+                f"LNST quý: {it['profit_growth_yoy']}"
+                if it["profit_growth_yoy"]
+                else "LNST: Đang cập nhật"
+            )
             cap_txt = f"Vốn hóa 1T: {it['market_cap_growth_1m'] or 'N/A'}, 1N: {it['market_cap_growth_1y'] or 'N/A'}"
             growth_lines.append(
                 f"- **{it['symbol']}** ({it['name']}): Trạng thái **{it['health_title']}**. "
@@ -1477,8 +1502,14 @@ def _build_comparison_section(
     text_parts.append("### 2. Báo cáo Tăng trưởng & Sức khỏe Tài chính:")
     growth_lines = []
     for it in parsed_items:
-        rev_txt = f"Doanh thu quý {it['revenue_growth_yoy']}" if it['revenue_growth_yoy'] else "Doanh thu ổn định"
-        prof_txt = f"LNST quý {it['profit_growth_yoy']}" if it['profit_growth_yoy'] else "LNST ổn định"
+        rev_txt = (
+            f"Doanh thu quý {it['revenue_growth_yoy']}"
+            if it["revenue_growth_yoy"]
+            else "Doanh thu ổn định"
+        )
+        prof_txt = (
+            f"LNST quý {it['profit_growth_yoy']}" if it["profit_growth_yoy"] else "LNST ổn định"
+        )
         growth_lines.append(
             f"- **{it['symbol']}**: Trạng thái **{it['health_title']}**. "
             f"{rev_txt}, {prof_txt}. LNST TTM: {it['profit_ttm'] or 'N/A'}. Tăng trưởng vốn hóa 1T: {it['market_cap_growth_1m'] or 'N/A'}."
@@ -1584,9 +1615,7 @@ def _build_single_stock_section(
     text_parts.append(
         f"- Thị giá: {price:,.0f} đ ({change_p:+.2f}%) | Sàn {exchange} | Ngành {sector}"
     )
-    text_parts.append(
-        f"- Định giá: P/E hiện tại {pe:.1f}x | P/B {pb:.1f}x | ROE {roe:.1f}%"
-    )
+    text_parts.append(f"- Định giá: P/E hiện tại {pe:.1f}x | P/B {pb:.1f}x | ROE {roe:.1f}%")
     text_parts.append(
         f"- Kỹ thuật: RSI (14) đang ở mức {rsi:.1f} | Giá {'nằm trên' if price >= ma20 else 'áp sát'} MA20 ({ma20:,.0f} đ)"
     )
@@ -1629,11 +1658,7 @@ def _build_single_stock_section(
     if is_forensics or flags or zone != "safe":
         flag_items = []
         for f in flags[:4]:
-            sev = (
-                getattr(f, "severity", "")
-                if not isinstance(f, dict)
-                else f.get("severity", "")
-            )
+            sev = getattr(f, "severity", "") if not isinstance(f, dict) else f.get("severity", "")
             title = (
                 getattr(f, "title", "")
                 if not isinstance(f, dict)
@@ -1746,19 +1771,48 @@ def _build_market_overview_section(
             k in q_folded for k in ["bien dong", "manh nhat", "nhieu nhat", "lon nhat"]
         ) and not any(
             k in q_folded
-            for k in ["tang manh", "giam manh", "thanh khoan", "giao dich nhieu", "soi noi", "soi dong"]
+            for k in [
+                "tang manh",
+                "giam manh",
+                "thanh khoan",
+                "giao dich nhieu",
+                "soi noi",
+                "soi dong",
+            ]
         )
         ask_gainers = any(
             k in q_folded
-            for k in ["tang manh", "tang nhieu", "tang tran", "tim tran", "co phieu nao tang", "ma nao tang"]
+            for k in [
+                "tang manh",
+                "tang nhieu",
+                "tang tran",
+                "tim tran",
+                "co phieu nao tang",
+                "ma nao tang",
+            ]
         )
         ask_losers = any(
             k in q_folded
-            for k in ["giam manh", "giam nhieu", "giam sau", "nam san", "giam san", "co phieu nao giam", "ma nao giam"]
+            for k in [
+                "giam manh",
+                "giam nhieu",
+                "giam sau",
+                "nam san",
+                "giam san",
+                "co phieu nao giam",
+                "ma nao giam",
+            ]
         )
         ask_liquidity = any(
             k in q_folded
-            for k in ["thanh khoan", "giao dich nhieu", "soi dong", "soi noi", "hoat dong", "nhon nhip"]
+            for k in [
+                "thanh khoan",
+                "giao dich nhieu",
+                "soi dong",
+                "soi noi",
+                "hoat dong",
+                "nhon nhip",
+            ]
         )
         ask_foreign = any(
             k in q_folded for k in ["khoi ngoai", "mua rong", "ban rong", "nuoc ngoai"]
@@ -1898,9 +1952,7 @@ def _build_market_overview_section(
             text_parts.append(
                 f"- Độ rộng thị trường: {advances} mã tăng / {declines} mã giảm / {unchanged} mã tham chiếu."
             )
-            text_parts.append(
-                f"- Thanh khoản toàn sàn: Xấp xỉ {matched_val:,.1f} nghìn tỷ đồng."
-            )
+            text_parts.append(f"- Thanh khoản toàn sàn: Xấp xỉ {matched_val:,.1f} nghìn tỷ đồng.")
             if top_gainers:
                 gainers_inline = ", ".join(
                     f"**{g['symbol']}** ({g['change_percent']:+.2f}%)" for g in top_gainers[:3]
@@ -2188,9 +2240,9 @@ def generate_structured_response(
     if is_trade_order:
         target_sym = trade_symbol or (tickers[0] if tickers else None)
         is_bad_trade_sym = (
-            (target_sym is not None and (target_sym in bad_tickers or not is_valid_ticker(target_sym)))
-            or (target_sym is None and bool(bad_tickers))
-        )
+            target_sym is not None
+            and (target_sym in bad_tickers or not is_valid_ticker(target_sym))
+        ) or (target_sym is None and bool(bad_tickers))
         if is_bad_trade_sym:
             order_bad_tickers = list(bad_tickers)
             if target_sym and target_sym not in order_bad_tickers:
@@ -2222,9 +2274,9 @@ def generate_structured_response(
     elif is_community_post:
         target_sym = community_symbol or (tickers[0] if tickers else None)
         is_bad_comm_sym = (
-            (target_sym is not None and (target_sym in bad_tickers or not is_valid_ticker(target_sym)))
-            or (target_sym is None and bool(bad_tickers))
-        )
+            target_sym is not None
+            and (target_sym in bad_tickers or not is_valid_ticker(target_sym))
+        ) or (target_sym is None and bool(bad_tickers))
         if is_bad_comm_sym:
             comm_bad_tickers = list(bad_tickers)
             if target_sym and target_sym not in comm_bad_tickers:
@@ -2454,9 +2506,7 @@ def generate_structured_response(
     if sources:
         citation_lines = ["\n\nNguồn tham khảo:"]
         for s in sources:
-            kind_badge = (
-                "[Hệ thống InvestIQ]" if s.get("kind") == "internal" else "[Nguồn ngoài]"
-            )
+            kind_badge = "[Hệ thống InvestIQ]" if s.get("kind") == "internal" else "[Nguồn ngoài]"
             citation_lines.append(f"- {kind_badge} {s['title']} ({s['url']})")
         text_parts.append("\n".join(citation_lines))
 

@@ -184,7 +184,11 @@ def get_trading_discipline_metrics(
                 ]
             raw_trades = dash.get("trades") or []
             if isinstance(raw_trades, list):
-                orders = [{"id": str(t.get("id")), "symbol": str(t.get("symbol"))} for t in raw_trades if isinstance(t, dict)]
+                orders = [
+                    {"id": str(t.get("id")), "symbol": str(t.get("symbol"))}
+                    for t in raw_trades
+                    if isinstance(t, dict)
+                ]
         except Exception:
             pass
 

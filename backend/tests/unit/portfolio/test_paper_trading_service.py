@@ -517,7 +517,9 @@ class DepthFixtureProvider(FixtureMarketProvider):
         )
 
 
-def test_option_b_exchange_hours_queues_orders_outside_trading_session_and_fills_in_session() -> None:
+def test_option_b_exchange_hours_queues_orders_outside_trading_session_and_fills_in_session() -> (
+    None
+):
     store = ExchangeSimulationStore()
     repo = MultiOrderRepository(portfolio())
     # Weekend Saturday 10:00 UTC (17:00 ICT) -> Outside trading hours

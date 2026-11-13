@@ -190,7 +190,7 @@ describe("MarketCandlestickChart", () => {
 describe("IndicesView chart detail", () => {
   afterEach(() => cleanup());
 
-  it("keeps the detailed index chart between 70 and 170 visible sessions", () => {
+  it("keeps the detailed index chart between 70 and 500 visible sessions", () => {
     const dailyCandles: MarketCandle[] = Array.from({ length: 190 }, (_, index) => ({
       timestamp: new Date(Date.UTC(2026, 8, index + 1, 3)).toISOString(),
       open: String(1700 + index),
@@ -235,20 +235,20 @@ describe("IndicesView chart detail", () => {
 
     const { container } = render(<IndicesView collection={collection} selected="VNINDEX" />);
 
-    expect(screen.getByText("170 nến ngày gần nhất")).toBeInTheDocument();
-    expect(screen.getByRole("img", { name: /Biểu đồ nến chi tiết VN-Index, 170 nến giá xanh đỏ/ })).toBeInTheDocument();
+    expect(screen.getByText("190 nến ngày gần nhất")).toBeInTheDocument();
+    expect(screen.getByRole("img", { name: /Biểu đồ nến chi tiết VN-Index, 190 nến giá xanh đỏ/ })).toBeInTheDocument();
     expect(screen.getByRole("table", { name: "Biểu đồ nến chi tiết VN-Index" })).toBeInTheDocument();
     expect(screen.getByRole("region", { name: "Giải thích biểu đồ" })).toHaveTextContent("MA20 màu xanh");
-    expect(screen.getAllByRole("button", { name: /Xem nến/ })).toHaveLength(170);
+    expect(screen.getAllByRole("button", { name: /Xem nến/ })).toHaveLength(190);
     const stage = container.querySelector<HTMLElement>(".financial-chart-stage")!;
     vi.spyOn(stage, "getBoundingClientRect").mockReturnValue({ left: 0, width: 1000 } as DOMRect);
     fireEvent.wheel(stage, { deltaY: -100, clientX: 500 });
-    expect(screen.getByRole("img", { name: /139 nến giá xanh đỏ/ })).toBeInTheDocument();
-    for (let index = 0; index < 4; index += 1) fireEvent.wheel(stage, { deltaY: -100, clientX: 500 });
+    expect(screen.getByRole("img", { name: /156 nến giá xanh đỏ/ })).toBeInTheDocument();
+    for (let index = 0; index < 5; index += 1) fireEvent.wheel(stage, { deltaY: -100, clientX: 500 });
     expect(screen.getByRole("img", { name: /70 nến giá xanh đỏ/ })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Phóng to biểu đồ năm" })).toBeDisabled();
-    for (let index = 0; index < 5; index += 1) fireEvent.wheel(stage, { deltaY: 100, clientX: 500 });
-    expect(screen.getByRole("img", { name: /170 nến giá xanh đỏ/ })).toBeInTheDocument();
+    for (let index = 0; index < 6; index += 1) fireEvent.wheel(stage, { deltaY: 100, clientX: 500 });
+    expect(screen.getByRole("img", { name: /190 nến giá xanh đỏ/ })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Thu nhỏ biểu đồ năm" })).toBeDisabled();
     expect(container.querySelector(".index-detail .mini-candles")).not.toBeInTheDocument();
   }, 45_000);

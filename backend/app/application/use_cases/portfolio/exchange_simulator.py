@@ -238,12 +238,21 @@ class ExchangeSimulationStore:
 
         try:
             from app.infrastructure.db.session import get_pool
+
             pool = get_pool()
             with pool.connection() as conn, conn.cursor() as cur:
                 cur.execute(
                     """INSERT INTO paper_cash_advances (id, user_id, gross_amount, fee_amount, net_received, days_advanced, created_at)
                        VALUES (%s, %s, %s, %s, %s, %s, %s)""",
-                    (rec_id, user_id, gross_amount, fee_amount, net_received, days_advanced, rec.created_at),
+                    (
+                        rec_id,
+                        user_id,
+                        gross_amount,
+                        fee_amount,
+                        net_received,
+                        days_advanced,
+                        rec.created_at,
+                    ),
                 )
                 conn.commit()
         except Exception:
@@ -258,6 +267,7 @@ class ExchangeSimulationStore:
         records: list[CashAdvanceRecord] = []
         try:
             from app.infrastructure.db.session import get_pool
+
             pool = get_pool()
             with pool.connection() as conn, conn.cursor() as cur:
                 cur.execute(
@@ -291,6 +301,7 @@ class ExchangeSimulationStore:
             self._advances.pop(user_id, None)
         try:
             from app.infrastructure.db.session import get_pool
+
             pool = get_pool()
             with pool.connection() as conn, conn.cursor() as cur:
                 cur.execute("DELETE FROM paper_cash_advances WHERE user_id = %s", (user_id,))
@@ -390,7 +401,10 @@ def is_within_exchange_trading_hours(
         if atc_start <= t <= afternoon_close:
             return True, "Đang trong phiên khớp lệnh định kỳ đóng cửa (ATC 14:30 - 14:45)."
         if t < atc_start:
-            return False, "Lệnh ATC đã được tiếp nhận và chờ khớp vào phiên đóng cửa (14:30 - 14:45)."
+            return (
+                False,
+                "Lệnh ATC đã được tiếp nhận và chờ khớp vào phiên đóng cửa (14:30 - 14:45).",
+            )
         return False, "Đã qua phiên ATC (14:30 - 14:45). Lệnh được lưu chờ phiên kế tiếp."
 
     if (morning_open <= t <= morning_close) or (afternoon_open <= t <= afternoon_close):
@@ -438,8 +452,10 @@ def validate_vietnam_exchange_rules(
 
     if order_type == "LO" and strict_rules:
         floor_price, ceiling_price = calculate_price_band(instrument)
-        if floor_price > 0 and ceiling_price > 0 and (
-            limit_price < floor_price or limit_price > ceiling_price
+        if (
+            floor_price > 0
+            and ceiling_price > 0
+            and (limit_price < floor_price or limit_price > ceiling_price)
         ):
             return (
                 False,
@@ -503,7 +519,11 @@ def match_against_orderbook(
         if not levels:
             p1 = base_price
             p2 = min(ceiling_price, base_price + tick) if ceiling_price > 0 else base_price + tick
-            p3 = min(ceiling_price, base_price + tick * 2) if ceiling_price > 0 else base_price + tick * 2
+            p3 = (
+                min(ceiling_price, base_price + tick * 2)
+                if ceiling_price > 0
+                else base_price + tick * 2
+            )
             levels = [(p1, 2000), (p2, 3000), (p3, 5000)]
     else:
         if instrument.bid_levels:
@@ -512,8 +532,16 @@ def match_against_orderbook(
                     levels.append((lvl.price, int(lvl.volume)))
         if not levels:
             p1 = base_price
-            p2 = max(floor_price, base_price - tick) if floor_price > 0 else max(tick, base_price - tick)
-            p3 = max(floor_price, base_price - tick * 2) if floor_price > 0 else max(tick, base_price - tick * 2)
+            p2 = (
+                max(floor_price, base_price - tick)
+                if floor_price > 0
+                else max(tick, base_price - tick)
+            )
+            p3 = (
+                max(floor_price, base_price - tick * 2)
+                if floor_price > 0
+                else max(tick, base_price - tick * 2)
+            )
             levels = [(p1, 2000), (p2, 3000), (p3, 5000)]
 
     # Check if LO order is marketable against Best Ask / Best Bid

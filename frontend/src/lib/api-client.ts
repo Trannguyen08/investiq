@@ -232,7 +232,7 @@ export function getMarketInstrument(symbol: string, timeoutMs?: number): Promise
 
 export function getMarketCandles(
   symbol: string,
-  interval: "1d" | "1h" | "30m" | "5m",
+  interval: "1d" | "1w" | "1M" | "1h" | "30m" | "5m",
   limit: number,
   timeoutMs?: number,
 ): Promise<MarketCandles> {
@@ -249,12 +249,12 @@ export function getMarketIntradayTrades(
   return requestJson<MarketIntradayTrades>(`/v1/market/intraday-trades?${query.toString()}`, 15, timeoutMs);
 }
 
-export function getMarketIndices(timeoutMs?: number): Promise<IndexCollection> {
-  return requestJson<IndexCollection>("/v1/market/indices", 30, timeoutMs);
+export function getMarketIndices(timeoutMs?: number, revalidate = 30): Promise<IndexCollection> {
+  return requestJson<IndexCollection>("/v1/market/indices", revalidate, timeoutMs);
 }
 
-export function getMarketSectors(timeoutMs?: number): Promise<SectorCollection> {
-  return requestJson<SectorCollection>("/v1/market/sectors", 60, timeoutMs);
+export function getMarketSectors(timeoutMs?: number, revalidate = 60): Promise<SectorCollection> {
+  return requestJson<SectorCollection>("/v1/market/sectors", revalidate, timeoutMs);
 }
 
 export function getMarketEvents(query = new URLSearchParams()): Promise<EventCollection> {

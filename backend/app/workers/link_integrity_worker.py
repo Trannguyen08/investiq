@@ -50,6 +50,8 @@ DEAD_CONTENT_PATTERNS = (
     "page not found",
     "the requested url was not found",
     "404 - ",
+    "this content has been removed or does not exist",
+    "file or directory not found",
 )
 
 
@@ -305,11 +307,13 @@ def verify_and_clean_news_articles(limit: int = 60) -> dict[str, Any]:
             )
             rows = cur.fetchall()
             for row in rows:
-                articles_to_check.append({
-                    "id": str(row[0]),
-                    "canonical_url": row[1],
-                    "title": row[2],
-                })
+                articles_to_check.append(
+                    {
+                        "id": str(row[0]),
+                        "canonical_url": row[1],
+                        "title": row[2],
+                    }
+                )
     except Exception as exc:
         logger.warning("Could not query news articles for link integrity: %s", exc)
         return {"checked_news": 0, "dead_news_withdrawn": 0, "error": str(exc)}
@@ -374,15 +378,93 @@ def verify_and_clean_news_articles(limit: int = 60) -> dict[str, Any]:
     }
 
 
+def verify_and_repair_financial_statement_links() -> dict[str, int]:
+    """Verify source links on stored financial statements and repair dead/missing URLs."""
+    from app.workers.financial_statements_sync import (
+        _MEMORY_CACHE,
+        _STORE_LOCK,
+        resolve_active_financial_source_url,
+    )
+
+    checked = 0
+    repaired = 0
+    try:
+        pool = get_pool()
+        with pool.connection() as conn, conn.cursor() as cur:
+            cur.execute("SELECT symbol, period_type, source FROM financial_statements")
+            rows = cur.fetchall()
+    except Exception as exc:
+        logger.warning("Failed reading financial_statements for link check: %s", exc)
+        return {"checked_financials": 0, "repaired_financial_links": 0}
+
+    symbol_urls: dict[str, tuple[str, str]] = {}
+    updates: list[tuple[str, str, str, str, str]] = []
+
+    for row in rows:
+        symbol = str(row[0]).upper()
+        period_type = str(row[1])
+        current_source = str(row[2] or "").strip()
+        checked += 1
+
+        url_match = re.search(r"https?://\S+", current_source)
+        current_url = url_match.group(0).rstrip(").,") if url_match else ""
+        needs_repair = (
+            not current_url
+            or "cafef.vn/hose/" in current_url.lower()
+            or ("finance.vietstock.vn/" in current_url.lower() and "tab=bctc" not in current_url.lower())
+        )
+        if not needs_repair:
+            is_dead, _code, _reason = check_url_integrity(current_url, timeout=5.0)
+            needs_repair = is_dead
+
+        if needs_repair:
+            if symbol not in symbol_urls:
+                symbol_urls[symbol] = resolve_active_financial_source_url(symbol, verify=True)
+            provider_name, active_url = symbol_urls[symbol]
+            base_source = re.sub(r"\s*\|\s*https?://\S+", "", current_source).strip()
+            if not base_source:
+                base_source = f"Báo cáo tài chính {symbol} ({provider_name})"
+            new_source = f"{base_source} | {active_url}"
+            updates.append((symbol, period_type, new_source, provider_name, active_url))
+
+    if updates:
+        try:
+            pool = get_pool()
+            with pool.connection() as conn, conn.cursor() as cur:
+                for symbol, period_type, new_source, provider_name, active_url in updates:
+                    cur.execute(
+                        """
+                        UPDATE financial_statements
+                        SET source = %s, updated_at = NOW()
+                        WHERE symbol = %s AND period_type = %s
+                        """,
+                        (new_source, symbol, period_type),
+                    )
+                    repaired += 1
+                    with _STORE_LOCK:
+                        cached = _MEMORY_CACHE.get((symbol, period_type))
+                        if isinstance(cached, dict):
+                            cached["source"] = new_source
+                            cached["source_provider"] = provider_name
+                            cached["source_url"] = active_url
+                conn.commit()
+        except Exception as exc:
+            logger.error("Failed updating repaired financial_statements links: %s", exc)
+
+    return {"checked_financials": checked, "repaired_financial_links": repaired}
+
+
 def run_link_integrity_cycle() -> dict[str, Any]:
-    """Execute complete link integrity verification for corporate events and news."""
+    """Execute complete link integrity verification for corporate events, news, and BCTC sources."""
     logger.info("Starting link integrity verification cycle")
     events_result = verify_and_clean_corporate_events()
     news_result = verify_and_clean_news_articles()
+    financials_result = verify_and_repair_financial_statement_links()
     summary = {
         "status": "success",
         "events": events_result,
         "news": news_result,
+        "financial_statements": financials_result,
     }
     logger.info("Link integrity verification cycle completed: %s", summary)
     return summary

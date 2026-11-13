@@ -88,7 +88,7 @@ def _check_and_dispatch_due_reminders() -> None:
     due = repo.get_due_reminders(window_hours=48)
     now = datetime.now(UTC)
 
-    for r in (due or []):
+    for r in due or []:
         try:
             ev_date = r["event_at"]
             days_left = (
@@ -147,11 +147,17 @@ def _check_and_dispatch_paper_daily_reports() -> None:
         try:
             dashboard = service.dashboard(str(uid))
             account_raw = dashboard.get("account")
-            account_dict: dict[str, Any] = dict(account_raw) if isinstance(account_raw, dict) else {}
+            account_dict: dict[str, Any] = (
+                dict(account_raw) if isinstance(account_raw, dict) else {}
+            )
             holdings_raw = dashboard.get("holdings")
-            holdings_list: list[dict[str, Any]] = list(holdings_raw) if isinstance(holdings_raw, list) else []
+            holdings_list: list[dict[str, Any]] = (
+                list(holdings_raw) if isinstance(holdings_raw, list) else []
+            )
             trades_raw = dashboard.get("trades")
-            trades_list: list[dict[str, Any]] | None = list(trades_raw) if isinstance(trades_raw, list) else None
+            trades_list: list[dict[str, Any]] | None = (
+                list(trades_raw) if isinstance(trades_raw, list) else None
+            )
 
             if not holdings_list and not trades_list:
                 continue
@@ -204,6 +210,12 @@ async def _link_integrity_background_loop() -> None:
 @asynccontextmanager
 async def lifespan(_: FastAPI) -> AsyncIterator[None]:
     await start_market_provider()
+    try:
+        from app.workers.financial_statements_sync import sync_financial_statements_store
+
+        await asyncio.to_thread(sync_financial_statements_store)
+    except Exception as exc:
+        logger.warning("financial_statements_prewarm_failed: %s", exc)
     news_task = None
     events_task = None
     link_integrity_task = None

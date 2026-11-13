@@ -69,24 +69,106 @@ export function StockMetricsPanel({ item }: { item: MarketInstrument }) {
 }
 
 export const STOCK_DETAIL_CHART_LIMITS: Record<StockChartRange, { minimum: number }> = {
-  day: { minimum: 70 },
-  week: { minimum: 70 },
-  month: { minimum: 100 },
-  year: { minimum: 150 },
+  day: { minimum: 20 },
+  week: { minimum: 12 },
+  month: { minimum: 6 },
+  year: { minimum: 30 },
 };
 
-export function StockPriceChart({ symbol, range, candles, returnTo }: { symbol: string; range: StockChartRange; candles: MarketCandle[]; returnTo?: string }) {
+export function StockPriceChart({
+  symbol,
+  range,
+  candles,
+  returnTo,
+  candleInterval,
+}: {
+  symbol: string;
+  range: StockChartRange;
+  candles: MarketCandle[];
+  returnTo?: string;
+  candleInterval?: "1d" | "1w" | "1M" | "5m";
+}) {
   const rangeHref = (value: StockChartRange) => {
     const query = new URLSearchParams({ range: value });
     if (returnTo) query.set("from", returnTo);
     return `/market/stocks/${symbol}?${query.toString()}`;
   };
   const limits = STOCK_DETAIL_CHART_LIMITS[range];
+  const currentRangeLabel = ranges.find((item) => item.value === range)?.label.toLowerCase() ?? range;
+  const resolvedInterval =
+    candleInterval ??
+    (range === "week" ? "1w" : range === "month" ? "1M" : range === "year" ? "1d" : "5m");
+
   return <section className="stock-chart-card" aria-labelledby="stock-chart-title">
-    <div className="stock-chart-heading"><div><p className="eyebrow">DIỄN BIẾN GIÁ</p><h2 id="stock-chart-title">Biểu đồ ${symbol}</h2></div><nav aria-label="Khoảng thời gian biểu đồ">{ranges.map((item) => <Link className={item.value === range ? "active" : ""} href={rangeHref(item.value)} key={item.value}>{item.label}</Link>)}</nav></div>
+    <div className="stock-chart-heading">
+      <div>
+        <p className="eyebrow">DIỄN BIẾN GIÁ</p>
+        <h2 id="stock-chart-title">Biểu đồ {symbol}</h2>
+      </div>
+      <nav aria-label="Khoảng thời gian biểu đồ">
+        {ranges.map((item) => (
+          <Link
+            className={item.value === range ? "active" : ""}
+            href={rangeHref(item.value)}
+            key={item.value}
+          >
+            {item.label}
+          </Link>
+        ))}
+      </nav>
+    </div>
     {candles.length > 1 ? <>
-      <MarketCandlestickChart key={`${symbol}-${range}-${candles.at(-1)?.timestamp ?? "empty"}`} candles={candles} label={`Biểu đồ nến ${symbol}`} range={range} explain minimumCandles={limits.minimum} />
-      <details className="stock-chart-data"><summary>Xem dữ liệu biểu đồ</summary><div className="market-table-wrap"><table className="market-table"><thead><tr><th>Thời gian</th><th>Mở</th><th>Cao</th><th>Thấp</th><th>Đóng</th><th>Khối lượng</th></tr></thead><tbody>{candles.slice(-20).map((item, idx) => <tr key={`${item.timestamp}-${idx}`}><td>{new Intl.DateTimeFormat("vi-VN", { timeZone: "Asia/Ho_Chi_Minh", dateStyle: "short", timeStyle: range === "day" ? "short" : undefined }).format(new Date(item.timestamp))}</td><td>{formatChange(item.open)}</td><td>{formatChange(item.high)}</td><td>{formatChange(item.low)}</td><td>{formatChange(item.close)}</td><td>{formatCompact(item.volume)}</td></tr>)}</tbody></table></div></details>
-    </> : <div className="stock-chart-empty"><strong>Chưa có chuỗi giá cho khoảng này</strong><p>Nguồn dữ liệu hiện không cung cấp OHLC nhiều phiên hoặc chưa trả đủ dữ liệu cho khung đã chọn. InvestIQ không tạo dữ liệu giả để lấp khoảng trống.</p></div>}
+      <MarketCandlestickChart
+        key={`${symbol}-${range}-${candles.at(-1)?.timestamp ?? "empty"}`}
+        candles={candles}
+        label={`Biểu đồ nến ${symbol}`}
+        range={range}
+        candleInterval={resolvedInterval}
+        explain
+        minimumCandles={limits.minimum}
+      />
+      <details className="stock-chart-data">
+        <summary>Xem dữ liệu biểu đồ</summary>
+        <div className="market-table-wrap">
+          <table className="market-table">
+            <thead>
+              <tr>
+                <th>Thời gian</th>
+                <th>Mở</th>
+                <th>Cao</th>
+                <th>Thấp</th>
+                <th>Đóng</th>
+                <th>Khối lượng</th>
+              </tr>
+            </thead>
+            <tbody>
+              {candles.slice(-20).map((item, idx) => (
+                <tr key={`${item.timestamp}-${idx}`}>
+                  <td>
+                    {new Intl.DateTimeFormat("vi-VN", {
+                      timeZone: "Asia/Ho_Chi_Minh",
+                      dateStyle: "short",
+                      timeStyle: range === "day" ? "short" : undefined,
+                    }).format(new Date(item.timestamp))}
+                  </td>
+                  <td>{formatChange(item.open)}</td>
+                  <td>{formatChange(item.high)}</td>
+                  <td>{formatChange(item.low)}</td>
+                  <td>{formatChange(item.close)}</td>
+                  <td>{formatCompact(item.volume)}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </details>
+    </> : (
+      <div className="stock-chart-empty" role="status" aria-live="polite">
+        <strong>Chưa có chuỗi giá theo {currentRangeLabel} cho {symbol}</strong>
+        <p>
+          Cổ phiếu {symbol} chưa có đủ dữ liệu nến lịch sử cho khung {currentRangeLabel} từ sở giao dịch (HOSE/HNX/UPCoM). Khung thời gian này tạm thời chưa khả dụng.
+        </p>
+      </div>
+    )}
   </section>;
 }

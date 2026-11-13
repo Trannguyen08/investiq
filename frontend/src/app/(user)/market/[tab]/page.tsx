@@ -24,6 +24,37 @@ import { isMarketTab, type MarketSearchParams } from "@/lib/market-routes";
 
 export const dynamic = "force-dynamic";
 
+const MARKET_UNIVERSE_PAGE_SIZE = 100;
+const MARKET_UNIVERSE_PAGE_COUNT = 5;
+
+async function getMarketUniverseSummary() {
+  let firstPage: Awaited<ReturnType<typeof getMarketInstruments>> | null = null;
+  let cursor: string | null = null;
+  const data: Awaited<ReturnType<typeof getMarketInstruments>>["data"] = [];
+
+  for (let page = 0; page < MARKET_UNIVERSE_PAGE_COUNT; page += 1) {
+    const query = new URLSearchParams({
+      sort: "matched_value",
+      direction: "desc",
+      limit: String(MARKET_UNIVERSE_PAGE_SIZE),
+    });
+    if (cursor) query.set("cursor", cursor);
+    let result: Awaited<ReturnType<typeof getMarketInstruments>>;
+    try {
+      result = await getMarketInstruments(query, 30);
+    } catch (error) {
+      if (!firstPage) throw error;
+      break;
+    }
+    firstPage ??= result;
+    data.push(...result.data);
+    cursor = result.pagination?.next_cursor ?? null;
+    if (!cursor) break;
+  }
+
+  return firstPage ? { ...firstPage, data } : null;
+}
+
 function value(params: MarketSearchParams, key: string, fallback = "") {
   const selected = params[key];
   return typeof selected === "string" ? selected : fallback;
@@ -66,7 +97,7 @@ export default async function MarketTabPage({
   if (!isMarketTab(requestedTab)) notFound();
   if (requestedTab === "watchlist") redirect("/market/stocks");
   const tab = requestedTab;
-  const indexCollection = await getMarketIndices();
+  const indexCollection = await getMarketIndices(undefined, 10);
   const symbols = indexCollection.data.map((item) => item.symbol);
 
   if (tab === "indices") {
@@ -140,15 +171,10 @@ export default async function MarketTabPage({
   const cursor = value(queryParams, "cursor");
   if (cursor) query.set("cursor", cursor);
   query.set("limit", "15");
-  const summaryQuery = new URLSearchParams({
-    sort: "matched_value",
-    direction: "desc",
-    limit: "100",
-  });
   const [instruments, summary, sectors] = await Promise.all([
-    getMarketInstruments(query),
-    getMarketInstruments(summaryQuery),
-    getMarketSectors(),
+    getMarketInstruments(query, 10),
+    getMarketUniverseSummary(),
+    getMarketSectors(undefined, 30),
   ]);
   const liveSymbols = [
     ...symbols,

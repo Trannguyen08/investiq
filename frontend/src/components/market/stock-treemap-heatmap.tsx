@@ -4,7 +4,7 @@ import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 
 import { changeTone, formatMoney, formatPercent } from "@/components/market/formatters";
-import type { MarketInstrument, MarketSector } from "@/types/market";
+import type { MarketInstrument, MarketSector, MarketSubsector } from "@/types/market";
 
 type TreemapRect<T> = {
   item: T;
@@ -185,15 +185,19 @@ export function computePercentMovementWeights(rawChangePercents: number[]): numb
 export function StockTreemapHeatmap({
   instruments,
   sectors,
+  subsectors = [],
   headingId = "stock-treemap-title",
   selectedSector: propSector,
   onSectorChange,
+  standalone = false,
 }: {
   instruments: MarketInstrument[];
   sectors: MarketSector[];
+  subsectors?: MarketSubsector[];
   headingId?: string;
   selectedSector?: string;
   onSectorChange?: (sector: string) => void;
+  standalone?: boolean;
 }) {
   const [internalSector, setInternalSector] = useState<string>("ALL");
   const selectedSector = propSector !== undefined ? propSector : internalSector;
@@ -204,6 +208,7 @@ export function StockTreemapHeatmap({
 
   const [hoveredSymbol, setHoveredSymbol] = useState<string | null>(null);
   const [activeSymbol, setActiveSymbol] = useState<string | null>(null);
+  const [searchQuery, setSearchQuery] = useState<string>("");
 
   // Cache sector instruments loaded from API
   const [sectorCache, setSectorCache] = useState<Record<string, MarketInstrument[]>>({});
@@ -217,51 +222,99 @@ export function StockTreemapHeatmap({
     setLoadingSector(true);
     let cancelled = false;
 
-    fetch(`/market-api/instruments?sector=${encodeURIComponent(selectedSector)}&limit=20&sort=matched_value&direction=desc`)
-      .then((res) => (res.ok ? res.json() : null))
-      .then((data: { data?: MarketInstrument[] } | null) => {
-        if (cancelled) return;
-        if (data?.data && Array.isArray(data.data) && data.data.length > 0) {
-          setSectorCache((prev) => ({ ...prev, [selectedSector]: data.data! }));
+    async function loadSectorInstruments() {
+      try {
+        let allItems: MarketInstrument[] = [];
+        let nextCursor: string | null = null;
+        let pages = 0;
+        const maxPages = 4; // up to 400 stocks per sector
+
+        while (pages < maxPages && !cancelled) {
+          const url: string = `/market-api/instruments?sector=${encodeURIComponent(selectedSector)}&limit=100&sort=matched_value&direction=desc${
+            nextCursor ? `&cursor=${encodeURIComponent(nextCursor)}` : ""
+          }`;
+          const res = await fetch(url);
+          if (!res.ok) break;
+          const json: { data?: MarketInstrument[]; meta?: { cursor?: string | null; has_next_page?: boolean } } =
+            await res.json();
+          if (!json?.data || !Array.isArray(json.data) || json.data.length === 0) break;
+          allItems = [...allItems, ...json.data];
+          if (!json.meta?.has_next_page || !json.meta?.cursor) break;
+          nextCursor = json.meta.cursor;
+          pages++;
         }
-      })
-      .catch(() => {})
-      .finally(() => {
+
+        if (!cancelled && allItems.length > 0) {
+          setSectorCache((prev) => ({ ...prev, [selectedSector]: allItems }));
+        }
+      } catch {
+        // Fall back to snapshot instruments
+      } finally {
         if (!cancelled) setLoadingSector(false);
-      });
+      }
+    }
+
+    loadSectorInstruments();
 
     return () => {
       cancelled = true;
     };
   }, [selectedSector, sectorCache]);
 
-  // Determine items to display (max 20 notable stocks per view)
-  const activeStockList = useMemo(() => {
+  // Find member count metadata from sectors/subsectors list
+  const sectorMeta = useMemo(() => {
+    if (!selectedSector || selectedSector === "ALL") return null;
+    const target = selectedSector.toLocaleLowerCase("vi-VN");
+    const directSector = (sectors || []).find(
+      (s) => s?.name && s.name.toLocaleLowerCase("vi-VN") === target
+    );
+    if (directSector) return directSector;
+    return (
+      (subsectors || []).find(
+        (s) => s?.name && s.name.toLocaleLowerCase("vi-VN") === target
+      ) ?? null
+    );
+  }, [sectors, subsectors, selectedSector]);
+
+  // Full pool of matching instruments for the chosen sector
+  const sectorPool = useMemo(() => {
     if (selectedSector === "ALL") {
-      // Top 20 representative stocks across whole market
-      return [...instruments]
-        .sort((a, b) => {
-          const valA = Number(a.market_cap) || Number(a.matched_value) || 0;
-          const valB = Number(b.market_cap) || Number(b.matched_value) || 0;
-          return valB - valA;
-        })
-        .slice(0, 20);
+      return [...instruments].sort((a, b) => {
+        const valA = Number(a.market_cap) || Number(a.matched_value) || 0;
+        const valB = Number(b.market_cap) || Number(b.matched_value) || 0;
+        return valB - valA;
+      });
     }
 
-    // Use cached sector data if available (max 20 notable stocks)
     const cached = sectorCache[selectedSector];
     if (cached && cached.length > 0) {
-      return cached.slice(0, 20);
+      return cached;
     }
 
-    // Fallback to filtering from snapshot instruments
-    const fromSnapshot = instruments
-      .filter(
-        (inst) => inst.sector && inst.sector.toLocaleLowerCase("vi-VN") === selectedSector.toLocaleLowerCase("vi-VN")
+    return instruments.filter((inst) =>
+      [inst.sector, inst.subsector].some(
+        (name) => name?.toLocaleLowerCase("vi-VN") === selectedSector.toLocaleLowerCase("vi-VN")
       )
-      .slice(0, 20);
-    return fromSnapshot;
+    );
   }, [instruments, selectedSector, sectorCache]);
+
+  const totalMatched = sectorPool.length || sectorMeta?.member_count || 0;
+
+  // Determine items to display based on standalone or search
+  const activeStockList = useMemo(() => {
+    if (!standalone) {
+      return sectorPool.slice(0, 20);
+    }
+    if (!searchQuery.trim()) {
+      return sectorPool;
+    }
+    const q = searchQuery.trim().toLowerCase();
+    return sectorPool.filter(
+      (item) =>
+        item.symbol.toLowerCase().includes(q) ||
+        item.name.toLowerCase().includes(q)
+    );
+  }, [sectorPool, standalone, searchQuery]);
 
   // Compute treemap rectangles with weights based on absolute percentage movement
   const treemapRects = useMemo(() => {
@@ -275,8 +328,9 @@ export function StockTreemapHeatmap({
       value: balancedWeights[idx],
     }));
 
-    return computeSquarifiedTreemap(rawItems, 1000, 560);
-  }, [activeStockList]);
+    const canvasH = standalone ? 700 : 560;
+    return computeSquarifiedTreemap(rawItems, 1000, canvasH);
+  }, [activeStockList, standalone]);
 
   const displayItem = (hoveredSymbol
     ? activeStockList.find((i) => i.symbol === hoveredSymbol) ?? instruments.find((i) => i.symbol === hoveredSymbol)
@@ -291,7 +345,7 @@ export function StockTreemapHeatmap({
       <div className="treemap-controls flex flex-wrap items-center justify-between gap-3 text-xs bg-slate-950/70 p-3 rounded-xl border border-slate-800">
         <div className="flex flex-wrap items-center gap-2.5">
           <label htmlFor="treemap-sector-select" className="text-slate-400 font-semibold shrink-0">
-            Ngành:
+            {standalone ? "Lọc ngành:" : "Ngành:"}
           </label>
           <select
             id="treemap-sector-select"
@@ -299,24 +353,65 @@ export function StockTreemapHeatmap({
             onChange={(e) => setSelectedSector(e.target.value)}
             className="bg-slate-900 text-slate-100 font-semibold px-2.5 py-1.5 rounded-lg border border-slate-700 hover:border-slate-600 focus:border-sky-500 focus:outline-none transition cursor-pointer max-w-[220px] truncate"
           >
-            <option value="ALL">Toàn bộ thị trường (Tiêu biểu)</option>
+            <option value="ALL">Toàn bộ thị trường {standalone ? "(Tất cả mã)" : "(Tiêu biểu)"}</option>
             {sectors.map((sec) => (
               <option key={sec.name} value={sec.name}>
                 {sec.name} ({sec.member_count} mã)
               </option>
             ))}
+            {subsectors.length > 0 && (
+              <optgroup label="Nhóm ngành con">
+                {subsectors.map((subsector) => (
+                  <option key={`${subsector.parent_sector}:${subsector.name}`} value={subsector.name}>
+                    {subsector.parent_sector} · {subsector.name} ({subsector.member_count} mã)
+                  </option>
+                ))}
+              </optgroup>
+            )}
           </select>
+
+          {standalone ? (
+            <input
+              type="text"
+              placeholder="Tìm mã cổ phiếu (HPG, SSI, VCB...)"
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              className="bg-slate-900 border border-slate-700 rounded-lg px-3 py-1.5 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-sky-500 min-w-[200px]"
+            />
+          ) : (
+            <Link
+              href={`/market/heatmap?sector=${encodeURIComponent(selectedSector)}`}
+              className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-sky-500/10 hover:bg-sky-500/20 text-sky-400 border border-sky-500/30 rounded-lg font-semibold transition"
+              title="Mở rộng biểu đồ nhiệt sang trang riêng biệt rộng rãi"
+            >
+              <span>Xem tất cả ({totalMatched} mã) trên trang riêng</span>
+              <span aria-hidden="true">↗</span>
+            </Link>
+          )}
         </div>
 
         {/* Indicator that tile size is by |% change| */}
-        <span className="text-[11px] text-slate-400 italic">
-          Độ to khối theo |% biến động| · Tối đa 20 mã tiêu biểu
-        </span>
+        {standalone ? (
+          <div className="flex items-center gap-2 text-xs font-medium">
+            <span className="bg-sky-500/10 text-sky-400 border border-sky-500/20 px-2.5 py-1 rounded-md">
+              Đang hiển thị {activeStockList.length} / {totalMatched} mã
+            </span>
+            <span className="text-[11px] text-slate-400 italic hidden sm:inline">
+              Độ to khối biểu thị biên độ |% biến động|
+            </span>
+          </div>
+        ) : (
+          <span className="text-[11px] text-slate-400 italic">
+            Độ to khối theo |% biến động| · Hiển thị 20 mã tiêu biểu
+          </span>
+        )}
       </div>
 
       {/* Treemap Canvas Container */}
       <div
-        className="treemap-canvas relative w-full h-[380px] sm:h-[440px] md:h-[480px] rounded-xl overflow-hidden bg-slate-950 border border-slate-800 shadow-inner select-none"
+        className={`treemap-canvas relative w-full ${
+          standalone ? "h-[620px] sm:h-[680px] lg:h-[750px]" : "h-[380px] sm:h-[440px] md:h-[480px]"
+        } rounded-xl overflow-hidden bg-slate-950 border border-slate-800 shadow-inner select-none`}
         role="region"
         aria-labelledby={headingId}
       >
@@ -341,6 +436,7 @@ export function StockTreemapHeatmap({
 
             const isBig = width > 13 && height > 16;
             const isSmall = width < 8.5 || height < 9.5;
+            const isTiny = width < 4.5 || height < 5.5;
 
             return (
               <Link
@@ -358,19 +454,19 @@ export function StockTreemapHeatmap({
                   width: `${width}%`,
                   height: `${height}%`,
                 }}
-                className={`absolute border box-border flex flex-col items-center justify-center p-1.5 transition-all duration-150 overflow-hidden cursor-pointer shadow-xs text-center ${bgClass}`}
+                className={`absolute border box-border flex flex-col items-center justify-center p-1 transition-all duration-150 overflow-hidden cursor-pointer shadow-xs text-center ${bgClass}`}
                 title={`${item.symbol} - ${item.name} | Giá: ${Number(item.price).toLocaleString("vi-VN")} đ | Biến động: ${formatPercent(item.change_percent)} | GTGD: ${formatMoney(item.matched_value)}`}
               >
                 <strong
                   className={`font-black tracking-tight leading-none drop-shadow-sm truncate max-w-full ${
-                    isBig ? "text-sm sm:text-base" : isSmall ? "text-xs" : "text-xs sm:text-sm"
+                    isBig ? "text-sm sm:text-base" : isTiny ? "text-[10px]" : isSmall ? "text-xs" : "text-xs sm:text-sm"
                   }`}
                 >
                   {item.symbol}
                 </strong>
                 <span
-                  className={`font-extrabold tracking-tight mt-1 drop-shadow-sm truncate max-w-full ${
-                    isBig ? "text-xs sm:text-sm" : isSmall ? "text-[10px] sm:text-[11px]" : "text-xs"
+                  className={`font-extrabold tracking-tight mt-0.5 drop-shadow-sm truncate max-w-full ${
+                    isBig ? "text-xs sm:text-sm" : isTiny ? "text-[9px]" : isSmall ? "text-[10px] sm:text-[11px]" : "text-xs"
                   }`}
                 >
                   {formatPercent(item.change_percent)}

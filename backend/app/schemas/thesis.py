@@ -106,3 +106,12 @@ class PublicPortfolioDetailResponse(BaseModel):
     roi_percent: str
     holdings: list[dict[str, Any]]
     trades: list[dict[str, Any]]
+
+
+class ReportThesisRequest(BaseModel):
+    reason: str = Field(..., min_length=5, max_length=300, description="Lý do báo cáo vi phạm")
+
+
+class ModerateThesisRequest(BaseModel):
+    action: str = Field(..., pattern="^(hide|dismiss)$", description="hide hoặc dismiss")
+    note: str | None = Field(None, max_length=500)

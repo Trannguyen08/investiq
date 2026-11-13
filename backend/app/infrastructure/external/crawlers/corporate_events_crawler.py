@@ -521,6 +521,7 @@ def _to_market_event(raw: dict[str, Any]) -> MarketEvent | None:
         from app.infrastructure.external.crawlers.dividend_crawler import (
             _resolve_direct_article_url,
         )
+
         source_url = _resolve_direct_article_url(sym, source_url)
 
         return MarketEvent(

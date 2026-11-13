@@ -34,9 +34,9 @@ export function AuthShell({ eyebrow, title, description, children, hideEyebrow =
   return <main className="auth-page" id="main-content"><section className="auth-card"><Link className="auth-brand" href="/"><img src="/investiq-logo.svg" width="164" height="46" alt="InvestIQ" /></Link><header className="auth-heading">{!hideEyebrow && <p className="eyebrow">{eyebrow}</p>}<h1>{title}</h1><p className="auth-description">{description}</p></header>{children}</section></main>;
 }
 
-function PasswordField({ id, label, value, onChange, autoComplete = "current-password" }: { id: string; label: string; value: string; onChange: (value: string) => void; autoComplete?: string }) {
+function PasswordField({ id, label, value, onChange, autoComplete = "current-password", placeholder = "Nhập mật khẩu (tối thiểu 15 ký tự)" }: { id: string; label: string; value: string; onChange: (value: string) => void; autoComplete?: string; placeholder?: string }) {
   const [visible, setVisible] = useState(false);
-  return <label className="auth-field" htmlFor={id}><span>{label}</span><span className="password-wrap"><input id={id} type={visible ? "text" : "password"} value={value} onChange={(event) => onChange(event.target.value)} autoComplete={autoComplete} required minLength={15} maxLength={128} /><button className="password-toggle" type="button" onClick={() => setVisible((current) => !current)} aria-label={`${visible ? "Ẩn" : "Hiện"} ${label.toLowerCase()}`} aria-pressed={visible}><svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M2.5 12s3.4-6 9.5-6 9.5 6 9.5 6-3.4 6-9.5 6-9.5-6-9.5-6Z" /><circle cx="12" cy="12" r="2.7" />{visible && <path d="m4 4 16 16" />}</svg></button></span></label>;
+  return <label className="auth-field" htmlFor={id}><span>{label}</span><span className="password-wrap"><input id={id} type={visible ? "text" : "password"} value={value} onChange={(event) => onChange(event.target.value)} autoComplete={autoComplete} placeholder={placeholder} required minLength={15} maxLength={128} /><button className="password-toggle" type="button" onClick={() => setVisible((current) => !current)} aria-label={`${visible ? "Ẩn" : "Hiện"} ${label.toLowerCase()}`} aria-pressed={visible}><svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M2.5 12s3.4-6 9.5-6 9.5 6 9.5 6-3.4 6-9.5 6-9.5-6-9.5-6Z" /><circle cx="12" cy="12" r="2.7" />{visible && <path d="m4 4 16 16" />}</svg></button></span></label>;
 }
 
 function Notice({ error, success }: { error?: string; success?: string }) {
@@ -45,16 +45,25 @@ function Notice({ error, success }: { error?: string; success?: string }) {
   return null;
 }
 
+function resolveSafeNextPath(nextPath?: string): string {
+  if (!nextPath || !nextPath.startsWith("/") || nextPath.startsWith("//")) return "";
+  if (nextPath.startsWith("/login") || nextPath.startsWith("/register")) return "";
+  return nextPath;
+}
+
 export function LoginForm({
   resetSucceeded = false,
   initialError = "",
+  nextPath = "",
 }: {
   resetSucceeded?: boolean;
   initialError?: string;
+  nextPath?: string;
 }) {
   const router = useRouter();
   const [email, setEmail] = useState(""); const [password, setPassword] = useState("");
   const [busy, setBusy] = useState(false); const [error, setError] = useState(initialError);
+  const safeNext = resolveSafeNextPath(nextPath);
   async function submit(event: FormEvent) {
     event.preventDefault(); setBusy(true); setError("");
     try {
@@ -62,6 +71,8 @@ export function LoginForm({
       await loadAuth(true);
       if (result?.user?.role === "admin") {
         router.push("/admin");
+      } else if (safeNext) {
+        router.push(safeNext);
       } else {
         router.push("/?auth=login-success");
       }
@@ -70,18 +81,21 @@ export function LoginForm({
     catch (value) { setError(value instanceof Error ? value.message : "Đăng nhập thất bại."); }
     finally { setBusy(false); }
   }
+  const registerHref = safeNext ? `/register?next=${encodeURIComponent(safeNext)}` : "/register";
   // A native navigation is required here: Next's client transition can issue a
   // second OAuth start request and overwrite the one-time PKCE/state cookie.
   // eslint-disable-next-line @next/next/no-html-link-for-pages
-  return <form className="auth-form" onSubmit={submit}><label className="auth-field" htmlFor="email"><span>Email</span><input id="email" type="email" value={email} onChange={(event) => setEmail(event.target.value)} autoComplete="email" required maxLength={320} /></label><PasswordField id="password" label="Mật khẩu" value={password} onChange={setPassword} /><div className="forgot-row"><Link href="/forgot-password">Quên mật khẩu?</Link></div><Notice error={error} success={resetSucceeded ? "Mật khẩu của bạn đã được cập nhật thành công. Vui lòng đăng nhập bằng mật khẩu mới." : ""} /><button className="auth-primary" disabled={busy}>{busy ? "Đang đăng nhập…" : "Đăng nhập"}</button><a className="google-button" href="/auth-api/google/start"><svg viewBox="0 0 48 48" aria-hidden="true" focusable="false"><path fill="#4285F4" d="M43.6 24.5c0-1.4-.1-2.9-.4-4.3H24v8.2h11a9.5 9.5 0 0 1-4.1 6.2v5.4h6.7c3.9-3.6 6-8.9 6-15.5Z" /><path fill="#34A853" d="M24 44c5.5 0 10.1-1.8 13.5-4.9l-6.7-5.4c-1.9 1.3-4.1 2-6.8 2-5.2 0-9.6-3.5-11.2-8.2H5.9v5.5A20 20 0 0 0 24 44Z" /><path fill="#FBBC05" d="M12.8 27.5a12 12 0 0 1 0-7v-5.6H5.9a20 20 0 0 0 0 18.2l6.9-5.6Z" /><path fill="#EA4335" d="M24 12.3c3 0 5.7 1 7.8 3.1l5.8-5.8A19.3 19.3 0 0 0 24 4 20 20 0 0 0 5.9 14.9l6.9 5.6c1.6-4.7 6-8.2 11.2-8.2Z" /></svg>Đăng nhập với Google</a><p className="auth-switch">Chưa có tài khoản? <Link href="/register">Đăng ký ngay</Link></p></form>;
+  return <form className="auth-form" onSubmit={submit}><label className="auth-field" htmlFor="email"><span>Email</span><input id="email" type="email" value={email} onChange={(event) => setEmail(event.target.value)} autoComplete="email" placeholder="ten.ban@example.com" required maxLength={320} /></label><PasswordField id="password" label="Mật khẩu" value={password} onChange={setPassword} placeholder="Nhập mật khẩu của bạn" /><div className="forgot-row"><Link href="/forgot-password">Quên mật khẩu?</Link></div><Notice error={error} success={resetSucceeded ? "Mật khẩu của bạn đã được cập nhật thành công. Vui lòng đăng nhập bằng mật khẩu mới." : ""} /><button className="auth-primary" disabled={busy}>{busy ? "Đang đăng nhập…" : "Đăng nhập"}</button><a className="google-button" href="/auth-api/google/start"><svg viewBox="0 0 48 48" aria-hidden="true" focusable="false"><path fill="#4285F4" d="M43.6 24.5c0-1.4-.1-2.9-.4-4.3H24v8.2h11a9.5 9.5 0 0 1-4.1 6.2v5.4h6.7c3.9-3.6 6-8.9 6-15.5Z" /><path fill="#34A853" d="M24 44c5.5 0 10.1-1.8 13.5-4.9l-6.7-5.4c-1.9 1.3-4.1 2-6.8 2-5.2 0-9.6-3.5-11.2-8.2H5.9v5.5A20 20 0 0 0 24 44Z" /><path fill="#FBBC05" d="M12.8 27.5a12 12 0 0 1 0-7v-5.6H5.9a20 20 0 0 0 0 18.2l6.9-5.6Z" /><path fill="#EA4335" d="M24 12.3c3 0 5.7 1 7.8 3.1l5.8-5.8A19.3 19.3 0 0 0 24 4 20 20 0 0 0 5.9 14.9l6.9 5.6c1.6-4.7 6-8.2 11.2-8.2Z" /></svg>Đăng nhập với Google</a><p className="auth-switch">Chưa có tài khoản? <Link href={registerHref}>Đăng ký ngay</Link></p></form>;
 }
 
-export function RegisterForm() {
+export function RegisterForm({ nextPath = "" }: { nextPath?: string }) {
   const router = useRouter();
   const [email, setEmail] = useState(""); const [name, setName] = useState(""); const [password, setPassword] = useState(""); const [confirmation, setConfirmation] = useState("");
   const [busy, setBusy] = useState(false); const [error, setError] = useState("");
-  async function submit(event: FormEvent) { event.preventDefault(); setBusy(true); setError(""); try { await post("register", { email, display_name: name, password, password_confirmation: confirmation }); router.push("/verify-email"); } catch (value) { setError(value instanceof Error ? value.message : "Đăng ký thất bại."); } finally { setBusy(false); } }
-  return <form className="auth-form" onSubmit={submit}><label className="auth-field" htmlFor="email"><span>Email</span><input id="email" type="email" value={email} onChange={(event) => setEmail(event.target.value)} autoComplete="email" required maxLength={320} /></label><label className="auth-field" htmlFor="display-name"><span>Tên hiển thị</span><input id="display-name" value={name} onChange={(event) => setName(event.target.value)} autoComplete="name" required minLength={2} maxLength={80} /></label><PasswordField id="password" label="Mật khẩu" value={password} onChange={setPassword} autoComplete="new-password" /><PasswordField id="confirmation" label="Nhập lại mật khẩu" value={confirmation} onChange={setConfirmation} autoComplete="new-password" /><p className="password-hint">Dùng từ 15 đến 128 ký tự. Bạn có thể dùng trình quản lý mật khẩu.</p><Notice error={error} /><button className="auth-primary" disabled={busy}>{busy ? "Đang tạo tài khoản…" : "Đăng ký"}</button><p className="auth-switch">Đã có tài khoản? <Link href="/login">Đăng nhập</Link></p></form>;
+  const safeNext = resolveSafeNextPath(nextPath);
+  async function submit(event: FormEvent) { event.preventDefault(); setBusy(true); setError(""); try { await post("register", { email, display_name: name, password, password_confirmation: confirmation }); router.push(safeNext ? `/verify-email?next=${encodeURIComponent(safeNext)}` : "/verify-email"); } catch (value) { setError(value instanceof Error ? value.message : "Đăng ký thất bại."); } finally { setBusy(false); } }
+  const loginHref = safeNext ? `/login?next=${encodeURIComponent(safeNext)}` : "/login";
+  return <form className="auth-form" onSubmit={submit}><label className="auth-field" htmlFor="email"><span>Email</span><input id="email" type="email" value={email} onChange={(event) => setEmail(event.target.value)} autoComplete="email" placeholder="ten.ban@example.com" required maxLength={320} /></label><label className="auth-field" htmlFor="display-name"><span>Tên hiển thị</span><input id="display-name" value={name} onChange={(event) => setName(event.target.value)} autoComplete="name" placeholder="Ví dụ: Nguyễn Văn An" required minLength={2} maxLength={80} /></label><PasswordField id="password" label="Mật khẩu" value={password} onChange={setPassword} autoComplete="new-password" placeholder="Tạo mật khẩu từ 15 đến 128 ký tự" /><PasswordField id="confirmation" label="Nhập lại mật khẩu" value={confirmation} onChange={setConfirmation} autoComplete="new-password" placeholder="Nhập lại mật khẩu giống ở trên" /><p className="password-hint">Dùng từ 15 đến 128 ký tự. Bạn có thể dùng trình quản lý mật khẩu.</p><Notice error={error} /><button className="auth-primary" disabled={busy}>{busy ? "Đang tạo tài khoản…" : "Đăng ký"}</button><p className="auth-switch">Đã có tài khoản? <Link href={loginHref}>Đăng nhập</Link></p></form>;
 }
 
 function useChallenge() {

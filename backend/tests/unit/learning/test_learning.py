@@ -122,19 +122,29 @@ def test_admin_learning_lifecycle_with_auth_override() -> None:
                 "ticker": "HPG",
                 "scenario": "Tình huống thử nghiệm thực tế.",
                 "analysis": "Phân tích thử nghiệm.",
-                "key_takeaway": "Bài học rút ra."
+                "key_takeaway": "Bài học rút ra.",
             },
             "quizzes": [
                 {
                     "id": "tq1",
                     "prompt": "Câu hỏi thử nghiệm 1?",
                     "options": [
-                        {"id": "o1", "label": "Lựa chọn 1", "correct": True, "feedback": "Đúng rồi"},
-                        {"id": "o2", "label": "Lựa chọn 2", "correct": False, "feedback": "Sai rồi"}
-                    ]
+                        {
+                            "id": "o1",
+                            "label": "Lựa chọn 1",
+                            "correct": True,
+                            "feedback": "Đúng rồi",
+                        },
+                        {
+                            "id": "o2",
+                            "label": "Lựa chọn 2",
+                            "correct": False,
+                            "feedback": "Sai rồi",
+                        },
+                    ],
                 }
             ],
-            "status": "draft"
+            "status": "draft",
         }
         res_create = client.post("/api/v1/admin/learning/topics", json=create_payload)
         assert res_create.status_code == 201
@@ -144,10 +154,7 @@ def test_admin_learning_lifecycle_with_auth_override() -> None:
         assert created_data["status"] == "draft"
 
         # 3. Update topic
-        update_payload = {
-            "title": "Bài học thử nghiệm đã cập nhật tiêu đề",
-            "status": "published"
-        }
+        update_payload = {"title": "Bài học thử nghiệm đã cập nhật tiêu đề", "status": "published"}
         res_update = client.put(f"/api/v1/admin/learning/topics/{created_id}", json=update_payload)
         assert res_update.status_code == 200
         assert res_update.json()["title"] == "Bài học thử nghiệm đã cập nhật tiêu đề"
@@ -155,8 +162,7 @@ def test_admin_learning_lifecycle_with_auth_override() -> None:
 
         # 4. Toggle status
         res_toggle = client.patch(
-            f"/api/v1/admin/learning/topics/{created_id}/status",
-            json={"status": "draft"}
+            f"/api/v1/admin/learning/topics/{created_id}/status", json={"status": "draft"}
         )
         assert res_toggle.status_code == 200
         assert res_toggle.json()["new_status"] == "draft"

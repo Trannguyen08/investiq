@@ -246,3 +246,85 @@ class SqlThesisRepository(IThesisRepository):
                 (user_id,),
             ).fetchall()
             return tuple(self._map_thesis(r) for r in rows)
+
+    def report_thesis(self, thesis_id: str, reporter_user_id: str, reason: str) -> dict[str, Any]:
+        with (
+            self._pool.connection() as connection,
+            connection.cursor(row_factory=dict_row) as cursor,
+        ):
+            row = cursor.execute(
+                """INSERT INTO thesis_reports (thesis_id, reporter_user_id, reason)
+                   VALUES (%s, %s, %s)
+                   ON CONFLICT (thesis_id, reporter_user_id)
+                   DO UPDATE SET reason = EXCLUDED.reason, status = 'pending', resolved_at = NULL
+                   RETURNING id, thesis_id, reason, status, created_at""",
+                (thesis_id, reporter_user_id, reason[:300]),
+            ).fetchone()
+            cursor.execute(
+                """UPDATE investment_theses
+                   SET moderation_status = 'flagged', updated_at = now()
+                   WHERE id = %s AND moderation_status = 'visible'""",
+                (thesis_id,),
+            )
+            connection.commit()
+            return {
+                "report_id": str(row["id"]) if row else "",
+                "thesis_id": thesis_id,
+                "status": str(row["status"]) if row else "pending",
+            }
+
+    def list_moderation_queue(self, limit: int = 50) -> list[dict[str, Any]]:
+        with (
+            self._pool.connection() as connection,
+            connection.cursor(row_factory=dict_row) as cursor,
+        ):
+            rows = cursor.execute(
+                """SELECT tr.id AS report_id, tr.thesis_id, tr.reason, tr.status AS report_status,
+                          tr.created_at, it.symbol, it.title, it.author_name, it.moderation_status
+                   FROM thesis_reports tr
+                   JOIN investment_theses it ON it.id = tr.thesis_id
+                   WHERE tr.status = 'pending'
+                   ORDER BY tr.created_at DESC
+                   LIMIT %s""",
+                (limit,),
+            ).fetchall()
+            return [
+                {
+                    "report_id": str(r["report_id"]),
+                    "thesis_id": str(r["thesis_id"]),
+                    "symbol": str(r["symbol"]),
+                    "title": str(r["title"]),
+                    "author_name": str(r["author_name"]),
+                    "reason": str(r["reason"]),
+                    "report_status": str(r["report_status"]),
+                    "moderation_status": str(r["moderation_status"]),
+                    "created_at": r["created_at"].isoformat(),
+                }
+                for r in rows
+            ]
+
+    def moderate_thesis(
+        self, thesis_id: str, action: str, note: str | None = None
+    ) -> dict[str, str]:
+        target_mod = "hidden" if action == "hide" else "visible"
+        target_rep = "hidden" if action == "hide" else "dismissed"
+        with (
+            self._pool.connection() as connection,
+            connection.cursor() as cursor,
+        ):
+            cursor.execute(
+                "UPDATE investment_theses SET moderation_status = %s, updated_at = now() WHERE id = %s",
+                (target_mod, thesis_id),
+            )
+            cursor.execute(
+                """UPDATE thesis_reports
+                   SET status = %s, moderator_note = %s, resolved_at = now()
+                   WHERE thesis_id = %s AND status = 'pending'""",
+                (target_rep, note, thesis_id),
+            )
+            connection.commit()
+        return {
+            "thesis_id": thesis_id,
+            "moderation_status": target_mod,
+            "report_status": target_rep,
+        }

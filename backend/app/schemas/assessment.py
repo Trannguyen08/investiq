@@ -47,8 +47,12 @@ class InvestorPersonaResponse(StrictModel):
 class DisciplineMetricsResponse(StrictModel):
     cut_loss_score: float = Field(..., ge=0, le=100, description="Điểm tuân thủ cắt lỗ")
     diversification_score: float = Field(..., ge=0, le=100, description="Điểm đa dạng hóa danh mục")
-    cash_management_score: float = Field(..., ge=0, le=100, description="Điểm quản trị tiền mặt dự phòng")
-    emotional_pacing_score: float = Field(..., ge=0, le=100, description="Điểm kiểm soát nhịp độ giao dịch")
+    cash_management_score: float = Field(
+        ..., ge=0, le=100, description="Điểm quản trị tiền mặt dự phòng"
+    )
+    emotional_pacing_score: float = Field(
+        ..., ge=0, le=100, description="Điểm kiểm soát nhịp độ giao dịch"
+    )
     overall_discipline_score: float = Field(..., ge=0, le=100, description="Điểm kỷ luật tổng thể")
     badge: str = Field(..., description="Huy hiệu kỷ luật")
     strengths: list[str] = Field(default_factory=list)
@@ -62,8 +66,12 @@ class SubmitAssessmentRequest(StrictModel):
         description="Bản đồ các câu trả lời: {question_id_or_number: option_id}",
     )
     guest_identifier: str | None = Field(default=None, description="Mã ẩn danh nếu chưa đăng nhập")
-    knowledge_score: float | None = Field(default=None, ge=0, le=100, description="Điểm kiến thức từ bài học /learn")
-    discipline_score: float | None = Field(default=None, ge=0, le=100, description="Điểm kỷ luật từ paper trading")
+    knowledge_score: float | None = Field(
+        default=None, ge=0, le=100, description="Điểm kiến thức từ bài học /learn"
+    )
+    discipline_score: float | None = Field(
+        default=None, ge=0, le=100, description="Điểm kỷ luật từ paper trading"
+    )
 
 
 class ReadinessEvaluationResponse(StrictModel):

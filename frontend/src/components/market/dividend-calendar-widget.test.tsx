@@ -6,10 +6,10 @@ import type { DividendItem } from "@/types/market";
 
 const mockUpcomingEvents: DividendItem[] = [
   {
-    id: "FPT-2026-11-12",
+    id: "FPT-2026-11-20",
     symbol: "FPT",
-    event_date: "2026-11-12",
-    ex_date: "2026-11-12",
+    event_date: "2026-11-20",
+    ex_date: "2026-11-20",
     record_date: null,
     payout_date: "2026-12-05",
     type: "cash",

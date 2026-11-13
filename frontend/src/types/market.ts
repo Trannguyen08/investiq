@@ -39,6 +39,7 @@ export type MarketInstrument = {
   name: string;
   exchange: string;
   sector: string;
+  subsector?: string | null;
   price: string;
   reference_price: string;
   ceiling_price: string;
@@ -161,7 +162,13 @@ export type MarketSector = {
   market_cap: string;
 };
 
-export type SectorCollection = { data: MarketSector[]; meta: MarketMeta };
+export type MarketSubsector = MarketSector & { parent_sector: string };
+
+export type SectorCollection = {
+  data: MarketSector[];
+  subsectors?: MarketSubsector[];
+  meta: MarketMeta;
+};
 
 export type MarketCandles = {
   data: MarketCandle[];
@@ -513,6 +520,8 @@ export type FinancialStatementsData = {
   balance_sheet: FinancialMetricItem[];
   cash_flow: FinancialMetricItem[];
   source: string;
+  source_provider?: string | null;
+  source_url?: string | null;
 };
 
 export type FinancialStatementsEnvelope = {

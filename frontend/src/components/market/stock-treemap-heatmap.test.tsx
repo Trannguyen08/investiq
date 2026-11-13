@@ -180,4 +180,54 @@ describe("StockTreemapHeatmap", () => {
     expect(screen.getByText("+6,27%")).toBeInTheDocument();
     expect(screen.queryByText(/20\.350 đ/)).not.toBeInTheDocument();
   });
+
+  it("shows notable stocks in embedded mode and provides dedicated link to full heatmap", () => {
+    // Generate 25 bank instruments
+    const manyBankInstruments: MarketInstrument[] = Array.from({ length: 25 }, (_, i) =>
+      sampleInstrument(`BK${i + 1}`, `Bank ${i + 1}`, "Ngân hàng", `${(i % 5) - 2}.0`, "20000", `${(25 - i) * 1e12}`)
+    );
+
+    render(
+      <StockTreemapHeatmap
+        instruments={manyBankInstruments}
+        sectors={[sampleSector("Ngân hàng", "1.0", 25)]}
+        selectedSector="Ngân hàng"
+      />
+    );
+
+    // In default embedded mode: capped to top 20 notable stocks
+    expect(screen.getByText("BK1")).toBeInTheDocument();
+    expect(screen.getByText("BK20")).toBeInTheDocument();
+    expect(screen.queryByText("BK21")).not.toBeInTheDocument();
+
+    // Link to dedicated heatmap page
+    const link = screen.getByRole("link", { name: /Xem tất cả/ });
+    expect(link).toHaveAttribute("href", expect.stringContaining("/market/heatmap"));
+  });
+
+  it("renders all stocks in standalone mode with search filter", () => {
+    const manyBankInstruments: MarketInstrument[] = Array.from({ length: 25 }, (_, i) =>
+      sampleInstrument(`BK${i + 1}`, `Bank ${i + 1}`, "Ngân hàng", `${(i % 5) - 2}.0`, "20000", `${(25 - i) * 1e12}`)
+    );
+
+    render(
+      <StockTreemapHeatmap
+        instruments={manyBankInstruments}
+        sectors={[sampleSector("Ngân hàng", "1.0", 25)]}
+        selectedSector="Ngân hàng"
+        standalone={true}
+      />
+    );
+
+    // In standalone mode: displays all 25 stocks
+    expect(screen.getByText("BK21")).toBeInTheDocument();
+    expect(screen.getByText("BK25")).toBeInTheDocument();
+    expect(screen.getByText(/Đang hiển thị 25 \/ 25 mã/)).toBeInTheDocument();
+
+    // Search filter works
+    const searchInput = screen.getByPlaceholderText(/Tìm mã cổ phiếu/);
+    fireEvent.change(searchInput, { target: { value: "BK25" } });
+    expect(screen.getByText("BK25")).toBeInTheDocument();
+    expect(screen.queryByText("BK1")).not.toBeInTheDocument();
+  });
 });

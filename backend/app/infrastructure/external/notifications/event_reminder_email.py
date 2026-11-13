@@ -522,7 +522,9 @@ def send_event_cancellation_email(
                     )
                 smtp.send_message(message, from_addr=sender_address, to_addrs=[to_email])
 
-            logger.info("event_cancellation_email_sent_smtp", extra={"to": to_email, "symbol": symbol})
+            logger.info(
+                "event_cancellation_email_sent_smtp", extra={"to": to_email, "symbol": symbol}
+            )
             return True, "Email thông báo hủy đã được gửi thành công qua SMTP"
         except Exception as exc:
             logger.warning(

@@ -747,6 +747,7 @@ async def test_ai_community_post_intent_and_response() -> None:
         for a in actions
     )
 
+
 @pytest.mark.anyio
 async def test_ai_trade_order_with_typo_ticker_suggestions() -> None:
     from app.application.use_cases.ai_chat.intent_parser import detect_intent
@@ -790,7 +791,24 @@ async def test_ai_trade_order_with_typo_ticker_suggestions() -> None:
         for a in actions
     )
     assert any(
-        a.get("action_type") == "SEND_PROMPT"
-        and "HPG" in a.get("prompt", "")
-        for a in actions
+        a.get("action_type") == "SEND_PROMPT" and "HPG" in a.get("prompt", "") for a in actions
     )
+
+
+@pytest.mark.anyio
+async def test_ai_nonsense_and_finance_relevance_gate() -> None:
+    from app.application.use_cases.ai_chat.intent_parser import is_finance_relevant_query
+
+    assert is_finance_relevant_query("ngu") is False
+    assert is_finance_relevant_query("vl") is False
+    assert is_finance_relevant_query("Lãi suất Fed ảnh hưởng gì đến chứng khoán?") is True
+    assert is_finance_relevant_query("Giá vàng SJC hôm nay") is True
+
+    provider = FixtureMarketProvider()
+    service = MarketService(provider)
+    ai_service = AiFinancialService(market_service=service)
+
+    res = await ai_service.process_chat("ngu")
+    assert "InvestIQ Financial Assistant" in res["content"]
+    assert "Investing.com" not in res["content"]
+    assert "TradingView" not in res["content"]

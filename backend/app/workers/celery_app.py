@@ -1,6 +1,7 @@
 """Celery configuration using Redis for task delivery and result storage."""
 
 from celery import Celery
+from celery.schedules import crontab
 from celery.signals import beat_init, setup_logging
 
 from app.infrastructure.config.logging_config import configure_logging
@@ -14,6 +15,9 @@ celery_app = Celery(
         "app.workers.news_ingestion_worker",
         "app.workers.auth_email_worker",
         "app.workers.link_integrity_worker",
+        "app.workers.events_ingestion_worker",
+        "app.workers.financial_statements_sync",
+        "app.workers.market_eod_sync",
     ),
 )
 celery_app.conf.update(
@@ -76,6 +80,21 @@ celery_app.conf.update(
             if settings.news_ingestion_enabled
             else {}
         ),
+        "sync-corporate-events": {
+            "task": "investiq.events.crawl.v1",
+            "schedule": crontab(minute=15, hour="*/4"),
+            "options": {"queue": "news-ingestion"},
+        },
+        "sync-market-eod-candles": {
+            "task": "investiq.market.eod_sync.v1",
+            "schedule": crontab(minute=30, hour=15, day_of_week="1-5"),
+            "options": {"queue": "news-ingestion"},
+        },
+        "sync-financial-statements": {
+            "task": "investiq.market.financials_sync.v1",
+            "schedule": crontab(minute=0, hour=2, day_of_week="1,4"),
+            "options": {"queue": "news-ingestion"},
+        },
     },
     broker_connection_retry_on_startup=True,
     enable_utc=True,
@@ -88,6 +107,8 @@ celery_app.conf.update(
         "investiq.news.*": {"queue": "news-ingestion"},
         "investiq.auth.email.*": {"queue": "notifications"},
         "investiq.links.*": {"queue": "news-ingestion"},
+        "investiq.events.*": {"queue": "news-ingestion"},
+        "investiq.market.*": {"queue": "news-ingestion"},
     },
     worker_prefetch_multiplier=1,
 )

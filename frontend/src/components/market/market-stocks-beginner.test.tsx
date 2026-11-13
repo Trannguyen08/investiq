@@ -114,6 +114,19 @@ describe("StocksView navigation", () => {
     expect(push).toHaveBeenCalledWith(expect.stringContaining("/market/stocks/FPT"));
   });
 
+  it("keeps server-filtered results searchable beyond the 500-symbol local summary", () => {
+    const summary: InstrumentCollection = {
+      ...collection,
+      data: Array.from({ length: 500 }, (_, index) => ({
+        ...instrument,
+        symbol: `S${String(index).padStart(2, "0")}`,
+      })),
+    };
+    render(<StocksView collection={collection} summary={summary} sectors={sectors} filters={{ q: "FPT", exchange: "", sort: "vn30", direction: "desc" }} selected="" selectedCandles={[]} index={index} />);
+
+    expect(screen.getByRole("row", { name: /FPT/ })).toBeInTheDocument();
+  });
+
   it("keeps the highlighted VN-Index chart between 50 and 120 visible sessions", () => {
     const dailyCandles = Array.from({ length: 140 }, (_, candleIndex) => ({
       timestamp: new Date(Date.UTC(2026, 0, candleIndex + 1, 3)).toISOString(),

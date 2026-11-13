@@ -179,3 +179,10 @@
 ## Admin account management
 
 Implemented `/admin/users` with backend role checks, stable search/filter pagination, account role/status updates, active-session revocation on disable, Redis rate limits, and audit details. The Admin News shared password remains a separate gate and does not authorize the account API. See `docs/plan/admin-user-management.md`.
+
+## Recent platform extensions (2026-11-13)
+
+- Removed unused user scaffold pages `/alerts` and `/backtesting` (`ScaffoldPage`).
+- Added PostgreSQL market candle persistence (`SqlMarketCandlesRepository`), DB candle fallback in `VnstockMarketProvider`, and scheduled Celery Beat tasks (`investiq.events.crawl.v1`, `investiq.market.eod_sync.v1`, `investiq.market.financials_sync.v1`).
+- Added community thesis counter-analysis (`GET /api/v1/theses/{thesis_id}/counter-analysis`), thesis reporting & moderation queue (`thesis_reports` in `0026_thesis_moderation_and_benchmark.sql`), and quantitative ML Sentiment-to-Impact scoring (`GET /api/v1/market/instruments/{symbol}/sentiment-impact`).
+- Added market staleness/DB health endpoint (`GET /api/v1/market/health`), sliding-window rate limiting (`rate_limiter.py`) on AI chat, and authenticated personal data export/deletion (`GET /api/v1/auth/me/export`, `DELETE /api/v1/auth/me/data`).

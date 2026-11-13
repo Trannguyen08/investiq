@@ -119,4 +119,13 @@ describe("authentication forms", () => {
     expect(screen.getByRole("button", { name: "Xác nhận OTP" })).toHaveClass("auth-primary");
     vi.unstubAllGlobals();
   });
+
+  it("renders placeholders on LoginForm and preserves nextPath on register link", () => {
+    render(<LoginForm nextPath="/market/stocks" />);
+
+    expect(screen.getByPlaceholderText("ten.ban@example.com")).toBeTruthy();
+    expect(screen.getByPlaceholderText("Nhập mật khẩu của bạn")).toBeTruthy();
+    const registerLink = screen.getByRole("link", { name: "Đăng ký ngay" });
+    expect(registerLink.getAttribute("href")).toBe("/register?next=%2Fmarket%2Fstocks");
+  });
 });

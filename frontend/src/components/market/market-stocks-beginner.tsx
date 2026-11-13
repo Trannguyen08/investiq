@@ -707,12 +707,12 @@ export function StocksView({
   const displayedRows = useMemo(() => {
     const q = searchQuery.trim().toLowerCase();
     if (!q) return rows;
-    const pool = universe.length > rows.length ? universe : rows;
+    const pool = filters.q ? rows : (universe.length > rows.length ? universe : rows);
     return pool.filter((item) =>
       item.symbol.toLowerCase().includes(q) ||
       item.name.toLowerCase().includes(q)
     );
-  }, [rows, universe, searchQuery]);
+  }, [filters.q, rows, universe, searchQuery]);
 
   useEffect(() => {
     const timer = setTimeout(() => {
@@ -827,6 +827,7 @@ export function StocksView({
               <StockTreemapHeatmap
                 instruments={universe}
                 sectors={sectors.data}
+                subsectors={sectors.subsectors ?? []}
                 headingId="market-heatmap-title"
                 selectedSector={selectedTreemapSector}
                 onSectorChange={setSelectedTreemapSector}
@@ -835,6 +836,7 @@ export function StocksView({
             <div className={heatmapTab === "sectors" ? "block" : "hidden"}>
               <SectorTreemapHeatmap
                 sectors={sectors.data}
+                subsectors={sectors.subsectors ?? []}
                 headingId="market-heatmap-title"
                 onSelectSector={(sectorName) => {
                   setSelectedTreemapSector(sectorName);

@@ -54,16 +54,27 @@ function AdminPortalShortcut() {
   );
 }
 
+function buildLoginHref(pathname: string, search: string): string {
+  if (!pathname || pathname.startsWith("/login") || pathname.startsWith("/register") || pathname.startsWith("/forgot-password") || pathname.startsWith("/verify-email")) {
+    return "/login";
+  }
+  const target = search ? `${pathname}?${search}` : pathname;
+  return `/login?next=${encodeURIComponent(target)}`;
+}
+
 function AccountMenu() {
   const { status, user, logout } = useAuth();
   const [error, setError] = useState("");
   const router = useRouter();
+  const pathname = usePathname();
+  const searchParams = useSearchParams();
 
   if (status !== "authenticated" || !user) {
+    const loginHref = buildLoginHref(pathname, searchParams.toString());
     return (
       <Link
         className="account-link px-3 sm:px-4 py-1.5 text-xs font-bold rounded-lg bg-sky-500 hover:bg-sky-400 text-white shadow-md shadow-sky-500/20 transition whitespace-nowrap"
-        href="/login"
+        href={loginHref}
       >
         Đăng nhập
       </Link>
@@ -118,6 +129,9 @@ function MobileMenu() {
   const { status, user, logout } = useAuth();
   const [error, setError] = useState("");
   const router = useRouter();
+  const pathname = usePathname();
+  const searchParams = useSearchParams();
+  const loginHref = buildLoginHref(pathname, searchParams.toString());
   async function signOut() {
     setError("");
     try { await logout(); router.push("/login?logout=success"); router.refresh(); }
@@ -157,7 +171,7 @@ function MobileMenu() {
             </button>
           ) : (
             <Link
-              href="/login"
+              href={loginHref}
               className="block text-center py-2 bg-sky-500 text-white font-bold text-xs rounded-lg shadow-sm"
             >
               Đăng nhập

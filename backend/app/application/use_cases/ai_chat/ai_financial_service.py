@@ -42,6 +42,7 @@ from app.application.use_cases.ai_chat.intent_parser import (
     _extract_tickers,
     _get_val,
     detect_intent,
+    is_finance_relevant_query,
     normalize_question,
     normalize_user_input,
 )
@@ -219,7 +220,9 @@ class AiFinancialService:
                         if inst:
                             stock_data[target_sym] = {"instrument": inst}
                     except Exception as exc:
-                        logger.warning("Failed to fetch instrument for trade/community %s: %s", target_sym, exc)
+                        logger.warning(
+                            "Failed to fetch instrument for trade/community %s: %s", target_sym, exc
+                        )
                 d_step.mark("ok", passed=True, note=f"trade_or_community={target_sym}")
             elif is_leader:
                 try:
@@ -329,9 +332,7 @@ class AiFinancialService:
                             )
                             growth_res = self._market.growth(ticker)
                             growth = (
-                                growth_res.get("data", {})
-                                if isinstance(growth_res, dict)
-                                else {}
+                                growth_res.get("data", {}) if isinstance(growth_res, dict) else {}
                             )
                             stock_data[ticker] = {
                                 "instrument": inst,
@@ -394,11 +395,12 @@ class AiFinancialService:
                 and not is_dividend
                 and not is_leader
                 and not knowledge_hits
+                and is_finance_relevant_query(user_message)
             ):
                 external_snippets = await self._search_external_info(user_message)
                 s_step.mark("ok", passed=True, note=f"snippets={len(external_snippets)}")
             else:
-                s_step.mark("skipped", note="internal_data_or_knowledge_available")
+                s_step.mark("skipped", note="internal_data_or_off_topic")
 
         # Step 7: Response generation
         intent: AiIntent = "general"

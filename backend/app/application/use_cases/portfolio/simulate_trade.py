@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import json
-import threading
 from datetime import UTC, datetime, time, timedelta
 from decimal import Decimal
 from pathlib import Path
@@ -322,9 +321,7 @@ class PaperTradingService:
             else self._sim_store.get_mode(user_id)
         )
         enforce_strict = (
-            command.strict_rules
-            or active_mode == "exchange_hours"
-            or typed_order_type != "LO"
+            command.strict_rules or active_mode == "exchange_hours" or typed_order_type != "LO"
         )
 
         is_valid, err_code, err_msg = validate_vietnam_exchange_rules(
@@ -369,7 +366,8 @@ class PaperTradingService:
         ):
             base_order_price = (
                 command.limit_price
-                if (active_mode == "exchange_hours" or command.use_orderbook_depth) and command.limit_price
+                if (active_mode == "exchange_hours" or command.use_orderbook_depth)
+                and command.limit_price
                 else instrument.price
             )
             if (
@@ -386,7 +384,10 @@ class PaperTradingService:
                     "INVALID_STOP_LOSS",
                     f"Giá cắt lỗ ({decimal_text(command.stop_loss_price)} đ) phải nhỏ hơn giá đặt mua ({decimal_text(base_order_price)} đ).",
                 )
-            if command.take_profit_price is not None and command.take_profit_price <= base_order_price:
+            if (
+                command.take_profit_price is not None
+                and command.take_profit_price <= base_order_price
+            ):
                 raise PaperOrderError(
                     "INVALID_TAKE_PROFIT",
                     f"Giá chốt lời ({decimal_text(command.take_profit_price)} đ) phải lớn hơn giá đặt mua ({decimal_text(base_order_price)} đ).",
@@ -462,7 +463,11 @@ class PaperTradingService:
 
         submission_limit_price = (
             instrument.price
-            if (active_mode == "instant" and not command.use_orderbook_depth and typed_order_type == "LO")
+            if (
+                active_mode == "instant"
+                and not command.use_orderbook_depth
+                and typed_order_type == "LO"
+            )
             else exec_price
         )
         reserved_gross = round_vnd(submission_limit_price * Decimal(filled_qty))
@@ -829,36 +834,45 @@ class PaperTradingService:
         missing_prices = 0
         notices: list[dict[str, str]] = []
 
-        # Gather 90-day daily candles for holdings from memory/disk cache without blocking
+        # Gather 90-day daily candles for holdings, refreshing stale cache so daily history stays current
         holding_symbols = [holding.symbol for holding in portfolio.holdings]
         all_candles: dict[str, list[Candle]] = {}
+        market_tz = ZoneInfo("Asia/Ho_Chi_Minh")
+        today_market = datetime.now(market_tz).date()
         if holding_symbols:
             now_mono = _monotonic()
             symbols_to_fetch: list[str] = []
             for sym in holding_symbols:
                 cached_c = self._holding_candles_cache.get(sym)
-                if cached_c and cached_c[0] > now_mono and cached_c[1]:
+                cached_latest_date = (
+                    cached_c[1][-1].timestamp.astimezone(market_tz).date()
+                    if cached_c and cached_c[1]
+                    else None
+                )
+                is_fresh = (
+                    cached_c is not None
+                    and cached_c[0] > now_mono
+                    and bool(cached_c[1])
+                    and (cached_latest_date is not None and cached_latest_date >= today_market)
+                )
+                if is_fresh and cached_c is not None:
                     all_candles[sym] = cached_c[1]
                 else:
                     symbols_to_fetch.append(sym)
 
-            if symbols_to_fetch:
-                def _bg_fetch_symbols(sym_list: list[str]) -> None:
-                    for s in sym_list:
-                        try:
-                            fetched = list(self._provider.candles(s, "1d"))[-90:]
-                            if fetched:
-                                self._holding_candles_cache[s] = (_monotonic() + 86400.0 * 7, fetched)
-                                _persist_candles_to_disk(s, fetched)
-                        except Exception:
-                            pass
-
-                threading.Thread(target=_bg_fetch_symbols, args=(symbols_to_fetch,), daemon=True).start()
-
-                for sym in symbols_to_fetch:
-                    cached_c = self._holding_candles_cache.get(sym)
-                    if cached_c and cached_c[1]:
-                        all_candles[sym] = cached_c[1]
+            for s in symbols_to_fetch:
+                try:
+                    fetched = list(self._provider.candles(s, "1d"))[-90:]
+                    if fetched:
+                        self._holding_candles_cache[s] = (_monotonic() + 300.0, fetched)
+                        _persist_candles_to_disk(s, fetched)
+                        all_candles[s] = fetched
+                        continue
+                except Exception:
+                    pass
+                fallback_c = self._holding_candles_cache.get(s)
+                if fallback_c and fallback_c[1]:
+                    all_candles[s] = fallback_c[1]
 
         histories: dict[str, list[dict[str, str]]] = {}
         for holding in portfolio.holdings:
@@ -879,7 +893,20 @@ class PaperTradingService:
                 if unrealized is not None and holding.total_cost_basis
                 else None
             )
-            candles = all_candles.get(holding.symbol, [])[-30:]
+            candles = list(all_candles.get(holding.symbol, [])[-30:])
+            if price is not None and (
+                not candles or candles[-1].timestamp.astimezone(market_tz).date() < today_market
+            ):
+                candles.append(
+                    Candle(
+                        timestamp=datetime.now(UTC),
+                        open=price,
+                        high=price,
+                        low=price,
+                        close=price,
+                        volume=instrument.volume if instrument else Decimal("0"),
+                    )
+                )
             histories[holding.symbol] = [
                 {"timestamp": _iso(item.timestamp), "close": decimal_text(item.close)}
                 for item in candles
@@ -1189,9 +1216,9 @@ class PaperTradingService:
 
             inst = self._provider.instrument(holding.symbol, include_fundamentals=False)
             safe_price = (
-                inst.price if inst and inst.price > 0 else (
-                    candles[-1].close if candles else holding.average_cost
-                )
+                inst.price
+                if inst and inst.price > 0
+                else (candles[-1].close if candles else holding.average_cost)
             )
             fallback_prices[holding.symbol] = safe_price if safe_price > 0 else Decimal("10000")
 
@@ -1211,7 +1238,9 @@ class PaperTradingService:
         if buy_trades:
             first_buy_date = min(t.created_at.astimezone(_MARKET_TZ).date() for t in buy_trades)
         elif portfolio.trades:
-            first_buy_date = min(t.created_at.astimezone(_MARKET_TZ).date() for t in portfolio.trades)
+            first_buy_date = min(
+                t.created_at.astimezone(_MARKET_TZ).date() for t in portfolio.trades
+            )
         else:
             first_buy_date = portfolio.created_at.astimezone(_MARKET_TZ).date()
 
@@ -1227,7 +1256,9 @@ class PaperTradingService:
         eligible_days.add(first_buy_iso)
         eligible_days.add(today_iso)
 
-        trade_dates = [t.created_at.astimezone(_MARKET_TZ).date().isoformat() for t in portfolio.trades]
+        trade_dates = [
+            t.created_at.astimezone(_MARKET_TZ).date().isoformat() for t in portfolio.trades
+        ]
         for td in trade_dates:
             if td >= baseline_iso:
                 eligible_days.add(td)

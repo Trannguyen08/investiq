@@ -5,37 +5,43 @@ import { useMemo, useState } from "react";
 
 import { changeTone, formatMoney, formatPercent } from "@/components/market/formatters";
 import { computePercentMovementWeights, computeSquarifiedTreemap } from "@/components/market/stock-treemap-heatmap";
-import type { MarketSector } from "@/types/market";
+import type { MarketSector, MarketSubsector } from "@/types/market";
 
 export function SectorTreemapHeatmap({
   sectors,
+  subsectors = [],
   headingId = "sector-treemap-title",
   onSelectSector,
 }: {
   sectors: MarketSector[];
+  subsectors?: MarketSubsector[];
   headingId?: string;
   onSelectSector?: (sectorName: string) => void;
 }) {
   const [hoveredSectorName, setHoveredSectorName] = useState<string | null>(null);
   const [activeSectorName, setActiveSectorName] = useState<string | null>(null);
+  const [drilldownSector, setDrilldownSector] = useState<string | null>(null);
+  const visibleSectors = drilldownSector
+    ? subsectors.filter((sector) => sector.parent_sector === drilldownSector)
+    : sectors;
 
   // Compute treemap rectangles for all sectors with weights based on absolute percentage movement
   const treemapRects = useMemo(() => {
-    if (!sectors.length) return [];
+    if (!visibleSectors.length) return [];
 
-    const rawChanges = sectors.map((sector) => Number(sector.change_percent) || 0);
+    const rawChanges = visibleSectors.map((sector) => Number(sector.change_percent) || 0);
     const balancedWeights = computePercentMovementWeights(rawChanges);
 
-    const rawItems = sectors.map((sector, idx) => ({
+    const rawItems = visibleSectors.map((sector, idx) => ({
       item: sector,
       value: balancedWeights[idx],
     }));
 
     return computeSquarifiedTreemap(rawItems, 1000, 560);
-  }, [sectors]);
+  }, [visibleSectors]);
 
-  const displaySector = (hoveredSectorName ? sectors.find((s) => s.name === hoveredSectorName) : null)
-    ?? (activeSectorName ? sectors.find((s) => s.name === activeSectorName) : null);
+  const displaySector = (hoveredSectorName ? visibleSectors.find((s) => s.name === hoveredSectorName) : null)
+    ?? (activeSectorName ? visibleSectors.find((s) => s.name === activeSectorName) : null);
 
   return (
     <div className="sector-treemap-heatmap flex flex-col gap-3">
@@ -43,7 +49,24 @@ export function SectorTreemapHeatmap({
       <div className="treemap-controls flex flex-wrap items-center justify-between gap-3 text-xs bg-slate-950/70 p-3 rounded-xl border border-slate-800">
         <div className="flex flex-wrap items-center gap-2.5">
           <span className="text-slate-300 font-bold shrink-0">
-            Biến động các ngành ({sectors.length} ngành)
+            {drilldownSector ? (
+              <>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setDrilldownSector(null);
+                    setHoveredSectorName(null);
+                    setActiveSectorName(null);
+                  }}
+                  className="rounded border border-slate-700 px-2 py-1 text-sky-300 hover:text-white"
+                >
+                  ← Tất cả ngành
+                </button>
+                <span>{drilldownSector} · {visibleSectors.length} nhóm con</span>
+              </>
+            ) : (
+              <span>Biến động các ngành ({visibleSectors.length} ngành)</span>
+            )}
           </span>
         </div>
 
@@ -75,9 +98,15 @@ export function SectorTreemapHeatmap({
             const isTiny = width < 5 || height < 5.5;
             const isSmall = !isBig && (width < 8 || height < 8);
 
+            const hasChildren = !drilldownSector
+              && subsectors.some((subsector) => subsector.parent_sector === item.name);
             const handleClick = () => {
-              if (onSelectSector) {
-                onSelectSector(item.name);
+              if (hasChildren) {
+                setDrilldownSector(item.name);
+                setHoveredSectorName(null);
+                setActiveSectorName(null);
+              } else {
+                onSelectSector?.(item.name);
               }
             };
 
@@ -98,7 +127,7 @@ export function SectorTreemapHeatmap({
                   height: `${height}%`,
                 }}
                 className={`absolute border box-border flex flex-col items-center justify-center p-1.5 transition-all duration-150 overflow-hidden cursor-pointer shadow-xs text-center ${bgClass}`}
-                title={`${item.name} | Biến động: ${formatPercent(item.change_percent)} | ${item.member_count} mã (${item.advances} tăng, ${item.declines} giảm) | GTGD: ${formatMoney(item.matched_value)} | Vốn hóa: ${formatMoney(item.market_cap)}`}
+                title={`${item.name}${"parent_sector" in item ? ` · ${item.parent_sector}` : ""} | Biến động: ${formatPercent(item.change_percent)} | ${item.member_count} mã (${item.advances} tăng, ${item.declines} giảm) | GTGD: ${formatMoney(item.matched_value)} | Vốn hóa: ${formatMoney(item.market_cap)}${hasChildren ? " | Bấm để xem nhóm con" : ""}`}
               >
                 <strong
                   className={`font-black tracking-tight leading-tight drop-shadow-sm max-w-full ${

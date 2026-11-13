@@ -355,9 +355,7 @@ def test_exchange_simulation_endpoints_mode_advance_fill_and_conditional_trigger
                     "quantity": 100,
                 },
             )
-            del_trig_res = client.delete(
-                "/api/v1/paper-portfolio/conditional-triggers/trig-1"
-            )
+            del_trig_res = client.delete("/api/v1/paper-portfolio/conditional-triggers/trig-1")
     finally:
         app.dependency_overrides.clear()
 

@@ -157,11 +157,22 @@ def test_verify_and_clean_corporate_events() -> None:
     ]
 
     with (
-        patch("app.infrastructure.external.crawlers.corporate_events_crawler.get_corporate_events_crawler", return_value=mock_crawler),
-        patch("app.infrastructure.db.repositories.sql_event_reminder_repository.get_event_reminder_repository", return_value=mock_repo),
-        patch("app.workers.link_integrity_worker.check_url_integrity", return_value=(True, 404, "not_found")),
+        patch(
+            "app.infrastructure.external.crawlers.corporate_events_crawler.get_corporate_events_crawler",
+            return_value=mock_crawler,
+        ),
+        patch(
+            "app.infrastructure.db.repositories.sql_event_reminder_repository.get_event_reminder_repository",
+            return_value=mock_repo,
+        ),
+        patch(
+            "app.workers.link_integrity_worker.check_url_integrity",
+            return_value=(True, 404, "not_found"),
+        ),
         patch("app.workers.link_integrity_worker.get_pool") as mock_pool,
-        patch("app.infrastructure.external.notifications.event_reminder_email.send_event_cancellation_email") as mock_send_email,
+        patch(
+            "app.infrastructure.external.notifications.event_reminder_email.send_event_cancellation_email"
+        ) as mock_send_email,
     ):
         mock_conn = MagicMock()
         mock_pool.return_value.connection.return_value.__enter__.return_value = mock_conn
@@ -192,12 +203,19 @@ def test_verify_and_clean_news_articles() -> None:
 
     # Mock DB query returning 1 published article
     mock_cur.fetchall.return_value = [
-        ("00000000-0000-0000-0000-000000000001", "https://vnexpress.net/broken-news-404.html", "Tin kinh tế")
+        (
+            "00000000-0000-0000-0000-000000000001",
+            "https://vnexpress.net/broken-news-404.html",
+            "Tin kinh tế",
+        )
     ]
 
     with (
         patch("app.workers.link_integrity_worker.get_pool", mock_pool),
-        patch("app.workers.link_integrity_worker.check_url_integrity", return_value=(True, 404, "not_found")),
+        patch(
+            "app.workers.link_integrity_worker.check_url_integrity",
+            return_value=(True, 404, "not_found"),
+        ),
     ):
         res = verify_and_clean_news_articles(limit=10)
         assert res["checked_news"] == 1
@@ -215,12 +233,23 @@ def test_verify_and_clean_news_articles() -> None:
 
 
 def test_run_link_integrity_cycle() -> None:
-    """Test orchestrator function runs both corporate events and news verification."""
+    """Test orchestrator function runs corporate events, news, and financial links verification."""
     with (
-        patch("app.workers.link_integrity_worker.verify_and_clean_corporate_events", return_value={"checked_events": 5, "dead_events_removed": 1, "notified_subscribers": 1}),
-        patch("app.workers.link_integrity_worker.verify_and_clean_news_articles", return_value={"checked_news": 10, "dead_news_withdrawn": 2}),
+        patch(
+            "app.workers.link_integrity_worker.verify_and_clean_corporate_events",
+            return_value={"checked_events": 5, "dead_events_removed": 1, "notified_subscribers": 1},
+        ),
+        patch(
+            "app.workers.link_integrity_worker.verify_and_clean_news_articles",
+            return_value={"checked_news": 10, "dead_news_withdrawn": 2},
+        ),
+        patch(
+            "app.workers.link_integrity_worker.verify_and_repair_financial_statement_links",
+            return_value={"checked_financials": 20, "repaired_financial_links": 3},
+        ),
     ):
         summary = run_link_integrity_cycle()
         assert summary["status"] == "success"
         assert summary["events"]["dead_events_removed"] == 1
         assert summary["news"]["dead_news_withdrawn"] == 2
+        assert summary["financial_statements"]["repaired_financial_links"] == 3
