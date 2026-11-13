@@ -140,7 +140,7 @@ export type NewsCollection = {
 
 type Envelope<T> = { data: T; meta: NewsCollection["meta"] };
 
-class InvestIqApiError extends Error {
+export class InvestIqApiError extends Error {
   constructor(readonly status: number) {
     super(`InvestIQ API returned ${status}`);
   }

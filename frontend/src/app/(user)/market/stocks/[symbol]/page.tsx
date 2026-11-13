@@ -20,6 +20,7 @@ import { StockDividendPanel } from "@/components/market/stock-dividend-panel";
 import { StockFinancialStatements } from "@/components/market/stock-financial-statements";
 import { MarketStreamProvider } from "@/hooks/use-realtime-price";
 import {
+  InvestIqApiError,
   getInstrumentDividends,
   getInstrumentFinancialStatements,
   getMarketCandles,
@@ -67,9 +68,9 @@ export default async function StockDetailPage({
   const initialTab = typeof query.tab === "string" ? query.tab : "chart";
   const selected = rangeConfig[range];
 
-  const instrumentPromise = getMarketInstrument(symbol, 2500).then(
+  const instrumentPromise = getMarketInstrument(symbol, 8000).then(
     (value) => ({ status: "fulfilled" as const, value }),
-    () => ({ status: "rejected" as const }),
+    (error: unknown) => ({ status: "rejected" as const, error }),
   );
   const candlesPromise = getMarketCandles(symbol, selected.interval, selected.limit, 8000).catch(() => null);
   const intradayPromise = getMarketIntradayTrades(symbol, 100, 1500).catch(() => null);
@@ -99,7 +100,43 @@ export default async function StockDetailPage({
     fsYearPromise,
   ]);
 
-  if (instrumentResult.status === "rejected") notFound();
+  if (instrumentResult.status === "rejected") {
+    if (instrumentResult.error instanceof InvestIqApiError && instrumentResult.error.status === 404) {
+      notFound();
+    }
+    return (
+      <main id="main-content" className="market-page stock-detail-page max-w-4xl mx-auto px-4 sm:px-6 py-10 flex flex-col gap-6 text-slate-100">
+        <Link className="stock-detail-back inline-flex items-center gap-1.5 text-xs font-semibold text-slate-400 hover:text-white transition w-fit" href={returnTo}>
+          ← Quay lại bảng giá
+        </Link>
+        <section className="bg-slate-900/90 border border-slate-800 rounded-2xl p-8 flex flex-col gap-3">
+          <p className="text-xs font-bold text-amber-400 uppercase tracking-wider m-0">
+            Kết nối dữ liệu thị trường · {symbol}
+          </p>
+          <h1 className="text-2xl font-bold text-white m-0">
+            Dữ liệu mã {symbol} đang được khởi tạo hoặc tạm thời gián đoạn
+          </h1>
+          <p className="text-sm text-slate-300 m-0">
+            Máy chủ dữ liệu thị trường vừa khởi động lại hoặc nguồn sàn đang phản hồi chậm (HTTP 503). Vui lòng tải lại trang sau vài giây.
+          </p>
+          <div className="flex flex-wrap items-center gap-3 mt-2">
+            <Link
+              href={`/market/stocks/${encodeURIComponent(symbol)}`}
+              className="inline-flex items-center px-4 py-2 rounded-lg bg-sky-500 hover:bg-sky-400 text-white text-xs font-bold transition"
+            >
+              Thử tải lại {symbol}
+            </Link>
+            <Link
+              href={returnTo}
+              className="inline-flex items-center px-4 py-2 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-semibold transition"
+            >
+              Quay lại bảng giá
+            </Link>
+          </div>
+        </section>
+      </main>
+    );
+  }
   const envelope: InstrumentEnvelope = instrumentResult.value;
   const item = envelope.data;
 
