@@ -5,6 +5,7 @@ from __future__ import annotations
 from decimal import Decimal
 from typing import Any
 
+from app.application.use_cases.market_data.errors import MarketDataUnavailable
 from app.domain.entities.thesis import InvestmentThesis
 from app.domain.repositories.i_market_provider import IMarketProvider
 from app.domain.repositories.i_thesis_repository import IThesisRepository
@@ -22,6 +23,13 @@ class ThesisService:
     ) -> None:
         self._repo = thesis_repo
         self._provider = market_provider
+
+    def _try_current_price(self, symbol: str) -> Decimal | None:
+        """Read-path price lookup that never blocks listing theses on a provider outage."""
+        try:
+            return self._get_current_price(symbol)
+        except (MarketDataUnavailable, LookupError):
+            return None
 
     def _get_current_price(self, symbol: str) -> Decimal:
         instrument = self._provider.instrument(symbol.upper())
@@ -151,7 +159,10 @@ class ThesisService:
         if item.status != "active":
             return item
 
-        current_price = self._get_current_price(item.symbol)
+        current_price = self._try_current_price(item.symbol)
+        if current_price is None:
+            # Keep the thesis active; it is re-evaluated once live prices return.
+            return item
 
         if item.stance == "bullish":
             if current_price >= item.target_price:
@@ -195,9 +206,9 @@ class ThesisService:
         return item
 
     def _format_thesis(self, t: InvestmentThesis) -> dict[str, Any]:
-        curr = self._get_current_price(t.symbol)
+        curr = self._try_current_price(t.symbol)
         # Calculate progress towards target
-        if t.status == "active" and t.target_price != t.entry_price:
+        if curr is not None and t.status == "active" and t.target_price != t.entry_price:
             prog = ((curr - t.entry_price) / (t.target_price - t.entry_price)) * Decimal("100")
             progress_pct = max(Decimal("0"), min(Decimal("100"), prog))
         elif t.status == "hit_target":
@@ -214,7 +225,7 @@ class ThesisService:
             "entry_price": f"{t.entry_price:,.0f}",
             "target_price": f"{t.target_price:,.0f}",
             "stop_loss_price": f"{t.stop_loss_price:,.0f}",
-            "current_price": f"{curr:,.0f}",
+            "current_price": f"{curr:,.0f}" if curr is not None else None,
             "progress_percent": f"{progress_pct:.1f}",
             "horizon_months": t.horizon_months,
             "title": t.title,

@@ -631,7 +631,7 @@ export function ThesisArena({ initialTheses = [], initialLeaderboard = [] }: The
                   </div>
                   <div className="metric-box">
                     <span className="metric-lbl">Giá hiện tại</span>
-                    <span className="metric-val val-current">{formatVnd(thesis.current_price)}</span>
+                    <span className="metric-val val-current">{thesis.current_price ? formatVnd(thesis.current_price) : "Đang cập nhật"}</span>
                   </div>
                   <div className="metric-box">
                     <span className="metric-lbl">Mục tiêu</span>
