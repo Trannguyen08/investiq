@@ -15,8 +15,22 @@ function json(data: object, status = 200) {
   return NextResponse.json(data, { status, headers: { "Cache-Control": "no-store, max-age=0" } });
 }
 
+function envValue(...names: string[]): string | undefined {
+  for (const name of names) {
+    const value = process.env[name]?.trim();
+    if (value) return value;
+  }
+  return undefined;
+}
+
+function getGoogleClientId(): string | undefined {
+  // AUTH_GOOGLE_CLIENT_ID is canonical; the aliases tolerate common hosting-dashboard naming.
+  return envValue("AUTH_GOOGLE_CLIENT_ID", "GOOGLE_CLIENT_ID", "NEXT_PUBLIC_GOOGLE_CLIENT_ID");
+}
+
 function getGoogleRedirectUri(request?: Request): string {
-  if (process.env.AUTH_GOOGLE_REDIRECT_URI) return process.env.AUTH_GOOGLE_REDIRECT_URI;
+  const configured = envValue("AUTH_GOOGLE_REDIRECT_URI");
+  if (configured) return configured;
   if (request) {
     const proto = request.headers.get("x-forwarded-proto") ?? "https";
     const host = request.headers.get("x-forwarded-host") ?? request.headers.get("host");
@@ -67,7 +81,7 @@ export async function GET(request: Request, context: Context) {
     }
     if (path === "challenge") return json({ challenge: await fetchChallenge(await getOrCreatePreAuth()) });
     if (path === "google/start") {
-      const clientId = process.env.AUTH_GOOGLE_CLIENT_ID;
+      const clientId = getGoogleClientId();
       const redirectUri = getGoogleRedirectUri(request);
       if (!clientId || !redirectUri) throw new UserAuthError(503, "GOOGLE_NOT_CONFIGURED", "Đăng nhập Google chưa được cấu hình.");
       const preauth = await getOrCreatePreAuth();

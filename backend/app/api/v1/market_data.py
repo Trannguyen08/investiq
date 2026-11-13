@@ -5,6 +5,7 @@ from __future__ import annotations
 import asyncio
 import json
 import logging
+from collections.abc import Callable
 from decimal import Decimal
 from functools import lru_cache
 from typing import Annotated, Any, Literal
@@ -27,6 +28,7 @@ from app.application.use_cases.market_data.errors import MarketDataUnavailable
 from app.application.use_cases.market_data.market_service import MarketService, decode_cursor
 from app.domain.repositories.i_market_provider import IMarketProvider
 from app.infrastructure.cache.market_cache import MarketReadCache, get_market_read_cache
+from app.infrastructure.cache.market_snapshot_store import get_market_snapshot_store, mark_stale
 from app.infrastructure.config.settings import settings
 from app.infrastructure.db.repositories.sql_watchlist_repository import (
     SqlWatchlistRepository,
@@ -164,11 +166,37 @@ def _private_headers(response: Response) -> None:
     response.headers["Pragma"] = "no-cache"
 
 
+def _with_snapshot_fallback(
+    resource: str,
+    key: str,
+    loader: Callable[[], object],
+    *,
+    durable: bool = True,
+) -> tuple[object, bool]:
+    """Run a live loader; on provider outage serve the last-known-good payload marked stale.
+
+    Returns the payload and whether it came from the durable snapshot store.
+    """
+    store = get_market_snapshot_store()
+    try:
+        payload = loader()
+    except MarketDataUnavailable:
+        stale = store.load(key) if durable else None
+        if stale is None:
+            raise
+        return mark_stale(stale), True
+    if durable and isinstance(payload, dict):
+        store.save(resource, key, payload)
+    return payload, False
+
+
 def _cached(
     resource: str,
     dimensions: dict[str, object],
     loader: object,
     cache: MarketReadCache,
+    *,
+    durable: bool = True,
 ) -> dict[str, object]:
     key = cache.key(resource, dimensions)
     found = cache.get(key)
@@ -176,10 +204,11 @@ def _cached(
         return found
     if not callable(loader):
         raise TypeError("Market cache loader must be callable")
-    payload = loader()
+    payload, from_snapshot = _with_snapshot_fallback(resource, key, loader, durable=durable)
     if not isinstance(payload, dict):
         raise TypeError("Market cache loader returned an invalid payload")
-    cache.set(key, payload, settings.market_public_cache_seconds)
+    if not from_snapshot:
+        cache.set(key, payload, settings.market_public_cache_seconds)
     return payload
 
 
@@ -273,6 +302,7 @@ def instruments(
             vn30_only=vn30,
         ),
         get_market_read_cache(),
+        durable=not q,
     )
 
 
@@ -285,8 +315,14 @@ def sectors(response: Response) -> dict[str, object]:
 @router.get("/instruments/{symbol}", response_model=InstrumentEnvelope)
 def instrument(symbol: str, response: Response) -> dict[str, object]:
     _public_headers(response)
-    value = _service().instrument(symbol)
-    if value is None:
+    service = _service()
+    normalized = symbol.upper()
+    value, _ = _with_snapshot_fallback(
+        "instrument",
+        get_market_read_cache().key("instrument", {"symbol": normalized}),
+        lambda: service.instrument(symbol),
+    )
+    if not isinstance(value, dict):
         raise HTTPException(status_code=404, detail="Instrument not found")
     return value
 
