@@ -59,6 +59,7 @@ class MarketInstrument:
     is_vn30: bool = False
     bid_levels: tuple[MarketDepthLevel, ...] = ()
     ask_levels: tuple[MarketDepthLevel, ...] = ()
+    subsector: str = ""
 
     @property
     def change(self) -> Decimal:
@@ -132,3 +133,86 @@ class MarketPerson:
     net_worth_external: str | None = None
     bio: str | None = None
     avatar_url: str | None = None
+
+
+SUBSECTOR_PARENT_MAP: dict[str, str] = {
+    # Tài chính
+    "Ngân hàng": "Tài chính",
+    "Dịch vụ tài chính": "Tài chính",
+    "Bảo hiểm": "Tài chính",
+    # Hàng tiêu dùng không thiết yếu
+    "Bán lẻ": "Hàng tiêu dùng không thiết yếu",
+    "Du lịch và Giải trí": "Hàng tiêu dùng không thiết yếu",
+    "Hàng cá nhân & Gia dụng": "Hàng tiêu dùng không thiết yếu",
+    "Ô tô và phụ tùng": "Hàng tiêu dùng không thiết yếu",
+    # Hàng tiêu dùng thiết yếu
+    "Thực phẩm và đồ uống": "Hàng tiêu dùng thiết yếu",
+    "Thực phẩm": "Hàng tiêu dùng thiết yếu",
+    "Tiêu dùng": "Hàng tiêu dùng thiết yếu",
+    # Công nghệ
+    "Công nghệ Thông tin": "Công nghệ",
+    "Công nghệ thông tin": "Công nghệ",
+    # Năng lượng
+    "Dầu khí": "Năng lượng",
+    # Công nghiệp
+    "Hàng & Dịch vụ Công nghiệp": "Công nghiệp",
+    # Nguyên vật liệu
+    "Hóa chất": "Nguyên vật liệu",
+    "Tài nguyên Cơ bản": "Nguyên vật liệu",
+    "Tài nguyên cơ bản": "Nguyên vật liệu",
+    # Viễn thông
+    "Truyền thông": "Viễn thông",
+    "Viễn thông": "Viễn thông",
+    # Tiện ích
+    "Điện, nước & xăng dầu khí đốt": "Tiện ích",
+    # Y tế
+    "Y tế": "Y tế",
+    # Bất động sản
+    "Bất động sản": "Bất động sản",
+    # Xây dựng và Vật liệu
+    "Xây dựng và Vật liệu": "Xây dựng và Vật liệu",
+    "Xây dựng": "Xây dựng và Vật liệu",
+}
+
+
+def sector_parent(subsector: str | None) -> str | None:
+    """Return the canonical broad parent sector for a given subsector label, if known."""
+    if not subsector:
+        return None
+    raw = subsector.strip()
+    parent = SUBSECTOR_PARENT_MAP.get(raw)
+    if parent is not None:
+        return parent
+    folded = raw.casefold()
+    for name, p in SUBSECTOR_PARENT_MAP.items():
+        if name.casefold() == folded:
+            return p
+    return None
+
+
+def resolve_sector_hierarchy(sector: str | None, subsector: str | None = "") -> tuple[str, str]:
+    """Resolve an instrument's parent sector and subsector to a consistent hierarchy.
+
+    If the subsector is known, its broad parent is strictly determined by the subsector-to-parent mapping,
+    preventing discordant source parent sectors from misclassifying the subgroup.
+    If subsector is empty but sector is a known subsector label (e.g. 'Ngân hàng'), sector is promoted
+    to subsector and its mapped parent (e.g. 'Tài chính') becomes the broad sector.
+    """
+    clean_sub = (subsector or "").strip()
+    clean_sec = (sector or "").strip()
+
+    if clean_sub:
+        parent = sector_parent(clean_sub)
+        if parent:
+            sub = clean_sub if clean_sub != parent else ""
+            return parent, sub
+
+    if clean_sec:
+        parent = sector_parent(clean_sec)
+        if parent:
+            sub = clean_sec if clean_sec != parent else ""
+            return parent, sub
+
+    parent = clean_sec or "Chưa phân loại"
+    sub = clean_sub if clean_sub != parent else ""
+    return parent, sub

@@ -85,7 +85,7 @@ describe("AdminOverviewDashboard", () => {
     expect(screen.getAllByText("45").length).toBeGreaterThan(0);
 
     expect(screen.getByText("Tin tức thị trường")).toBeInTheDocument();
-    expect(screen.getByText("12,400")).toBeInTheDocument();
+    expect(screen.getByText(/12[.,\s]?400/)).toBeInTheDocument();
   });
 
   it("renders top traded symbols and audit entries", () => {

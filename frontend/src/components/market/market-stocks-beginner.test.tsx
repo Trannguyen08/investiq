@@ -114,6 +114,19 @@ describe("StocksView navigation", () => {
     expect(push).toHaveBeenCalledWith(expect.stringContaining("/market/stocks/FPT"));
   });
 
+  it("keeps server-filtered results searchable beyond the 500-symbol local summary", () => {
+    const summary: InstrumentCollection = {
+      ...collection,
+      data: Array.from({ length: 500 }, (_, index) => ({
+        ...instrument,
+        symbol: `S${String(index).padStart(2, "0")}`,
+      })),
+    };
+    render(<StocksView collection={collection} summary={summary} sectors={sectors} filters={{ q: "FPT", exchange: "", sort: "vn30", direction: "desc" }} selected="" selectedCandles={[]} index={index} />);
+
+    expect(screen.getByRole("row", { name: /FPT/ })).toBeInTheDocument();
+  });
+
   it("keeps the highlighted VN-Index chart between 50 and 120 visible sessions", () => {
     const dailyCandles = Array.from({ length: 140 }, (_, candleIndex) => ({
       timestamp: new Date(Date.UTC(2026, 0, candleIndex + 1, 3)).toISOString(),
@@ -244,7 +257,7 @@ describe("StocksView navigation", () => {
     expect(screen.getByLabelText("% tăng tối thiểu")).toBeInTheDocument();
   });
 
-  it("selects, removes and reloads up to three stocks in a comparison dialog", () => {
+  it("selects, removes and reloads up to two stocks in a comparison dialog", () => {
     const second = { ...instrument, symbol: "HPG", name: "Tập đoàn Hòa Phát", change_percent: "-1.2", is_vn30: false };
     const values = { ...collection, data: [instrument, second], pagination: { ...collection.pagination, total_items: 2 } };
     render(<StocksView collection={values} summary={values} sectors={sectors} filters={{ q: "", exchange: "", sort: "vn30", direction: "desc", mode: "basic" }} selected="" selectedCandles={[]} index={index} comparisonOptions={[instrument, second]} />);
@@ -255,8 +268,8 @@ describe("StocksView navigation", () => {
     fireEvent.click(screen.getByRole("button", { name: "Thêm FPT vào so sánh" }));
     fireEvent.click(screen.getByRole("button", { name: "Thêm HPG vào so sánh" }));
 
-    expect(screen.getByText("Đã chọn 2/3")).toBeInTheDocument();
-    expect(screen.getAllByText("Chưa có đánh giá AI đã kiểm định")).toHaveLength(2);
+    expect(screen.getByText("Đã chọn 2/2")).toBeInTheDocument();
+    expect(screen.getAllByText("Xu hướng phát triển (AI)")).toHaveLength(2);
     expect(screen.getAllByText("Chưa có").length).toBeGreaterThan(0);
     const metricGroups = document.querySelectorAll(".comparison-metrics");
     expect(metricGroups).toHaveLength(2);
@@ -266,7 +279,7 @@ describe("StocksView navigation", () => {
     });
 
     fireEvent.click(screen.getAllByRole("button", { name: "Gỡ HPG khỏi so sánh" })[0]);
-    expect(screen.getByText("Đã chọn 1/3")).toBeInTheDocument();
+    expect(screen.getByText("Đã chọn 1/2")).toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: "Thêm HPG vào so sánh" }));
     fireEvent.click(screen.getByRole("button", { name: "Tải dữ liệu so sánh" }));
 

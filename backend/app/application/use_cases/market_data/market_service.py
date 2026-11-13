@@ -4,11 +4,11 @@ from __future__ import annotations
 
 import base64
 import json
-import math
+import re
 import unicodedata
 from collections.abc import Callable
-from datetime import UTC, datetime, timedelta
-from decimal import Decimal
+from datetime import UTC, datetime
+from decimal import ROUND_HALF_UP, Decimal
 from typing import Any
 
 from app.domain.entities.market import (
@@ -17,6 +17,7 @@ from app.domain.entities.market import (
     MarketDepthLevel,
     MarketIndex,
     MarketInstrument,
+    resolve_sector_hierarchy,
 )
 from app.domain.repositories.i_market_provider import IMarketProvider
 from app.infrastructure.external.crawlers.financial_report_crawler import financial_report_crawler
@@ -66,11 +67,13 @@ def _intraday_trade(
 
 
 def _instrument(value: MarketInstrument, include_candles: bool = True) -> dict[str, object]:
+    parent_sector, subsector = resolve_sector_hierarchy(value.sector, value.subsector)
     payload: dict[str, object] = {
         "symbol": value.symbol,
         "name": value.name,
         "exchange": value.exchange,
-        "sector": value.sector,
+        "sector": parent_sector,
+        "subsector": subsector or None,
         "price": _decimal(value.price),
         "reference_price": _decimal(value.reference_price),
         "ceiling_price": _decimal(value.ceiling_price),
@@ -130,7 +133,7 @@ def _index(value: MarketIndex, include_candles: bool = True) -> dict[str, object
         "floor_count": value.floor_count,
     }
     if include_candles:
-        payload["candles"] = [_candle(item) for item in value.candles[-170:]]
+        payload["candles"] = [_candle(item) for item in value.candles[-500:]]
     return payload
 
 
@@ -158,113 +161,18 @@ def decode_cursor(value: str | None) -> int:
         raise ValueError("Pagination cursor is invalid") from exc
 
 
-
-
-def _synthesize_intraday_from_daily(
-    daily_candles: tuple[Candle, ...],
-    interval: str,
-) -> tuple[Candle, ...]:
-    """Generate representative intraday candles from daily bars if intraday series is unavailable."""
-    if not daily_candles:
-        return ()
-    step_minutes = 5 if interval == "5m" else (30 if interval == "30m" else 60)
-    session_offsets: list[int] = []
-    curr = 9 * 60 + 15
-    while curr <= 11 * 60 + 30:
-        session_offsets.append(curr)
-        curr += step_minutes
-    curr = 13 * 60
-    while curr <= 14 * 60 + 45:
-        session_offsets.append(curr)
-        curr += step_minutes
-
-    total_steps = max(1, len(session_offsets))
-    res: list[Candle] = []
-    for day in daily_candles[-10:]:
-        d_open = day.open
-        d_close = day.close
-        d_high = day.high
-        d_low = day.low
-        d_vol = max(Decimal("100"), day.volume)
-        step_vol = max(Decimal("10"), (d_vol / Decimal(str(total_steps))).quantize(Decimal("1")))
-
-        for idx, offset in enumerate(session_offsets):
-            minute = offset % 60
-            hour = offset // 60
-            ts = day.timestamp.replace(hour=hour, minute=minute, second=0, microsecond=0)
-            progress = Decimal(str(idx + 1)) / Decimal(str(total_steps))
-            osc = Decimal(str(math.sin(idx * 0.8) * 0.005))
-            bar_close = (d_open + (d_close - d_open) * progress + (d_high - d_low) * osc).quantize(Decimal("10"))
-            bar_open = (d_open if not res else res[-1].close).quantize(Decimal("10"))
-            bar_high = max(bar_open, bar_close, min(d_high, max(bar_open, bar_close) + Decimal("50")))
-            bar_low = min(bar_open, bar_close, max(d_low, min(bar_open, bar_close) - Decimal("50")))
-            res.append(Candle(
-                timestamp=ts,
-                open=bar_open,
-                high=bar_high,
-                low=bar_low,
-                close=bar_close,
-                volume=step_vol,
-            ))
-    return tuple(res)
-
-
-def _synthesize_candles_from_instrument(
-    instrument: MarketInstrument,
-    interval: str,
-    count: int,
-) -> tuple[Candle, ...]:
-    """Generate deterministic historical candles for an instrument when provider returns empty."""
-    base_price = instrument.price if instrument.price > 0 else (
-        instrument.reference_price if instrument.reference_price > 0 else Decimal("20000")
-    )
-    base_vol = instrument.volume if instrument.volume > 0 else Decimal("50000")
-    now = datetime.now(UTC)
-    res: list[Candle] = []
-
-    if interval in {"5m", "30m", "1h"}:
-        step_minutes = 5 if interval == "5m" else (30 if interval == "30m" else 60)
-        curr_ts = now.replace(second=0, microsecond=0)
-        for i in range(count):
-            factor = Decimal(str(1.0 + math.sin(i * 0.35 + len(instrument.symbol)) * 0.015))
-            c_price = (base_price * factor).quantize(Decimal("10"))
-            o_price = (base_price * Decimal(str(1.0 + math.sin((i - 1) * 0.35 + len(instrument.symbol)) * 0.015))).quantize(Decimal("10"))
-            h_price = max(o_price, c_price) + Decimal("50")
-            l_price = max(Decimal("100"), min(o_price, c_price) - Decimal("50"))
-            ts = curr_ts - timedelta(minutes=(count - i) * step_minutes)
-            res.append(Candle(
-                timestamp=ts,
-                open=o_price,
-                high=h_price,
-                low=l_price,
-                close=c_price,
-                volume=max(Decimal("100"), (base_vol / Decimal("10")).quantize(Decimal("1"))),
-            ))
+def _round_to_tick(price: Decimal, exchange: str = "HOSE") -> Decimal:
+    """Round price according to official Vietnamese stock exchange rules."""
+    if price <= 0:
+        return Decimal("1000")
+    if price >= Decimal("50000"):
+        tick = Decimal("100")
+    elif price >= Decimal("10000"):
+        tick = Decimal("50") if exchange.upper() in {"HOSE", "VN30"} else Decimal("100")
     else:
-        curr_date = now.date()
-        dates: list[datetime] = []
-        d = curr_date
-        while len(dates) < count:
-            if d.weekday() < 5:
-                dates.append(datetime(d.year, d.month, d.day, 8, 0, 0, tzinfo=UTC))
-            d -= timedelta(days=1)
-        dates.reverse()
+        tick = Decimal("10") if exchange.upper() in {"HOSE", "VN30"} else Decimal("100")
+    return (price / tick).quantize(Decimal("1"), rounding=ROUND_HALF_UP) * tick
 
-        for i, dt in enumerate(dates):
-            factor = Decimal(str(1.0 + math.sin(i * 0.2 + len(instrument.symbol)) * 0.04))
-            c_price = (base_price * factor).quantize(Decimal("10"))
-            o_price = (base_price * Decimal(str(1.0 + math.sin((i - 1) * 0.2 + len(instrument.symbol)) * 0.04))).quantize(Decimal("10"))
-            h_price = max(o_price, c_price) + Decimal("100")
-            l_price = max(Decimal("100"), min(o_price, c_price) - Decimal("100"))
-            res.append(Candle(
-                timestamp=dt,
-                open=o_price,
-                high=h_price,
-                low=l_price,
-                close=c_price,
-                volume=base_vol,
-            ))
-    return tuple(res)
 
 class MarketService:
     def __init__(self, provider: IMarketProvider) -> None:
@@ -356,7 +264,16 @@ class MarketService:
         if exchange:
             values = [item for item in values if item.exchange == exchange]
         if sector:
-            values = [item for item in values if item.sector == sector]
+            values = [
+                item
+                for item in values
+                if (
+                    item.sector == sector
+                    or item.subsector == sector
+                    or resolve_sector_hierarchy(item.sector, item.subsector)[0] == sector
+                    or resolve_sector_hierarchy(item.sector, item.subsector)[1] == sector
+                )
+            ]
         if min_change is not None:
             values = [item for item in values if item.change_percent >= min_change]
         if max_change is not None:
@@ -403,11 +320,14 @@ class MarketService:
 
     def sectors(self) -> dict[str, object]:
         groups: dict[str, list[MarketInstrument]] = {}
+        subgroups: dict[tuple[str, str], list[MarketInstrument]] = {}
         for item in self._provider.instruments():
-            groups.setdefault(item.sector or "Chưa phân loại", []).append(item)
+            parent, sub = resolve_sector_hierarchy(item.sector, item.subsector)
+            groups.setdefault(parent, []).append(item)
+            if sub and sub != parent:
+                subgroups.setdefault((parent, sub), []).append(item)
 
-        sectors: list[dict[str, object]] = []
-        for name, members in groups.items():
+        def aggregate(name: str, members: list[MarketInstrument]) -> dict[str, object]:
             matched_value = sum(
                 (max(item.matched_value, Decimal()) for item in members),
                 Decimal(),
@@ -427,26 +347,37 @@ class MarketService:
                 change_percent = sum(
                     (item.change_percent for item in members), Decimal()
                 ) / Decimal(len(members))
-            sectors.append(
-                {
-                    "name": name,
-                    "change_percent": _decimal(change_percent.quantize(Decimal("0.01"))),
-                    "member_count": len(members),
-                    "advances": sum(item.change > 0 for item in members),
-                    "declines": sum(item.change < 0 for item in members),
-                    "unchanged": sum(item.change == 0 for item in members),
-                    "matched_value": _decimal(matched_value),
-                    "foreign_net_value": _decimal(
-                        sum((item.foreign_net_value for item in members), Decimal())
-                    ),
-                    "market_cap": _decimal(sum((item.market_cap for item in members), Decimal())),
-                }
-            )
+            return {
+                "name": name,
+                "change_percent": _decimal(change_percent.quantize(Decimal("0.01"))),
+                "member_count": len(members),
+                "advances": sum(item.change > 0 for item in members),
+                "declines": sum(item.change < 0 for item in members),
+                "unchanged": sum(item.change == 0 for item in members),
+                "matched_value": _decimal(matched_value),
+                "foreign_net_value": _decimal(
+                    sum((item.foreign_net_value for item in members), Decimal())
+                ),
+                "market_cap": _decimal(sum((item.market_cap for item in members), Decimal())),
+            }
+
+        sectors = [aggregate(name, members) for name, members in groups.items()]
         sectors.sort(
             key=lambda item: (abs(Decimal(str(item["change_percent"]))), str(item["name"])),
             reverse=True,
         )
-        return {"data": sectors, "meta": self.meta()}
+        subsectors = [
+            {"parent_sector": parent, **aggregate(name, members)}
+            for (parent, name), members in subgroups.items()
+        ]
+        subsectors.sort(
+            key=lambda item: (
+                str(item["parent_sector"]),
+                -abs(Decimal(str(item["change_percent"]))),
+                str(item["name"]),
+            )
+        )
+        return {"data": sectors, "subsectors": subsectors, "meta": self.meta()}
 
     def instrument(
         self, symbol: str, *, include_fundamentals: bool = True
@@ -466,17 +397,28 @@ class MarketService:
         return {"data": _index(value), "meta": self.meta()} if value else None
 
     def candles(self, symbol: str, interval: str, limit: int) -> dict[str, object]:
+        instrument = self._provider.instrument(symbol, include_fundamentals=False)
+        exchange = instrument.exchange if instrument else "HOSE"
         values = list(self._provider.candles(symbol, interval))
-        if not values and interval in {"5m", "30m", "1h"}:
-            daily_candles = self._provider.candles(symbol, "1d")
-            if daily_candles:
-                values = list(_synthesize_intraday_from_daily(daily_candles, interval))
-        if not values:
-            instrument = self._provider.instrument(symbol, include_fundamentals=False)
-            if instrument:
-                values = list(_synthesize_candles_from_instrument(instrument, interval, max(limit, 70)))
+        # Sanitize and ensure tick size conformance & candle geometry consistency
+        sanitized_values: list[Candle] = []
+        for c in values:
+            o = _round_to_tick(c.open, exchange)
+            cl = _round_to_tick(c.close, exchange)
+            high_val = max(o, cl, _round_to_tick(c.high, exchange))
+            low_val = max(Decimal("100"), min(o, cl, _round_to_tick(c.low, exchange)))
+            sanitized_values.append(
+                Candle(
+                    timestamp=c.timestamp,
+                    open=o,
+                    high=high_val,
+                    low=low_val,
+                    close=cl,
+                    volume=max(Decimal("0"), c.volume),
+                )
+            )
 
-        limited_values = values[-limit:]
+        limited_values = sanitized_values[-limit:]
         return {
             "data": [_candle(item) for item in limited_values],
             "instrument": symbol.upper(),
@@ -718,6 +660,57 @@ class MarketService:
             ttm_rows.sort(key=lambda r: (_int(r.get("year")), _int(r.get("quarter"))))
             row_map = {(_int(r.get("year")), _int(r.get("quarter"))): r for r in ttm_rows}
 
+            # Lazy-loaded statement chart lookup for YoY fallback when TTM profit/revenue is absent
+            stmt_quarter_map: dict[tuple[int, int], dict[str, Decimal]] | None = None
+
+            def _get_stmt_quarter_map() -> dict[tuple[int, int], dict[str, Decimal]]:
+                nonlocal stmt_quarter_map
+                if stmt_quarter_map is not None:
+                    return stmt_quarter_map
+                parsed: dict[tuple[int, int], dict[str, Decimal]] = {}
+                try:
+                    fs_fn = getattr(self._provider, "financial_statements", None)
+                    stmt = fs_fn(instrument.symbol, "quarter", 8) if callable(fs_fn) else {}
+                except Exception:
+                    stmt = {}
+                charts = stmt.get("charts") if isinstance(stmt, dict) else None
+                if not isinstance(charts, list) or not charts:
+                    try:
+                        from app.workers.financial_statements_sync import get_stored_statement
+
+                        stored = get_stored_statement(instrument.symbol, "quarter")
+                        if isinstance(stored, dict):
+                            charts = stored.get("charts")
+                    except Exception:
+                        charts = None
+                if isinstance(charts, list):
+                    for item in charts:
+                        if not isinstance(item, dict):
+                            continue
+                        period_str = str(item.get("period") or "").strip().upper()
+                        # Matches Q3-2026, Q3/2026, Q3 2026
+                        m = re.match(r"Q([1-4])[-/\s](\d{4})", period_str)
+                        if not m:
+                            continue
+                        pq = int(m.group(1))
+                        py = int(m.group(2))
+                        rev_b = _dec(item.get("revenue_billion"))
+                        np_b = _dec(item.get("net_profit_billion"))
+                        nm_p = _dec(item.get("net_margin_percent"))
+                        gm_p = _dec(item.get("gross_margin_percent"))
+                        entry: dict[str, Decimal] = {}
+                        if rev_b is not None:
+                            entry["rev"] = rev_b
+                        if np_b is not None:
+                            entry["np"] = np_b
+                        if nm_p is not None:
+                            entry["nm"] = nm_p / Decimal("100")
+                        if gm_p is not None:
+                            entry["gm"] = gm_p / Decimal("100")
+                        parsed[(py, pq)] = entry
+                stmt_quarter_map = parsed
+                return stmt_quarter_map
+
             # Pick the latest 4-6 quarters
             recent_rows = ttm_rows[-6:]
             for r in recent_rows:
@@ -729,16 +722,38 @@ class MarketService:
                 margin_val = _dec(r.get("after_tax_profit_margin"))
                 gross_val = _dec(r.get("gross_margin"))
                 equity_val = _dec(r.get("owners_equity"))
+                revenue_ttm_value = _dec(r.get("revenue_ttm"))
+                profit_ttm_value = _dec(r.get("profit_ttm"))
 
                 rev_yoy: str | None = None
                 profit_yoy: str | None = None
+
+                if prev is not None and revenue_ttm_value is not None:
+                    previous_revenue = _dec(prev.get("revenue_ttm"))
+                    if previous_revenue not in (None, Decimal("0")):
+                        revenue_growth = (
+                            (revenue_ttm_value - previous_revenue)
+                            / abs(previous_revenue)
+                            * Decimal("100")
+                        )
+                        rev_yoy = f"{'+' if revenue_growth >= 0 else ''}{revenue_growth:.1f}%"
+
+                if prev is not None and profit_ttm_value is not None:
+                    previous_profit = _dec(prev.get("profit_ttm"))
+                    if previous_profit not in (None, Decimal("0")):
+                        profit_growth = (
+                            (profit_ttm_value - previous_profit)
+                            / abs(previous_profit)
+                            * Decimal("100")
+                        )
+                        profit_yoy = f"{'+' if profit_growth >= 0 else ''}{profit_growth:.1f}%"
 
                 if prev and roe_val is not None and equity_val is not None:
                     prev_roe = _dec(prev.get("roe"))
                     prev_equity = _dec(prev.get("owners_equity"))
                     prev_margin = _dec(prev.get("after_tax_profit_margin"))
 
-                    if prev_roe is not None and prev_equity is not None:
+                    if profit_yoy is None and prev_roe is not None and prev_equity is not None:
                         cur_profit = equity_val * roe_val
                         prev_profit = prev_equity * prev_roe
                         if prev_profit != Decimal("0"):
@@ -747,7 +762,7 @@ class MarketService:
                             )
                             profit_yoy = f"{'+' if p_growth >= Decimal('0') else ''}{p_growth:.1f}%"
 
-                            if (
+                            if rev_yoy is None and (
                                 margin_val
                                 and prev_margin
                                 and margin_val > Decimal("0")
@@ -765,6 +780,28 @@ class MarketService:
                     lg = _dec(r.get("loans_growth"))
                     if lg is not None:
                         rev_yoy = f"{'+' if lg >= Decimal('0') else ''}{lg * Decimal('100'):.1f}%"
+
+                # Fallback 1: Financial statement quarterly charts YoY
+                if rev_yoy is None or profit_yoy is None:
+                    qmap = _get_stmt_quarter_map()
+                    cur_stmt = qmap.get((y, q))
+                    prev_stmt = qmap.get((y - 1, q))
+                    if cur_stmt and prev_stmt:
+                        if rev_yoy is None and "rev" in cur_stmt and prev_stmt.get("rev") not in (None, Decimal("0")):
+                            r_g = (cur_stmt["rev"] - prev_stmt["rev"]) / abs(prev_stmt["rev"]) * Decimal("100")
+                            rev_yoy = f"{'+' if r_g >= Decimal('0') else ''}{r_g:.1f}%"
+                        if profit_yoy is None and "np" in cur_stmt and prev_stmt.get("np") not in (None, Decimal("0")):
+                            p_g = (cur_stmt["np"] - prev_stmt["np"]) / abs(prev_stmt["np"]) * Decimal("100")
+                            profit_yoy = f"{'+' if p_g >= Decimal('0') else ''}{p_g:.1f}%"
+
+                # Fallback 2: Derive profit YoY from revenue YoY and net margin identity
+                if profit_yoy is None and rev_yoy is not None and prev is not None and margin_val is not None:
+                    prev_margin = _dec(prev.get("after_tax_profit_margin"))
+                    rev_growth_pct = _dec(rev_yoy.replace("%", "").replace("+", ""))
+                    if prev_margin not in (None, Decimal("0")) and rev_growth_pct is not None:
+                        ratio = (Decimal("1") + rev_growth_pct / Decimal("100")) * (margin_val / prev_margin)
+                        p_g = (ratio - Decimal("1")) * Decimal("100")
+                        profit_yoy = f"{'+' if p_g >= Decimal('0') else ''}{p_g:.1f}%"
 
                 quarters.append(
                     {
@@ -812,47 +849,24 @@ class MarketService:
                 if eb_d is not None and eb_d > Decimal("0"):
                     ebitda = f"{eb_d / Decimal('1000000000'):,.0f} tỷ"
 
+                direct_revenue = _dec(latest_ttm.get("revenue_ttm"))
+                if direct_revenue is not None:
+                    revenue_ttm = f"{direct_revenue / Decimal('1000000000'):,.0f} tỷ"
+
+                direct_profit = _dec(latest_ttm.get("profit_ttm"))
+                if direct_profit is not None:
+                    profit_ttm = f"{direct_profit / Decimal('1000000000'):,.0f} tỷ"
+
                 mcap_d = _dec(latest_ttm.get("market_cap"))
                 ps_d = _dec(latest_ttm.get("ps"))
-                if mcap_d and ps_d and ps_d > Decimal("0"):
+                if revenue_ttm is None and mcap_d and ps_d and ps_d > Decimal("0"):
                     rev_calc = (mcap_d / ps_d) / Decimal("1000000000")
                     revenue_ttm = f"{rev_calc:,.0f} tỷ"
 
                 pe_d = _dec(latest_ttm.get("pe")) or instrument.pe
-                if mcap_d and pe_d and pe_d > Decimal("0"):
+                if profit_ttm is None and mcap_d and pe_d and pe_d > Decimal("0"):
                     prof_calc = (mcap_d / pe_d) / Decimal("1000000000")
                     profit_ttm = f"{prof_calc:,.0f} tỷ"
-
-        # Tier 2 Fallback: If no ratio quarters found, synthesize 4 quarters from trend
-        if len(quarters) < 4:
-            base_roe = instrument.roe_percent or Decimal("12.5")
-            base_margin = Decimal("10.2")
-            periods = ["Q3/2025", "Q4/2025", "Q1/2026", "Q2/2026"]
-            quarters = []
-            for i, period_label in enumerate(periods):
-                mod = (i - 1) * Decimal("1.2")
-                q_roe = max(Decimal("4.0"), base_roe + mod)
-                q_margin = max(Decimal("3.0"), base_margin + (i - 1) * Decimal("0.8"))
-                p_growth = (i - 1) * Decimal("4.5") + Decimal("8.0")
-                r_growth = (i - 1) * Decimal("3.2") + Decimal("6.5")
-                p_sign = "+" if p_growth >= Decimal("0") else ""
-                r_sign = "+" if r_growth >= Decimal("0") else ""
-                quarters.append(
-                    {
-                        "period": period_label,
-                        "revenue_growth_yoy": f"{r_sign}{r_growth:.1f}%",
-                        "profit_growth_yoy": f"{p_sign}{p_growth:.1f}%",
-                        "roe": f"{q_roe:.1f}%",
-                        "net_margin": f"{q_margin:.1f}%",
-                        "gross_margin": f"{q_margin + Decimal('12.5'):.1f}%",
-                    }
-                )
-
-            roa_percent = roa_percent or f"{base_roe * Decimal('0.45'):.1f}%"
-            gross_margin_percent = gross_margin_percent or "22.8%"
-            net_margin_percent = net_margin_percent or "10.5%"
-            current_ratio = current_ratio or "1.52 lần"
-            debt_to_equity = debt_to_equity or "0.95 lần"
 
         # Derived EPS & BVPS
         if instrument.eps is not None:
@@ -866,13 +880,14 @@ class MarketService:
             bvps = f"{cur_price / instrument.pb:,.0f} ₫"
 
         # 4. Determine Health Status & Insights
-        current_roe = instrument.roe_percent or Decimal("12.0")
+        current_roe = instrument.roe_percent
         has_positive_profit = any(
             q.get("profit_growth_yoy") and not str(q.get("profit_growth_yoy")).startswith("-")
             for q in quarters[-2:]
         )
-        is_expanding = current_roe >= Decimal("15.0") or (
-            cap_1y and not cap_1y.startswith("-") and current_roe >= Decimal("11.0")
+        is_expanding = current_roe is not None and (
+            current_roe >= Decimal("15.0")
+            or (cap_1y and not cap_1y.startswith("-") and current_roe >= Decimal("11.0"))
         )
         is_accumulating = vol_ratio >= Decimal("1.05") and (cap_1m and not cap_1m.startswith("-"))
 
@@ -884,7 +899,7 @@ class MarketService:
                 f"trong nhóm {instrument.sector or 'thị trường'}, với hiệu quả sinh lời trên vốn "
                 "cao và vị thế kinh doanh vững chắc."
             )
-        elif current_roe >= Decimal("8.0") or has_positive_profit:
+        elif (current_roe is not None and current_roe >= Decimal("8.0")) or has_positive_profit:
             health_status = "stable"
             health_title = "Hoạt động & tài chính ổn định"
             health_summary = (
@@ -917,16 +932,28 @@ class MarketService:
         sector_name = instrument.sector or "thị trường"
         roe_evaluation = (
             "thuộc nhóm sinh lời cao vượt trội trong ngành."
-            if current_roe >= Decimal("15")
-            else "ở mức ổn định, đáp ứng tiêu chuẩn đầu tư an toàn."
+            if current_roe is not None and current_roe >= Decimal("15")
+            else (
+                "ở mức ổn định, đáp ứng tiêu chuẩn đầu tư an toàn."
+                if current_roe is not None
+                else "chưa có đủ dữ liệu nguồn để đánh giá."
+            )
         )
-        insight_1 = f"Hiệu quả vốn (ROE): Đạt {current_roe:.1f}%, {roe_evaluation}"
+        insight_1 = (
+            f"Hiệu quả vốn (ROE): Đạt {current_roe:.1f}%, {roe_evaluation}"
+            if current_roe is not None
+            else f"Hiệu quả vốn (ROE): Chưa có dữ liệu nguồn; {roe_evaluation}"
+        )
 
-        pe_str = f"{instrument.pe:.1f} lần" if instrument.pe is not None else "đang cập nhật"
+        pe_str = f"{instrument.pe:.1f} lần" if instrument.pe is not None else "chưa có dữ liệu"
         pe_eval = (
             "vùng định giá hấp dẫn so với tiềm năng tăng trưởng trung hạn."
             if instrument.pe and instrument.pe < Decimal("15")
-            else "phản ánh kỳ vọng cao từ thị trường vào chu kỳ kinh doanh mới."
+            else (
+                "phản ánh kỳ vọng cao từ thị trường vào chu kỳ kinh doanh mới."
+                if instrument.pe
+                else "chưa có đủ dữ liệu nguồn để đánh giá."
+            )
         )
         insight_2 = (
             f"Định giá P/E: Hiện ở mức {pe_str} với quy mô vốn hóa {market_cap_str}, {pe_eval}"

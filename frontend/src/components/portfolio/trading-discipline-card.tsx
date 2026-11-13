@@ -139,10 +139,10 @@ export function TradingDisciplineCard({ initialMetrics, dashboard }: Props) {
       >
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: "0.5rem" }}>
           <div>
-            <div style={{ fontSize: "0.75rem", color: "#94a3b8", fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.05em" }}>
+            <div style={{ fontSize: "0.85rem", color: "#94a3b8", fontWeight: 750, textTransform: "uppercase", letterSpacing: "0.05em" }}>
               HỆ THỐNG ĐÁNH GIÁ HÀNH VI ĐẦU TƯ
             </div>
-            <div style={{ fontSize: "1.2rem", fontWeight: 800, color: "#ffffff", marginTop: "0.15rem" }}>
+            <div style={{ fontSize: "1.25rem", fontWeight: 800, color: "#ffffff", marginTop: "0.15rem" }}>
               Chỉ số Kỷ luật Giao dịch
             </div>
           </div>
@@ -151,9 +151,9 @@ export function TradingDisciplineCard({ initialMetrics, dashboard }: Props) {
             <span
               style={{
                 display: "inline-block",
-                padding: "0.25rem 0.75rem",
+                padding: "0.3rem 0.85rem",
                 borderRadius: "1rem",
-                fontSize: "0.8rem",
+                fontSize: "0.86rem",
                 fontWeight: 700,
                 background: "rgba(148, 163, 184, 0.15)",
                 color: "#94a3b8",
@@ -167,41 +167,41 @@ export function TradingDisciplineCard({ initialMetrics, dashboard }: Props) {
 
         {/* 4 Indicators Grid */}
         <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(130px, 1fr))", gap: "0.75rem" }}>
-          <div style={{ background: "#06101d", padding: "0.75rem", borderRadius: "0.5rem", border: "1px solid #142a42" }}>
-            <div style={{ fontSize: "0.7rem", color: "#94a3b8" }}>Kỷ luật cắt lỗ (-7%)</div>
-            <div style={{ fontSize: "1.1rem", fontWeight: 700, color: "#94a3b8", marginTop: "0.2rem" }}>
+          <div style={{ background: "#06101d", padding: "0.85rem", borderRadius: "0.5rem", border: "1px solid #142a42" }}>
+            <div style={{ fontSize: "0.85rem", color: "#cbd5e1", fontWeight: 600 }}>Kỷ luật cắt lỗ (-7%)</div>
+            <div style={{ fontSize: "1.15rem", fontWeight: 700, color: "#94a3b8", marginTop: "0.25rem" }}>
               -- / 100
             </div>
-            <div style={{ fontSize: "0.68rem", color: "#64748b", marginTop: "0.15rem" }}>Chưa có vị thế</div>
+            <div style={{ fontSize: "0.78rem", color: "#64748b", marginTop: "0.15rem" }}>Chưa có vị thế</div>
           </div>
 
-          <div style={{ background: "#06101d", padding: "0.75rem", borderRadius: "0.5rem", border: "1px solid #142a42" }}>
-            <div style={{ fontSize: "0.7rem", color: "#94a3b8" }}>Đa dạng hóa danh mục</div>
-            <div style={{ fontSize: "1.1rem", fontWeight: 700, color: "#94a3b8", marginTop: "0.2rem" }}>
+          <div style={{ background: "#06101d", padding: "0.85rem", borderRadius: "0.5rem", border: "1px solid #142a42" }}>
+            <div style={{ fontSize: "0.85rem", color: "#cbd5e1", fontWeight: 600 }}>Đa dạng hóa danh mục</div>
+            <div style={{ fontSize: "1.15rem", fontWeight: 700, color: "#94a3b8", marginTop: "0.25rem" }}>
               -- / 100
             </div>
-            <div style={{ fontSize: "0.68rem", color: "#64748b", marginTop: "0.15rem" }}>Chưa giải ngân</div>
+            <div style={{ fontSize: "0.78rem", color: "#64748b", marginTop: "0.15rem" }}>Chưa giải ngân</div>
           </div>
 
-          <div style={{ background: "#06101d", padding: "0.75rem", borderRadius: "0.5rem", border: "1px solid #142a42" }}>
-            <div style={{ fontSize: "0.7rem", color: "#94a3b8" }}>Quản trị tiền mặt</div>
-            <div style={{ fontSize: "1.1rem", fontWeight: 700, color: "#94a3b8", marginTop: "0.2rem" }}>
+          <div style={{ background: "#06101d", padding: "0.85rem", borderRadius: "0.5rem", border: "1px solid #142a42" }}>
+            <div style={{ fontSize: "0.85rem", color: "#cbd5e1", fontWeight: 600 }}>Quản trị tiền mặt</div>
+            <div style={{ fontSize: "1.15rem", fontWeight: 700, color: "#94a3b8", marginTop: "0.25rem" }}>
               -- / 100
             </div>
-            <div style={{ fontSize: "0.68rem", color: "#64748b", marginTop: "0.15rem" }}>100% tiền mặt</div>
+            <div style={{ fontSize: "0.78rem", color: "#64748b", marginTop: "0.15rem" }}>100% tiền mặt</div>
           </div>
 
-          <div style={{ background: "#06101d", padding: "0.75rem", borderRadius: "0.5rem", border: "1px solid #142a42" }}>
-            <div style={{ fontSize: "0.7rem", color: "#94a3b8" }}>Kiểm soát nhịp độ</div>
-            <div style={{ fontSize: "1.1rem", fontWeight: 700, color: "#94a3b8", marginTop: "0.2rem" }}>
+          <div style={{ background: "#06101d", padding: "0.85rem", borderRadius: "0.5rem", border: "1px solid #142a42" }}>
+            <div style={{ fontSize: "0.85rem", color: "#cbd5e1", fontWeight: 600 }}>Kiểm soát nhịp độ</div>
+            <div style={{ fontSize: "1.15rem", fontWeight: 700, color: "#94a3b8", marginTop: "0.25rem" }}>
               -- / 100
             </div>
-            <div style={{ fontSize: "0.68rem", color: "#64748b", marginTop: "0.15rem" }}>Chờ lệnh đầu tiên</div>
+            <div style={{ fontSize: "0.78rem", color: "#64748b", marginTop: "0.15rem" }}>Chờ lệnh đầu tiên</div>
           </div>
         </div>
 
         {/* Guidance Notice */}
-        <div style={{ color: "#94a3b8", fontSize: "0.82rem", lineHeight: 1.5, background: "rgba(6, 16, 29, 0.6)", padding: "0.6rem 0.75rem", borderRadius: "0.375rem", border: "1px solid #142a42" }}>
+        <div style={{ color: "#cbd5e1", fontSize: "0.88rem", lineHeight: 1.55, background: "rgba(6, 16, 29, 0.6)", padding: "0.65rem 0.85rem", borderRadius: "0.375rem", border: "1px solid #142a42" }}>
           Tài khoản chưa phát sinh giao dịch. Hãy thực hiện lệnh mua/bán mô phỏng đầu tiên tại bảng cổ phiếu bên dưới để hệ thống bắt đầu đo lường 4 chỉ số kỷ luật của bạn.
         </div>
 
@@ -210,9 +210,9 @@ export function TradingDisciplineCard({ initialMetrics, dashboard }: Props) {
           <Link
             href="/learn/readiness"
             style={{
-              fontSize: "0.8rem",
+              fontSize: "0.88rem",
               color: "#38bdf8",
-              fontWeight: 600,
+              fontWeight: 700,
               textDecoration: "none",
             }}
           >
@@ -252,10 +252,10 @@ export function TradingDisciplineCard({ initialMetrics, dashboard }: Props) {
     >
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: "0.5rem" }}>
         <div>
-          <div style={{ fontSize: "0.75rem", color: "#94a3b8", fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.05em" }}>
+          <div style={{ fontSize: "0.85rem", color: "#94a3b8", fontWeight: 750, textTransform: "uppercase", letterSpacing: "0.05em" }}>
             HỆ THỐNG ĐÁNH GIÁ HÀNH VI ĐẦU TƯ
           </div>
-          <div style={{ fontSize: "1.2rem", fontWeight: 800, color: "#ffffff", marginTop: "0.15rem" }}>
+          <div style={{ fontSize: "1.25rem", fontWeight: 800, color: "#ffffff", marginTop: "0.15rem" }}>
             Chỉ số Kỷ luật Giao dịch
           </div>
         </div>
@@ -264,9 +264,9 @@ export function TradingDisciplineCard({ initialMetrics, dashboard }: Props) {
           <span
             style={{
               display: "inline-block",
-              padding: "0.25rem 0.75rem",
+              padding: "0.3rem 0.85rem",
               borderRadius: "1rem",
-              fontSize: "0.8rem",
+              fontSize: "0.86rem",
               fontWeight: 700,
               background: `rgba(${badgeColor === "#38e1b0" ? "56, 225, 176" : badgeColor === "#38bdf8" ? "56, 189, 248" : badgeColor === "#f59e0b" ? "245, 158, 11" : "244, 63, 94"}, 0.15)`,
               color: badgeColor,
@@ -280,37 +280,37 @@ export function TradingDisciplineCard({ initialMetrics, dashboard }: Props) {
 
       {/* 4 Indicators Grid */}
       <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(130px, 1fr))", gap: "0.75rem" }}>
-        <div style={{ background: "#06101d", padding: "0.75rem", borderRadius: "0.5rem", border: "1px solid #142a42" }}>
-          <div style={{ fontSize: "0.7rem", color: "#94a3b8" }}>Kỷ luật cắt lỗ (-7%)</div>
-          <div style={{ fontSize: "1.1rem", fontWeight: 700, color: metrics.cut_loss_score >= 70 ? "#38e1b0" : "#f43f5e", marginTop: "0.2rem" }}>
+        <div style={{ background: "#06101d", padding: "0.85rem", borderRadius: "0.5rem", border: "1px solid #142a42" }}>
+          <div style={{ fontSize: "0.85rem", color: "#cbd5e1", fontWeight: 600 }}>Kỷ luật cắt lỗ (-7%)</div>
+          <div style={{ fontSize: "1.15rem", fontWeight: 700, color: metrics.cut_loss_score >= 70 ? "#38e1b0" : "#f43f5e", marginTop: "0.25rem" }}>
             {metrics.cut_loss_score} / 100
           </div>
         </div>
 
-        <div style={{ background: "#06101d", padding: "0.75rem", borderRadius: "0.5rem", border: "1px solid #142a42" }}>
-          <div style={{ fontSize: "0.7rem", color: "#94a3b8" }}>Đa dạng hóa danh mục</div>
-          <div style={{ fontSize: "1.1rem", fontWeight: 700, color: metrics.diversification_score >= 70 ? "#38e1b0" : "#f59e0b", marginTop: "0.2rem" }}>
+        <div style={{ background: "#06101d", padding: "0.85rem", borderRadius: "0.5rem", border: "1px solid #142a42" }}>
+          <div style={{ fontSize: "0.85rem", color: "#cbd5e1", fontWeight: 600 }}>Đa dạng hóa danh mục</div>
+          <div style={{ fontSize: "1.15rem", fontWeight: 700, color: metrics.diversification_score >= 70 ? "#38e1b0" : "#f59e0b", marginTop: "0.25rem" }}>
             {metrics.diversification_score} / 100
           </div>
         </div>
 
-        <div style={{ background: "#06101d", padding: "0.75rem", borderRadius: "0.5rem", border: "1px solid #142a42" }}>
-          <div style={{ fontSize: "0.7rem", color: "#94a3b8" }}>Quản trị tiền mặt</div>
-          <div style={{ fontSize: "1.1rem", fontWeight: 700, color: metrics.cash_management_score >= 70 ? "#38e1b0" : "#38bdf8", marginTop: "0.2rem" }}>
+        <div style={{ background: "#06101d", padding: "0.85rem", borderRadius: "0.5rem", border: "1px solid #142a42" }}>
+          <div style={{ fontSize: "0.85rem", color: "#cbd5e1", fontWeight: 600 }}>Quản trị tiền mặt</div>
+          <div style={{ fontSize: "1.15rem", fontWeight: 700, color: metrics.cash_management_score >= 70 ? "#38e1b0" : "#38bdf8", marginTop: "0.25rem" }}>
             {metrics.cash_management_score} / 100
           </div>
         </div>
 
-        <div style={{ background: "#06101d", padding: "0.75rem", borderRadius: "0.5rem", border: "1px solid #142a42" }}>
-          <div style={{ fontSize: "0.7rem", color: "#94a3b8" }}>Kiểm soát nhịp độ</div>
-          <div style={{ fontSize: "1.1rem", fontWeight: 700, color: metrics.emotional_pacing_score >= 70 ? "#38e1b0" : "#f59e0b", marginTop: "0.2rem" }}>
+        <div style={{ background: "#06101d", padding: "0.85rem", borderRadius: "0.5rem", border: "1px solid #142a42" }}>
+          <div style={{ fontSize: "0.85rem", color: "#cbd5e1", fontWeight: 600 }}>Kiểm soát nhịp độ</div>
+          <div style={{ fontSize: "1.15rem", fontWeight: 700, color: metrics.emotional_pacing_score >= 70 ? "#38e1b0" : "#f59e0b", marginTop: "0.25rem" }}>
             {metrics.emotional_pacing_score} / 100
           </div>
         </div>
       </div>
 
       {/* Observations: Strengths & Recommendations */}
-      <div style={{ display: "flex", flexDirection: "column", gap: "0.4rem", fontSize: "0.82rem" }}>
+      <div style={{ display: "flex", flexDirection: "column", gap: "0.4rem", fontSize: "0.9rem", fontWeight: 550 }}>
         {(metrics.strengths || []).slice(0, 1).map((s, idx) => (
           <div key={`str-${idx}`} style={{ color: "#38e1b0" }}>
             Điểm mạnh: {s}
@@ -328,9 +328,9 @@ export function TradingDisciplineCard({ initialMetrics, dashboard }: Props) {
         <Link
           href="/learn/readiness"
           style={{
-            fontSize: "0.8rem",
+            fontSize: "0.88rem",
             color: "#38bdf8",
-            fontWeight: 600,
+            fontWeight: 700,
             textDecoration: "none",
           }}
         >

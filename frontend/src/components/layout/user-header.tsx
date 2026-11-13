@@ -54,31 +54,27 @@ function AdminPortalShortcut() {
   );
 }
 
+function buildLoginHref(pathname: string, search: string): string {
+  if (!pathname || pathname.startsWith("/login") || pathname.startsWith("/register") || pathname.startsWith("/forgot-password") || pathname.startsWith("/verify-email")) {
+    return "/login";
+  }
+  const target = search ? `${pathname}?${search}` : pathname;
+  return `/login?next=${encodeURIComponent(target)}`;
+}
+
 function AccountMenu() {
   const { status, user, logout } = useAuth();
-  const [open, setOpen] = useState(false);
   const [error, setError] = useState("");
-  const ref = useRef<HTMLDivElement>(null);
   const router = useRouter();
-
-  useEffect(() => {
-    const close = (event: PointerEvent) => {
-      if (!ref.current?.contains(event.target as Node)) setOpen(false);
-    };
-    document.addEventListener("pointerdown", close);
-    return () => document.removeEventListener("pointerdown", close);
-  }, []);
-  useEffect(() => {
-    const close = (event: KeyboardEvent) => { if (event.key === "Escape") setOpen(false); };
-    document.addEventListener("keydown", close);
-    return () => document.removeEventListener("keydown", close);
-  }, []);
+  const pathname = usePathname();
+  const searchParams = useSearchParams();
 
   if (status !== "authenticated" || !user) {
+    const loginHref = buildLoginHref(pathname, searchParams.toString());
     return (
       <Link
         className="account-link px-3 sm:px-4 py-1.5 text-xs font-bold rounded-lg bg-sky-500 hover:bg-sky-400 text-white shadow-md shadow-sky-500/20 transition whitespace-nowrap"
-        href="/login"
+        href={loginHref}
       >
         Đăng nhập
       </Link>
@@ -89,7 +85,6 @@ function AccountMenu() {
     setError("");
     try {
       await logout();
-      setOpen(false);
       router.push("/login?logout=success");
       router.refresh();
     } catch (value) {
@@ -97,47 +92,35 @@ function AccountMenu() {
     }
   }
 
-  const greeting = getUserGreeting(user.display_name);
+  const shortName = user.display_name.trim().includes("@")
+    ? user.display_name.trim().split("@")[0]
+    : user.display_name.trim();
 
   return (
-    <div className="account-menu relative shrink-0" ref={ref}>
-      <button
-        className="account-trigger flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl bg-slate-900 border border-slate-800 hover:border-slate-700 text-slate-200 text-xs font-semibold transition cursor-pointer whitespace-nowrap"
-        type="button"
-        onClick={() => setOpen((value) => !value)}
-        aria-haspopup="menu"
-        aria-expanded={open}
-      >
+    <div className="account-menu flex items-center gap-1.5 shrink-0">
+      <div className="flex items-center gap-2 px-2.5 py-1 rounded-xl bg-slate-900 border border-slate-800 text-slate-200 shadow-sm">
         <UserAvatar name={user.display_name} url={user.avatar_url} />
-        <span className="truncate max-w-[120px]">{greeting}</span>
-        <span aria-hidden="true" className="text-slate-400 text-xs">⌄</span>
-      </button>
-      {open && (
-        <div className="account-dropdown absolute right-0 mt-2 w-56 bg-slate-900 border border-slate-800 rounded-xl shadow-2xl py-1.5 z-50 text-xs sm:text-sm" role="menu">
-          <div className="px-4 py-2 border-b border-slate-800 text-xs text-slate-400">
-            Tài khoản: <strong className="text-slate-200">{user.display_name}</strong>
-          </div>
-          {user.role === "admin" && (
-            <Link
-              href="/admin"
-              role="menuitem"
-              onClick={() => setOpen(false)}
-              className="block px-4 py-2 text-sky-400 hover:bg-slate-800/80 font-bold border-b border-slate-800/80 transition"
-            >
-              Vào trang quản trị (Admin)
-            </Link>
-          )}
-          <button
-            type="button"
-            role="menuitem"
-            onClick={signOut}
-            className="w-full text-left px-4 py-2 text-rose-400 hover:bg-slate-800/80 font-semibold transition cursor-pointer"
-          >
-            Đăng xuất
-          </button>
-          {error && <p role="alert" className="px-4 py-1 text-xs text-rose-400 m-0">{error}</p>}
+        <div className="flex flex-col text-left leading-tight">
+          <span className="text-[10px] text-slate-400 font-medium">Xin chào</span>
+          <span className="text-xs font-bold text-slate-100 truncate max-w-[100px] sm:max-w-[130px]">
+            {shortName}
+          </span>
         </div>
-      )}
+      </div>
+      <button
+        type="button"
+        onClick={signOut}
+        title="Đăng xuất"
+        aria-label="Đăng xuất"
+        className="p-2 rounded-xl bg-slate-900 border border-slate-800 hover:border-rose-500/50 hover:bg-rose-950/40 text-slate-400 hover:text-rose-400 transition cursor-pointer flex items-center justify-center shrink-0 shadow-sm"
+      >
+        <svg xmlns="http://www.w3.org/2000/svg" className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+          <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4" />
+          <polyline points="16 17 21 12 16 7" />
+          <line x1="21" y1="12" x2="9" y2="12" />
+        </svg>
+      </button>
+      {error && <span role="alert" className="sr-only">{error}</span>}
     </div>
   );
 }
@@ -146,6 +129,9 @@ function MobileMenu() {
   const { status, user, logout } = useAuth();
   const [error, setError] = useState("");
   const router = useRouter();
+  const pathname = usePathname();
+  const searchParams = useSearchParams();
+  const loginHref = buildLoginHref(pathname, searchParams.toString());
   async function signOut() {
     setError("");
     try { await logout(); router.push("/login?logout=success"); router.refresh(); }
@@ -185,7 +171,7 @@ function MobileMenu() {
             </button>
           ) : (
             <Link
-              href="/login"
+              href={loginHref}
               className="block text-center py-2 bg-sky-500 text-white font-bold text-xs rounded-lg shadow-sm"
             >
               Đăng nhập
@@ -236,14 +222,73 @@ export function UserHeader() {
   );
 }
 
+const shownAuthKeys = new Set<string>();
+
 function AuthMessage() {
   const search = useSearchParams();
-  const message = search.get("auth") === "register-success"
+  const authParam = search.get("auth");
+  const rawMessage = authParam === "register-success"
     ? "Đăng ký thành công. Email xác nhận đã được gửi."
-    : search.get("auth") === "login-success" ? "Đăng nhập thành công." : "";
-  return message ? (
-    <div className="global-toast fixed bottom-4 right-4 z-50 bg-emerald-600 text-white text-xs font-bold px-4 py-2.5 rounded-xl shadow-2xl" role="status">
-      {message}
+    : authParam === "login-success" ? "Đăng nhập thành công." : "";
+
+  const [visible, setVisible] = useState(false);
+  const [closing, setClosing] = useState(false);
+  const [currentMessage, setCurrentMessage] = useState("");
+
+  useEffect(() => {
+    if (!rawMessage || !authParam) return;
+    if (shownAuthKeys.has(authParam)) return;
+    shownAuthKeys.add(authParam);
+
+    setCurrentMessage(rawMessage);
+    setVisible(true);
+    setClosing(false);
+
+    // Xóa ?auth=... khỏi URL để giữ URL sạch và không bị hiện lại khi refresh
+    if (typeof window !== "undefined") {
+      const url = new URL(window.location.href);
+      url.searchParams.delete("auth");
+      window.history.replaceState({}, "", url.pathname + (url.search ? url.search : "") + url.hash);
+    }
+
+    // Tự động ẩn chính xác sau 3 giây (3000ms), hiệu ứng fade-out mượt mà
+    const fadeTimer = setTimeout(() => {
+      setClosing(true);
+    }, 2800);
+
+    const removeTimer = setTimeout(() => {
+      setVisible(false);
+      setClosing(false);
+      setCurrentMessage("");
+    }, 3200);
+
+    return () => {
+      clearTimeout(fadeTimer);
+      clearTimeout(removeTimer);
+    };
+  }, [rawMessage, authParam]);
+
+  if (!visible || !currentMessage) return null;
+
+  return (
+    <div
+      className={`global-toast fixed bottom-4 right-4 z-50 flex items-center justify-between gap-3 text-xs font-bold px-4 py-2.5 rounded-xl shadow-2xl transition-all duration-300 ease-in-out ${
+        closing ? "opacity-0 translate-y-2 pointer-events-none" : "opacity-100 translate-y-0"
+      }`}
+      role="status"
+    >
+      <span>{currentMessage}</span>
+      <button
+        type="button"
+        onClick={() => {
+          setClosing(true);
+          setTimeout(() => setVisible(false), 200);
+        }}
+        className="ml-2 text-current opacity-70 hover:opacity-100 transition cursor-pointer text-sm font-bold leading-none"
+        aria-label="Đóng thông báo"
+      >
+        ×
+      </button>
     </div>
-  ) : null;
+  );
 }

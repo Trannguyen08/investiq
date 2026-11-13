@@ -78,6 +78,25 @@ describe("StockGrowthPanel", () => {
     expect(screen.getAllByText("Q2/2026").length).toBeGreaterThanOrEqual(1);
   });
 
+  it("does not invent quarterly growth or health metrics when reports are unavailable", () => {
+    render(
+      <StockGrowthPanel
+        growth={{
+          ...mockGrowthData,
+          quarters: [],
+          roe_percent: null,
+          current_ratio: null,
+          pe: null,
+        }}
+      />,
+    );
+
+    expect(screen.getByText("Nguồn hiện chưa trả báo cáo quý cho mã này.")).toBeInTheDocument();
+    expect(screen.queryByText("+15%")).not.toBeInTheDocument();
+    expect(screen.queryByText("1.5x")).not.toBeInTheDocument();
+    expect(screen.queryByText("Hợp lý")).not.toBeInTheDocument();
+  });
+
   it("renders 3 educational investor insights", () => {
     render(<StockGrowthPanel growth={mockGrowthData} />);
 

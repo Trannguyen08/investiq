@@ -23,23 +23,49 @@ export function SuggestedActionsWidget({
     }
   };
 
-  const handleOpenTrade = (sym: string, qty: number) => {
+  const handleOpenTrade = (sym: string, qty: number, side: "buy" | "sell" = "buy") => {
     onActionTriggered?.();
-    const targetUrl = `/market/stocks/${sym}?trade=buy&qty=${qty}`;
     if (typeof window !== "undefined") {
-      if (window.location.pathname.startsWith(`/market/stocks/${sym}`)) {
+      if (window.location.pathname.startsWith("/portfolio")) {
+        window.dispatchEvent(
+          new CustomEvent("open-stock-trade", {
+            detail: { symbol: sym, side, quantity: qty },
+          })
+        );
+      } else if (window.location.pathname.startsWith(`/market/stocks/${sym}`)) {
         const url = new URL(window.location.href);
-        url.searchParams.set("trade", "buy");
+        url.searchParams.set("trade", side);
         url.searchParams.set("qty", String(qty));
         window.history.pushState({}, "", url.toString());
         window.dispatchEvent(
           new CustomEvent("open-stock-trade", {
-            detail: { side: "buy", quantity: qty },
+            detail: { symbol: sym, side, quantity: qty },
           })
         );
       } else {
-        router.push(targetUrl);
+        router.push(`/portfolio?action=trade&symbol=${sym}&side=${side}&qty=${qty}`);
       }
+    }
+  };
+
+  const handlePostCommunityThesis = (act: SuggestedAction) => {
+    onActionTriggered?.();
+    const sym = act.symbol || "MBB";
+    const payload = act.payload || {
+      symbol: sym,
+      title: act.title || `Luận điểm đầu tư ${sym}`,
+      stance: act.stance || "bullish",
+      targetPrice: act.target_price,
+      stopLossPrice: act.stop_loss_price,
+      horizon: act.horizon || 3,
+      body: act.content || "",
+      catalysts: act.catalysts || "",
+    };
+    if (typeof window !== "undefined") {
+      try {
+        sessionStorage.setItem("investiq_pending_thesis", JSON.stringify(payload));
+      } catch {}
+      router.push(act.url || `/community?action=new-thesis&symbol=${sym}`);
     }
   };
 
@@ -92,14 +118,32 @@ export function SuggestedActionsWidget({
         }
 
         if (act.action_type === "TRADE_ORDER") {
-          const sym = act.symbol || "HPG";
-          const qty = act.quantity || 1000;
+          const sym = act.symbol || "MBB";
+          const qty = act.quantity || 100;
+          const side = act.side === "sell" ? "sell" : "buy";
           return (
             <button
               key={idx}
               type="button"
-              onClick={() => handleOpenTrade(sym, qty)}
-              className="inline-flex items-center px-3 py-1.5 rounded-xl bg-emerald-950/60 border border-emerald-700/80 hover:border-emerald-400 hover:bg-emerald-900/60 text-xs font-semibold text-emerald-300 hover:text-white transition shadow-sm active:scale-95 cursor-pointer"
+              onClick={() => handleOpenTrade(sym, qty, side)}
+              className={`inline-flex items-center px-3 py-1.5 rounded-xl text-xs font-semibold transition shadow-sm active:scale-95 cursor-pointer ${
+                side === "sell"
+                  ? "bg-rose-950/60 border border-rose-700/80 hover:border-rose-400 hover:bg-rose-900/60 text-rose-300 hover:text-white"
+                  : "bg-emerald-950/60 border border-emerald-700/80 hover:border-emerald-400 hover:bg-emerald-900/60 text-emerald-300 hover:text-white"
+              }`}
+            >
+              <span>{act.label}</span>
+            </button>
+          );
+        }
+
+        if (act.action_type === "POST_COMMUNITY_THESIS") {
+          return (
+            <button
+              key={idx}
+              type="button"
+              onClick={() => handlePostCommunityThesis(act)}
+              className="inline-flex items-center px-3 py-1.5 rounded-xl bg-purple-950/60 border border-purple-700/80 hover:border-purple-400 hover:bg-purple-900/60 text-xs font-semibold text-purple-300 hover:text-white transition shadow-sm active:scale-95 cursor-pointer"
             >
               <span>{act.label}</span>
             </button>

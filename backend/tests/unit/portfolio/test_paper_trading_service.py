@@ -3,7 +3,7 @@ from __future__ import annotations
 from dataclasses import replace
 from datetime import UTC, datetime, timedelta
 from decimal import Decimal
-from typing import Any
+from typing import Any, cast
 
 import pytest
 
@@ -151,6 +151,12 @@ class RecordingPortfolioRepository:
     def get_public_portfolio(self, portfolio_id: str) -> PaperPortfolio | None:
         return self.portfolio
 
+    def credit_cash(self, user_id: str, amount: Decimal) -> None:
+        self.portfolio = replace(
+            self.portfolio,
+            cash_balance=self.portfolio.cash_balance + amount,
+        )
+
 
 def portfolio(*holdings: PaperHolding) -> PaperPortfolio:
     now = datetime(2026, 10, 8, tzinfo=UTC)
@@ -258,6 +264,47 @@ def test_dashboard_separates_cash_cost_value_and_unrealized_profit() -> None:
     assert holdings[0]["unrealized_pnl_percent"] == "13.78"
     assert dashboard["equity_curve"]
     assert dashboard["opportunities"]
+
+
+def test_dashboard_total_assets_equal_starting_cash_plus_realized_and_unrealized_pnl() -> None:
+    class ObservedPriceProvider(FixtureMarketProvider):
+        def instrument(
+            self,
+            symbol: str,
+            *,
+            include_fundamentals: bool = False,
+        ) -> MarketInstrument | None:
+            item = super().instrument(symbol, include_fundamentals=include_fundamentals)
+            return replace(item, price=Decimal("126000")) if item is not None else None
+
+    holding = PaperHolding(
+        symbol="FPT",
+        name="CTCP FPT",
+        exchange="HOSE",
+        sector="Công nghệ",
+        quantity=200,
+        total_cost_basis=Decimal("25000000"),
+    )
+    account = replace(
+        portfolio(holding),
+        cash_balance=Decimal("75500000"),
+        realized_pnl=Decimal("500000"),
+    )
+    dashboard = PaperTradingService(
+        RecordingPortfolioRepository(account),
+        ObservedPriceProvider(),
+    ).dashboard("asset-valuation-regression")
+    account_data = cast(dict[str, Any], dashboard["account"])
+
+    assert account_data["market_value"] == "25200000"
+    assert account_data["unrealized_pnl"] == "200000"
+    assert account_data["total_value"] == "100700000"
+    assert account_data["total_pnl"] == "700000"
+    assert Decimal(str(account_data["total_value"])) == (
+        Decimal(str(account_data["starting_cash"]))
+        + Decimal(str(account_data["realized_pnl"]))
+        + Decimal(str(account_data["unrealized_pnl"]))
+    )
 
 
 def test_simulated_order_ignores_limit_crossing_and_auto_fills() -> None:
@@ -470,7 +517,9 @@ class DepthFixtureProvider(FixtureMarketProvider):
         )
 
 
-def test_option_b_exchange_hours_queues_orders_outside_trading_session_and_fills_in_session() -> None:
+def test_option_b_exchange_hours_queues_orders_outside_trading_session_and_fills_in_session() -> (
+    None
+):
     store = ExchangeSimulationStore()
     repo = MultiOrderRepository(portfolio())
     # Weekend Saturday 10:00 UTC (17:00 ICT) -> Outside trading hours

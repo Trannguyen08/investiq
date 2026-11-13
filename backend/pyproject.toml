@@ -32,7 +32,7 @@ select = ["E", "F", "I", "UP", "B", "SIM"]
 ignore = ["E501"]
 
 [tool.mypy]
-python_version = "3.11"
+python_version = "3.13"
 strict = true
 files = ["app/infrastructure/config", "app/main.py", "app/workers/celery_app.py", "tests"]
 

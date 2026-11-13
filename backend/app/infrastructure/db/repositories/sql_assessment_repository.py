@@ -120,25 +120,45 @@ _DEFAULT_QUESTIONS: list[dict[str, Any]] = [
                 "id": "q1_opt1",
                 "label": "Tích lũy tài sản đều đặn hàng tháng cho tương lai dài hạn (5 - 10 năm tới)",
                 "risk_weight": 40,
-                "persona_weights": {"dca_accumulator": 8, "value_growth": 4, "active_swing": 1, "conservative_fund": 5},
+                "persona_weights": {
+                    "dca_accumulator": 8,
+                    "value_growth": 4,
+                    "active_swing": 1,
+                    "conservative_fund": 5,
+                },
             },
             {
                 "id": "q1_opt2",
                 "label": "Tìm kiếm các doanh nghiệp tốt để nhân đôi, nhân ba tài sản trong chu kỳ 2 - 4 năm",
                 "risk_weight": 65,
-                "persona_weights": {"dca_accumulator": 3, "value_growth": 8, "active_swing": 4, "conservative_fund": 1},
+                "persona_weights": {
+                    "dca_accumulator": 3,
+                    "value_growth": 8,
+                    "active_swing": 4,
+                    "conservative_fund": 1,
+                },
             },
             {
                 "id": "q1_opt3",
                 "label": "Kiếm thêm thu nhập chủ động hàng tuần/hàng tháng từ các con sóng ngắn hạn",
                 "risk_weight": 85,
-                "persona_weights": {"dca_accumulator": 1, "value_growth": 2, "active_swing": 9, "conservative_fund": 0},
+                "persona_weights": {
+                    "dca_accumulator": 1,
+                    "value_growth": 2,
+                    "active_swing": 9,
+                    "conservative_fund": 0,
+                },
             },
             {
                 "id": "q1_opt4",
                 "label": "Tìm kênh cất giữ tiền an toàn hơn lạm phát nhưng không muốn bị mất tiền",
                 "risk_weight": 20,
-                "persona_weights": {"dca_accumulator": 4, "value_growth": 1, "active_swing": 0, "conservative_fund": 9},
+                "persona_weights": {
+                    "dca_accumulator": 4,
+                    "value_growth": 1,
+                    "active_swing": 0,
+                    "conservative_fund": 9,
+                },
             },
         ],
         "status": "published",
@@ -154,25 +174,45 @@ _DEFAULT_QUESTIONS: list[dict[str, Any]] = [
                 "id": "q2_opt1",
                 "label": "Bình tĩnh rà soát lại lý do mua; nếu doanh nghiệp vẫn tốt, coi đây là cơ hội để mua thêm với giá rẻ",
                 "risk_weight": 60,
-                "persona_weights": {"dca_accumulator": 8, "value_growth": 8, "active_swing": 2, "conservative_fund": 1},
+                "persona_weights": {
+                    "dca_accumulator": 8,
+                    "value_growth": 8,
+                    "active_swing": 2,
+                    "conservative_fund": 1,
+                },
             },
             {
                 "id": "q2_opt2",
                 "label": "Kỷ luật cắt lỗ ngay lập tức vì giá đã vi phạm ngưỡng cho phép (-7% đến -8%), đứng ngoài chờ cơ hội mới",
                 "risk_weight": 80,
-                "persona_weights": {"dca_accumulator": 2, "value_growth": 3, "active_swing": 9, "conservative_fund": 2},
+                "persona_weights": {
+                    "dca_accumulator": 2,
+                    "value_growth": 3,
+                    "active_swing": 9,
+                    "conservative_fund": 2,
+                },
             },
             {
                 "id": "q2_opt3",
                 "label": "Rất lo lắng, mất ngủ, liên tục mở ứng dụng xem giá nhưng không dám cắt vì sợ bán đúng đáy",
                 "risk_weight": 35,
-                "persona_weights": {"dca_accumulator": 3, "value_growth": 1, "active_swing": 1, "conservative_fund": 7},
+                "persona_weights": {
+                    "dca_accumulator": 3,
+                    "value_growth": 1,
+                    "active_swing": 1,
+                    "conservative_fund": 7,
+                },
             },
             {
                 "id": "q2_opt4",
                 "label": "Hoảng loạn, bán tháo sạch toàn bộ danh mục ngay lập tức và quyết định không bao giờ chơi chứng khoán nữa",
                 "risk_weight": 15,
-                "persona_weights": {"dca_accumulator": 0, "value_growth": 0, "active_swing": 0, "conservative_fund": 9},
+                "persona_weights": {
+                    "dca_accumulator": 0,
+                    "value_growth": 0,
+                    "active_swing": 0,
+                    "conservative_fund": 9,
+                },
             },
         ],
         "status": "published",
@@ -188,25 +228,45 @@ _DEFAULT_QUESTIONS: list[dict[str, Any]] = [
                 "id": "q3_opt1",
                 "label": "Dưới 2 giờ mỗi tuần (chỉ xem lại tài sản vào cuối tuần hoặc khi có kỳ trả lương)",
                 "risk_weight": 30,
-                "persona_weights": {"dca_accumulator": 9, "value_growth": 2, "active_swing": 0, "conservative_fund": 8},
+                "persona_weights": {
+                    "dca_accumulator": 9,
+                    "value_growth": 2,
+                    "active_swing": 0,
+                    "conservative_fund": 8,
+                },
             },
             {
                 "id": "q3_opt2",
                 "label": "Khoảng 3 - 6 giờ mỗi tuần (đọc báo cáo phân tích, tin tức buổi tối sau giờ làm việc)",
                 "risk_weight": 55,
-                "persona_weights": {"dca_accumulator": 5, "value_growth": 8, "active_swing": 3, "conservative_fund": 3},
+                "persona_weights": {
+                    "dca_accumulator": 5,
+                    "value_growth": 8,
+                    "active_swing": 3,
+                    "conservative_fund": 3,
+                },
             },
             {
                 "id": "q3_opt3",
                 "label": "Trên 10 giờ mỗi tuần (có thể theo dõi bảng điện thường xuyên trong giờ giao dịch 9h-15h)",
                 "risk_weight": 85,
-                "persona_weights": {"dca_accumulator": 1, "value_growth": 4, "active_swing": 9, "conservative_fund": 0},
+                "persona_weights": {
+                    "dca_accumulator": 1,
+                    "value_growth": 4,
+                    "active_swing": 9,
+                    "conservative_fund": 0,
+                },
             },
             {
                 "id": "q3_opt4",
                 "label": "Hầu như không có thời gian rảnh, công việc chính rất bận rộn và căng thẳng",
                 "risk_weight": 20,
-                "persona_weights": {"dca_accumulator": 6, "value_growth": 0, "active_swing": 0, "conservative_fund": 9},
+                "persona_weights": {
+                    "dca_accumulator": 6,
+                    "value_growth": 0,
+                    "active_swing": 0,
+                    "conservative_fund": 9,
+                },
             },
         ],
         "status": "published",
@@ -222,25 +282,45 @@ _DEFAULT_QUESTIONS: list[dict[str, Any]] = [
                 "id": "q4_opt1",
                 "label": "Tiền nhàn rỗi dài hạn từ 3 đến 5 năm trở lên, hoàn toàn không cần dùng đến trong ngắn hạn",
                 "risk_weight": 70,
-                "persona_weights": {"dca_accumulator": 8, "value_growth": 8, "active_swing": 3, "conservative_fund": 4},
+                "persona_weights": {
+                    "dca_accumulator": 8,
+                    "value_growth": 8,
+                    "active_swing": 3,
+                    "conservative_fund": 4,
+                },
             },
             {
                 "id": "q4_opt2",
                 "label": "Tiền nhàn rỗi trong khoảng 6 tháng đến 1 năm",
                 "risk_weight": 50,
-                "persona_weights": {"dca_accumulator": 4, "value_growth": 5, "active_swing": 6, "conservative_fund": 4},
+                "persona_weights": {
+                    "dca_accumulator": 4,
+                    "value_growth": 5,
+                    "active_swing": 6,
+                    "conservative_fund": 4,
+                },
             },
             {
                 "id": "q4_opt3",
                 "label": "Tiền cần chi trả cho các nghĩa vụ trong 1 - 3 tháng tới (tiền học, tiền thuê nhà, tiền hàng)",
                 "risk_weight": 10,
-                "persona_weights": {"dca_accumulator": 0, "value_growth": 0, "active_swing": 1, "conservative_fund": 9},
+                "persona_weights": {
+                    "dca_accumulator": 0,
+                    "value_growth": 0,
+                    "active_swing": 1,
+                    "conservative_fund": 9,
+                },
             },
             {
                 "id": "q4_opt4",
                 "label": "Tiền vay mượn từ người quen hoặc dự định dùng đòn bẩy Margin cao để làm giàu nhanh",
                 "risk_weight": 95,
-                "persona_weights": {"dca_accumulator": 0, "value_growth": 0, "active_swing": 5, "conservative_fund": 0},
+                "persona_weights": {
+                    "dca_accumulator": 0,
+                    "value_growth": 0,
+                    "active_swing": 5,
+                    "conservative_fund": 0,
+                },
             },
         ],
         "status": "published",
@@ -256,25 +336,45 @@ _DEFAULT_QUESTIONS: list[dict[str, Any]] = [
                 "id": "q5_opt1",
                 "label": "Chưa biết gì, nhìn vào các bảng số liệu tài chính thấy rất khó hiểu và nhức đầu",
                 "risk_weight": 25,
-                "persona_weights": {"dca_accumulator": 6, "value_growth": 1, "active_swing": 3, "conservative_fund": 8},
+                "persona_weights": {
+                    "dca_accumulator": 6,
+                    "value_growth": 1,
+                    "active_swing": 3,
+                    "conservative_fund": 8,
+                },
             },
             {
                 "id": "q5_opt2",
                 "label": "Đã hiểu các chỉ số cơ bản như P/E, P/B, Biên lợi nhuận nhưng chưa phân tích sâu được BCTC",
                 "risk_weight": 50,
-                "persona_weights": {"dca_accumulator": 6, "value_growth": 6, "active_swing": 4, "conservative_fund": 3},
+                "persona_weights": {
+                    "dca_accumulator": 6,
+                    "value_growth": 6,
+                    "active_swing": 4,
+                    "conservative_fund": 3,
+                },
             },
             {
                 "id": "q5_opt3",
                 "label": "Có thể đọc hiểu Bảng cân đối kế toán, Báo cáo KQKD và phát hiện các rủi ro nợ vay, dòng tiền",
                 "risk_weight": 75,
-                "persona_weights": {"dca_accumulator": 4, "value_growth": 9, "active_swing": 4, "conservative_fund": 1},
+                "persona_weights": {
+                    "dca_accumulator": 4,
+                    "value_growth": 9,
+                    "active_swing": 4,
+                    "conservative_fund": 1,
+                },
             },
             {
                 "id": "q5_opt4",
                 "label": "Không quan tâm đến BCTC, chỉ tin vào hành động giá, chỉ báo kỹ thuật và khối lượng giao dịch",
                 "risk_weight": 80,
-                "persona_weights": {"dca_accumulator": 1, "value_growth": 1, "active_swing": 9, "conservative_fund": 1},
+                "persona_weights": {
+                    "dca_accumulator": 1,
+                    "value_growth": 1,
+                    "active_swing": 9,
+                    "conservative_fund": 1,
+                },
             },
         ],
         "status": "published",
@@ -290,25 +390,45 @@ _DEFAULT_QUESTIONS: list[dict[str, Any]] = [
                 "id": "q6_opt1",
                 "label": "Lập tức mở tài khoản mua ngay kẻo lỡ tàu, sợ mọi người kiếm được tiền mà mình đứng ngoài",
                 "risk_weight": 85,
-                "persona_weights": {"dca_accumulator": 0, "value_growth": 0, "active_swing": 6, "conservative_fund": 1},
+                "persona_weights": {
+                    "dca_accumulator": 0,
+                    "value_growth": 0,
+                    "active_swing": 6,
+                    "conservative_fund": 1,
+                },
             },
             {
                 "id": "q6_opt2",
                 "label": "Tò mò tìm hiểu, mở biểu đồ kỹ thuật xem xu hướng dòng tiền và điểm vào hợp lý trước khi quyết định",
                 "risk_weight": 70,
-                "persona_weights": {"dca_accumulator": 2, "value_growth": 4, "active_swing": 8, "conservative_fund": 1},
+                "persona_weights": {
+                    "dca_accumulator": 2,
+                    "value_growth": 4,
+                    "active_swing": 8,
+                    "conservative_fund": 1,
+                },
             },
             {
                 "id": "q6_opt3",
                 "label": "Bỏ ngoài tai hoặc chỉ đọc cho vui, chỉ đầu tư vào những doanh nghiệp mình đã tự nghiên cứu kỹ",
                 "risk_weight": 50,
-                "persona_weights": {"dca_accumulator": 8, "value_growth": 8, "active_swing": 2, "conservative_fund": 4},
+                "persona_weights": {
+                    "dca_accumulator": 8,
+                    "value_growth": 8,
+                    "active_swing": 2,
+                    "conservative_fund": 4,
+                },
             },
             {
                 "id": "q6_opt4",
                 "label": "Cảm thấy đây là cờ bạc lừa đảo và sợ hãi không dám tham gia bất cứ thứ gì",
                 "risk_weight": 20,
-                "persona_weights": {"dca_accumulator": 3, "value_growth": 1, "active_swing": 0, "conservative_fund": 9},
+                "persona_weights": {
+                    "dca_accumulator": 3,
+                    "value_growth": 1,
+                    "active_swing": 0,
+                    "conservative_fund": 9,
+                },
             },
         ],
         "status": "published",
@@ -324,25 +444,45 @@ _DEFAULT_QUESTIONS: list[dict[str, Any]] = [
                 "id": "q7_opt1",
                 "label": "Cắt dứt khoát 100% không do dự để bảo toàn vốn, sai thì làm lại ở cơ hội khác",
                 "risk_weight": 85,
-                "persona_weights": {"dca_accumulator": 2, "value_growth": 3, "active_swing": 9, "conservative_fund": 2},
+                "persona_weights": {
+                    "dca_accumulator": 2,
+                    "value_growth": 3,
+                    "active_swing": 9,
+                    "conservative_fund": 2,
+                },
             },
             {
                 "id": "q7_opt2",
                 "label": "Nếu là cổ phiếu đầu cơ ngắn hạn thì cắt ngay; nếu là cổ phiếu đầu ngành tích sản dài hạn thì giữ hoặc mua thêm",
                 "risk_weight": 60,
-                "persona_weights": {"dca_accumulator": 8, "value_growth": 8, "active_swing": 3, "conservative_fund": 2},
+                "persona_weights": {
+                    "dca_accumulator": 8,
+                    "value_growth": 8,
+                    "active_swing": 3,
+                    "conservative_fund": 2,
+                },
             },
             {
                 "id": "q7_opt3",
                 "label": "Không bao giờ cắt lỗ vì tin rằng cổ phiếu chưa bán là chưa lỗ, cứ ôm chờ vài năm sẽ về bờ",
                 "risk_weight": 30,
-                "persona_weights": {"dca_accumulator": 2, "value_growth": 2, "active_swing": 1, "conservative_fund": 5},
+                "persona_weights": {
+                    "dca_accumulator": 2,
+                    "value_growth": 2,
+                    "active_swing": 1,
+                    "conservative_fund": 5,
+                },
             },
             {
                 "id": "q7_opt4",
                 "label": "Rất sợ hãi khi phải nhấn nút bán lỗ, cảm giác như mình là kẻ thất bại",
                 "risk_weight": 20,
-                "persona_weights": {"dca_accumulator": 1, "value_growth": 0, "active_swing": 0, "conservative_fund": 8},
+                "persona_weights": {
+                    "dca_accumulator": 1,
+                    "value_growth": 0,
+                    "active_swing": 0,
+                    "conservative_fund": 8,
+                },
             },
         ],
         "status": "published",
@@ -358,25 +498,45 @@ _DEFAULT_QUESTIONS: list[dict[str, Any]] = [
                 "id": "q8_opt1",
                 "label": "Chưa từng đầu tư bất kỳ kênh nào, trước giờ chỉ gửi tiết kiệm ngân hàng",
                 "risk_weight": 25,
-                "persona_weights": {"dca_accumulator": 6, "value_growth": 2, "active_swing": 0, "conservative_fund": 9},
+                "persona_weights": {
+                    "dca_accumulator": 6,
+                    "value_growth": 2,
+                    "active_swing": 0,
+                    "conservative_fund": 9,
+                },
             },
             {
                 "id": "q8_opt2",
                 "label": "Đã từng mua vàng, gửi tiết kiệm online hoặc mua chứng chỉ quỹ mở",
                 "risk_weight": 45,
-                "persona_weights": {"dca_accumulator": 7, "value_growth": 5, "active_swing": 2, "conservative_fund": 6},
+                "persona_weights": {
+                    "dca_accumulator": 7,
+                    "value_growth": 5,
+                    "active_swing": 2,
+                    "conservative_fund": 6,
+                },
             },
             {
                 "id": "q8_opt3",
                 "label": "Đã tự giao dịch chứng khoán hoặc tiền số từ 6 tháng đến 1 năm trở lên",
                 "risk_weight": 75,
-                "persona_weights": {"dca_accumulator": 4, "value_growth": 6, "active_swing": 8, "conservative_fund": 1},
+                "persona_weights": {
+                    "dca_accumulator": 4,
+                    "value_growth": 6,
+                    "active_swing": 8,
+                    "conservative_fund": 1,
+                },
             },
             {
                 "id": "q8_opt4",
                 "label": "Có kinh nghiệm đầu tư bất động sản hoặc kinh doanh buôn bán bên ngoài",
                 "risk_weight": 65,
-                "persona_weights": {"dca_accumulator": 5, "value_growth": 8, "active_swing": 4, "conservative_fund": 2},
+                "persona_weights": {
+                    "dca_accumulator": 5,
+                    "value_growth": 8,
+                    "active_swing": 4,
+                    "conservative_fund": 2,
+                },
             },
         ],
         "status": "published",
@@ -392,25 +552,45 @@ _DEFAULT_QUESTIONS: list[dict[str, Any]] = [
                 "id": "q9_opt1",
                 "label": "Khoảng 10% - 15%/năm (cao hơn lãi suất ngân hàng 1.5 - 2 lần là hài lòng)",
                 "risk_weight": 40,
-                "persona_weights": {"dca_accumulator": 9, "value_growth": 5, "active_swing": 1, "conservative_fund": 6},
+                "persona_weights": {
+                    "dca_accumulator": 9,
+                    "value_growth": 5,
+                    "active_swing": 1,
+                    "conservative_fund": 6,
+                },
             },
             {
                 "id": "q9_opt2",
                 "label": "Khoảng 18% - 25%/năm (tương đương thành tích của các nhà đầu tư chuyên nghiệp)",
                 "risk_weight": 65,
-                "persona_weights": {"dca_accumulator": 4, "value_growth": 8, "active_swing": 5, "conservative_fund": 1},
+                "persona_weights": {
+                    "dca_accumulator": 4,
+                    "value_growth": 8,
+                    "active_swing": 5,
+                    "conservative_fund": 1,
+                },
             },
             {
                 "id": "q9_opt3",
                 "label": "Trên 40% - 50%/năm, hoặc nhân đôi tài khoản mỗi năm",
                 "risk_weight": 90,
-                "persona_weights": {"dca_accumulator": 0, "value_growth": 2, "active_swing": 8, "conservative_fund": 0},
+                "persona_weights": {
+                    "dca_accumulator": 0,
+                    "value_growth": 2,
+                    "active_swing": 8,
+                    "conservative_fund": 0,
+                },
             },
             {
                 "id": "q9_opt4",
                 "label": "Chỉ cần bảo toàn được vốn gốc và không bị âm tiền là đủ",
                 "risk_weight": 20,
-                "persona_weights": {"dca_accumulator": 3, "value_growth": 1, "active_swing": 0, "conservative_fund": 9},
+                "persona_weights": {
+                    "dca_accumulator": 3,
+                    "value_growth": 1,
+                    "active_swing": 0,
+                    "conservative_fund": 9,
+                },
             },
         ],
         "status": "published",
@@ -426,25 +606,45 @@ _DEFAULT_QUESTIONS: list[dict[str, Any]] = [
                 "id": "q10_opt1",
                 "label": "Bình tĩnh hiểu rằng thị trường luôn có những cơn bão và sau bão kinh tế sẽ phục hồi",
                 "risk_weight": 65,
-                "persona_weights": {"dca_accumulator": 8, "value_growth": 8, "active_swing": 3, "conservative_fund": 2},
+                "persona_weights": {
+                    "dca_accumulator": 8,
+                    "value_growth": 8,
+                    "active_swing": 3,
+                    "conservative_fund": 2,
+                },
             },
             {
                 "id": "q10_opt2",
                 "label": "Lập tức đưa tỷ trọng tiền mặt lên mức an toàn cao nhất để bảo vệ thành quả",
                 "risk_weight": 80,
-                "persona_weights": {"dca_accumulator": 3, "value_growth": 4, "active_swing": 9, "conservative_fund": 3},
+                "persona_weights": {
+                    "dca_accumulator": 3,
+                    "value_growth": 4,
+                    "active_swing": 9,
+                    "conservative_fund": 3,
+                },
             },
             {
                 "id": "q10_opt3",
                 "label": "Vô cùng căng thẳng, stress kéo dài, liên tục đọc báo và mạng xã hội trong hoang mang",
                 "risk_weight": 30,
-                "persona_weights": {"dca_accumulator": 2, "value_growth": 1, "active_swing": 1, "conservative_fund": 8},
+                "persona_weights": {
+                    "dca_accumulator": 2,
+                    "value_growth": 1,
+                    "active_swing": 1,
+                    "conservative_fund": 8,
+                },
             },
             {
                 "id": "q10_opt4",
                 "label": "Sụp đổ tinh thần, cảm thấy mình không phù hợp với bất kỳ kênh đầu tư rủi ro nào",
                 "risk_weight": 15,
-                "persona_weights": {"dca_accumulator": 0, "value_growth": 0, "active_swing": 0, "conservative_fund": 9},
+                "persona_weights": {
+                    "dca_accumulator": 0,
+                    "value_growth": 0,
+                    "active_swing": 0,
+                    "conservative_fund": 9,
+                },
             },
         ],
         "status": "published",
@@ -479,18 +679,28 @@ class SqlAssessmentRepository:
                     if rows:
                         results = []
                         for r in rows:
-                            results.append({
-                                "code": r[0],
-                                "title": r[1],
-                                "tagline": r[2],
-                                "description": r[3],
-                                "strengths": r[4] if isinstance(r[4], list) else json.loads(r[4]),
-                                "weaknesses": r[5] if isinstance(r[5], list) else json.loads(r[5]),
-                                "recommended_strategy": r[6],
-                                "asset_allocation": r[7] if isinstance(r[7], dict) else json.loads(r[7]),
-                                "ideal_time_hours_per_week": r[8],
-                                "suitable_instruments": r[9] if isinstance(r[9], list) else json.loads(r[9]),
-                            })
+                            results.append(
+                                {
+                                    "code": r[0],
+                                    "title": r[1],
+                                    "tagline": r[2],
+                                    "description": r[3],
+                                    "strengths": r[4]
+                                    if isinstance(r[4], list)
+                                    else json.loads(r[4]),
+                                    "weaknesses": r[5]
+                                    if isinstance(r[5], list)
+                                    else json.loads(r[5]),
+                                    "recommended_strategy": r[6],
+                                    "asset_allocation": r[7]
+                                    if isinstance(r[7], dict)
+                                    else json.loads(r[7]),
+                                    "ideal_time_hours_per_week": r[8],
+                                    "suitable_instruments": r[9]
+                                    if isinstance(r[9], list)
+                                    else json.loads(r[9]),
+                                }
+                            )
                         return results
             except Exception as exc:
                 logger.warning("DB query investor_personas failed, using memory: %s", exc)
@@ -528,10 +738,15 @@ class SqlAssessmentRepository:
                         WHERE code = %s;
                         """,
                         (
-                            updated["title"], updated["tagline"], updated["description"],
-                            json.dumps(updated["strengths"]), json.dumps(updated["weaknesses"]),
-                            updated["recommended_strategy"], json.dumps(updated["asset_allocation"]),
-                            updated["ideal_time_hours_per_week"], json.dumps(updated["suitable_instruments"]),
+                            updated["title"],
+                            updated["tagline"],
+                            updated["description"],
+                            json.dumps(updated["strengths"]),
+                            json.dumps(updated["weaknesses"]),
+                            updated["recommended_strategy"],
+                            json.dumps(updated["asset_allocation"]),
+                            updated["ideal_time_hours_per_week"],
+                            json.dumps(updated["suitable_instruments"]),
                             code,
                         ),
                     )
@@ -568,15 +783,17 @@ class SqlAssessmentRepository:
                     if rows:
                         results = []
                         for r in rows:
-                            results.append({
-                                "id": str(r[0]),
-                                "sort_order": r[1],
-                                "category": r[2],
-                                "prompt": r[3],
-                                "subtext": r[4],
-                                "options": r[5] if isinstance(r[5], list) else json.loads(r[5]),
-                                "status": r[6],
-                            })
+                            results.append(
+                                {
+                                    "id": str(r[0]),
+                                    "sort_order": r[1],
+                                    "category": r[2],
+                                    "prompt": r[3],
+                                    "subtext": r[4],
+                                    "options": r[5] if isinstance(r[5], list) else json.loads(r[5]),
+                                    "status": r[6],
+                                }
+                            )
                         return results
             except Exception as exc:
                 logger.warning("DB query assessment_questions failed, using memory: %s", exc)
@@ -617,8 +834,12 @@ class SqlAssessmentRepository:
                         VALUES (%s, %s, %s, %s, %s, %s, %s);
                         """,
                         (
-                            record["id"], record["sort_order"], record["category"],
-                            record["prompt"], record["subtext"], json.dumps(record["options"]),
+                            record["id"],
+                            record["sort_order"],
+                            record["category"],
+                            record["prompt"],
+                            record["subtext"],
+                            json.dumps(record["options"]),
                             record["status"],
                         ),
                     )
@@ -650,8 +871,12 @@ class SqlAssessmentRepository:
                         WHERE id = %s;
                         """,
                         (
-                            updated["sort_order"], updated["category"], updated["prompt"],
-                            updated["subtext"], json.dumps(updated["options"]), updated["status"],
+                            updated["sort_order"],
+                            updated["category"],
+                            updated["prompt"],
+                            updated["subtext"],
+                            json.dumps(updated["options"]),
+                            updated["status"],
                             question_id,
                         ),
                     )
@@ -697,18 +922,30 @@ class SqlAssessmentRepository:
             strengths.append("Tài khoản chưa giải ngân, bảo toàn nguyên vẹn 100% tiền mặt.")
         else:
             num_stocks = len(holdings)
-            max_allocation_ratio = max(float(h.get("market_value", 0)) for h in holdings) / (total_assets or 1.0)
+            max_allocation_ratio = max(float(h.get("market_value", 0)) for h in holdings) / (
+                total_assets or 1.0
+            )
             if num_stocks == 1:
                 diversification_score = 40.0
-                weaknesses.append("Tất cả vốn đang dồn vào 1 mã duy nhất (rủi ro tập trung cực lớn).")
-                recommendations.append("Nên phân bổ thành 3 đến 5 mã thuộc các ngành khác nhau để giảm thiểu rủi ro phi hệ thống.")
+                weaknesses.append(
+                    "Tất cả vốn đang dồn vào 1 mã duy nhất (rủi ro tập trung cực lớn)."
+                )
+                recommendations.append(
+                    "Nên phân bổ thành 3 đến 5 mã thuộc các ngành khác nhau để giảm thiểu rủi ro phi hệ thống."
+                )
             elif 2 <= num_stocks <= 6 and max_allocation_ratio <= 0.40:
                 diversification_score = 95.0
-                strengths.append(f"Danh mục cân đối ({num_stocks} mã), không có mã nào chiếm quá 40% tổng tài sản.")
+                strengths.append(
+                    f"Danh mục cân đối ({num_stocks} mã), không có mã nào chiếm quá 40% tổng tài sản."
+                )
             elif max_allocation_ratio > 0.50:
                 diversification_score = 60.0
-                weaknesses.append(f"Có mã chiếm tới {int(max_allocation_ratio * 100)}% danh mục, rủi ro biến động theo mã này rất cao.")
-                recommendations.append("Cân nhắc hạ bớt tỷ trọng của mã lớn nhất về dưới mức 35% danh mục.")
+                weaknesses.append(
+                    f"Có mã chiếm tới {int(max_allocation_ratio * 100)}% danh mục, rủi ro biến động theo mã này rất cao."
+                )
+                recommendations.append(
+                    "Cân nhắc hạ bớt tỷ trọng của mã lớn nhất về dưới mức 35% danh mục."
+                )
             else:
                 diversification_score = 80.0
                 strengths.append(f"Đa dạng hóa vừa phải với {num_stocks} mã cổ phiếu.")
@@ -717,15 +954,23 @@ class SqlAssessmentRepository:
         cash_ratio = cash_vnd / (total_assets or 1.0)
         if 0.10 <= cash_ratio <= 0.35:
             cash_score = 95.0
-            strengths.append(f"Duy trì bộ đệm tiền mặt an toàn {int(cash_ratio * 100)}%, sẵn sàng bắt đáy khi có nhịp điều chỉnh.")
+            strengths.append(
+                f"Duy trì bộ đệm tiền mặt an toàn {int(cash_ratio * 100)}%, sẵn sàng bắt đáy khi có nhịp điều chỉnh."
+            )
         elif cash_ratio > 0.80:
             cash_score = 75.0
             strengths.append("Giữ tỷ lệ tiền mặt rất cao, rủi ro sụt giảm tài sản là cực thấp.")
-            recommendations.append("Có thể giải ngân từng phần (DCA) vào các cổ phiếu đầu ngành định giá hấp dẫn.")
+            recommendations.append(
+                "Có thể giải ngân từng phần (DCA) vào các cổ phiếu đầu ngành định giá hấp dẫn."
+            )
         elif cash_ratio < 0.05 and holdings:
             cash_score = 45.0
-            weaknesses.append("Gần như 'All-in' 100% cổ phiếu, không còn tiền mặt dự phòng nếu thị trường sụt giảm bất ngờ.")
-            recommendations.append("Nên giữ ít nhất 10% - 20% tiền mặt để chủ động quản trị rủi ro.")
+            weaknesses.append(
+                "Gần như 'All-in' 100% cổ phiếu, không còn tiền mặt dự phòng nếu thị trường sụt giảm bất ngờ."
+            )
+            recommendations.append(
+                "Nên giữ ít nhất 10% - 20% tiền mặt để chủ động quản trị rủi ro."
+            )
         else:
             cash_score = 80.0
 
@@ -741,22 +986,36 @@ class SqlAssessmentRepository:
             strengths.append("Không có vị thế nào bị âm sâu quá ngưỡng an toàn -7%.")
         elif deep_loss_count == 1:
             cut_loss_score = 65.0
-            weaknesses.append("Đang có 1 mã âm vượt quá ngưỡng -7% nhưng chưa thực hiện cắt lỗ bảo toàn vốn.")
-            recommendations.append("Cần xem xét dứt khoát hạ tỷ trọng hoặc cắt lỗ mã âm sâu theo nguyên tắc 7-8% của William O'Neil.")
+            weaknesses.append(
+                "Đang có 1 mã âm vượt quá ngưỡng -7% nhưng chưa thực hiện cắt lỗ bảo toàn vốn."
+            )
+            recommendations.append(
+                "Cần xem xét dứt khoát hạ tỷ trọng hoặc cắt lỗ mã âm sâu theo nguyên tắc 7-8% của William O'Neil."
+            )
         else:
             cut_loss_score = 40.0
-            weaknesses.append(f"Đang gồng lỗ {deep_loss_count} mã âm vượt quá -7%, tâm lý 'chờ về bờ' đang chi phối.")
-            recommendations.append("Tuyệt đối không gồng lỗ cổ phiếu đầu cơ. Cắt lỗ sớm giúp bạn giữ được 90% vốn để làm lại ở con sóng mới.")
+            weaknesses.append(
+                f"Đang gồng lỗ {deep_loss_count} mã âm vượt quá -7%, tâm lý 'chờ về bờ' đang chi phối."
+            )
+            recommendations.append(
+                "Tuyệt đối không gồng lỗ cổ phiếu đầu cơ. Cắt lỗ sớm giúp bạn giữ được 90% vốn để làm lại ở con sóng mới."
+            )
 
         # 4. Emotional Pacing Score (20%)
         orders_count = len(realized_orders or [])
         if orders_count > 20:
             pacing_score = 60.0
-            weaknesses.append("Tần suất mua bán khá dày đặc, có dấu hiệu giao dịch theo cảm xúc (Overtrading).")
-            recommendations.append("Giảm nhịp độ giao dịch, chỉ mở vị thế khi cổ phiếu đạt đủ tiêu chí kỹ thuật và định giá.")
+            weaknesses.append(
+                "Tần suất mua bán khá dày đặc, có dấu hiệu giao dịch theo cảm xúc (Overtrading)."
+            )
+            recommendations.append(
+                "Giảm nhịp độ giao dịch, chỉ mở vị thế khi cổ phiếu đạt đủ tiêu chí kỹ thuật và định giá."
+            )
         else:
             pacing_score = 90.0
-            strengths.append("Giao dịch có chọn lọc, nhịp độ bình tĩnh không bị cuốn vào bảng điện.")
+            strengths.append(
+                "Giao dịch có chọn lọc, nhịp độ bình tĩnh không bị cuốn vào bảng điện."
+            )
 
         overall_discipline = (
             diversification_score * 0.25
@@ -897,9 +1156,17 @@ class SqlAssessmentRepository:
                         ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, NOW());
                         """,
                         (
-                            record["id"], user_id, guest_identifier, top_persona_code,
-                            risk_score, k_score, d_score, overall_readiness,
-                            level, json.dumps(answers), verdict,
+                            record["id"],
+                            user_id,
+                            guest_identifier,
+                            top_persona_code,
+                            risk_score,
+                            k_score,
+                            d_score,
+                            overall_readiness,
+                            level,
+                            json.dumps(answers),
+                            verdict,
                         ),
                     )
             except Exception as exc:
@@ -957,12 +1224,28 @@ class SqlAssessmentRepository:
                             "discipline_score": float(row[6]),
                             "overall_readiness_score": overall,
                             "readiness_level": row[8],
-                            "readiness_label": "Nhà đầu tư Bản lĩnh" if overall >= 80 else ("Sẵn sàng Khởi đầu có Kiểm soát" if overall >= 65 else ("Cần Rèn luyện Thêm" if overall >= 50 else "Chưa Sẵn sàng Đầu tư Thật")),
+                            "readiness_label": "Nhà đầu tư Bản lĩnh"
+                            if overall >= 80
+                            else (
+                                "Sẵn sàng Khởi đầu có Kiểm soát"
+                                if overall >= 65
+                                else (
+                                    "Cần Rèn luyện Thêm"
+                                    if overall >= 50
+                                    else "Chưa Sẵn sàng Đầu tư Thật"
+                                )
+                            ),
                             "verdict_summary": row[10] or "",
                             "can_trade_real_money": overall >= 65,
-                            "recommended_action": "Bắt đầu với số vốn nhỏ" if overall >= 65 else "Tiếp tục học và rèn luyện trên tài khoản thử nghiệm",
-                            "created_at": row[11].isoformat() if hasattr(row[11], "isoformat") else str(row[11]),
-                            "answers": row[9] if isinstance(row[9], dict) else json.loads(row[9] or "{}"),
+                            "recommended_action": "Bắt đầu với số vốn nhỏ"
+                            if overall >= 65
+                            else "Tiếp tục học và rèn luyện trên tài khoản thử nghiệm",
+                            "created_at": row[11].isoformat()
+                            if hasattr(row[11], "isoformat")
+                            else str(row[11]),
+                            "answers": row[9]
+                            if isinstance(row[9], dict)
+                            else json.loads(row[9] or "{}"),
                         }
             except Exception as exc:
                 logger.warning("DB query latest assessment failed: %s", exc)
@@ -997,21 +1280,24 @@ class SqlAssessmentRepository:
 
         summary_items: list[dict[str, Any]] = []
         for item in paged:
-            summary_items.append({
-                "id": item["id"],
-                "user_id": item.get("user_id"),
-                "guest_identifier": item.get("guest_identifier"),
-                "persona_code": item.get("persona_code", "dca_accumulator"),
-                "persona_title": item.get("persona_title") or (item.get("persona", {}).get("title", "")),
-                "risk_score": float(item.get("risk_score", 50)),
-                "knowledge_score": float(item.get("knowledge_score", 50)),
-                "discipline_score": float(item.get("discipline_score", 50)),
-                "readiness_score": float(item.get("overall_readiness_score", 50)),
-                "readiness_level": item.get("readiness_level", "needs_training"),
-                "readiness_label": item.get("readiness_label", "Cần Rèn luyện Thêm"),
-                "can_trade_real_money": bool(item.get("can_trade_real_money", False)),
-                "created_at": str(item.get("created_at", "")),
-            })
+            summary_items.append(
+                {
+                    "id": item["id"],
+                    "user_id": item.get("user_id"),
+                    "guest_identifier": item.get("guest_identifier"),
+                    "persona_code": item.get("persona_code", "dca_accumulator"),
+                    "persona_title": item.get("persona_title")
+                    or (item.get("persona", {}).get("title", "")),
+                    "risk_score": float(item.get("risk_score", 50)),
+                    "knowledge_score": float(item.get("knowledge_score", 50)),
+                    "discipline_score": float(item.get("discipline_score", 50)),
+                    "readiness_score": float(item.get("overall_readiness_score", 50)),
+                    "readiness_level": item.get("readiness_level", "needs_training"),
+                    "readiness_label": item.get("readiness_label", "Cần Rèn luyện Thêm"),
+                    "can_trade_real_money": bool(item.get("can_trade_real_money", False)),
+                    "created_at": str(item.get("created_at", "")),
+                }
+            )
         return summary_items, total
 
     def get_admin_stats(self) -> dict[str, Any]:
@@ -1033,7 +1319,9 @@ class SqlAssessmentRepository:
                 },
             }
 
-        avg_score = round(sum(float(a.get("overall_readiness_score", 0)) for a in assessments) / total, 1)
+        avg_score = round(
+            sum(float(a.get("overall_readiness_score", 0)) for a in assessments) / total, 1
+        )
         ready_count = sum(1 for a in assessments if a.get("can_trade_real_money"))
         ready_pct = round((ready_count / total) * 100, 1)
 
@@ -1071,6 +1359,7 @@ def get_assessment_repository() -> SqlAssessmentRepository:
     if _assessment_repo is None:
         try:
             from app.infrastructure.db.session import get_pool
+
             pool = get_pool()
         except Exception:
             pool = None

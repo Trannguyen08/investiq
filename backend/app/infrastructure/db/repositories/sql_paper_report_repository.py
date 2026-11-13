@@ -67,8 +67,8 @@ class SqlPaperReportRepository:
 
         try:
             with self._pool.connection() as conn, conn.cursor() as cur:
-                    cur.execute(
-                        """
+                cur.execute(
+                    """
                         INSERT INTO paper_portfolio_daily_reports (user_id, email, is_active, updated_at)
                         VALUES (%s, %s, %s, %s)
                         ON CONFLICT (user_id) DO UPDATE
@@ -77,20 +77,20 @@ class SqlPaperReportRepository:
                             updated_at = EXCLUDED.updated_at
                         RETURNING id, user_id, email, is_active, last_sent_at, created_at, updated_at;
                         """,
-                        (user_id, email.strip().lower(), is_active, now),
-                    )
-                    row = cur.fetchone()
-                    conn.commit()
-                    if row:
-                        return {
-                            "id": str(row[0]),
-                            "user_id": str(row[1]),
-                            "email": str(row[2]),
-                            "is_active": bool(row[3]),
-                            "last_sent_at": row[4],
-                            "created_at": row[5],
-                            "updated_at": row[6],
-                        }
+                    (user_id, email.strip().lower(), is_active, now),
+                )
+                row = cur.fetchone()
+                conn.commit()
+                if row:
+                    return {
+                        "id": str(row[0]),
+                        "user_id": str(row[1]),
+                        "email": str(row[2]),
+                        "is_active": bool(row[3]),
+                        "last_sent_at": row[4],
+                        "created_at": row[5],
+                        "updated_at": row[6],
+                    }
         except Exception as exc:
             logger.warning("Failed to upsert paper report sub in DB: %s", exc)
 

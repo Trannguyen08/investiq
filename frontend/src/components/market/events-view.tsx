@@ -5,6 +5,7 @@ import { formatEventDate, formatMarketTime } from "@/components/market/formatter
 import { EventReminderModal, type ReminderTargetEvent } from "@/components/market/event-reminder-modal";
 import type { EventCollection } from "@/types/market";
 import { Pagination } from "@/components/ui/pagination";
+import { resolveDirectArticleUrl } from "@/lib/market-article-links";
 
 const labels: Record<string, string> = {
   shareholder_meeting: "Đại hội cổ đông",
@@ -91,11 +92,7 @@ export function EventsView({
                 <h3>{date}</h3>
                 <div>
                   {events.map((event) => {
-                    const eventUrl =
-                      event.source_url ||
-                      (event.symbol
-                        ? `https://s.cafef.vn/lich-su-kien.chn?symbol=${encodeURIComponent(event.symbol)}`
-                        : "https://s.cafef.vn/lich-su-kien.chn");
+                    const eventUrl = resolveDirectArticleUrl(event.symbol, event.source_url);
 
                     return (
                       <a

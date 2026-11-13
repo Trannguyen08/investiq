@@ -76,12 +76,22 @@ export type MarketPulseWidgetData = {
 
 export type SuggestedAction = {
   label: string;
-  action_type: "NAVIGATE" | "OPEN_MODAL" | "TRADE_ORDER" | "SEND_PROMPT";
+  action_type: "NAVIGATE" | "OPEN_MODAL" | "TRADE_ORDER" | "SEND_PROMPT" | "POST_COMMUNITY_THESIS";
   url?: string | null;
   modal_type?: string | null;
   symbol?: string | null;
   prompt?: string | null;
   quantity?: number | null;
+  side?: "buy" | "sell" | string | null;
+  price?: string | null;
+  title?: string | null;
+  content?: string | null;
+  target_price?: number | null;
+  stop_loss_price?: number | null;
+  horizon?: number | string | null;
+  stance?: string | null;
+  catalysts?: string | null;
+  payload?: Record<string, any> | null;
 };
 
 export type AiWidget =

@@ -3,6 +3,27 @@
 Record durable decisions in reverse chronological order. Do not record routine implementation
 details.
 
+## 2026-11-12 — Canonical Subsector-to-Parent Sector Hierarchy Resolution
+
+- **Status:** Accepted and implemented on `fix/project`.
+- **Context:** Upstream market screener feeds (FHSC) and legacy fixtures occasionally contain discordant or mismatched parent sector labels against the detailed 20-category industry catalog (`stock_sectors.json`), which caused subgroups like "Ngân hàng" to be categorized under the wrong broad sector or fragmented from "Tài chính".
+- **Decision:** Establish a single source of truth `SUBSECTOR_PARENT_MAP` and `resolve_sector_hierarchy()` in `app.domain.entities.market` defining strict mappings from subsector to broad sector (e.g. `Ngân hàng` → `Tài chính`, `Dịch vụ tài chính` → `Tài chính`, `Bảo hiểm` → `Tài chính`). Both `VnstockMarketProvider` and `FixtureMarketProvider` enforce this hierarchy upon instrument creation, and `MarketService` uses it to aggregate consistent parent sector totals while maintaining subgroup drill-down collections.
+- **Consequences:** All 28 active banking stocks and related financial institutions are guaranteed to belong to parent sector "Tài chính" and subgroup "Ngân hàng". The heatmap can drill down from "Tài chính" into its specific subsectors, total sector statistics match the sum of their subgroups, and stock list filtering seamlessly supports both broad sector and detailed subgroup queries.
+
+## 2026-11-12 — Localized Market Sectors and Initial Snapshot Reads
+
+- **Status:** Accepted and implemented on `fix/project`.
+- **Context:** FHSC market responses use English sector slugs. During provider startup, API reads could race the initial background snapshot and return empty collections, which the Next.js data cache could retain.
+- **Decision:** Translate known FHSC sector slugs at the provider boundary so all downstream views share Vietnamese names. A read waits for the first snapshot to finish (up to three minutes); subsequent stale reads can continue using the existing stale-while-refresh behavior. Do not cache market indices, sectors, or instrument collections in the market page's Next.js fetches.
+- **Consequences:** The first market page visit receives a complete localized snapshot without needing a browser reload. Cold start can wait for the upstream snapshot; if it remains unavailable past the wait limit, the API reports unavailable rather than returning a misleading empty snapshot.
+
+## 2026-11-12 — Multi-Source Stock History and Honest Reporting Periods
+
+- **Status:** Accepted and implemented on `fix/project`.
+- **Context:** The FHSC screener covers the listed stock universe but only provides a current close for broad-market rows; native DNSE weekly/monthly history may be shorter than daily FHSC history. Missing chart history had previously been filled with generated candles. Financial reporting sources expose quarterly and annual statements, not a standardized monthly statement period.
+- **Decision:** Keep the full FHSC stock universe and current prices, enrich broad-market daily OHLC through the bounded DNSE stream, and retrieve per-symbol historical candles from both sources. For weekly/monthly candles, aggregate observed FHSC daily OHLCV and prefer whichever source returns the longer real history. Keep missing series empty instead of generating price history. Fetch 500 instruments for market search/summary via bounded cursor pagination. Present financial statements by quarter/year and explain that monthly statements are not available from the configured source.
+- **Consequences:** Users can search hundreds of stocks and see consistent weekly/monthly bars derived from actual daily trades; data gaps remain visible. Daily refresh and financial statements remain on-demand/cached. Monthly statutory statements cannot be provided until a source exposes them.
+
 ## 2026-11-09 — Cloud Deployment Strategy: Vercel (Frontend) + Render (Backend) + Neon.tech (PostgreSQL) 100% Free & Always-On 24/7
 
 - **Status:** Accepted and implemented on `feature/deploy-vercel-render`

@@ -264,11 +264,11 @@ export function SocialPaperTrading({ initialLeaderboard = [] }: SocialPaperTradi
                         <thead>
                           <tr>
                             <th>Mã CK</th>
-                            <th className="text-right">Khối lượng</th>
-                            <th className="text-right">Giá vốn</th>
-                            <th className="text-right">Giá thị trường</th>
-                            <th className="text-right">Giá trị thị trường</th>
-                            <th className="text-right">Lãi/Lỗ tạm tính</th>
+                            <th className="text-center">Khối lượng</th>
+                            <th className="text-center">Giá vốn</th>
+                            <th className="text-center">Giá thị trường</th>
+                            <th className="text-center">Giá trị thị trường</th>
+                            <th className="text-center">Lãi/Lỗ tạm tính</th>
                           </tr>
                         </thead>
                         <tbody>
@@ -282,11 +282,11 @@ export function SocialPaperTrading({ initialLeaderboard = [] }: SocialPaperTradi
                                   </Link>
                                   <span className="text-sub block text-xs">{h.name}</span>
                                 </td>
-                                <td className="text-right font-mono">{h.quantity.toLocaleString("vi-VN")}</td>
-                                <td className="text-right font-mono">{formatVnd(h.cost_basis)}</td>
-                                <td className="text-right font-mono">{formatVnd(h.current_price)}</td>
-                                <td className="text-right font-mono font-bold">{formatVnd(h.market_value)}</td>
-                                <td className={`text-right font-mono font-bold ${isPos ? "text-emerald" : "text-rose"}`}>
+                                <td className="text-center font-mono">{h.quantity.toLocaleString("vi-VN")}</td>
+                                <td className="text-center font-mono">{formatVnd(h.cost_basis)}</td>
+                                <td className="text-center font-mono">{formatVnd(h.current_price)}</td>
+                                <td className="text-center font-mono font-bold">{formatVnd(h.market_value)}</td>
+                                <td className={`text-center font-mono font-bold ${isPos ? "text-emerald" : "text-rose"}`}>
                                   {isPos ? `+${h.roi_percent}%` : `${h.roi_percent}%`}
                                   <span className="text-sub block text-xs">({isPos ? `+${formatVnd(h.unrealized_pnl)}` : formatVnd(h.unrealized_pnl)})</span>
                                 </td>
@@ -309,12 +309,12 @@ export function SocialPaperTrading({ initialLeaderboard = [] }: SocialPaperTradi
                         <thead>
                           <tr>
                             <th>Thời gian</th>
-                            <th>Lệnh</th>
-                            <th>Mã CK</th>
-                            <th className="text-right">Khối lượng</th>
-                            <th className="text-right">Giá khớp</th>
-                            <th className="text-right">Giá trị lệnh</th>
-                            <th className="text-right">Lãi chốt</th>
+                            <th className="text-center">Lệnh</th>
+                            <th className="text-center">Mã CK</th>
+                            <th className="text-center">Khối lượng</th>
+                            <th className="text-center">Giá khớp</th>
+                            <th className="text-center">Giá trị lệnh</th>
+                            <th className="text-center">Lãi chốt</th>
                           </tr>
                         </thead>
                         <tbody>
@@ -330,16 +330,16 @@ export function SocialPaperTrading({ initialLeaderboard = [] }: SocialPaperTradi
                                     timeStyle: "short",
                                   })}
                                 </td>
-                                <td>
+                                <td className="text-center">
                                   <span className={`trade-badge ${isBuy ? "trade-buy" : "trade-sell"}`}>
                                     {isBuy ? "MUA" : "BÁN"}
                                   </span>
                                 </td>
-                                <td className="font-bold text-cyan">{t.symbol}</td>
-                                <td className="text-right font-mono">{t.quantity.toLocaleString("vi-VN")}</td>
-                                <td className="text-right font-mono">{formatVnd(t.execution_price)}</td>
-                                <td className="text-right font-mono">{formatVnd(t.gross_amount)}</td>
-                                <td className="text-right font-mono">
+                                <td className="text-center font-bold text-cyan">{t.symbol}</td>
+                                <td className="text-center font-mono">{t.quantity.toLocaleString("vi-VN")}</td>
+                                <td className="text-center font-mono">{formatVnd(t.execution_price)}</td>
+                                <td className="text-center font-mono">{formatVnd(t.gross_amount)}</td>
+                                <td className="text-center font-mono">
                                   {pnlNum !== null ? (
                                     <span className={pnlNum >= 0 ? "text-emerald font-bold" : "text-rose font-bold"}>
                                       {pnlNum > 0 ? `+${formatVnd(t.realized_pnl!)}` : formatVnd(t.realized_pnl!)}

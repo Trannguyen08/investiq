@@ -77,12 +77,24 @@ class ForensicWarningWidgetData(BaseModel):
 
 class SuggestedAction(BaseModel):
     label: str
-    action_type: Literal["NAVIGATE", "OPEN_MODAL", "TRADE_ORDER", "SEND_PROMPT"]
+    action_type: Literal[
+        "NAVIGATE", "OPEN_MODAL", "TRADE_ORDER", "SEND_PROMPT", "POST_COMMUNITY_THESIS"
+    ]
     url: str | None = None
     modal_type: str | None = None
     symbol: str | None = None
     prompt: str | None = None
     quantity: int | None = None
+    side: str | None = None
+    price: str | None = None
+    title: str | None = None
+    content: str | None = None
+    target_price: int | float | None = None
+    stop_loss_price: int | float | None = None
+    horizon: int | str | None = None
+    stance: str | None = None
+    catalysts: str | None = None
+    payload: dict[str, Any] | None = None
 
 
 class AiWidget(BaseModel):

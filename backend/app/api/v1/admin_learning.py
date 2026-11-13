@@ -32,9 +32,7 @@ def list_admin_learning_topics(
     actor_id: Annotated[str, Depends(require_admin_user)],
     repository: Annotated[SqlLearningRepository, Depends(get_learning_repository)],
     q: Annotated[str | None, Query(max_length=120)] = None,
-    level: Annotated[
-        str | None, Query(pattern="^(beginner|intermediate|advanced)$")
-    ] = None,
+    level: Annotated[str | None, Query(pattern="^(beginner|intermediate|advanced)$")] = None,
     status_filter: Annotated[
         str | None, Query(alias="status", pattern="^(published|draft)$")
     ] = None,
@@ -60,7 +58,9 @@ def list_admin_learning_topics(
     )
 
 
-@router.post("/topics", response_model=LearningTopicDetailResponse, status_code=status.HTTP_201_CREATED)
+@router.post(
+    "/topics", response_model=LearningTopicDetailResponse, status_code=status.HTTP_201_CREATED
+)
 def create_admin_learning_topic(
     payload: AdminTopicCreateRequest,
     actor_id: Annotated[str, Depends(require_admin_user)],

@@ -341,8 +341,6 @@ def build_paper_portfolio_email_html(
     return html
 
 
-
-
 def build_paper_portfolio_email_text(
     email: str,
     account_data: dict[str, Any],
@@ -351,7 +349,9 @@ def build_paper_portfolio_email_text(
 ) -> str:
     """Render a clean, structured plaintext alternative to prevent email spam flags."""
     now_str = report_date_str or datetime.now(UTC).strftime("%d/%m/%Y")
-    total_val = float(account_data.get("total_value") or account_data.get("starting_cash") or 1_000_000_000)
+    total_val = float(
+        account_data.get("total_value") or account_data.get("starting_cash") or 1_000_000_000
+    )
     avail_cash = float(account_data.get("available_cash") or account_data.get("cash_balance") or 0)
     total_pnl = float(account_data.get("total_pnl") or account_data.get("unrealized_pnl") or 0)
     total_return_pct = float(
@@ -383,23 +383,27 @@ def build_paper_portfolio_email_text(
     else:
         lines.append("- Hiện danh mục đang giữ 100% tiền mặt, chưa mua cổ phiếu nào.")
 
-    lines.extend([
-        "-" * 50,
-        "ĐÁNH GIÁ TỪ TRỢ LÝ AI:",
-        ai_review.overall_verdict,
-        "",
-        "HÀNH ĐỘNG ĐỀ XUẤT:",
-    ])
+    lines.extend(
+        [
+            "-" * 50,
+            "ĐÁNH GIÁ TỪ TRỢ LÝ AI:",
+            ai_review.overall_verdict,
+            "",
+            "HÀNH ĐỘNG ĐỀ XUẤT:",
+        ]
+    )
     for item in ai_review.action_items:
         lines.append(f"* {item}")
 
-    lines.extend([
-        "",
-        "=" * 50,
-        "Báo cáo này được tự động tạo bởi InvestIQ Platform.",
-        "Bạn nhận được thư này do đã bật tính năng Báo cáo Danh mục Thử nghiệm Hàng ngày.",
-        "© 2026 InvestIQ Platform · support@investiq.vn",
-    ])
+    lines.extend(
+        [
+            "",
+            "=" * 50,
+            "Báo cáo này được tự động tạo bởi InvestIQ Platform.",
+            "Bạn nhận được thư này do đã bật tính năng Báo cáo Danh mục Thử nghiệm Hàng ngày.",
+            "© 2026 InvestIQ Platform · support@investiq.vn",
+        ]
+    )
     return "\n".join(lines)
 
 

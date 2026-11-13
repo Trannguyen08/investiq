@@ -9,7 +9,7 @@ from uuid import uuid4
 
 from fastapi import APIRouter, Depends, Header, HTTPException, Query, Request, Response
 
-from app.api.deps import get_user_repository, require_auth_bff
+from app.api.deps import authenticated_user_id, get_user_repository, require_auth_bff
 from app.application.use_cases.auth.auth_service import AuthError, AuthService, Credentials
 from app.domain.entities.user import User
 from app.infrastructure.config.settings import settings
@@ -312,3 +312,74 @@ def google_exchange(
         avatar_url=identity.avatar_url,
     )
     return _credentials(credentials)
+
+
+@router.get("/me/export")
+def export_my_data(
+    response: Response,
+    user_id: Annotated[str, Depends(authenticated_user_id)],
+    _auth: Annotated[None, Depends(require_auth_bff)],
+) -> dict[str, object]:
+    """Export the authenticated user's watchlists, paper portfolios, theses, and reminders."""
+    from datetime import UTC, datetime
+
+    from psycopg.rows import dict_row
+
+    from app.infrastructure.db.session import get_pool
+
+    _private(response)
+    pool = get_pool()
+    with pool.connection() as conn, conn.cursor(row_factory=dict_row) as cur:
+        watchlists = cur.execute(
+            "SELECT id::text, name, created_at FROM watchlists WHERE user_id = %s",
+            (user_id,),
+        ).fetchall()
+        portfolios = cur.execute(
+            "SELECT id::text, name, starting_cash::text, cash_balance::text, created_at "
+            "FROM paper_portfolios WHERE user_id = %s",
+            (user_id,),
+        ).fetchall()
+        theses = cur.execute(
+            "SELECT id::text, symbol, stance, title, status, created_at "
+            "FROM investment_theses WHERE user_id = %s",
+            (user_id,),
+        ).fetchall()
+        reminders = cur.execute(
+            "SELECT id::text, symbol, event_type, created_at "
+            "FROM event_reminders WHERE user_id = %s",
+            (user_id,),
+        ).fetchall()
+
+    return {
+        "exported_at": datetime.now(UTC).isoformat(),
+        "user_id": user_id,
+        "watchlists": watchlists,
+        "paper_portfolios": portfolios,
+        "investment_theses": theses,
+        "event_reminders": reminders,
+    }
+
+
+@router.delete("/me/data")
+def delete_my_personal_data(
+    response: Response,
+    user_id: Annotated[str, Depends(authenticated_user_id)],
+    _auth: Annotated[None, Depends(require_auth_bff)],
+) -> dict[str, object]:
+    """Delete personal financial records (watchlists, paper portfolios, AI chats, reminders)."""
+    from app.infrastructure.db.session import get_pool
+
+    _private(response)
+    pool = get_pool()
+    deleted: dict[str, int] = {}
+    with pool.connection() as conn, conn.cursor() as cur:
+        for table in (
+            "watchlists",
+            "paper_portfolios",
+            "ai_conversations",
+            "event_reminders",
+        ):
+            cur.execute(f"DELETE FROM {table} WHERE user_id = %s", (user_id,))
+            deleted[table] = cur.rowcount or 0
+        conn.commit()
+    return {"status": "deleted", "user_id": user_id, "deleted_counts": deleted}

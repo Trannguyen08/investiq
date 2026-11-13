@@ -31,19 +31,91 @@ class TickerSuggestion:
 # Top benchmark symbols for liquidity-weighted matching
 _VN30_SET = frozenset(
     {
-        "ACB", "BCM", "BID", "BVH", "CTG", "FPT", "GAS", "GVR", "HDB", "HPG",
-        "MBB", "MSN", "MWG", "PLX", "POW", "SAB", "SHB", "SSB", "SSI", "STB",
-        "TCB", "TPB", "VCB", "VHM", "VIB", "VIC", "VJC", "VNM", "VPB", "VRE",
+        "ACB",
+        "BCM",
+        "BID",
+        "BVH",
+        "CTG",
+        "FPT",
+        "GAS",
+        "GVR",
+        "HDB",
+        "HPG",
+        "MBB",
+        "MSN",
+        "MWG",
+        "PLX",
+        "POW",
+        "SAB",
+        "SHB",
+        "SSB",
+        "SSI",
+        "STB",
+        "TCB",
+        "TPB",
+        "VCB",
+        "VHM",
+        "VIB",
+        "VIC",
+        "VJC",
+        "VNM",
+        "VPB",
+        "VRE",
     }
 )
 
 _MAJOR_SET = frozenset(
     {
-        "DIG", "DXG", "PDR", "CEO", "NVL", "KBC", "VCI", "HCM", "VND", "SHS",
-        "MBS", "CTS", "BSI", "DGC", "DCM", "DPM", "HSG", "NKG", "PVD", "PVS",
-        "PVT", "VPI", "KDH", "GEX", "PC1", "REE", "VGC", "HAG", "HNG", "DBC",
-        "BAF", "ANV", "VHC", "GMD", "HAH", "VOS", "BMP", "NTP", "HT1", "BSR",
-        "OIL", "CTR", "VGI", "VTP", "FOX", "FRT", "DGW", "PNJ", "MSB", "LPB",
+        "DIG",
+        "DXG",
+        "PDR",
+        "CEO",
+        "NVL",
+        "KBC",
+        "VCI",
+        "HCM",
+        "VND",
+        "SHS",
+        "MBS",
+        "CTS",
+        "BSI",
+        "DGC",
+        "DCM",
+        "DPM",
+        "HSG",
+        "NKG",
+        "PVD",
+        "PVS",
+        "PVT",
+        "VPI",
+        "KDH",
+        "GEX",
+        "PC1",
+        "REE",
+        "VGC",
+        "HAG",
+        "HNG",
+        "DBC",
+        "BAF",
+        "ANV",
+        "VHC",
+        "GMD",
+        "HAH",
+        "VOS",
+        "BMP",
+        "NTP",
+        "HT1",
+        "BSR",
+        "OIL",
+        "CTR",
+        "VGI",
+        "VTP",
+        "FOX",
+        "FRT",
+        "DGW",
+        "PNJ",
+        "MSB",
+        "LPB",
     }
 )
 
@@ -355,13 +427,74 @@ def find_closest_tickers(
 
 _EXTRA_STOP_WORDS = frozenset(
     {
-        "ATC", "ATO", "PLO", "MP", "LO", "MTL", "MOK", "MAK", "VN30", "HOSE", "HNX",
-        "UPCOM", "VNINDEX", "VANG", "NGAN", "HANG", "TIET", "KIEM", "TRAI", "PHIEU",
-        "TANG", "GIAM", "TRAN", "SAN", "HOM", "NAY", "THE", "NAO", "MANH", "NHAT",
-        "TRONG", "RO", "LA", "GI", "VA", "VOI", "SO", "SANH", "DOI", "CHIEU", "GIUA",
-        "CUA", "SAP", "TOI", "MOI", "TIN", "TUC", "LICH", "CHIA", "CO", "MA", "CP",
-        "CK", "DINH", "PHAN", "TICH", "RUI", "BAO", "CAO", "TAI", "CHINH", "THEO",
-        "THONG", "CA", "HAI", "TOAN", "DIEN", "TRUONG",
+        "ATC",
+        "ATO",
+        "PLO",
+        "MP",
+        "LO",
+        "MTL",
+        "MOK",
+        "MAK",
+        "VN30",
+        "HOSE",
+        "HNX",
+        "UPCOM",
+        "VNINDEX",
+        "VANG",
+        "NGAN",
+        "HANG",
+        "TIET",
+        "KIEM",
+        "TRAI",
+        "PHIEU",
+        "TANG",
+        "GIAM",
+        "TRAN",
+        "SAN",
+        "HOM",
+        "NAY",
+        "THE",
+        "NAO",
+        "MANH",
+        "NHAT",
+        "TRONG",
+        "RO",
+        "LA",
+        "GI",
+        "VA",
+        "VOI",
+        "SO",
+        "SANH",
+        "DOI",
+        "CHIEU",
+        "GIUA",
+        "CUA",
+        "SAP",
+        "TOI",
+        "MOI",
+        "TIN",
+        "TUC",
+        "LICH",
+        "CHIA",
+        "CO",
+        "MA",
+        "CP",
+        "CK",
+        "DINH",
+        "PHAN",
+        "TICH",
+        "RUI",
+        "BAO",
+        "CAO",
+        "TAI",
+        "CHINH",
+        "THEO",
+        "THONG",
+        "CA",
+        "HAI",
+        "TOAN",
+        "DIEN",
+        "TRUONG",
     }
 )
 
@@ -406,22 +539,25 @@ def extract_tickers_with_typo_handling(
         for g in (1, 2):
             _add_token(m.group(g))
 
-    # 3. Explicit keywords: e.g. "mã VICC", "cổ phiếu HBG", "định giá TCBB", "phân tích HBG"
+    # 3. Explicit keywords: e.g. "mã VICC", "cổ phiếu HBG", "định giá TCBB", "phân tích HBG", "mua 300 HPPG"
     explicit_pat = re.compile(
         r"(?:mã|cổ phiếu|cp|ck|chứng khoán|định giá|phân tích|bctc|cổ tức|rủi ro)\s+([A-Za-z0-9]{2,5})\b|"
+        r"(?:mua|bán|ban|lệnh|gom|múc|muc|xả|xa|khớp|khop|đặt|dat)\s+(?:thêm\s+|them\s+|tiếp\s+|tiep\s+|giúp\s+|giup\s+|hộ\s+|ho\s+|dùm\s+|dum\s+|ngay\s+|luôn\s+|luon\s+|bớt\s+|bot\s+|hết\s+|het\s+)?(?:\d{1,7}\s*(?:co|cp|co phieu|shares)?\s+)?([A-Za-z0-9]{2,5})\b|"
+        r"\b(?:\d{1,7})\s*(?:co|cp|co phieu|shares)\s+([A-Za-z0-9]{2,5})\b|"
+        r"\b([A-Za-z0-9]{2,5})\s+(?:\d{1,7})\s*(?:co|cp|co phieu|shares)\b|"
         r"\b([A-Za-z0-9]{2,5})\s+(?:tăng|giảm|trần|sàn|hôm nay|thế nào)\b|"
         r"\(([A-Za-z0-9]{2,5})\)",
         re.IGNORECASE,
     )
     for m in explicit_pat.finditer(text):
-        for g in (1, 2, 3):
+        for g in range(1, 7):
             tok = m.group(g)
             if tok:
                 _add_token(tok)
 
-    # 4. General 3-letter tokens in uppercase text
-    ticker_pat = re.compile(r"\b([A-Z]{3})\b")
-    for m in ticker_pat.finditer(text.upper()):
+    # 4. General tokens in uppercase text (3-4 letters e.g. HPG, HPPG, FPTT)
+    ticker_pat = re.compile(r"\b([A-Z]{3,4})\b")
+    for m in ticker_pat.finditer(text):
         _add_token(m.group(1))
 
     return valid, invalid

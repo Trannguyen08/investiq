@@ -113,12 +113,49 @@ class ExchangeSimulationStore:
 
     def get_mode(self, user_id: str) -> ExecutionMode:
         with self._lock:
-            return self._user_modes.get(user_id, "instant")
+            if user_id in self._user_modes:
+                return self._user_modes[user_id]
+
+        # Query persistent preference from database
+        try:
+            from app.infrastructure.db.session import get_pool
+
+            pool = get_pool()
+            with pool.connection() as conn, conn.cursor() as cur:
+                cur.execute(
+                    "SELECT COALESCE(execution_mode, 'instant') FROM paper_portfolios WHERE user_id = %s",
+                    (user_id,),
+                )
+                row = cur.fetchone()
+                if row and row[0] in ("instant", "exchange_hours"):
+                    mode: ExecutionMode = row[0]
+                    with self._lock:
+                        self._user_modes[user_id] = mode
+                    return mode
+        except Exception:
+            pass
+
+        return "instant"
 
     def set_mode(self, user_id: str, mode: ExecutionMode) -> ExecutionMode:
         with self._lock:
             self._user_modes[user_id] = mode
-            return mode
+
+        # Persist preference to database for user account
+        try:
+            from app.infrastructure.db.session import get_pool
+
+            pool = get_pool()
+            with pool.connection() as conn, conn.cursor() as cur:
+                cur.execute(
+                    "UPDATE paper_portfolios SET execution_mode = %s, updated_at = now() WHERE user_id = %s",
+                    (mode, user_id),
+                )
+                conn.commit()
+        except Exception:
+            pass
+
+        return mode
 
     def save_order_meta(self, meta: OrderExtendedMeta) -> None:
         with self._lock:
@@ -126,7 +163,18 @@ class ExchangeSimulationStore:
 
     def get_order_meta(self, order_id: str) -> OrderExtendedMeta | None:
         with self._lock:
-            return self._order_meta.get(order_id)
+            meta = self._order_meta.get(order_id)
+            if meta is not None:
+                return meta
+        # Return sensible default meta if not in memory (e.g. after server reboot)
+        return OrderExtendedMeta(
+            order_id=order_id,
+            display_order_type="LO",
+            lot_type="even",
+            slippage_vnd=Decimal("0"),
+            slippage_bps=Decimal("0"),
+            pending_reason="Ngoài khung giờ giao dịch (09:00 - 11:30 & 13:00 - 14:45). Lệnh được lưu chờ phiên kế tiếp.",
+        )
 
     def upsert_trigger(
         self,
@@ -176,27 +224,90 @@ class ExchangeSimulationStore:
         net_received: Decimal,
         days_advanced: int,
     ) -> CashAdvanceRecord:
+        rec_id = str(uuid4())
+        rec = CashAdvanceRecord(
+            id=rec_id,
+            user_id=user_id,
+            gross_amount=gross_amount,
+            fee_amount=fee_amount,
+            net_received=net_received,
+            days_advanced=days_advanced,
+        )
         with self._lock:
-            rec = CashAdvanceRecord(
-                id=str(uuid4()),
-                user_id=user_id,
-                gross_amount=gross_amount,
-                fee_amount=fee_amount,
-                net_received=net_received,
-                days_advanced=days_advanced,
-            )
             self._advances.setdefault(user_id, []).append(rec)
-            return rec
+
+        try:
+            from app.infrastructure.db.session import get_pool
+
+            pool = get_pool()
+            with pool.connection() as conn, conn.cursor() as cur:
+                cur.execute(
+                    """INSERT INTO paper_cash_advances (id, user_id, gross_amount, fee_amount, net_received, days_advanced, created_at)
+                       VALUES (%s, %s, %s, %s, %s, %s, %s)""",
+                    (
+                        rec_id,
+                        user_id,
+                        gross_amount,
+                        fee_amount,
+                        net_received,
+                        days_advanced,
+                        rec.created_at,
+                    ),
+                )
+                conn.commit()
+        except Exception:
+            pass
+        return rec
 
     def list_cash_advances(self, user_id: str) -> list[CashAdvanceRecord]:
         with self._lock:
-            return list(self._advances.get(user_id, []))
+            if user_id in self._advances:
+                return list(self._advances[user_id])
+
+        records: list[CashAdvanceRecord] = []
+        try:
+            from app.infrastructure.db.session import get_pool
+
+            pool = get_pool()
+            with pool.connection() as conn, conn.cursor() as cur:
+                cur.execute(
+                    """SELECT id::text, user_id::text, gross_amount, fee_amount, net_received, days_advanced, created_at
+                       FROM paper_cash_advances WHERE user_id = %s ORDER BY created_at ASC""",
+                    (user_id,),
+                )
+                for row in cur.fetchall():
+                    records.append(
+                        CashAdvanceRecord(
+                            id=str(row[0]),
+                            user_id=str(row[1]),
+                            gross_amount=Decimal(str(row[2])),
+                            fee_amount=Decimal(str(row[3])),
+                            net_received=Decimal(str(row[4])),
+                            days_advanced=int(row[5]),
+                            created_at=row[6],
+                        )
+                    )
+        except Exception:
+            pass
+
+        with self._lock:
+            self._advances[user_id] = records
+        return list(records)
 
     def reset_user(self, user_id: str) -> None:
         with self._lock:
             self._user_modes.pop(user_id, None)
             self._triggers.pop(user_id, None)
             self._advances.pop(user_id, None)
+        try:
+            from app.infrastructure.db.session import get_pool
+
+            pool = get_pool()
+            with pool.connection() as conn, conn.cursor() as cur:
+                cur.execute("DELETE FROM paper_cash_advances WHERE user_id = %s", (user_id,))
+                conn.commit()
+        except Exception:
+            pass
 
 
 _GLOBAL_SIM_STORE = ExchangeSimulationStore()
@@ -257,15 +368,6 @@ def is_within_exchange_trading_hours(
     order_type: OrderTypeCode = "LO",
 ) -> tuple[bool, str]:
     """Check if the order can be matched immediately under real HOSE/HNX session hours."""
-    sess = provider_session.lower()
-    if sess == "open":
-        return True, "Đang trong phiên giao dịch khớp lệnh liên tục."
-    if sess in {"lunch_break", "intermission"}:
-        return (
-            False,
-            "Thị trường đang nghỉ giữa phiên (11:30 - 13:00). Lệnh được lưu chờ phiên chiều.",
-        )
-
     local = now.astimezone(_MARKET_TZ)
     if local.weekday() >= 5:
         return (
@@ -281,6 +383,13 @@ def is_within_exchange_trading_hours(
     atc_start = time(14, 30)
     afternoon_close = time(14, 45)
 
+    sess = provider_session.lower()
+    if sess in {"lunch_break", "intermission"} or (morning_close < t < afternoon_open):
+        return (
+            False,
+            "Thị trường đang nghỉ giữa phiên (11:30 - 13:00). Lệnh được lưu chờ phiên chiều.",
+        )
+
     if order_type == "ATO":
         if morning_open <= t <= ato_end:
             return True, "Đang trong phiên khớp lệnh định kỳ mở cửa (ATO 09:00 - 09:15)."
@@ -292,7 +401,10 @@ def is_within_exchange_trading_hours(
         if atc_start <= t <= afternoon_close:
             return True, "Đang trong phiên khớp lệnh định kỳ đóng cửa (ATC 14:30 - 14:45)."
         if t < atc_start:
-            return False, "Lệnh ATC đã được tiếp nhận và chờ khớp vào phiên đóng cửa (14:30 - 14:45)."
+            return (
+                False,
+                "Lệnh ATC đã được tiếp nhận và chờ khớp vào phiên đóng cửa (14:30 - 14:45).",
+            )
         return False, "Đã qua phiên ATC (14:30 - 14:45). Lệnh được lưu chờ phiên kế tiếp."
 
     if (morning_open <= t <= morning_close) or (afternoon_open <= t <= afternoon_close):
@@ -301,13 +413,8 @@ def is_within_exchange_trading_hours(
                 False,
                 "Phiên giao dịch hiện tại đang đóng (Provider: closed). Lệnh được lưu vào sổ lệnh chờ.",
             )
-        return True, "Đang trong khung giờ giao dịch của Sở Giao dịch."
+        return True, "Đang trong phiên giao dịch khớp lệnh liên tục."
 
-    if morning_close < t < afternoon_open:
-        return (
-            False,
-            "Thị trường đang nghỉ trưa (11:30 - 13:00). Lệnh được giữ chờ phiên chiều 13:00.",
-        )
     return (
         False,
         "Ngoài khung giờ giao dịch (09:00 - 11:30 & 13:00 - 14:45). Lệnh được lưu chờ phiên kế tiếp.",
@@ -345,8 +452,10 @@ def validate_vietnam_exchange_rules(
 
     if order_type == "LO" and strict_rules:
         floor_price, ceiling_price = calculate_price_band(instrument)
-        if floor_price > 0 and ceiling_price > 0 and (
-            limit_price < floor_price or limit_price > ceiling_price
+        if (
+            floor_price > 0
+            and ceiling_price > 0
+            and (limit_price < floor_price or limit_price > ceiling_price)
         ):
             return (
                 False,
@@ -410,7 +519,11 @@ def match_against_orderbook(
         if not levels:
             p1 = base_price
             p2 = min(ceiling_price, base_price + tick) if ceiling_price > 0 else base_price + tick
-            p3 = min(ceiling_price, base_price + tick * 2) if ceiling_price > 0 else base_price + tick * 2
+            p3 = (
+                min(ceiling_price, base_price + tick * 2)
+                if ceiling_price > 0
+                else base_price + tick * 2
+            )
             levels = [(p1, 2000), (p2, 3000), (p3, 5000)]
     else:
         if instrument.bid_levels:
@@ -419,8 +532,16 @@ def match_against_orderbook(
                     levels.append((lvl.price, int(lvl.volume)))
         if not levels:
             p1 = base_price
-            p2 = max(floor_price, base_price - tick) if floor_price > 0 else max(tick, base_price - tick)
-            p3 = max(floor_price, base_price - tick * 2) if floor_price > 0 else max(tick, base_price - tick * 2)
+            p2 = (
+                max(floor_price, base_price - tick)
+                if floor_price > 0
+                else max(tick, base_price - tick)
+            )
+            p3 = (
+                max(floor_price, base_price - tick * 2)
+                if floor_price > 0
+                else max(tick, base_price - tick * 2)
+            )
             levels = [(p1, 2000), (p2, 3000), (p3, 5000)]
 
     # Check if LO order is marketable against Best Ask / Best Bid
@@ -597,7 +718,8 @@ def build_t2_settlement_summary(
         "pending_buy_shares_by_symbol": pending_shares_by_symbol,
         "pending_buy_settlements": pending_buys[:15],
         "pending_sell_settlements": pending_sells[:15],
-        "receivable_cash_t2": decimal_text(total_receivable_cash),
+        "receivable_cash_t2": decimal_text(advanceable_cash),
+        "gross_receivable_cash_t2": decimal_text(total_receivable_cash),
         "already_advanced_cash": decimal_text(already_advanced),
         "advanceable_cash": decimal_text(advanceable_cash),
         "estimated_advance_fee": decimal_text(estimated_fee),

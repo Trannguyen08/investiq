@@ -7,8 +7,9 @@ from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 
-from app.api.deps import authenticated_user_id, require_auth_bff
+from app.api.deps import authenticated_user_id, require_admin_user, require_auth_bff
 from app.api.v1.market_data import get_market_provider
+from app.application.use_cases.community.counter_analysis import generate_counter_analysis
 from app.application.use_cases.community.thesis_service import (
     ThesisService,
     ThesisValidationError,
@@ -18,6 +19,8 @@ from app.infrastructure.db.session import get_pool
 from app.schemas.thesis import (
     AnalystLeaderboardResponse,
     CreateThesisRequest,
+    ModerateThesisRequest,
+    ReportThesisRequest,
     ThesesListResponse,
     ThesisResponse,
 )
@@ -119,3 +122,87 @@ def upvote_thesis(
 ) -> dict[str, int]:
     new_votes = service.upvote_thesis(str(thesis_id))
     return {"upvotes": new_votes}
+
+
+@router.get("/{thesis_id}/counter-analysis")
+def get_thesis_counter_analysis(
+    thesis_id: UUID,
+    service: Annotated[ThesisService, Depends(get_thesis_service)],
+) -> dict[str, object]:
+    item = service.get_thesis(str(thesis_id))
+    if not item:
+        raise HTTPException(status_code=404, detail="Không tìm thấy luận điểm đầu tư này.")
+    symbol = str(item.get("symbol") or "").upper()
+    news_items: list[dict[str, object]] = []
+    try:
+        from app.application.dto.news_dto import NewsQuery
+        from app.infrastructure.db.repositories.sql_news_repository import SqlNewsRepository
+
+        repo = SqlNewsRepository(get_pool())
+        articles, _ = repo.list_articles(NewsQuery(symbols=(symbol,), limit=15))
+        news_items = [
+            {
+                "title": a.title,
+                "sentiment": a.sentiment.label if a.sentiment else "neutral",
+                "source_name": a.source.name,
+                "canonical_url": a.canonical_url,
+                "published_at": a.published_at,
+            }
+            for a in articles
+        ]
+    except Exception:
+        news_items = []
+
+    statement = None
+    try:
+        from app.workers.financial_statements_sync import get_stored_statement
+
+        statement = get_stored_statement(symbol, "quarter")
+    except Exception:
+        statement = None
+
+    current_price = None
+    try:
+        inst = get_market_provider().instrument(symbol)
+        if inst is not None:
+            current_price = inst.price
+    except Exception:
+        current_price = None
+
+    return generate_counter_analysis(
+        thesis=item,
+        news_items=news_items,
+        financial_statement=statement,
+        current_price=current_price,
+    )
+
+
+@router.post("/{thesis_id}/report")
+def report_thesis(
+    thesis_id: UUID,
+    body: ReportThesisRequest,
+    user_id: Annotated[str, Depends(authenticated_user_id)],
+    _auth: Annotated[None, Depends(require_auth_bff)],
+) -> dict[str, object]:
+    repo = SqlThesisRepository(get_pool())
+    return repo.report_thesis(str(thesis_id), user_id, body.reason)
+
+
+@router.get("/moderation/queue")
+def list_moderation_queue(
+    _admin: Annotated[None, Depends(require_admin_user)],
+    limit: int = Query(50, ge=1, le=100),
+) -> dict[str, object]:
+    repo = SqlThesisRepository(get_pool())
+    items = repo.list_moderation_queue(limit=limit)
+    return {"data": items, "total": len(items)}
+
+
+@router.post("/{thesis_id}/moderate")
+def moderate_thesis(
+    thesis_id: UUID,
+    body: ModerateThesisRequest,
+    _admin: Annotated[None, Depends(require_admin_user)],
+) -> dict[str, str]:
+    repo = SqlThesisRepository(get_pool())
+    return repo.moderate_thesis(str(thesis_id), body.action, body.note)

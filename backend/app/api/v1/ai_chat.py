@@ -16,6 +16,7 @@ from app.application.use_cases.ai_chat.ai_observability import AiMetricsRegistry
 from app.application.use_cases.ai_chat.knowledge_base import InternalKnowledgeBase
 from app.application.use_cases.market_data.market_service import MarketService
 from app.infrastructure.cache.ai_chat_cache import get_ai_chat_cache
+from app.infrastructure.cache.rate_limiter import rate_limit_dependency
 from app.infrastructure.db.repositories.sql_ai_chat_repository import SqlAiChatRepository
 from app.infrastructure.db.repositories.sql_learning_repository import SqlLearningRepository
 from app.infrastructure.db.repositories.sql_news_repository import SqlNewsRepository
@@ -43,6 +44,7 @@ def _get_shared_knowledge_base() -> InternalKnowledgeBase:
             repo: SqlLearningRepository
             try:
                 from app.infrastructure.db.session import _pool
+
                 if _pool is not None:
                     repo = SqlLearningRepository(_pool)
                 else:
@@ -64,6 +66,7 @@ def _ai_service() -> AiFinancialService:
     news_repo: SqlNewsRepository | None = None
     try:
         from app.infrastructure.db.session import _pool
+
         if _pool is not None:
             news_repo = SqlNewsRepository(_pool)
     except Exception:
@@ -89,6 +92,9 @@ def _chat_repo() -> SqlAiChatRepository | None:
 async def chat_with_ai(
     request: AiChatRequest,
     ai_service: Annotated[AiFinancialService, Depends(_ai_service)],
+    _rate_limit: Annotated[
+        None, Depends(rate_limit_dependency("ai-chat", max_requests=20, window_seconds=60))
+    ],
     user_id: Annotated[str | None, Depends(optional_user_id)] = None,
 ) -> AiChatResponse:
     """Send a user message, process with financial context & widgets, save if logged in."""

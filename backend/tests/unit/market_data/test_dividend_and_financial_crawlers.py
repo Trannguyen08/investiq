@@ -6,6 +6,7 @@ from unittest.mock import MagicMock, patch
 
 from fastapi.testclient import TestClient
 
+from app.application.use_cases.market_data.market_service import MarketService
 from app.infrastructure.external.crawlers.dividend_crawler import (
     DividendCrawler,
     _classify_dividend,
@@ -14,6 +15,8 @@ from app.infrastructure.external.crawlers.dividend_crawler import (
 from app.infrastructure.external.crawlers.financial_statements_crawler import (
     FinancialStatementsCrawler,
 )
+from app.infrastructure.external.market_fixture_provider import FixtureMarketProvider
+from app.infrastructure.external.vnstock_market_provider import VnstockMarketProvider
 from app.main import app
 
 
@@ -99,13 +102,23 @@ def test_financial_statements_crawler_parse() -> None:
 def test_api_dividend_calendar_and_stock_endpoints() -> None:
     client = TestClient(app)
 
-    with patch(
-        "app.infrastructure.external.crawlers.dividend_crawler.DividendCrawler.get_market_calendar"
-    ) as mock_cal, patch(
-        "app.infrastructure.external.crawlers.dividend_crawler.DividendCrawler.get_symbol_dividends"
-    ) as mock_div, patch(
-        "app.infrastructure.external.crawlers.financial_statements_crawler.FinancialStatementsCrawler.get_financial_statements"
-    ) as mock_fs:
+    with (
+        patch("app.api.v1.market_data.settings.market_data_mode", "fixture"),
+        patch(
+            "app.api.v1.market_data._safe_meta",
+            return_value=MarketService(FixtureMarketProvider()).meta(),
+        ),
+        patch(
+            "app.infrastructure.external.crawlers.dividend_crawler.DividendCrawler.get_market_calendar"
+        ) as mock_cal,
+        patch(
+            "app.infrastructure.external.crawlers.dividend_crawler.DividendCrawler.get_symbol_dividends"
+        ) as mock_div,
+        patch("app.workers.financial_statements_sync.get_stored_statement", return_value=None),
+        patch(
+            "app.infrastructure.external.crawlers.financial_statements_crawler.FinancialStatementsCrawler.get_financial_statements"
+        ) as mock_fs,
+    ):
         mock_cal.return_value = [
             {
                 "id": "HPG-2026-11-20",
@@ -150,15 +163,9 @@ def test_api_dividend_calendar_and_stock_endpoints() -> None:
                     "equity_billion": 100000.0,
                 }
             ],
-            "income_statement": [
-                {"code": "REV", "name": "Doanh thu thuần", "values": [35000.0]}
-            ],
-            "balance_sheet": [
-                {"code": "ASSET", "name": "Tổng tài sản", "values": [180000.0]}
-            ],
-            "cash_flow": [
-                {"code": "CASH", "name": "Lưu chuyển tiền tệ", "values": [2000.0]}
-            ],
+            "income_statement": [{"code": "REV", "name": "Doanh thu thuần", "values": [35000.0]}],
+            "balance_sheet": [{"code": "ASSET", "name": "Tổng tài sản", "values": [180000.0]}],
+            "cash_flow": [{"code": "CASH", "name": "Lưu chuyển tiền tệ", "values": [2000.0]}],
             "source": "Vietstock",
         }
 
@@ -185,3 +192,52 @@ def test_api_dividend_calendar_and_stock_endpoints() -> None:
         assert fs_data["data"]["symbol"] == "HPG"
         assert "charts" in fs_data["data"]
         assert "income_statement" in fs_data["data"]
+
+
+def test_financial_statements_fallback_when_vnstock_empty() -> None:
+    client = TestClient(app)
+    mock_vnstock_provider = MagicMock(spec=VnstockMarketProvider)
+    # Simulate Vnstock returning empty statement tables
+    mock_vnstock_provider.financial_statements.return_value = {
+        "symbol": "DBC",
+        "period_type": "quarter",
+        "periods": [],
+        "charts": [],
+        "income_statement": [],
+        "balance_sheet": [],
+        "cash_flow": [],
+    }
+
+    crawler_data = {
+        "symbol": "DBC",
+        "period_type": "quarter",
+        "periods": ["Q3 2024", "Q2 2024"],
+        "charts": [{"period": "Q3 2024", "revenue_billion": 3000.0}],
+        "income_statement": [{"code": "REV", "name": "Doanh thu", "values": [3000.0]}],
+        "balance_sheet": [],
+        "cash_flow": [],
+        "source": "CafeF Data",
+    }
+
+    with (
+        patch("app.api.v1.market_data.settings.market_data_mode", "vnstock"),
+        patch("app.api.v1.market_data._provider", return_value=mock_vnstock_provider),
+        patch("app.workers.financial_statements_sync.get_stored_statement", return_value=None),
+        patch(
+            "app.api.v1.market_data._safe_meta",
+            return_value=MarketService(FixtureMarketProvider()).meta(),
+        ),
+        patch(
+            "app.infrastructure.external.crawlers.financial_statements_crawler.FinancialStatementsCrawler.get_financial_statements",
+            return_value=crawler_data,
+        ) as mock_crawler_call,
+    ):
+        res = client.get(
+            "/api/v1/market/instruments/DBC/financial-statements?period=quarter&limit=4"
+        )
+        assert res.status_code == 200
+        data = res.json()["data"]
+        assert data["symbol"] == "DBC"
+        assert len(data["periods"]) == 2
+        assert data["charts"][0]["revenue_billion"] == 3000.0
+        assert mock_crawler_call.called

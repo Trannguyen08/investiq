@@ -54,6 +54,29 @@ describe("SectorTreemapHeatmap", () => {
     expect(handleSelect).toHaveBeenCalledWith("Công nghệ Thông tin");
   });
 
+  it("drills into a broad sector and selects a subgroup", () => {
+    const handleSelect = vi.fn();
+    const financials = sampleSector("Tài chính", "0.8", 40, "100000000000000", "2000000000000");
+    const subsectors = [
+      { ...sampleSector("Ngân hàng", "1.2", 20, "80000000000000", "1500000000000"), parent_sector: "Tài chính" },
+      { ...sampleSector("Dịch vụ tài chính", "-0.4", 15, "15000000000000", "400000000000"), parent_sector: "Tài chính" },
+      { ...sampleSector("Bảo hiểm", "0.2", 5, "5000000000000", "100000000000"), parent_sector: "Tài chính" },
+    ];
+    render(
+      <SectorTreemapHeatmap
+        sectors={[financials]}
+        subsectors={subsectors}
+        onSelectSector={handleSelect}
+      />,
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: /Tài chính/i }));
+    expect(screen.getByRole("button", { name: /Ngân hàng/i })).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: /Ngân hàng/i }));
+
+    expect(handleSelect).toHaveBeenCalledWith("Ngân hàng");
+  });
+
   it("displays hover bar with sector details when hovered", () => {
     render(<SectorTreemapHeatmap sectors={sectors} />);
 

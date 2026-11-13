@@ -653,6 +653,19 @@ class FinancialStatementsCrawler:
             if cached and (now - cached[0]) < _CACHE_TTL_SECONDS:
                 return cached[1]
 
+        # For yearly reports, retrieve directly from persistent store
+        if norm_period == "year":
+            try:
+                from app.workers.financial_statements_sync import get_stored_statement
+
+                stored = get_stored_statement(clean_symbol, "year")
+                if stored and stored.get("charts") and len(stored["charts"]) > 0:
+                    with self._lock:
+                        self._cache[cache_key] = (now, stored)
+                    return stored
+            except Exception:
+                pass
+
         # 1. Attempt live CafeF fetch
         try:
             is_data = self._fetch_report(
@@ -986,6 +999,15 @@ class FinancialStatementsCrawler:
 
     def _get_curated_or_fallback(self, symbol: str, period_type: str) -> dict[str, Any]:
         """Returns structured benchmark statement data if crawler source is unavailable."""
+        try:
+            from app.workers.financial_statements_sync import get_stored_statement
+
+            stored = get_stored_statement(symbol, period_type)
+            if stored and stored.get("charts") and len(stored["charts"]) > 0:
+                return stored
+        except Exception:
+            pass
+
         is_quarter = period_type == "quarter"
         curated = _VN30_CURATED_DATA.get(symbol)
         if not curated:

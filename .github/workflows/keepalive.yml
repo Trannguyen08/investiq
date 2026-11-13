@@ -23,11 +23,3 @@ jobs:
           echo "Pinging Backend healthcheck at ${BACKEND_URL}/healthz..."
           status=$(curl -s -o /dev/null -w "%{http_code}" -m 30 "${BACKEND_URL}/healthz" || echo "failed")
           echo "Backend response HTTP status: ${status}"
-
-      - name: Ping Frontend Health
-        env:
-          FRONTEND_URL: ${{ secrets.RENDER_FRONTEND_URL || 'https://investiq-frontend-zd01.onrender.com' }}
-        run: |
-          echo "Pinging Frontend at ${FRONTEND_URL}..."
-          status=$(curl -s -o /dev/null -w "%{http_code}" -m 30 "${FRONTEND_URL}" || echo "failed")
-          echo "Frontend response HTTP status: ${status}"

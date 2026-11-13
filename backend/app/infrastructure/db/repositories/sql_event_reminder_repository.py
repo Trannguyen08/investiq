@@ -93,28 +93,28 @@ class SqlEventReminderRepository:
         try:
             pool = get_pool()
             with pool.connection() as conn, conn.cursor(row_factory=dict_row) as cur:
-                    if clean_email:
-                        cur.execute(
-                            """
+                if clean_email:
+                    cur.execute(
+                        """
                             SELECT id::text, email, event_id, symbol, event_title, event_type, event_at, days_before, status, created_at
                             FROM event_reminders
                             WHERE email = %s AND status != 'cancelled'
                             ORDER BY event_at ASC
                             """,
-                            (clean_email,),
-                        )
-                    else:
-                        cur.execute(
-                            """
+                        (clean_email,),
+                    )
+                else:
+                    cur.execute(
+                        """
                             SELECT id::text, email, event_id, symbol, event_title, event_type, event_at, days_before, status, created_at
                             FROM event_reminders
                             WHERE status != 'cancelled'
                             ORDER BY event_at ASC LIMIT 100
                             """
-                        )
-                    rows = cur.fetchall()
-                    for r in rows:
-                        results.append(dict(r))
+                    )
+                rows = cur.fetchall()
+                for r in rows:
+                    results.append(dict(r))
             return results
         except Exception as exc:
             logger.warning("db_list_reminders_failed_using_memory", extra={"error": str(exc)})
@@ -153,8 +153,8 @@ class SqlEventReminderRepository:
         try:
             pool = get_pool()
             with pool.connection() as conn, conn.cursor(row_factory=dict_row) as cur:
-                    cur.execute(
-                        """
+                cur.execute(
+                    """
                         SELECT id::text, email, event_id, symbol, event_title, event_type, event_at, days_before, status, created_at
                         FROM event_reminders
                         WHERE status = 'pending'
@@ -162,11 +162,11 @@ class SqlEventReminderRepository:
                           AND event_at >= %s
                         ORDER BY event_at ASC LIMIT 50
                         """,
-                        (deadline, now),
-                    )
-                    rows = cur.fetchall()
-                    for r in rows:
-                        due_items.append(dict(r))
+                    (deadline, now),
+                )
+                rows = cur.fetchall()
+                for r in rows:
+                    due_items.append(dict(r))
             return due_items
         except Exception as exc:
             logger.warning("db_get_due_reminders_failed_using_memory", extra={"error": str(exc)})
@@ -194,6 +194,59 @@ class SqlEventReminderRepository:
                 conn.commit()
         except Exception as exc:
             logger.warning("db_mark_sent_failed", extra={"error": str(exc)})
+
+    def get_pending_by_event_id(self, event_id: str) -> builtins.list[dict[str, Any]]:
+        """Returns all pending reminders for a specific event."""
+        results: builtins.list[dict[str, Any]] = []
+        try:
+            pool = get_pool()
+            with pool.connection() as conn, conn.cursor(row_factory=dict_row) as cur:
+                cur.execute(
+                    """
+                    SELECT id::text, email, event_id, symbol, event_title, event_type, event_at, days_before, status, created_at
+                    FROM event_reminders
+                    WHERE event_id = %s AND status = 'pending'
+                    """,
+                    (event_id,),
+                )
+                for r in cur.fetchall():
+                    results.append(dict(r))
+            return results
+        except Exception as exc:
+            logger.warning(
+                "db_get_pending_by_event_id_failed_using_memory", extra={"error": str(exc)}
+            )
+
+        with self._lock:
+            for item in self._memory_store.values():
+                if item.get("event_id") == event_id and item.get("status") == "pending":
+                    results.append(item)
+        return results
+
+    def cancel_reminders_for_event(self, event_id: str, reason: str = "source_not_found") -> int:
+        """Cancels all pending reminders for a specific event with an explanation."""
+        cancelled_count = 0
+        with self._lock:
+            for item in self._memory_store.values():
+                if item.get("event_id") == event_id and item.get("status") == "pending":
+                    item["status"] = "cancelled"
+                    item["cancellation_reason"] = reason
+                    cancelled_count += 1
+
+        try:
+            pool = get_pool()
+            with pool.connection() as conn:
+                with conn.cursor() as cur:
+                    cur.execute(
+                        "UPDATE event_reminders SET status = 'cancelled', updated_at = now() WHERE event_id = %s AND status = 'pending'",
+                        (event_id,),
+                    )
+                    db_count = cur.rowcount
+                conn.commit()
+            return max(cancelled_count, db_count)
+        except Exception as exc:
+            logger.warning("db_cancel_reminders_for_event_failed", extra={"error": str(exc)})
+            return cancelled_count
 
 
 _reminder_repo: SqlEventReminderRepository | None = None

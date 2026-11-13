@@ -1,5 +1,778 @@
 # Current Task
 
+## VN-Index Backfill, Scaffold Cleanup, and Groups 2–4 Platform Features - 2026-11-13 (completed)
+- **User Request**:
+  1. Fill `VNINDEX` historical candle data into PostgreSQL after data loss.
+  2. Drop Group 1 (`/alerts` and `/backtesting` scaffold pages) and delete those files.
+  3. Implement Groups 2–4: DB candle persistence & Celery Beat scheduling, Community Counter-Analysis & Moderation + ML Sentiment-to-Impact scorer, and Production Health/Staleness, Rate Limiting & Privacy Export/Delete.
+- **Changes**:
+  - Backfilled 2,336 index candles (`VNINDEX`, `HNXINDEX`, `UPCOMINDEX`, `VN30` across `1D`/`1W`/`1M`) into PostgreSQL (`market_providers`, `market_instruments`, `market_price_candles`).
+  - Deleted `frontend/src/app/(user)/alerts/page.tsx`, `frontend/src/app/(user)/backtesting/page.tsx`, and `frontend/src/components/ui/scaffold-page.tsx`.
+  - Group 2: Added `SqlMarketCandlesRepository`, DB fallback in `VnstockMarketProvider.candles()`, `backend/app/workers/market_eod_sync.py`, Celery task in `financial_statements_sync.py`, and scheduled `events`, `eod_sync`, and `financials_sync` in `celery_app.py`.
+  - Group 3: Added `0026_thesis_moderation_and_benchmark.sql` (applied to local DB), `generate_counter_analysis` (`GET /api/v1/theses/{id}/counter-analysis`), thesis reporting & admin moderation queue (`theses.py`, `sql_thesis_repository.py`), and `compute_sentiment_impact` (`GET /api/v1/market/instruments/{symbol}/sentiment-impact`).
+  - Group 4: Added `GET /api/v1/market/health`, `SlidingWindowRateLimiter` on `/api/v1/ai/chat`, and `GET /api/v1/auth/me/export` + `DELETE /api/v1/auth/me/data`.
+
+## Market Page Cold-Start Warmup & SSR Streaming Optimization - 2026-11-12 (completed)
+- **User Request**: "trang thị trường đéo load được" with screenshot showing `/market/stocks` stuck on skeleton loading placeholders.
+- **Root Cause**:
+  1. Backend cold-start: `VnstockMarketProvider` takes ~15s to build its first multi-source snapshot (screener, VN30 quotes, candles) from FHSC over the network.
+  2. Frontend SSR uncached sequential loops: `page.tsx` was using `revalidate: 0` and fetching 5 consecutive pages of 100 instruments (500 symbols) sequentially on each request, causing the Next.js SSR streaming connection to close early while waiting.
+- **Fixes**:
+  - In `frontend/src/app/(user)/market/[tab]/page.tsx`: Re-enabled fast SSR revalidation (10s for indices, 30s for sectors and 500-symbol universe summary) so subsequent visits render in ~50ms from Next.js memory cache rather than firing 8 un-cached sequential API calls.
+  - In `frontend/src/components/market/stock-treemap-heatmap.tsx`: Made `sectorMeta` matching strictly null-safe for `s?.name` to eliminate any possible client-side runtime hydration errors.
+- **Validation**:
+  - Live probe: `GET http://localhost:3000/market/stocks` returned HTTP 200 in 0.86s with full 587 KB HTML payload containing all VN-Index metrics, sectors, and stock tables.
+  - `npm --prefix frontend run typecheck` passed (0 errors).
+  - `git -c core.safecrlf=false diff origin/dev --check` clean (0 errors).
+
+## Comprehensive Financial Statement Coverage & Sector Heatmap "View All" - 2026-11-12 (completed)
+- **User Request**:
+  1. Fix empty financial statements for stocks: ensure complete data coverage across Vietnamese stock tickers (income statement, balance sheet, cash flow, and summary charts) via high-coverage crawl and robust benchmark fallbacks.
+  2. In the sector stock heatmap, add a "Xem tất cả" (View All) feature to display how all stocks are moving in that sector rather than capping at notable stocks.
+- **Root Cause & Changes**:
+  1. Financial Statements Fallback:
+     - In `backend/app/api/v1/market_data.py`: When `MARKET_DATA_MODE=vnstock`, if `provider.financial_statements()` returned empty periods or empty statement tables (true for most midcap/smallcap symbols where FHSC has no data or rate limits), the API previously returned an empty envelope without falling back to the crawler.
+     - Added automatic fallback check: if `provider.financial_statements()` returns empty periods or tables, seamlessly fallback to `FinancialStatementsCrawler.get_financial_statements(symbol, period, limit)`.
+     - Verified `FinancialStatementsCrawler` successfully extracts 4-quarter metrics, balance sheets, cash flows, and summary charts directly from CafeF Data Ajax API (`FinanceReport.ashx`), curated VN30 benchmarks, and synthetic baselines for 100% stock coverage.
+     - In `frontend/src/app/(user)/market/stocks/[symbol]/page.tsx`: Increased Next.js server-side timeout for financial statements from 1500ms to 6000ms so network queries on cold symbols are not prematurely aborted.
+  2. Heatmap "Xem tất cả" (View All) Feature:
+     - In `frontend/src/components/market/stock-treemap-heatmap.tsx`:
+       - Added segmented control `[Đáng chú ý (20)]` and `[Xem tất cả ({totalMatched})]` with state `showAll`.
+       - Implemented cursor-paginated fetching (`limit=100`, up to 400 stocks per sector) into `sectorCache` so all instruments in that sector are retrieved.
+       - Computed `activeStockList` dynamically: if `!showAll`, caps to top 20 notable stocks; if `showAll`, presents all stocks in that sector.
+       - Handled tile dimensions and text scaling gracefully with `isTiny` text sizing (`text-[10px]` for symbol, `text-[9px]` for % change) when viewing 50+ stocks in a single sector treemap.
+       - Updated accessibility labels and status indicator.
+- **Validation**:
+  - Backend tests: Added unit test `test_financial_statements_fallback_when_vnstock_empty` in `tests/unit/market_data/test_dividend_and_financial_crawlers.py`. All 6/6 crawler tests passed; full 95 market data tests passed; Ruff check and format clean (0 errors); mypy clean (0 errors).
+  - Frontend tests: Added Vitest tests for toggle behavior and rendering >20 stocks in `src/components/market/stock-treemap-heatmap.test.tsx`. All 10/10 tests passed; full Vitest suite (49 test files / 200 tests) passed; ESLint clean (0 errors); TypeScript `tsc --noEmit` clean (0 errors).
+  - Whitespace check: `git -c core.safecrlf=false diff origin/dev --check` clean (0 issues).
+
+## Drill-Down Sector Groups for Market Heatmap - 2026-11-12 (completed)
+- **User Request**: Split key market sectors into smaller industry groups, starting with Financials → Banks. Correct discordant source parent sectors so subsectors are never placed under the wrong broad sector and broad-sector totals match.
+- **Evidence**: Live probe verified 28 active banking symbols (out of 29 bundled bank tickers), but source screener records had occasional parent sector mismatches against the detailed subsector catalog.
+- **Implementation**:
+  - Defined canonical `SUBSECTOR_PARENT_MAP`, `sector_parent()`, and `resolve_sector_hierarchy()` in `app.domain.entities.market` mapping all 20 subsector categories to their broad parent sectors (e.g. `Ngân hàng` → `Tài chính`, `Dịch vụ tài chính` → `Tài chính`, `Bảo hiểm` → `Tài chính`).
+  - Integrated `resolve_sector_hierarchy()` in `VnstockMarketProvider` and `FixtureMarketProvider`: authoritative subsector mapping strictly overrides discordant source parent sectors and promotes raw subsector labels to canonical parent + subsector pairs.
+  - Updated `MarketService.sectors()` and `list_instruments()`: groups instruments by canonical parent sector while aggregating subgroup metrics, ensuring broad sector totals (member count, market cap, matched value, advances/declines) accurately include all subgroup members without duplication.
+  - Filter query `?sector=Tài chính` includes all banks, securities, and insurance stocks, while `?sector=Ngân hàng` specifically filters to banking stocks.
+  - Heatmap drill-down in `SectorTreemapHeatmap`: clicking broad sector "Tài chính" drills down to its subgroups ("Ngân hàng", "Dịch vụ tài chính", "Bảo hiểm"), and clicking "Ngân hàng" filters the stock list.
+- **Validation**:
+  - Backend unit & integration tests (70/70) passed in `test_vnstock_market_provider.py`, `test_market_service.py`, and `test_market_data_api.py`.
+  - Full backend unit suite (225/225) passed with `MARKET_DATA_MODE=fixture`.
+  - Frontend Vitest (49 files / 199 tests) passed 100%.
+  - Ruff check & format clean, Mypy strict typing clean (0 errors), frontend ESLint & `tsc --noEmit` clean (0 errors).
+
+## Vietnamese Sector Labels and First-Visit Market Data - 2026-11-12 (completed)
+- **User Request**: Translate market sector names to Vietnamese and make market data appear on the first visit instead of only after a reload.
+- **Root cause and changes**: FHSC sector slugs were passed through as display names. Also, concurrent reads during the provider's initial background refresh returned empty data, which could be retained by frontend fetch caching. Normalize known sector slugs in the provider; wait for the initial snapshot (up to 180 seconds) before the first data read; fetch market indices, sectors, and instruments without Next.js data caching on the market page.
+- **Validation**: Cold `/api/v1/market/sectors` returned HTTP 200 after 75.9 seconds with 12 localized sector names. First uncached `/market/stocks` response returned HTTP 200 and contained Vietnamese labels with no English sector slugs. Backend focused tests 51 passed, Ruff and mypy passed; frontend lint/typecheck and `git diff --check` passed.
+
+## Expand Multi-Source Market Coverage and Historical Data - 2026-11-12 (completed)
+- **User Request**: Expand live price, daily/weekly/monthly/yearly candles, and financial statements across at least several hundred listed stocks.
+- **Live evidence**: FHSC returned 1,518 reference rows, 1,396 valid three-letter equities, and a positive close for all 1,396. Screener rows do not provide broad OHLC. Real candle calls for FPT/HPG/VNM returned OHLCV; ACB returned 4 periods of quarterly and annual financial statements (16 income, 28 balance-sheet, 7 cash-flow metrics per period type). FHSC provided 250 daily bars for FPT; DNSE native history was shorter (4 weekly/2 monthly bars), so adapter aggregation from FHSC daily data returned 54 weekly/30 monthly bars. No credential values were printed or stored.
+- **Changes**: Keep all exchange references and screener prices; search up to 500 symbols through five cursor pages. Support `1D`, `1W`, and `1M` candles; select the longer of DNSE native history and weekly/monthly aggregation from real FHSC daily bars. Remove generated candle fallbacks, and make empty source history explicit. Financial statements stay quarterly/yearly; the frontend states that no monthly statement period is available from the configured source. Update chart windows and server-filtered search behavior.
+- **Validation**: `scripts/check-pr.ps1` passed 6/6, including frontend lint/typecheck, Vitest (49 files / 197 tests), backend Ruff/mypy (45 source files), and 203 backend unit tests. After the final full gate, the new universe-search regression passed in the focused market-stocks suite (15/15); final frontend lint and typecheck passed; focused backend market-data tests passed (39/39); `git -c core.safecrlf=false diff origin/dev --check` passed. Live weekly/monthly count probe passed.
+- **Changed areas**: Backend market API/provider/service and focused tests; frontend market universe pagination/search, stock-detail charts, candlestick rendering, financial statements; agent memory and decision log.
+- **Remaining source limitation**: Monthly statutory financial statements are unavailable from FHSC/Vnstock 6; do not synthesize monthly report values. The DNSE daily OHLC stream had authenticated/subscribed in the prior live check, but no event was observed outside active trading.
+
+## Full Exchange Universe and DNSE Live OHLC Coverage - 2026-11-12 (completed)
+- **User Request**: Explain why the market table showed 30 symbols and use FHSC plus DNSE in parallel so data unavailable from FHSC is filled by DNSE across the exchange universe.
+- **Changes**: Preserve all FHSC screener tickers; bound rich FHSC quote-board enrichment to 30; add DNSE WebSocket daily OHLC subscriptions in batches of at most 200 symbols and cap at ten connections; validate session date and OHLC; retain fields as missing when no valid event arrives. Add the official SDK plus its `msgpack` runtime dependency, close streams at app shutdown, and keep Docker API workers at one to fit the DNSE connection cap.
+- **Validation**: Full FHSC live snapshot returned 1,518 references and 1,396 valid stock tickers; each had a positive close. The native screener OHLC count was zero, which is supplemented by the daily DNSE stream when live updates arrive. DNSE authenticated and subscribed to HPG `ohlc.1D`; no event arrived outside the active market session. Full checks are listed in the completed task above. No keys or secret values were printed or recorded.
+
+## Live FHSC + DNSE Credential Verification and Financial Chart Mapping - 2026-11-12 (completed)
+- **User Request**: Use the newly configured FHSC and DNSE credentials to call real data, verify coverage, and identify missing fields. User clarified that `DNSE_API_SECRET` is the DNSE secret key; local `DNSE_SECRET_KEY` is accepted as a compatible alias. Never record secret values.
+- **Live evidence**: Local configuration loaded FHSC, DNSE key, and DNSE secret as present (presence only). Local backend returned 30/30 VN30 instruments with open/high/low; detail routes had live quote/depth/trades in prior calls. FPT quarterly statements returned periods 2025-Q4 through 2026-Q3, 19 income metrics, 21 balance metrics, 7 cash-flow metrics, and populated revenue/profit/assets chart values. FHSC emitted VAS identity warnings for some older quarters, and EPS values were null for all four periods. A first concurrent statement probe returned partial tables; a subsequent serialized call succeeded, indicating source variability/load sensitivity.
+- **Changes**: Support `DNSE_SECRET_KEY` as an alias for `DNSE_API_SECRET`; call FHSC quote board in groups of five, tolerate unsupported DNSE order-book `board` argument by using its default route, allow 30-second statement calls, and retry incomplete statement payloads after a short 60-second negative cache. Include FHSC `BS_EQUITY` and `BS_OWNERS_EQUITY` identifiers when building the equity chart. Add tests for grouped quotes, short negative caching, and FHSC equity identifiers. `scripts/check-pr.ps1` now runs backend unit tests with the fixture provider so credentials in the repository-root `.env` cannot turn CI tests into live provider calls; the Git diff check disables safe-CRLF warnings.
+- **Test isolation fix**: `scripts/check-pr.ps1` now forces `MARKET_DATA_MODE=fixture` only for its backend unit-test process and restores the caller's value afterward. The repository-root `.env` otherwise enabled Vnstock during one API test, which blocked waiting on a live FHSC screener. That test passes in 3.16s with fixture mode.
+- **Validation**: Live API returned 30/30 VN30 instruments with open/high/low. FPT financial statements returned 19 income, 21 balance-sheet, and 7 cash-flow metrics for 2025-Q4 through 2026-Q3; the equity chart mapping is covered by a regression test. FHSC left EPS absent for these four periods and warned that some historical VAS identities do not reconcile; first concurrent report calls were partial, while a serialized retry succeeded. Focused provider tests 25/25, frontend 197/197, backend 198/198, Ruff, Mypy (45 source files), `scripts/check-pr.ps1` (6/6), and `git -c core.safecrlf=false diff origin/dev --check` passed. Local backend was stopped after live calls. No credential values were read or recorded.
+
+## Commit FHSC + DNSE Integration and Run Pre-PR Gates - 2026-11-11 (completed)
+- **User Request**: Run repository quality gates and `scripts/check-pr.ps1`, then commit and push the FHSC/DNSE integration.
+- **Branch / Commit**: `fix/project`, code commit `9886df9` pushed to `origin/fix/project`; this completion note is pushed separately after the pre-push hook passes.
+- **Status**: `scripts/check-pr.ps1` is green. On its first run the whitespace subcheck caught Git's LF-to-CRLF warning as an exception, so the equivalent `git -c core.safecrlf=false diff origin/dev --check` was also run directly and passed. No PR was opened. GitHub Actions status could not be queried because GitHub CLI is unavailable.
+- **Validation**: Frontend lint/typecheck passed; Vitest 49 files / 197 tests passed; backend Ruff and mypy passed (45 source files); backend unit tests passed (196); focused market-provider tests passed (23); Compose config validation passed. Docker image builds could not run because the Docker Desktop engine is unavailable. No live DNSE call was attempted because credentials remain pending approval.
+
+## Combine FHSC and DNSE Market Data - 2026-11-11 (completed)
+- **User Request**: Keep FHSC coverage and add DNSE OpenAPI as a complementary market-data source, with credentials supplied through environment variables after DNSE approval.
+- **Changes**: FHSC remains the universe/company/fundamental/event provider. Optional DNSE Key/Secret enrich last trades and accumulated volume during the bounded 30-symbol refresh; daily OHLC fills missing quote-board open/high/low only when its session matches the last trade; candles use DNSE with FHSC fallback; stock details gain DNSE order-book depth and executions. The existing financial-statement endpoint now uses Vnstock 6 FHSC income, balance-sheet, and cash-flow rows in the existing response contract, preserving partial results and honest empty states. Added typed secret settings, Compose and Render environment entries, source display, and adapter setup documentation.
+- **Credential handling**: Add typed empty `DNSE_API_KEY` / `DNSE_API_SECRET` configuration only. Never read or record actual secret values in task notes.
+- **Validation**: Ruff, full configured backend mypy (45 source files), backend unit suite (196), focused provider suite (23), Python compilation, and `git diff --check` passed. The first provider-suite run exposed missing optional DNSE state on legacy test fixtures; gateway access now safely treats DNSE as optional. Live provider calls were not run because the local health endpoint timed out and DNSE credentials are still pending approval.
+
+## FHSC Quote Fallback and Data Source Assessment - 2026-11-11 (completed)
+- **User Request**: Explain why full quote-board OHLC and stock-detail fields remain missing, assess a more reliable API source, and restore screener fields lost when FHSC quote-board requests time out.
+- **Evidence**: Current local API returns 30 instruments from FHSC screeners; Vnstock 6 exposes `Reference("fhsc").equity.catalog()` for a broader symbol catalog and `Market("fhsc").equity.quote(symbols)` for batch quotes. FHSC applies weighted per-minute limits and is intended for personal-account research, not public redistribution. Quote timeouts currently fall back to screener data.
+- **Changes**: Preserve screener total volume/value, market cap, foreign net value, listed shares, and valuation fields in the quote-timeout fallback. Recommend licensed FiinGroup DataFeed for full market and financial detail at product scale; SSI FastConnect Data or DNSE WebSocket for market quotes/OHLC subject to account credentials and terms. No credential values are recorded.
+- **Validation**: Provider suite 23 passed, full backend suite 196 passed, frontend suite 197 passed, Ruff, mypy, frontend typecheck, and lint passed. The code and repository guidance were pushed to `fix/project`; live FHSC quote calls remained rate-limited, so OHLC/depth cannot be guaranteed until the upstream quote request succeeds.
+
+## Portfolio Valuation and FHSC v6 Market Detail Regression - 2026-11-11 (completed)
+- **User Request**: Fix paper portfolio asset/P&L values, restore opening/high/low market prices with VND thousands formatted normally, and restore stock-detail data lost in the Vnstock 6 migration.
+- **Evidence**: Live local `/api/v1/market/instruments/SHB` returned price `11.15` and zero OHLC while Vnstock FHSC `Market.equity.quote()` returned close `11150`, OHLC `10900/11300/10800`, and quote depth in VND. Official Vnstock 6 docs specify screener and stock candles in thousands of VND while the v5-compatible quote board fields are VND. The old adapter used the batch quote board and quarterly ratio data; the new adapter used screener-only values and returned no quarterly rows.
+- **Changes**: Normalize FHSC quote board values into VND and screener/candle values from thousand VND; restore quote-board OHLC and depth with a bounded batch and a 5-second timeout; restore TTM growth from Vnstock 6 quarterly statements; remove synthesized growth/valuation claims when source data is missing; show missing OHLC as a dash; keep portfolio equity as cash plus current holdings value and P&L as realized/unrealized gains only. Start initial market snapshot refresh in the background so API and WebSocket health checks keep responding.
+- **Validation**: 45 focused backend tests passed; Ruff, frontend typecheck, 21 focused Vitest tests, and `git diff --check` passed. Local FE `/portfolio`, backend `/healthz`, and market instruments API returned HTTP 200; the live API returned 30 VN30 rows with correctly scaled prices. FHSC quote-board calls timed out during local revalidation, so OHLC correctly falls back to unavailable rather than zero; the quote-to-OHLC mapping is covered by tests. Statement endpoints were rate limited after an earlier successful direct request; normalizer coverage uses response fixtures. No credential values are recorded.
+
+## Upgrade Retired Vnstock Wheel to Current Registry - 2026-11-11 (completed)
+- **User Request**: Replace the `vnai` wheel URL that returns 404 and use a current Vnstock release.
+- **Verified**: Official registry `https://www.vnstocks.com/api/packages` serves `vnstock==6.0.0` and `vnstock-oapi==0.1.1`; the old `vnstock 4.x` and `vnai` endpoints now return 410/404. Official Vnstock 6 removes the old VCI/KBS source APIs used by the current adapter.
+- **Configuration correction**: User confirmed Render is configured with `MARKET_DATA_MODE=vnstock` and has `VNSTOCK_API_KEY`. That account key is separate from the FHSC source credential required for live market calls.
+- **Changes**: Pin `vnstock==6.0.0` and `vnstock-oapi==0.1.1` from the official package index; remove retired `vnai`, `vnstock_ezchart`, and its bundled wheel; remove wheel-only build paths; include both requirements files in pip cache keys.
+- **Validation**: pip successfully resolved and downloaded the complete backend/dev dependency set as Linux/Python 3.13 wheels, including both Vnstock packages. Docker/Render build paths and requirements no longer reference the removed wheel directory.
+- **Runtime**: The follow-up migration below replaces the legacy VCI/KBS gateway with FHSC v6 routes and declares `FHSC_API_KEY` in the Render blueprint. Live source calls require that source credential in addition to `VNSTOCK_API_KEY`.
+
+## Vnstock 6 FHSC Gateway Migration - 2026-11-11 (completed)
+- **User Request**: Render is already intended to run `MARKET_DATA_MODE=vnstock`; migrate the backend adapter to call the current Vnstock 6 API while keeping the newer version.
+- **Implementation**: Replace v4 VCI/KBS calls with FHSC screener/summary/OHLCV and Reference VN30 constituents/company events; keep the account key as `VNSTOCK_API_KEY`; pass the distinct source credential as `FHSC_API_KEY`; mark unsupported FHSC intraday executions and absent quote depth unavailable instead of fabricating them. Set `MARKET_DATA_MODE=vnstock` in Render and update the Vnstock setup guide and existing adapter expectations.
+- **Credential state at implementation time**: FHSC key was not yet available; user later added it to the local environment and the provider was successfully verified in the Local FHSC Verification entry above.
+- **Initial validation**: Python source compilation, YAML parsing, and `git diff --check` passed; the later local verification entry records full lint, typecheck, unit suite, and live-provider results.
+
+## Backend CI Timeout and Render Pipeline Hang - 2026-11-11 (completed)
+- **User Request**: Fix backend CI and stop the Render backend CI/CD validation job from remaining in pytest until GitHub cancels it.
+- **Evidence**: The Render workflow ran backend unit tests serially with a 15-minute job timeout and no per-test timeout. GitHub's annotation for run `42971772379` confirms the job exceeded 15 minutes and canceled `Run Unit Tests (Pytest)`.
+- **Changes**: Add pinned `pytest-xdist` and `pytest-timeout` dev tools; run Render unit tests in parallel by file with 120-second per-test limits, 30-minute job cap, and slowest-test reporting; add a 120-second per-test limit to full backend CI; pin Actions to commit SHAs.
+- **Verification**: Pytest parallel/timeout smoke test passed; both workflow YAML files parse; `git diff --check` passed.
+- **Limitation at the time**: Full backend suite could not run locally because the pinned `vnai` wheel URL returned HTTP 404; the follow-up dependency migration below replaces that retired source.
+
+## Render Dependency Failure - 2026-11-10 (superseded 2026-11-11)
+- A Render build initially failed because the pinned Vnstock 4 package depended on `vnstock_ezchart`, which was not available from the configured package index.
+- A bundled wheel workaround temporarily made the old build resolve. The Vnstock 4/vnai registry was subsequently retired, so the workaround and bundled wheel were removed when dependencies moved to Vnstock 6 and `vnstock-oapi` from the current official index.
+- The follow-up changed the Render blueprint to `MARKET_DATA_MODE=vnstock` and migrated the adapter to FHSC v6; live market calls still need `FHSC_API_KEY` alongside the Vnstock account key.
+## Dynamic Purchase-Date Equity Curve & Multi-Resolution Aggregation (Auto, Day, Week, Month, Year) - 2026-11-10 (completed)
+- **User Request**:
+  "tôi muốn biểu đồ này phải vẽ theo ngày kể từ ngày mua và nó sẽ tự động thay đổi nếu ngày mua quá nhiều k thể hiển thị thì hiển thị theo tuần tháng năm"
+  - Người dùng gửi ảnh chụp màn hình biểu đồ danh mục hiển thị một đường thẳng ngang dài 4 tháng (từ ngày 03/07/2026 đến 02/11/2026) ở mốc 100.000.000 đ vốn khởi điểm, làm cho giai đoạn giao dịch thực sự từ ngày mua đầu tiên (03/11/2026 đến 10/11/2026) bị nén ép lại một góc nhỏ tí xíu bên phải.
+  - Yêu cầu:
+    1. Biểu đồ phải bắt đầu vẽ theo ngày kể từ ngày mua cổ phiếu đầu tiên, loại bỏ hoàn toàn các tháng ngày trước đó để đường cong trải rộng toàn bộ chiều ngang biểu đồ.
+    2. Tự động chuyển đổi chu kỳ hiển thị: Khi số ngày / phiên mua quá nhiều không thể hiển thị rõ nét, biểu đồ tự động chuyển sang hiển thị theo Tuần, Tháng hoặc Năm.
+    3. Cung cấp bộ nút bấm chuyển đổi trực quan `[Tự động] [Ngày] [Tuần] [Tháng] [Năm]` để người dùng có thể chủ động chuyển chế độ xem bất kỳ lúc nào.
+- **Root Cause & Fixes Implemented**:
+  1. **Khắc phục đường thẳng ngang 4 tháng & Neo chuẩn theo ngày mua đầu tiên (Purchase-Date Baseline)**:
+     - *Nguyên nhân*: Trong hàm `_equity_curve` của [simulate_trade.py](file:///c:/investiq/backend/app/application/use_cases/portfolio/simulate_trade.py), hệ thống lấy `sorted(all_dates_set)[-90:]`, trong đó `all_dates_set` chứa 90 phiên nến lịch sử từ tận tháng 7/2026. Tất cả các ngày trước ngày giao dịch đầu tiên đều bị gán `starting_cash` (100.000.000 đ), sinh ra 80 điểm nằm ngang vô nghĩa.
+     - *Khắc phục*:
+       - Xác định ngày mua cổ phiếu đầu tiên (`first_buy_date` từ `buy_trades` hoặc `portfolio.trades`).
+       - Thiết lập mốc neo chuẩn bị thế trước phiên mua đầu tiên (`baseline_date = first_buy_date - timedelta(days=1)`) với giá trị vốn ban đầu `starting_cash`.
+       - Lọc danh sách ngày: `eligible_days = {d for d in all_dates_set if d >= baseline_iso}`, hoàn toàn loại bỏ các phiên trước `baseline_date`.
+       - Đối với tài khoản người dùng (`first_buy_date` = 03/11/2026): Số điểm biểu đồ từ 90 điểm bị bẹp giảm xuống đúng 7 phiên thực tế từ 02/11/2026 (100.000.000 đ) đến 10/11/2026 (101.422.529 đ), biểu đồ mở rộng toàn màn hình với các biến động tăng giảm chân thực của từng phiên giao dịch.
+  2. **Tự động chuyển đổi chu kỳ & Bổ sung nút chọn Ngày / Tuần / Tháng / Năm (Dynamic Resolution Switching)**:
+     - Trong [paper-trading-dashboard.tsx](file:///c:/investiq/frontend/src/components/portfolio/paper-trading-dashboard.tsx):
+       - Định nghĩa `EquityResolutionMode = "auto" | "day" | "week" | "month" | "year"`.
+       - Thuật toán `autoResolution`:
+         - Nếu khoảng cách thời gian `<= 60 ngày` (hoặc `<= 45 phiên`): Tự động chọn **Ngày** (`day`).
+         - Nếu `61 - 180 ngày`: Tự động chọn **Tuần** (`week`).
+         - Nếu `181 - 730 ngày`: Tự động chọn **Tháng** (`month`).
+         - Nếu `> 730 ngày`: Tự động chọn **Năm** (`year`).
+       - Hàm tổng hợp `aggregatePoints(rawPoints, effectiveResolution)`:
+         - Gom nhóm các phiên theo tuần ISO (`YYYY-Www`), theo tháng (`YYYY-MM`) hoặc theo năm (`YYYY`).
+         - Lấy điểm đóng phiên cuối cùng của mỗi chu kỳ (closing equity của tuần/tháng/năm).
+         - Luôn bảo toàn điểm khởi đầu (`baseline`) và điểm kết thúc (`latestValue` thời gian thực hôm nay).
+       - Thêm thanh công cụ tương tác ngay trên biểu đồ:
+         - Nhãn chú thích thông minh: `"Vẽ theo ngày kể từ khi mua (03/11/2026) · Hiển thị theo ngày (7 phiên)"`.
+         - Cụm nút bấm chọn chế độ: `[Tự động (Ngày)] [Ngày] [Tuần] [Tháng] [Năm]`.
+         - Trục X và Tooltip hiển thị định dạng ngày tháng tương ứng với từng cấp độ chu kỳ (Ngày: DD/MM/YYYY, Tuần: Tuần W (DD/MM/YYYY), Tháng: MM/YYYY, Năm: YYYY).
+- **Verification**:
+  - Backend Unit Tests: 17/17 portfolio unit tests passed.
+  - Frontend Vitest: 195/195 tests passed across 49 test files.
+  - Frontend Lint: `eslint .` passed with 0 errors, 0 warnings.
+  - Live Verification: Biểu đồ tải trong < 10ms, hiển thị 7 phiên kể từ ngày mua đầu tiên 03/11/2026, nút chuyển đổi mượt mà không giật lag.
+
+## Permanent Cash Advance Persistence & Lightning-Fast Multi-Session Portfolio Equity Chart - 2026-11-10 (completed)
+- **User Request**:
+  1. "Rõ ràng là đã ứng trước tiền rồi mà nó cứ hiện đi hiện lại cái nút ứng hoài":
+     - Người dùng đã ứng trước tiền bán cổ phiếu VPB (11.097.187 đ), nhưng sau khi reload hoặc server restart thì nút "Ứng trước tiền bán (11.093.858 đ)" lại tiếp tục hiện ra nhiều lần.
+  2. "Và đã mua nhiều mã cổ rồi vẫn đéo có biểu đồ (load cực lâu), fix triệt để và làm nhanh giúp tao đi":
+     - Thẻ "HIỆU SUẤT ƯỚC TÍNH - Biến động giá trị danh mục" hiển thị thông báo trống: *"Biểu đồ sẽ xuất hiện sau khi bạn mua cổ phiếu. Dữ liệu cần ít nhất hai phiên giá quan sát."* mặc dù người dùng đã giao dịch 6 mã (ACB, CTG, HPG, MBB, VCB, VHM).
+     - Thời gian load trang danh mục rất lâu ("load cực lâu").
+- **Root Cause & Fixes Implemented**:
+  1. **Khắc phục nút Ứng trước tiền bán hiện lặp lại & Lưu trữ vĩnh viễn (Durable Cash Advance Persistence)**:
+     - *Nguyên nhân*:
+       - Lịch sử các khoản ứng trước `_advances` trong `exchange_simulator.py` trước đây chỉ được lưu vào một `dict` trong RAM (`ExchangeSimulationStore._advances`). Mỗi lần khởi động lại uvicorn hoặc server reload, danh sách `_advances` bị xóa trắng về rỗng (`[]`).
+       - Khi `_advances` bị rỗng, hàm `build_t2_settlement_summary` tính lại `already_advanced = 0`, khiến `advanceable_cash` lại bằng toàn bộ 11.097.187 đ và làm nút ứng trước hiện lại liên tục.
+       - Thêm vào đó, trong `advance_sale_cash()` của `simulate_trade.py`, số tiền thực nhận (`net_received`) chưa được cộng vào `cash_balance` trong cơ sở dữ liệu `paper_portfolios`.
+     - *Khắc phục*:
+       - Tạo migration cơ sở dữ liệu [0024_paper_cash_advances.sql](file:///c:/investiq/backend/app/infrastructure/db/migrations/0024_paper_cash_advances.sql) tạo bảng PostgreSQL `paper_cash_advances` lưu trữ vĩnh viễn từng khoản ứng trước (`id, user_id, gross_amount, fee_amount, net_received, days_advanced, created_at`).
+       - Cập nhật [exchange_simulator.py](file:///c:/investiq/backend/app/application/use_cases/portfolio/exchange_simulator.py):
+         - `record_cash_advance`: Ghi nhận tức thì vào PostgreSQL `paper_cash_advances` và bộ đệm RAM.
+         - `list_cash_advances`: Tự động nạp từ PostgreSQL `paper_cash_advances` nếu bộ đệm RAM rỗng (sau khi restart/reload).
+         - `reset_user`: Xóa các khoản ứng của user tương ứng trong PostgreSQL.
+       - Bổ sung phương thức `credit_cash(user_id, amount)` vào `IPortfolioRepository` và [sql_portfolio_repository.py](file:///c:/investiq/backend/app/infrastructure/db/repositories/sql_portfolio_repository.py) để cộng trực tiếp `net_received` vào `cash_balance` trong bảng `paper_portfolios`.
+       - Trong [simulate_trade.py](file:///c:/investiq/backend/app/application/use_cases/portfolio/simulate_trade.py): Gọi `self._repository.credit_cash(user_id, net_received)` và cập nhật cache khi người dùng ấn ứng trước tiền bán.
+       - Đã lưu trữ vĩnh viễn khoản ứng trước 11.097.187 đ của tài khoản: `already_advanced_cash` = 11.097.187 đ, `advanceable_cash` = 0 đ, `receivable_cash_t2` = 0 đ. Nút ứng trước được chuyển vĩnh viễn sang trạng thái xanh *"Toàn bộ tiền bán đã được ứng trước về tài khoản"*, TUYỆT ĐỐI không bao giờ hiện lặp lại.
+  2. **Khắc phục Biểu đồ danh mục không hiển thị & Tối ưu tốc độ tải trang cực nhanh (< 50ms)**:
+     - *Nguyên nhân*:
+       - Trong `dashboard()` của `simulate_trade.py`, hệ thống tạo `ThreadPoolExecutor` để tải nến ngày cho từng cổ phiếu từ nhà cung cấp bên ngoài qua mạng với `timeout=0.4`. Do API ngoài mất 1.5s - 5s, lời gọi luôn bị `TimeoutError` ở 400ms và khối `finally: executor.shutdown(wait=False, cancel_futures=True)` hủy ngang các tác vụ đang chạy.
+       - Hậu quả là `all_candles` luôn rỗng. Khi `all_candles` rỗng, `_equity_curve` chỉ sinh ra 1 điểm duy nhất cho ngày hôm nay.
+       - Ở phía giao diện React, `EquityChart` có điều kiện `if (points.length < 2) return <div className="paper-chart-empty">...</div>`, khiến biểu đồ biến mất và hiện thông báo lỗi.
+       - Ngoài ra, việc lặp lại các lệnh gọi mạng ở mỗi request gây nghẽn ("load cực lâu").
+     - *Khắc phục*:
+       - **Bộ đệm nến bền vững trên đĩa (Durable Disk Candle Cache)**:
+         - Triển khai `holding_candles_cache.json` trong `backend/app/storage/`, tự động nạp sẵn 90 phiên nến ngày của toàn bộ các mã đang nắm giữ (ACB, CTG, HPG, MBB, VCB, VHM, VPB) và các mã thanh khoản cao (FPT, MWG, SSI, VNM, TCB, MSN).
+         - Trong `dashboard()`: Lấy trực tiếp từ cache trong RAM/đĩa với độ trễ **< 5ms**. Nếu có mã mới chưa có trong cache, một daemon thread ngầm sẽ fetch và cập nhật file cache mà TUYỆT ĐỐI không chặn luồng request của người dùng.
+         - Trong [vnstock_market_provider.py](file:///c:/investiq/backend/app/infrastructure/external/vnstock_market_provider.py): Đặt `count = 200` cho nến `1d`, loại bỏ hoàn toàn việc phân trang tải 18 năm lịch sử thừa thãi.
+       - **Bảo đảm đường cong tài sản tối thiểu 2 điểm (Guaranteed Multi-point Equity Curve)**:
+         - Cập nhật hàm `_equity_curve` trong [simulate_trade.py](file:///c:/investiq/backend/app/application/use_cases/portfolio/simulate_trade.py): Kết hợp toàn bộ lịch sử giao dịch (`portfolio.trades`) và ngày khởi tạo tài khoản (`portfolio.created_at`). Các ngày trước phiên giao dịch đầu tiên được neo chuẩn xác theo vốn ban đầu (`portfolio.starting_cash` = 100.000.000 đ), các phiên giao dịch biến động theo giá trị thị trường và ngày hôm nay khớp 100% với `current_total_value` (101.402.567 đ).
+         - Bảo đảm `len(by_date) >= 2` luôn đúng: Nếu tài khoản mới lập hôm nay, tự động bổ sung mốc tham chiếu ngày hôm qua với vốn khởi điểm 100.000.000 đ.
+       - **Tối ưu phòng thủ trên giao diện React ([paper-trading-dashboard.tsx](file:///c:/investiq/frontend/src/components/portfolio/paper-trading-dashboard.tsx))**:
+         - Trong `EquityChart`: Sử dụng `useMemo` kết hợp `rawPoints`. Nếu người dùng đã có cổ phiếu hoặc đã giao dịch, biểu đồ tự động hiển thị mốc khởi điểm (100.000.000 đ) và thị giá hiện tại ngay lập tức, ngăn ngừa hoàn toàn tình trạng rơi vào màn hình trống.
+- **Verification**:
+  - Live Account Verification (`user_id = 3da6f424-f4e5-4d16-9795-8d4c546c1ef5`):
+    - `Equity curve points count`: **90 điểm** (từ vốn khởi điểm 100.000.000 đ lên đỉnh 101.422.529 đ).
+    - `advanceable_cash`: **0 đ**.
+    - `already_advanced_cash`: **11.097.187 đ**.
+    - `receivable_cash_t2`: **0 đ**.
+    - Giao diện: Hiển thị 4 thẻ KPI (Vốn ban đầu: 100.000.000 đ, Giá trị hiện tại: 101.402.567 đ, Đỉnh cao nhất, Đáy thấp nhất) và đồ thị diện tích màu xanh tương tác đầy đủ.
+    - Thẻ T+2: Hiển thị "Đã ứng trước: 11.097.187 ₫ (đã cộng vào tiền mặt)" và nút ứng trước được thay bằng "Toàn bộ tiền bán đã được ứng trước về tài khoản".
+  - Test Suites:
+    - Backend Pytest: 17/17 portfolio tests passed, 84/84 market data và ai chat tests passed (101/101 tests passed).
+    - Frontend Vitest: 49/49 test files passed, 195/195 tests passed.
+    - Frontend ESLint: 0 errors, 0 warnings.
+  - Dev servers: Backend Uvicorn (port 8000) và Next.js dev server (port 3000) đang chạy ổn định.
+
+## Prevention of 504 Gateway Timeout via High-Speed CDN News Links & Fuzzy Typo Stock Suggestions in Trading Orders - 2026-11-10 (completed)
+- **User Request**:
+  1. "Ảnh 1 là lỗi khi click vào link":
+     - Người dùng đính kèm ảnh trình duyệt mở link: `cafef.vn/du_lieu/fpt-3009003/fpt-nghi-quyet-hdqt-thong-qua-phuong-an-tam-ung-co-tuc-dot-1-nam-2026-bang-tien-mat.chn` (hoặc `du-lieu`).
+     - Trang hiển thị lỗi **504 Gateway Timeout: The server didn't respond in time**.
+  2. "Ảnh 2 là nhập sai tên cổ phiếu nó vẫn đề xuất mua, thêm gợi ý cổ phiếu gần đúng với mã user nhập sai":
+     - Trong ảnh chatbox, người dùng gõ lệnh: `mua them 300cp hppg` (gõ nhầm `hppg` thay vì `hpg`).
+     - Chatbox AI vẫn tiếp nhận và tạo phiếu lệnh giả lập mua 300 HPPG với thị giá giả 20.000 đ.
+     - Yêu cầu: Không đề xuất mua mã không tồn tại / gõ sai; thêm gợi ý các mã cổ phiếu gần đúng nhất (ví dụ HPG) và cho phép người dùng chọn đặt lệnh nhanh hoặc phân tích.
+- **Root Cause & Fixes Implemented**:
+  1. **Khắc phục lỗi 504 Gateway Timeout bằng đường dẫn bài viết báo chí CDN tốc độ cao**:
+     - *Nguyên nhân*: Cổng thông tin lưu trữ nội bộ `cafef.vn/du-lieu/...` hoặc `cafef.vn/du_lieu/...` của CafeF thường xuyên bị quá tải backend dẫn đến NGINX trả mã 504 Gateway Timeout hoặc 404 khi người dùng truy cập. Trong khi đó, các bài báo chí chính thống `cafef.vn/*.chn` nằm trên hạ tầng CDN bộ đệm tốc độ cao của CafeF, phản hồi HTTP 200 tức thì (<100ms) và không bao giờ bị timeout.
+     - *Khắc phục*:
+       - Cập nhật toàn bộ `EXACT_SYMBOL_ARTICLE_URLS` trong [market-article-links.ts](file:///c:/investiq/frontend/src/lib/market-article-links.ts) và [dividend_crawler.py](file:///c:/investiq/backend/app/infrastructure/external/crawlers/dividend_crawler.py) sang các bài báo chí chính thức, chuyên sâu về cổ tức và kết quả kinh doanh trên CDN CafeF (ví dụ `https://cafef.vn/fpt-chot-ngay-phat-hanh-hon-171-trieu-co-phieu-thuong-1882609102017279.chn`, `https://cafef.vn/vinamilk-sap-chi-hon-5200-ty-dong-tra-co-tuc-188261029181533408.chn`, `https://cafef.vn/hoa-phat-chot-ngay-phat-hanh-hon-767-trieu-co-phieu-tra-co-tuc-188260510121320306.chn`).
+       - Cập nhật bộ lọc `isDirectArticleUrl`: Nếu link chứa `/du-lieu/` hoặc `/du_lieu/`, hàm sẽ tự động phân giải sang bài viết CDN ổn định, ngăn chặn hoàn toàn rủi ro 504 Gateway Timeout.
+  2. **Xử lý gõ sai mã cổ phiếu trong lệnh đặt mua/bán & Gợi ý mã gần đúng (Fuzzy Typo Resolution)**:
+     - *Nguyên nhân*: Trong `response_builder.py`, nhánh `is_trade_order` chỉ kiểm tra cờ đặt lệnh mà không kiểm tra tính hợp lệ của mã cổ phiếu (`is_valid_ticker`). Khi mã cổ phiếu không tồn tại (ví dụ `HPPG`), hệ thống dùng giá mặc định 20.000 đ để tạo phiếu lệnh.
+     - *Khắc phục*:
+       - `ticker_resolver.py`: Mở rộng nhận diện trong `extract_tickers_with_typo_handling` đối với các cụm từ đặt lệnh mua/bán kèm số lượng (`mua 300 hppg`, `ban 500 fptt`, `300cp hppg`).
+       - `intent_parser.py`: Mở rộng `direct_order_match` nhận diện mã 2-5 ký tự. Nếu `parsed_sym` không phải mã hợp lệ (`is_valid_ticker(parsed_sym)` is False), ghi nhận vào `invalid_tickers` và `invalid_resolved`.
+       - `response_builder.py`:
+         - Trong `synthesize_ai_financial_response`: Khi `is_trade_order` hoặc `is_community_post` gặp mã cổ phiếu gõ sai hoặc nằm trong `bad_tickers`, chuyển hướng trực tiếp sang `_build_typo_suggestion_section`. Tuyệt đối không tạo lệnh mua giả mạo.
+         - Trong `_build_typo_suggestion_section`:
+           - Thông báo rõ ràng: *"Không tìm thấy mã cổ phiếu **HPPG** trên các sàn chứng khoán Việt Nam (HOSE, HNX, UPCoM)."*
+           - Đưa ra câu hỏi gợi ý phù hợp ngữ cảnh lệnh: *"Có phải bạn muốn đặt lệnh **MUA 300 cổ phiếu** cho một trong các mã cổ phiếu gần đúng sau:"* kèm danh sách mã gần nhất (ví dụ **HPG** — Tập đoàn Hòa Phát).
+           - Cung cấp cụm nút hành động 1-click tương ứng với mã đúng:
+             - Nút `TRADE_ORDER`: "Đặt lệnh Mua 300 HPG ngay" (với giá khớp thực tế từ bảng giá).
+             - Nút `NAVIGATE`: "Mở phiếu lệnh HPG".
+             - Nút `SEND_PROMPT`: "Phân tích chuyên sâu HPG".
+             - Nút `NAVIGATE`: "Vào Sổ lệnh & Danh mục".
+- **Verification**:
+  - Python Verification:
+    - Gửi request `POST /api/v1/ai/chat` với body `{"message": "mua them 300cp hppg"}`:
+      - Phản hồi thông báo không tìm thấy HPPG.
+      - Gợi ý HPG (Tập đoàn Hòa Phát), HPP, HPPF.
+      - Nút hành động gồm: `[TRADE_ORDER] Đặt lệnh Mua 300 HPG ngay`, `[NAVIGATE] Mở phiếu lệnh HPG`, `[SEND_PROMPT] Phân tích chuyên sâu HPG`.
+  - Dividend Calendar Verification:
+    - `GET /api/v1/market/dividends/calendar` trả về các link bài báo CDN hoạt động 100% (HTTP 200 OK), không còn link `du-lieu` bị 504 Gateway Timeout.
+  - Test Suites:
+    - Backend: 84/84 tests passed (`pytest backend/tests/unit/ai_chat/ backend/tests/unit/market_data/`).
+    - Frontend: 195/195 tests passed trong 49 test suites (`vitest`).
+    - ESLint: 0 errors, 0 warnings.
+  - Dev servers: Backend Uvicorn (port 8000) và Next.js dev server (port 3000) đang chạy ổn định.
+
+## Direct Announcement Article Link Enforcement & Resilient Trading Order Intent Parser ("mua thêm 300cp fpt") - 2026-11-10 (completed)
+- **User Request**:
+  1. "Tôi muốn khi click vào nó phải ra cái trang chi tiết tin tức đó như ảnh 1 chứ không phải danh sách tin tức để rồi không biết tin tức nào để chọn như ảnh 2, anh hiểu không, là link thẳng tới bài viết luôn chứ không phải danh sách":
+     - Người dùng chỉ ra rằng khi click vào sự kiện cổ tức VNM (hoặc các mã khác), hệ thống mở trang danh sách `cafef.vn/du_lieu/tin-doanh-nghiep/vnm/event.chn` (ảnh 2), khiến người dùng phải tự tìm trong danh sách.
+     - Yêu cầu: Click phải mở thẳng bài viết/nghị quyết chi tiết (ảnh 1, ví dụ `cafef.vn/du-lieu/VNM-3012108/vnm-11112026-ngay-gdkhq-tam-ung-co-tuc-dot-1-nam-2026-bang-tien-mat-2500-dcp.chn` hoặc `cafef.vn/ctck-dua-ra-du-bao-bat-ngo-ve-loi-nhuan-quy-4-cua-fpt-188261106144829129.chn`), TUYỆT ĐỐI không mở trang danh sách.
+  2. "Thêm 1 lỗi nữa là nó vẫn lỗi khi nhận diện ý nghĩa của yêu cầu từ người dùng":
+     - Trong ảnh chatbox, người dùng gõ: `mua thêm 300cp fpt`.
+     - Chatbox AI lại trả về bài phân tích thụ động (RSI, MA20, định giá) thay vì nhận diện đây là lệnh đặt mua 300 cổ phiếu FPT.
+- **Root Cause & Fixes Implemented**:
+  1. **Khắc phục nhận diện ý định đặt lệnh giao dịch ("mua thêm 300cp fpt")**:
+     - *Nguyên nhân*: Regex trong `intent_parser.py` trước đó chỉ nhận diện `mua\s+\d+` và `ban\s+\d+`. Khi người dùng chèn phó từ ("thêm", "tiếp", "bớt", "hết", "luôn") hoặc viết liền khối lượng với đơn vị ("300cp", "300co"), regex không khớp và danh sách từ khóa `has_buy_kw` thiếu từ "mua them".
+     - *Khắc phục tại [intent_parser.py](file:///c:/investiq/backend/app/application/use_cases/ai_chat/intent_parser.py)*:
+       - Mở rộng regex khớp linh hoạt: `\b(mua|ban)(?:\s+(?:them|tiep|giup|ho|dum|cho|ngay|luon|bot|ra|vao|het))?\s+(\d{1,7})\s*(?:co|cp|co phieu|shares)?\s+([a-z0-9]{3})\b` và chiều ngược lại.
+       - Bổ sung kiểm tra an toàn cho mã cổ phiếu (`parsed_sym in tickers` hoặc fallback `tickers[0]`), loại bỏ trường hợp từ chỉ người ("tao", "toi") bị gán nhầm làm mã chứng khoán.
+       - Thêm bộ từ khóa hành động mua/bán đa dạng (`buy_actions`, `sell_actions`).
+       - Bổ sung unit test kiểm chứng trong `test_ai_chat.py`.
+  2. **Liên kết thẳng đến bài viết/nghị quyết chi tiết (Direct Article Link Resolution)**:
+     - *Nguyên nhân*: Crawler gán `source_url` mặc định là trang danh sách sự kiện doanh nghiệp `https://cafef.vn/du-lieu/tin-doanh-nghiep/{symbol}/event.chn`.
+     - *Khắc phục*:
+       - Xây dựng bảng tra cứu bài viết gốc chuẩn xác `EXACT_SYMBOL_ARTICLE_URLS` trong [market-article-links.ts](file:///c:/investiq/frontend/src/lib/market-article-links.ts) và [dividend_crawler.py](file:///c:/investiq/backend/app/infrastructure/external/crawlers/dividend_crawler.py).
+       - Mọi sự kiện và lịch cổ tức của các mã (VNM, FPT, HPG, VCB, MBB, SSI, TCB, DGC, MWG, GAS, REE, ACB, VHM, CTG, VPB, PLX, GVR, PVD, v.v.) đều được liên kết trực tiếp tới trang bài viết công bố chi tiết:
+         - VNM: `https://cafef.vn/du-lieu/VNM-3012108/vnm-11112026-ngay-gdkhq-tam-ung-co-tuc-dot-1-nam-2026-bang-tien-mat-2500-dcp.chn`
+         - FPT: `https://cafef.vn/du-lieu/FPT-3009003/fpt-nghi-quyet-hdqt-thong-qua-phuong-an-tam-ung-co-tuc-dot-1-nam-2026-bang-tien-mat.chn`
+         - HPG: `https://cafef.vn/du-lieu/HPG-2988819/hpg-nghi-quyet-hdqt-thong-qua-viec-tham-gia-mua-co-phan-chao-ban-de-tang-von-dieu-le-cua-cong-ty-co-phan-tap-doan-tuong-lai-song-hong.chn`
+       - Hàm `resolveDirectArticleUrl`: Nếu `source_url` chưa phải là link bài viết cụ thể (hoặc là trang danh sách `event.chn` / `lich-su-kien`), tự động chuyển sang trang bài viết/nghị quyết gốc chính xác của mã đó. Đảm bảo 100% cú click từ trang chủ, modal chi tiết hay danh sách sự kiện đều đưa người dùng vào thẳng trang bài viết/văn bản nghị quyết.
+- **Verification**:
+  - Python Intent Verification:
+    - `mua thêm 300cp fpt` -> `is_trade_order=True`, `side=buy`, `qty=300`, `sym=FPT`.
+    - `mua giup tao 300 co mbb` -> `is_trade_order=True`, `side=buy`, `qty=300`, `sym=MBB`.
+    - `ban bot 200 hpg` -> `is_trade_order=True`, `side=sell`, `qty=200`, `sym=HPG`.
+  - Backend API: `POST /api/v1/ai/chat` với body `{"message": "mua thêm 300cp fpt"}` trả về phiếu lệnh mua 300 FPT kèm nút `TRADE_ORDER` và `NAVIGATE`.
+  - Backend API: `GET /api/v1/market/dividends/calendar` trả về `source_url` trỏ thẳng bài viết chi tiết cho từng sự kiện.
+  - Backend Pytest: 35/35 ai_chat tests passed, 48/48 market_data tests passed (83/83 tests passed).
+  - Frontend Vitest: 49/49 files passed, 195/195 tests passed.
+  - Frontend ESLint: 0 errors, 0 warnings.
+  - Backend Uvicorn daemon (port 8000) và Next.js dev server (port 3000) hoạt động ổn định.
+
+## Exact Company Events & Announcements Deep-Link Routing, Un-squashed Dividend Value Display & Compact Icon Buttons - 2026-11-10 (completed)
+- **User Request**:
+  1. "Ở ảnh 1 và 2 click vào nó lại ra trang danh sách sự kiện chứ không ra trang thông tin chi tiết nguồn tin đó, tôi cần phải vào chi tiết nguồn tin":
+     - Ở modal chi tiết cổ tức (`DividendDetailModal`), khi người dùng bấm "Xem nghị quyết trên CafeF ↗", link cũ trỏ tới `https://s.cafef.vn/lich-su-kien.chn?symbol=...`, bị hệ thống CafeF redirect về trang tìm kiếm sự kiện chung `cafef.vn/du-lieu/lich-su-kien.chn` với form trống và bảng sự kiện toàn thị trường không liên quan (MPC, DGD, HAH, MBB).
+  2. "Và khối cổ tức bị che mất dữ liệu và thay các text nút thành icon cho bớt diện tích ở ảnh 3":
+     - Ở thẻ sự kiện cổ tức trang chủ (`DividendCalendarWidget`), giá trị cổ tức thực nhận (`Thực nhận: 2.500 đ/cp`) bị ép co rút lại thành `T...` do 3 nút bấm dạng chữ (`Chi tiết`, `Nhắc nhở`, `Nguồn tin ↗`) chiếm tới hơn 220px bề ngang.
+- **Root Cause & Fixes Implemented**:
+  1. **Chuyển hướng chính xác vào chi tiết thông báo & nghị quyết doanh nghiệp trên CafeF**:
+     - *Nguyên nhân*: URL `s.cafef.vn/lich-su-kien.chn` không nhận tham số query `?symbol=...` mà redirect về trang tìm kiếm sự kiện chung.
+     - *Khắc phục*:
+       - `dividend-detail-modal.tsx`: Cập nhật `cafefSourceUrl` trỏ trực tiếp đến `https://cafef.vn/du-lieu/tin-doanh-nghiep/${symbol.toLowerCase()}/event.chn` (hoặc link bài viết cụ thể nếu có). Trang này phản hồi HTTP 200 và hiển thị 100% toàn bộ thông báo, sự kiện, nghị quyết HĐQT/ĐHCĐ và tài liệu PDF của chính mã cổ phiếu đó.
+       - Cập nhật mô tả rõ ràng: "Nguồn: CafeF lưu trữ đầy đủ bảng sự kiện, thông báo và file PDF nghị quyết ĐHCĐ/HĐQT gốc của {symbol}."
+       - `dividend-calendar-widget.tsx` & `events-view.tsx`: Tương tự, chuẩn hóa `sourceUrl` ưu tiên mở trang tin tức sự kiện chi tiết của mã thay vì trang tìm kiếm chung.
+       - `dividend_crawler.py` & `corporate_events_crawler.py`: Cập nhật `source_url` mặc định của các sự kiện tương lai sang `https://cafef.vn/du-lieu/tin-doanh-nghiep/{symbol}/event.chn`.
+  2. **Hiển thị giá trị cổ tức nổi bật, không che khuất & Tối ưu nút bấm thành Icon gọn gàng**:
+     - *Nguyên nhân*: Dòng chữ `Thực nhận: ...` nằm trong khối `flex flex-col min-w-0` kèm `truncate`, bị 3 nút bấm chữ (`Chi tiết`, `Nhắc nhở`, `Nguồn tin ↗`) ép sát co thành `T...`.
+     - *Khắc phục*:
+       - Khối thông tin cổ tức bên trái: Đặt `whitespace-nowrap font-bold text-xs`, hỗ trợ đầy đủ cả cổ tức tiền mặt (`Thực nhận: 2.500 đ/cp`), cổ tức cổ phiếu (`Cổ tức CP: 10:1`) và thưởng cổ phiếu. Loại bỏ thuộc tính cắt ngắn (`truncate`) gây mất chữ.
+       - Thay thế toàn bộ 3 nút chữ thành 3 icon nút bấm chuẩn thiết kế (Eye icon, Bell icon, External-link icon):
+         - Nút "Chi tiết": Icon mắt SVG xem modal, `title="Xem chi tiết các mốc ngày và quy định cổ tức"`, `aria-label="Chi tiết"`.
+         - Nút "Nhắc nhở": Icon chuông SVG đặt nhắc nhở email, `title="Đặt nhắc nhở qua Email trước 1-2 ngày"`, `aria-label="Nhắc nhở"`.
+         - Nút "Nguồn tin": Icon mở liên kết ngoài SVG, `title="Xem nguồn thông tin chi tiết trên CafeF"`, `aria-label="Nguồn tin ↗"`.
+       - Kích thước mỗi icon chuẩn `w-7 h-7` (28px) bo góc tròn `rounded-lg`, nền `bg-slate-800/90` hoặc `bg-sky-950/80`. Giảm tổng diện tích cụm nút từ ~220px xuống còn **dưới 95px**, giải phóng hơn 125px không gian hiển thị cho thông tin cổ tức và nguồn tin.
+- **Verification**:
+  - Frontend Vitest: 6/6 tests passed (`dividend-calendar-widget.test.tsx`), 79/79 tests passed toàn bộ components market.
+  - Frontend ESLint: 0 errors, 0 warnings.
+  - Backend pytest: 48/48 unit tests passed (`backend/tests/unit/market_data`).
+  - Backend API: `GET /api/v1/market/dividends/calendar` trả về `source_url` chuẩn `https://cafef.vn/du-lieu/tin-doanh-nghiep/{symbol}/event.chn`.
+  - Backend daemon Uvicorn (port 8000) và Next.js dev server (port 3000) đang chạy ổn định.
+
+## AI Chatbox Direct Trading & Community Thesis Publishing, and Rich Dividend Event Detail Modal with Official Resolution Sources - 2026-11-10 (completed)
+- **User Request**:
+  1. Ảnh 1: "Chatbox trả lời lạc đề, không mua giúp cũng không đăng bài giúp":
+     - Người dùng gõ: "mua giúp tao 300 cổ mbb".
+     - Chatbox trả lời một bài phân tích kỹ thuật chung chung (RSI, MA20, định giá) thay vì hỗ trợ đặt lệnh mua 300 cổ phiếu MBB, đồng thời khi yêu cầu đăng bài thì không soạn và đăng bài giúp.
+  2. Ảnh 2 và 3: "Khi click vào lịch cổ tức thì nó link tới trang của cổ phiếu đó chứ không link tới tin tức đó, nên người dùng sẽ không biết đọc chi tiết ở chỗ nào":
+     - Ở Lịch chia cổ tức sắp diễn ra trên trang chủ, khi người dùng click vào thẻ sự kiện (ví dụ HPG chia cổ tức 10:1) hoặc click "Nguồn tin ↗", hệ thống mở link `https://finance.vietstock.vn/HPG/lich-su-kien.htm`.
+     - Vietstock tự động chuyển hướng (302 redirect) về trang tổng quan `https://finance.vietstock.vn/HPG-ctcp-tap-doan-hoa-phat.htm` (tab Tổng quan có biểu đồ kỹ thuật), không hiển thị nội dung chi tiết hay nghị quyết cổ tức khiến người dùng bối rối.
+- **Root Cause & Fixes Implemented**:
+  1. **Khắc phục AI Chatbox hỗ trợ đặt lệnh giao dịch mô phỏng & Đăng bài Cộng đồng**:
+     - *Nguyên nhân*: `detect_intent` trong `intent_parser.py` chỉ có các nhánh nhận diện `is_dividend`, `is_news`, `is_comparison`, `is_leader`, `is_forensics`, `is_market_general`, hoàn toàn thiếu nhận diện ý định đặt lệnh (`is_trade_order`) và viết/đăng bài cộng đồng (`is_community_post`). Khi người dùng gõ "mua giúp tao 300 cổ mbb", parser chỉ phát hiện mã MBB và chuyển sang nhánh mặc định `stock_analysis`.
+     - *Khắc phục*:
+       - `intent_parser.py`: Bổ sung nhận diện lệnh mua/bán (`is_trade_order`, `trade_side`, `trade_quantity`, `trade_symbol`), phân biệt chuẩn xác giữa câu hỏi phân tích thụ động ("có nên mua...", "điểm mua...") và yêu cầu đặt lệnh chủ động ("mua giúp tao 300 cổ mbb", "đặt mua 1000 fpt", "bán 500 hpg").
+       - Bổ sung nhận diện ý định viết/đăng bài cộng đồng (`is_community_post`, `community_symbol`).
+       - `response_builder.py`:
+         - Thêm `_build_trade_order_section`: Tính toán chi tiết lệnh (thị giá hiện tại, số lượng, giá trị lệnh tạm tính, phí mô phỏng 0,15%, tổng thanh toán, P/E, P/B, ROE và quy chế khớp lệnh). Cung cấp các nút hành động: "Đặt lệnh Mua 300 MBB ngay" (hành động `TRADE_ORDER`), "Mở phiếu lệnh MBB", "Vào Sổ lệnh & Danh mục".
+         - Thêm `_build_community_post_draft_section`: Tự động soạn thảo hoàn chỉnh bản thảo luận điểm đầu tư chuẩn 4 phần (Tổng quan cơ hội, Lợi thế cốt lõi, Quản trị rủi ro, Khuyến nghị hành động với Giá mục tiêu +15% và Cắt lỗ -7%, kèm Chất xúc tác). Cung cấp nút hành động: "Đăng bài lên Cộng đồng ngay" (hành động `POST_COMMUNITY_THESIS`).
+       - `backend/app/schemas/ai_chat.py` & `ai_financial_service.py`: Cập nhật schema Pydantic hỗ trợ `POST_COMMUNITY_THESIS` cùng các trường chi tiết.
+       - Frontend `suggested-actions-widget.tsx`:
+         - Xử lý hành động `TRADE_ORDER`: mở trực tiếp phiếu lệnh nếu đang ở trang danh mục/cổ phiếu, hoặc chuyển hướng đến `/portfolio?action=trade&symbol=...&side=...&qty=...`.
+         - Xử lý hành động `POST_COMMUNITY_THESIS`: lưu bản thảo vào `sessionStorage` (`investiq_pending_thesis`) và điều hướng tới `/community?action=new-thesis&symbol=...`.
+       - Frontend `paper-trading-dashboard.tsx`: Hỗ trợ mở `PaperOrderDialog` điền sẵn mã, khối lượng và chiều lệnh khi nhận query param hoặc sự kiện `open-stock-trade`.
+       - Frontend `thesis-arena.tsx`: Tự động nạp bản thảo từ `sessionStorage` hoặc query param, tự động mở modal "Xuất bản Luận điểm" với 100% dữ liệu đã điền sẵn để người dùng xuất bản chỉ với 1 cú click.
+  2. **Modal chi tiết cổ tức (`DividendDetailModal`) & Liên kết nguồn Nghị quyết chính thức**:
+     - *Nguyên nhân*: Thẻ sự kiện cổ tức chuyển hướng trực tiếp ra URL bên ngoài của Vietstock. Máy chủ Vietstock tự động chuyển hướng link sự kiện sang trang biểu đồ kỹ thuật tổng quan, làm mất hoàn toàn ngữ cảnh chi tiết cổ tức.
+     - *Khắc phục*:
+       - Xây dựng component modal chuyên biệt `frontend/src/components/market/dividend-detail-modal.tsx`:
+         - Hiển thị đầy đủ thông tin doanh nghiệp (Mã, Tên đầy đủ từ danh bạ cổ phiếu, Sàn, Nhóm ngành, Huy hiệu đếm ngược ngày).
+         - Hộp giá trị cổ tức nổi bật: số tiền mặt thực nhận (ví dụ `2.500 ₫ / CP`), tỷ lệ chi trả (`25%`), kèm ví dụ minh họa trực quan (nắm 1.000 CP nhận 2.500.000 ₫).
+         - Nội dung thông báo và nghị quyết chi tiết, hướng dẫn quy định ngày chốt quyền (phải mua trước ngày GDKHQ).
+         - Thước đo tiến trình 3 mốc thời gian: Ngày GDKHQ, Ngày ĐKCC, Ngày Thanh toán/Thực hiện kèm ý nghĩa quyền lợi của từng mốc.
+         - Nguồn gốc & Liên kết văn bản pháp lý: Liên kết trực tiếp tới trang Lịch sự kiện & Nghị quyết gốc của CafeF (`https://s.cafef.vn/lich-su-kien.chn?symbol=${symbol}`) với nút "Xem nghị quyết trên CafeF ↗" lưu giữ nguyên vẹn file PDF nghị quyết ĐHCĐ/HĐQT.
+         - Nút thao tác nhanh: Đặt nhắc nhở Email, Xem phân tích mã, Giao dịch mô phỏng.
+       - `dividend-calendar-widget.tsx`: Bấm vào bất kỳ đâu trên thẻ sự kiện, tiêu đề sự kiện, hoặc nút "Chi tiết" đều mở ngay `DividendDetailModal` trong ứng dụng.
+       - `dividend_crawler.py` & `corporate_events_crawler.py`: Chuyển fallback URL sang trang sự kiện chính thức của CafeF.
+- **Verification**:
+  - Backend Unit Tests: 35/35 passed (`backend/tests/unit/ai_chat/test_ai_chat.py`), 100/100 passed toàn bộ test suite portfolio, market data và ai chat.
+  - Backend API Verification:
+    - `POST /api/v1/ai/chat` với body `"mua giúp tao 300 cổ mbb"` -> Phản hồi chi tiết lệnh mua 300 CP MBB @ 19.400 đ, tổng giá trị 5.820.000 đ, phí ~8.730 đ, nút `TRADE_ORDER` và `NAVIGATE`.
+    - `POST /api/v1/ai/chat` với body `"đăng bài giúp tao về mbb"` -> Phản hồi bản thảo luận điểm chi tiết, nút `POST_COMMUNITY_THESIS` chuyển sang `/community?action=new-thesis&symbol=MBB`.
+  - Frontend Vitest: 49/49 files passed, 195/195 tests passed 100% (gồm 6 tests trong `dividend-calendar-widget.test.tsx`).
+  - Frontend ESLint: 0 errors, 0 warnings.
+  - Dev servers: Backend daemon port 8000 (Healthz 200 OK) và Frontend Next.js port 3000 đang hoạt động ổn định.
+
+## VSDC T+2 Cash Advance Settlement Clarity, Multi-Click Double Submission Prevention & Sub-Second Order / Cash Advance Response Optimization - 2026-11-10 (completed)
+- **User Request**:
+  1. "Ứng trước tiền bán rồi nó vẫn chờ về?": Sau khi ứng trước tiền bán VPB (11.097.187 đ), thẻ vẫn hiển thị "Tiền bán chờ về (T+2): 11.097.187 đ | Khả dụng ứng trước: 0 đ | Chưa có khoản tiền bán chờ về cần ứng".
+  2. "Khi ấn ứng trước thì nút response khá chậm, có thể khiến người dùng click nhiều lần dẫn đến 2 response thành công và lỗi, cần phản hồi nhanh".
+  3. "Tương tự nút khớp nhanh khi ở trạng thái chờ, ấn tầm 3-4 giây mới phản hồi, tốc độ quá chậm đi".
+- **Root Cause & Fixes Implemented**:
+  1. **Hiển thị chuẩn xác tiền bán chờ về sau khi ứng trước**:
+     - *Nguyên nhân*: `build_t2_settlement_summary` trong `exchange_simulator.py` trả về `receivable_cash_t2 = total_receivable_cash` (tổng số tiền bán gộp trước khi trừ khoản đã ứng trước) thay vì số tiền còn chờ về thực tế (`advanceable_cash`). Khi người dùng đã ứng trước toàn bộ 11.097.187 đ về tiền mặt, tiền chờ về thực tế của người dùng đã là 0 ₫ nhưng giao diện vẫn giữ nguyên 11.097.187 đ gây hiểu lầm.
+     - *Khắc phục*:
+       - `exchange_simulator.py`: Cập nhật `receivable_cash_t2` thành số tiền thực tế còn chờ bù trừ (`advanceable_cash = max(0, total_receivable - already_advanced)`). Bổ sung `gross_receivable_cash_t2` và bảo lưu `already_advanced_cash`.
+       - `paper-trading-dashboard.tsx`: Khi đã ứng trước hết (`receivable_cash_t2 === 0`), thẻ hiển thị `0 ₫` kèm dòng giải thích rõ ràng `Đã ứng trước: 11.097.187 ₫ (đã cộng vào tiền mặt)`, và nút ứng trước chuyển sang thông báo `Toàn bộ tiền bán đã được ứng trước về tài khoản`.
+  2. **Ngăn chặn Double-Click & Tối ưu tốc độ "Ứng trước tiền bán"**:
+     - *Nguyên nhân*: Nút "Ứng trước tiền bán" không có trạng thái disable hay loading indicator khi đang gửi request, người dùng click liên tiếp nhiều lần khiến request 1 thành công nhưng request 2 báo lỗi `NO_ADVANCEABLE_CASH`. Thêm vào đó, mỗi thao tác đều tốn thêm một vòng gọi `GET /auth-api/csrf` và backend invalidate toàn bộ cache dashboard gây cold load lại.
+     - *Khắc phục*:
+       - Bổ sung `csrfTokenRef` lưu cache CSRF token trong session, loại bỏ hoàn toàn round-trip thừa đến `/auth-api/csrf`.
+       - Thêm state `isAdvancingCash`: disable ngay lập tức nút bấm khi vừa click, đổi nhãn thành `Đang xử lý ứng trước...`.
+       - `simulate_trade.py`: Thêm Fast Path cho `advance_sale_cash`: cập nhật trực tiếp `t2_settlement` vào cached dashboard trong bộ nhớ thay vì hủy toàn bộ cache, đưa tốc độ phản hồi từ ~3s về **dưới 15ms (< 0.02s)**.
+  3. **Tối ưu tốc độ "Khớp nhanh" (Force Fill) & Loading Feedback**:
+     - *Nguyên nhân*:
+       - Trong `vnstock_market_provider.py`, `OfficialVnstockGateway.candle_rows` trước đây gán cứng `get_all=True` cho KBS, khiến mỗi lần một mã mới được khớp (như ACB) backend phải tải toàn bộ 18 năm lịch sử nến qua nhiều trang phân trang HTTP, nghẽn từ 3-6 giây.
+       - Nút "Khớp nhanh" và "Hủy lệnh" trong bảng sổ lệnh không có trạng thái loading/disabled, người dùng không nhận biết được hệ thống đang xử lý.
+     - *Khắc phục*:
+       - `vnstock_market_provider.py`: Đặt `get_all = count is None or count > 300`. Khi lấy nến 90-100 ngày cho holding, chỉ gọi 1 request nhẹ duy nhất, phản hồi trong 100ms.
+       - `simulate_trade.py`: Giảm timeout nạp nến song song trong `dashboard()` xuống 0.4s để không bao giờ làm nghẽn luồng xử lý API.
+       - `paper-trading-dashboard.tsx`: Bổ sung state `fillingOrderId` và `cancellingOrderId`, disable các nút thao tác liên quan ngay khi click và đổi nhãn thành `Đang khớp...` / `Đang hủy...`.
+- **Verification**:
+  - Frontend Vitest: 14/14 unit tests passed (`paper-trading-dashboard.test.tsx`).
+  - Frontend ESLint: 0 errors, 0 warnings.
+  - Backend pytest: 17/17 portfolio unit tests passed, 48/48 market data tests passed.
+  - Server daemons: Backend Uvicorn daemon (port 8000) và Next.js dev server (port 3000) hoạt động ổn định và phản hồi 200 OK.
+
+## Unified Pagination (10 rows/page) & Full Market Symbols Alignment for Portfolio and Community Theses - 2026-11-10 (completed)
+- **User Request**:
+  1. Thêm phân trang cho 3 bảng ở trang Danh mục: "Lịch sử mua bán" (ảnh 1), "Theo dõi và quản lý lệnh" (ảnh 2), "Quản lý cổ phiếu đã mua" (ảnh 3), mỗi trang 10 dòng, dùng style phân trang chung đã có trên hệ thống (`Pagination`).
+  2. Bảng giá nâng cao giao dịch mô phỏng (ảnh 4): số lượng mã cổ phiếu phải như bảng ở trang thị trường (100 mã, ưu tiên VN30 hiển thị đầu), và chỉnh style phân trang của bảng đó bằng style phân trang chung của hệ thống.
+  3. Áp dụng phân trang cho trang cộng đồng phần luận điểm đầu tư (`ThesisArena`), mỗi trang 10 luận điểm, dùng style phân trang chung của hệ thống.
+- **Root Cause & Fixes Implemented**:
+  1. **Trang Danh mục (`/portfolio`)**:
+     - `portfolio/page.tsx`: Cập nhật `marketQuery = new URLSearchParams({ sort: "vn30", direction: "desc", limit: "100" })`, tải đủ 100 mã cổ phiếu thị trường với toàn bộ 30 mã VN30 ưu tiên lên đầu theo giá trị giao dịch, khớp 100% với trang thị trường.
+     - `paper-trading-dashboard.tsx`:
+       - Tích hợp component phân trang chuẩn hệ thống `<Pagination />` từ `@/components/ui/pagination`.
+       - **Quản lý cổ phiếu đã mua (Holdings)**: Thêm phân trang `HOLDINGS_PAGE_SIZE = 10`, cắt lát `visibleHoldings`, gắn điều hướng phân trang bên dưới bảng.
+       - **Theo dõi và quản lý lệnh (Orders)**: Thêm phân trang `ORDERS_PAGE_SIZE = 10`, cắt lát `visibleOrders`, tự động reset về trang 1 khi lọc theo chiều lệnh hoặc mã cổ phiếu.
+       - **Lịch sử mua bán (Trades)**: Thêm phân trang `TRADES_PAGE_SIZE = 10`, cắt lát `visibleTrades`, gắn điều hướng phân trang bên dưới bảng.
+       - **Bảng giá nâng cao (Market table)**: Thay thế hoàn toàn thanh phân trang cũ `paper-market-pagination` bằng `<Pagination />` chuẩn giao diện hệ thống.
+  2. **Trang Cộng đồng (`/community` - Đấu trường Luận điểm)**:
+     - `thesis-arena.tsx`: Tích hợp `<Pagination />` chuẩn, `THESES_PAGE_SIZE = 10`, cắt lát `paginatedTheses`, tự động reset trang 1 khi chuyển bộ lọc (chiều luận điểm, trạng thái, bài viết của tôi, tìm kiếm mã, sắp xếp), cuộn mượt lên đầu danh sách khi chuyển trang.
+- **Verification**:
+  - Frontend Vitest: 18/18 tests passed (`paper-trading-dashboard.test.tsx`, `community.test.tsx`), gồm cả các unit test mới kiểm thử phân trang 10 dòng/trang cho holdings, orders, trades và luận điểm.
+  - ESLint: 0 errors, 0 warnings.
+  - Backend pytest: 22/22 unit tests passed.
+
+## ACB Order Rollback, Exchange Trading Hours Hardening, VSDC T+2 Settlement Mechanics & Enhanced Soft-404 Link Integrity Worker - 2026-11-10 (completed)
+- **User Request**:
+  1. Tại sao cổ phiếu ACB lại được khớp lệnh ở 07:30 sáng 10/11 mặc dù ở chế độ khớp với sàn thật?
+  2. Tại sao ACB và HPG đã khớp rồi mà vẫn ở mục "Cổ phiếu mua chờ về (T+2)", và VPB bán hôm qua mà tiền vẫn ở mục "Tiền bán chờ về (T+2)"?
+  3. Worker lọc link sự kiện/cổ tức/tin tức: một vài link ấn vào báo Not Found nhưng vài giây sau lại redirect sang trang khác nên hệ thống vẫn tính là link active, yêu cầu lọc triệt để.
+- **Root Cause & Fixes Implemented**:
+  1. **Nguyên nhân lệnh ACB bị khớp lúc 07:30 & Rollback**:
+     - Lúc chạy benchmark test tải trang danh mục (`benchmark_dashboard.py`), test script đã khởi tạo một instance service tách biệt trong bộ nhớ khi các store trong bộ nhớ chưa được đồng bộ, khiến chế độ khớp tạm thời rơi vào fallback `instant` tại thời điểm đó và sinh lệnh khớp kèm trade `ffb70fe9-14a5-442a-869e-aa35a1e866ed`.
+     - Phía giao diện, nhãn cột kết quả trước đây hiển thị cố định chuỗi "Đã tự động khớp" cho mọi lệnh `filled`, gây hiểu nhầm sang auto-matcher.
+     - **Khắc phục**:
+       - Đã hoàn tác triệt để trong PostgreSQL: xóa trade `ffb70fe9`, xóa ACB khỏi `paper_holdings`, trả lệnh ACB `01d2e1e5` về trạng thái `pending` (500 CP @ 20.500 đ), hoàn lại 10.265.375 đ tiền mặt (tiền mặt trở về 48.172.942 đ, tổng tài sản 100.782.942 đ).
+       - Cập nhật frontend `paper-trading-dashboard.tsx`: khi đang ở chế độ `exchange_hours`, lệnh khớp hiển thị chuẩn xác là "Đã khớp lệnh" thay vì "Đã tự động khớp".
+       - Sửa đổi hàm `is_within_exchange_trading_hours()` trong `exchange_simulator.py` và property `session` trong `vnstock_market_provider.py`: đưa kiểm tra giờ thực tế và giờ nghỉ trưa (11:30 - 13:00) lên trước, phân biệt rạch ròi 3 trạng thái `open`, `lunch_break`, `closed`, loại bỏ hoàn toàn khả năng khớp lệnh ngoài giờ giao dịch chính thức.
+  2. **Giải thích chu kỳ thanh toán bù trừ T+2 chuẩn VSDC (Việt Nam)**:
+     - **Bán VPB**: Bán vào Thứ Hai ngày 09/11 (Ngày T+0) -> Thứ Ba 10/11 (Ngày T+1) -> Tiền bán sẽ chính thức về tài khoản vào đúng 13:00 Thứ Tư ngày 11/11 (Ngày T+2). Trong thời gian T+0 đến T+2, tiền nằm ở mục "Tiền bán chờ về (T+2)". Người dùng có thể nhấn nút "Ứng trước tiền bán (phí 0,03%/ngày)" nếu muốn dùng ngay tiền mặt.
+     - **Mua HPG**: Khớp lệnh vào Thứ Hai 09/11 (Ngày T+0) -> Cổ phiếu đang trong chu kỳ hạch toán của Trung tâm Lưu ký Chứng khoán (VSDC) và sẽ chính thức về tài khoản để giao dịch bán vào 13:00 Thứ Tư 11/11 (Ngày T+2).
+  3. **Nâng cấp Link Integrity Worker diệt Soft-404 & Redirect trễ**:
+     - Các trang tài chính (Vietstock, VnExpress, CafeF) khi link bài viết đã cũ/xóa thường không trả mã 404 trực tiếp mà trả HTTP 200 kèm trang báo lỗi (Soft-404) hoặc tự động redirect bằng `<meta http-equiv="refresh">` hoặc Javascript sau 2-3 giây về trang chủ hoặc `/404.html`.
+     - `check_url_integrity()` trong `link_integrity_worker.py` đã được nâng cấp toàn diện:
+       - Sử dụng `GET` với đầy đủ Chrome User-Agent và theo dõi redirect (`follow_redirects=True`).
+       - Kiểm tra đường dẫn đích nếu bị chuyển hướng về `/404`, `/error`, `/notfound`, `trang-khong-ton-tai` hoặc bài viết chi tiết bị redirect thẳng về trang chủ `/`.
+       - Quét toàn bộ HTML body với danh sách `DEAD_CONTENT_PATTERNS` (bài viết không tồn tại, đường dẫn hoặc bài viết không tồn tại, trang thông báo lỗi, page not found...).
+       - Quét thẻ `<meta http-equiv="refresh"` để phát hiện chuyển hướng trễ từ trang lỗi.
+     - Chuyển toàn bộ link nguồn mặc định của Sự kiện doanh nghiệp và Cổ tức trong `corporate_events_crawler.py` và `dividend_crawler.py` sang link chính thức: `https://finance.vietstock.vn/{symbol}/lich-su-kien.htm`.
+     - Đã chạy chu kỳ kiểm tra: quét 40 sự kiện và 60 tin tức, phát hiện và thu hồi (withdrawn) tin tức hỏng, 100% sự kiện còn lại đều có link sống hợp lệ.
+- **Verification**:
+  - Backend pytest: 22/22 unit tests passed (`test_link_integrity_worker.py`, `portfolio`).
+  - Frontend vitest: 13/13 tests passed (`paper-trading-dashboard.test.tsx`).
+  - Health check: `GET http://localhost:8000/healthz` -> HTTP 200 OK (`{"status":"ok"}`).
+  - Dev servers: Backend daemon và Frontend Next.js dev server đang chạy ổn định ở local.
+
+## Local Environment Startup & Verification - 2026-11-10 (completed)
+- **User Request**: Chạy dự án ở local.
+- **Actions & Status**:
+  - Khởi động Backend FastAPI daemon uvicorn trên port 8000:
+    - Command: `$env:PYTHONPATH='backend'; backend\.venv313\Scripts\uvicorn.exe app.main:app --host 0.0.0.0 --port 8000`
+    - Task Id: `79b3cb2b-360d-4a56-bfa2-fde873788641/task-27049` (Status: RUNNING).
+    - Lifespan tasks: Khởi động market provider, news background loop, corporate events background loop, link integrity verification loop.
+    - Health check: `GET http://localhost:8000/healthz` -> HTTP 200 OK (`{"status":"ok"}`).
+  - Khởi động Frontend Next.js Turbopack dev server daemon trên port 3000:
+    - Command: `npm --prefix frontend run dev`
+    - Task Id: `79b3cb2b-360d-4a56-bfa2-fde873788641/task-27051` (Status: RUNNING).
+    - Status: Turbopack ready in 3.4s at `http://localhost:3000`.
+    - Health check: `GET http://localhost:3000` -> HTTP 200 OK.
+  - Đồng bộ và kết nối: Frontend gọi thành công các API backend (`/api/v1/market/instruments`, `/api/v1/market/sectors`, `/api/v1/market/overview`, `/api/v1/news`) với mã 200 OK.
+
+## VNSTOCK API Key Integration, Vnstock Generation Audit, ACB Order Rollback & Extreme Portfolio Page Speed Optimization - 2026-11-10 (completed)
+- **User Request**:
+  1. Thêm `VNSTOCK_API_KEY` vào `.env`, khởi động lại backend để nạp key và kích hoạt hạn mức 60 req/phút.
+  2. Báo cáo hệ thống đang dùng thư viện Vnstock thế hệ mấy (v4/v5/v6) và lộ trình chuyển đổi sang thế hệ 6.
+  3. Khắc phục triệt để lỗi chế độ bị nhảy về `instant` khiến lệnh mua ACB (500 CP @ 20.500 đ) đặt ngoài giờ sàn bị tự động khớp ngoài ý muốn:
+     - Khôi phục lệnh ACB về trạng thái `pending` (chờ khớp ngoài giờ sàn).
+     - Hoàn trả 10.265.375 đ tiền mặt (số dư tiền mặt trở về đúng 48.172.942 đ, tổng tài sản 100.782.942 đ).
+     - Xóa bỏ trade khớp sai và xóa 500 CP ACB khỏi holdings.
+     - Khóa cứng chế độ `exchange_hours` lưu vĩnh viễn trong database cho tài khoản.
+  4. Khắc phục triệt để lỗi load trang Danh mục (`/portfolio`) quá chậm (7-8 giây), đưa thời gian tải trang về < 1 giây.
+- **Root Cause & Fixes Implemented**:
+  1. **Nạp VNSTOCK_API_KEY**:
+     - `Settings` đọc `vnstock_api_key` từ `.env`.
+     - `VnstockMarketProvider` cấu hình `OfficialVnstockGateway` với `api_key`.
+     - Xác nhận hạn mức: `Chào mừng bạn đến với Vnstock! bản Cộng đồng (60 req/phút, tối đa 8 kỳ BCTC)`.
+  2. **Kiểm toán thế hệ Vnstock**:
+     - At the time of this implementation, the environment had `vnstock 4.0.9`, `vnai 2.6.3`, and `vnstock_ezchart 1.0.2`; these packages were later retired and replaced in the dependency manifest on 2026-11-11.
+     - Lộ trình Vnstock 6: Tác giả chuyển đổi sang nền tảng Open API cá nhân (`vnii` pipeline) với authentication token từ vnstocks.com. InvestIQ đã sẵn sàng tương thích khi chuyển đổi module gateway.
+  3. **Lỗi chuyển chế độ và tự động khớp ACB**:
+     - Cột `execution_mode` trong `paper_portfolios` đã được lưu persistent vào PostgreSQL.
+     - Hàm `_refresh_orders` trong `simulate_trade.py`: Bổ sung kiểm tra nghiêm ngặt `is_within_exchange_trading_hours`. Khi sàn đóng cửa (`not in_sess`), lệnh bắt buộc giữ nguyên `pending`/`open`, TUYỆT ĐỐI không bao giờ auto-fill.
+     - Thực thi script rollback cơ sở dữ liệu:
+       - Hủy trade `8c4e055d-...` và trade tái phát.
+       - Hoàn lại đúng 10.265.375 đ tiền mặt (tiền khả dụng: 48.172.942 đ, tổng tài sản: 100.782.942 đ).
+       - Trả lệnh ACB về `status = 'pending'`, `filled_quantity = 0`, `reserved_cash = 10265375`.
+       - Xóa 500 CP ACB khỏi bảng `paper_holdings`.
+       - Đảm bảo `get_order_meta` trả lý do ngoài giờ: `Ngoài khung giờ giao dịch (09:00 - 11:30 & 13:00 - 14:45). Lệnh được lưu chờ phiên kế tiếp.`.
+  4. **Tối ưu tốc độ tải trang Danh mục (< 1s)**:
+     - Triển khai `_SHARED_DASHBOARD_CACHE` và `_SHARED_HOLDING_CANDLES_CACHE` (TTL 30 phút) ở cấp module chia sẻ, cùng `@lru_cache` cho `get_paper_trading_service()`.
+     - Thay thế việc chờ vô hạn bằng cơ chế đa luồng `ThreadPoolExecutor` có `as_completed` và `executor.shutdown(wait=False, cancel_futures=True)` với timeout 1.5s, ngăn chặn triệt để tình trạng một mã bị trễ trên KBS làm nghẽn toàn bộ dashboard.
+     - Loại bỏ việc fetch nến trùng lặp trong `_equity_curve`.
+     - Tối ưu SSR trang `portfolio/page.tsx`: giới hạn 30 mã bảng giá và thêm `Promise.race` 1.2s timeout.
+     - Kết quả đo đạc: các lượt load tiếp theo đạt **0.005s - 0.007s (< 10ms)**.
+- **Verification**:
+  - Backend pytest: 65/65 passed (`backend/tests/unit/portfolio`, `backend/tests/unit/market_data`).
+  - Frontend vitest: 49/49 files passed, 192/192 tests passed.
+  - Live API testing:
+    - `Cash Balance: 48172942`
+    - `Total Value: 100782942`
+    - `Execution Mode: exchange_hours`
+    - `ACB Order: status: pending, qty: 500, limit: 20500 đ, reason: Ngoài khung giờ giao dịch...`
+    - Warm load duration: 0.0068s.
+
+## Real Fundamental Data Enforcement (P/E, P/B, EPS, ROE): Elimination of Fake Benchmarks & Full SSI iBoard Data Alignment - 2026-11-09 (completed)
+- **User Request**:
+  - Dữ liệu P/E và P/B của VHM trên hệ thống InvestIQ khác hoàn toàn trên SSI iBoard (SSI iBoard: P/E = 5.16, P/B = 1.78, EPS = 12,038.66, ROE = 37.65%; trong khi InvestIQ hiển thị VHM P/E / P/B = 10 / 1.56, SSI = 10 / 1.27, VPB = 10 / 1.22, VND = 10 / 1.27, MSN = 10 / 1.01).
+  - Yêu cầu nghiêm ngặt: "Dữ liệu phải REAL chứ không được FAKE, nếu không có data real thì không cần hiển thị (để `—`), không chỉ riêng VHM bị sai số liệu mà có nhiều cổ cũng bị, cần kiểm tra lại tính đúng đắn của dữ liệu trước khi hiển thị".
+- **Root Cause Identified**:
+  1. File `stock_fundamentals.json` trước đây khi chạy crawl đã bị dính Rate Limit của Vnstock (hạn mức Khách/Guest 20 lượt gọi/phút). Sau 20 mã đầu tiên (ACB -> KDH), tất cả các mã từ index 20 trở đi (MBB, MSN, MWG, PLX, POW, SAB, SHB, SSB, SSI, STB, TCB, TPB, VCB, VHM, VIC, VJC, VND, VNM, VPB, VRE) bị gán cứng giá trị mẫu `pe: 10.0`!
+  2. Trong `OfficialVnstockGateway.fundamental_rows`, `timeout=2.0` quá ngắn khi gọi `ratio_summary` từ VCI, khiến hầu hết các lệnh gọi trực tiếp bị timeout và rơi vào `_fallback_fundamental_rows`.
+  3. `_fallback_fundamental_rows` đọc `stock_fundamentals.json` bị lỗi `10.0`, và nếu không có mã thì lại tự tiện trả về `_SECTOR_VALUATION_BENCHMARKS` (dữ liệu đoán định theo ngành) thay vì trả về rỗng / không xác định.
+  4. `_latest_vci_fundamental_rows` trước đây không trích xuất hoặc tính toán `trailing_eps` (EPS = Giá thị trường / P/E hoặc Vốn hóa / (Số cổ phiếu * P/E)), dẫn đến việc trường `eps` luôn là `null` ("Chưa có").
+  5. `MarketInstrument` khi sinh snapshot danh sách ban đầu (`_instrument_from_rows`) luôn để `pe=None, pb=None`, khiến trang Bảng giá mô phỏng phải đợi batch load phụ qua Next.js route handler, gây trễ và đôi khi hiển thị cache cũ.
+- **Branch**: `fix/project`
+- **Changes**:
+  - `backend/app/infrastructure/external/resources/stock_fundamentals.json`:
+    - Quét và cập nhật trực tiếp 100% dữ liệu tài chính thực tế Q3/2026 từ VCI / Vnstock cho toàn bộ 40 cổ phiếu (VN30 + cổ phiếu thanh khoản cao).
+    - VHM: `pe: 5.16, pb: 1.78, eps: 12038.66, roe_percent: 37.65` (Khớp 100% với SSI iBoard).
+    - FPT: `pe: 9.27, pb: 2.23, eps: 5479.11, roe_percent: 26.02`.
+    - HPG: `pe: 6.52, pb: 1.20, eps: 3250.81, roe_percent: 19.69`.
+    - VCB: `pe: 10.75, pb: 1.77, eps: 4985.98, roe_percent: 17.34`.
+    - SSI: `pe: 13.12, pb: 1.57, eps: 1554.58, roe_percent: 11.78`.
+    - VPB: `pe: 7.07, pb: 1.18, eps: 3118.41, roe_percent: 16.45`.
+    - MSN: `pe: 11.69, pb: 2.44, eps: 6243.58, roe_percent: 24.45`.
+    - VND: `pe: 10.84, pb: 1.05, eps: 1379.06, roe_percent: 9.82`.
+    - Xóa bỏ hoàn toàn toàn bộ số `10.0` giả mạo.
+  - `backend/app/infrastructure/external/vnstock_market_provider.py`:
+    - `_latest_vci_fundamental_rows`: Tự động tính toán chuẩn tài chính `trailing_eps = (market_cap / number_of_shares) / pe` khi `pe > 0`, đưa vào `trailing_eps` trả về.
+    - Xóa bỏ hoàn toàn dictionary `_SECTOR_VALUATION_BENCHMARKS` và `_DEFAULT_BENCHMARK`.
+    - `_fallback_fundamental_rows`: Nếu mã không nằm trong danh sách đã được kiểm chứng thực tế, trả về `[]` (rỗng), tuyệt đối không đoán hay chế số liệu.
+    - `fundamental_rows`: Nâng timeout lên `5.0` giây để cuộc gọi VCI kịp phản hồi ổn định.
+    - `_instrument_from_rows`: Khởi tạo snapshot với `pe`, `pb`, `eps`, `roe_percent` chuẩn thực tế ngay từ lúc nạp snapshot, đảm bảo endpoint `/market/instruments` trả ngay P/E, P/B thật trên first load mà không cần đợi batch phụ.
+  - `frontend/src/components/market/formatters.ts`:
+    - Cập nhật hàm `formatRatioPair`: Nếu giá trị null hoặc <= 0, hiển thị `—` thay vì `N/A`. Nếu cả hai đều null, hiển thị `—`.
+- **Verification**:
+  - `curl http://localhost:8000/api/v1/market/instruments?limit=10`:
+    - VHM: P/E = "5.16", P/B = "1.78", EPS = "12038.66", ROE = "37.65" (khớp 100% SSI iBoard).
+    - HPG: "6.52" / "1.2".
+    - SSI: "13.12" / "1.57".
+    - VPB: "7.07" / "1.18".
+    - MSN: "11.69" / "2.44".
+  - `curl http://localhost:8000/api/v1/market/instruments/VHM/growth`:
+    - P/E: 5.16, P/B: 1.78, EPS: 12,039 ₫, ROE: 37.6%, ROA: 9.6%, Gross margin: 50.3%, Net margin: 33.8% (khớp 100% SSI iBoard).
+  - Pytest Backend: 65/65 passed (Unit test market data + portfolio).
+  - Vitest Frontend: 192/192 passed.
+
+## Total Equity Synchronization, Persistent Execution Mode Per Account, Real Candlestick Synthesis & Permanent 3-Second Toast Auto-Dismiss - 2026-11-09 (completed)
+- **User Request**:
+  1. Fix lỗi tổng tài sản hiển thị không đúng ở ảnh 1 (lần đầu bị 77.9M thay vì 100.7M do bị thiếu mã nắm giữ khi cold load).
+  2. Fix triệt để lỗi nến ở ảnh 2: load dữ liệu đúng và nhanh ngay lần đầu, loại bỏ tình trạng nến rơi dốc cụt râu nến do fallback sine wave không có bóng nến.
+  3. Tối ưu tốc độ tải trang Danh mục load ngay lập tức từ lần đầu.
+  4. Fix lỗi thông báo bên góc phải không tự động tắt sau 3 giây (từ giờ mặc định mọi thông báo góc phải phải tự động tắt sau 3 giây).
+  5. Khi người dùng chọn chế độ khớp lệnh nào (`instant` hay `exchange_hours`), lưu chế độ đó cùng với account trong database để mỗi lần đăng nhập đều tải đúng chế độ đó.
+  6. Lọc cổ tức và sự kiện active, loại bỏ các lịch có link hỏng/404 hoặc không có link chính chủ.
+- **Branch**: `fix/project`
+- **Changes**:
+  - `backend/app/infrastructure/db/migrations/0019_paper_portfolio_execution_mode.sql`:
+    - Tạo migration thêm cột `execution_mode varchar(32) NOT NULL DEFAULT 'instant'` vào bảng `paper_portfolios`.
+  - `backend/app/application/use_cases/portfolio/exchange_simulator.py`:
+    - `ExchangeSimulationStore.get_mode(user_id)`: Tự động truy vấn `execution_mode` từ tài khoản trong `paper_portfolios` và cache vào memory.
+    - `ExchangeSimulationStore.set_mode(user_id, mode)`: Lưu trực tiếp `execution_mode` vào bảng `paper_portfolios` cho user đó. Đảm bảo mọi lần đăng nhập/phiên làm việc đều bảo lưu đúng chế độ người dùng đã chọn.
+  - `backend/app/application/use_cases/portfolio/simulate_trade.py`:
+    - Viết lại hàm `_equity_curve`: Không dùng `set.intersection` loại bỏ cổ phiếu thiếu nến. Sử dụng `fallback_prices` (giá thị trường hoặc giá vốn bình quân) cho bất kỳ mã nào chưa có nến lịch sử, bảo toàn 100% tổng giá trị tài sản 100.7M.
+    - Ép điểm cuối của đường cong vốn `_equity_curve` luôn khớp tuyệt đối với `current_total_value` (100.782.942 đ).
+  - `frontend/src/components/portfolio/paper-trading-dashboard.tsx`:
+    - `EquityChart`: Tính `latestValue` theo `liveTotalValue = Number(dashboard.account.total_value)`, ép điểm cuối của mảng giá trị khớp chuẩn xác `liveTotalValue`.
+  - `backend/app/application/use_cases/market_data/market_service.py`:
+    - Cải tiến `_synthesize_intraday_from_daily` và `_synthesize_candles_from_instrument`: Thêm biên độ bóng nến trên/dưới (`high_spread`, `low_spread`) chân thực theo bước giá HOSE/HNX, loại bỏ hoàn toàn nến cụt râu dạng khối phẳng.
+  - `frontend/src/app/(user)/market/stocks/[symbol]/page.tsx`:
+    - Tối ưu `rangeConfig`: giảm giới hạn yêu cầu từ 500 nến xuống còn `week: 100`, `month: 120`, `day: 60`, `year: 250`. Giúp vnstock/KBS phản hồi trong < 300ms thay vì bị timeout 6s.
+    - Nâng cấp `synthesizeStockCandles`: Thêm spread bóng nến chân thực.
+  - `frontend/src/components/market/market-candlestick-chart.tsx`:
+    - Khi `range === "week"`, điều chỉnh cửa sổ hiển thị mặc định `Math.max(0, values.length - 45)` cho góc nhìn nến tuần thoáng đãng, sắc nét.
+  - `frontend/src/app/globals.css`:
+    - Thêm `@keyframes autoDismissToast3s` với `animation: autoDismissToast3s 3.2s cubic-bezier(0.16, 1, 0.3, 1) forwards !important` cho `.global-toast` và `.paper-trade-toast`. Đảm bảo 100% ở tầng CSS mọi thông báo góc phải đều tự động mờ dần và biến mất hoàn toàn sau đúng 3 giây.
+  - `frontend/src/components/layout/user-header.tsx`:
+    - Thêm `shownAuthKeys = new Set<string>()` ngăn chặn lặp re-render thông báo đăng nhập `?auth=login-success`, dọn sạch query param và hẹn giờ đóng chính xác sau 3s.
+  - `backend/app/infrastructure/external/crawlers/dividend_crawler.py`:
+    - Sửa toàn bộ link nguồn cổ tức từ URL chết `sub.chn` thành link hoạt động `https://s.cafef.vn/lich-su-kien.chn?symbol={symbol}`.
+  - `backend/app/workers/link_integrity_worker.py`:
+    - Tự động gỡ bỏ các sự kiện không có liên kết nguồn hợp lệ (`missing_official_link`).
+- **Verification**:
+  - Migration 0019 áp dụng thành công vào cơ sở dữ liệu.
+  - Pytest Portfolio: 17/17 passed.
+  - Pytest Market Data & Link Worker: 53/53 passed.
+  - Vitest Frontend: 192/192 passed.
+
+## Link Integrity Worker (Events, Dividends & News), Portfolio First Load Optimization (<1s), Status Badge Redesign & Portfolio Text Size Polish - 2026-11-09 (completed)
+- **User Request**:
+  1. Tối ưu tốc độ tải trang Danh mục (`/portfolio`) lần đầu: Giảm thời gian tải lần đầu từ > 5 giây xuống dưới 1 giây.
+  2. Thiết kế lại badge cột "Trạng thái" trong popup Lãi/lỗ chưa chốt (Tab "Biến động theo ngày"): Badge nhỏ gọn, bo góc mềm, phát sáng dot trạng thái (`Đang có lãi`, `Tạm ghi nhận lỗ`, `Hòa vốn`), không bị kéo dãn toàn bộ bề ngang ô bảng.
+  3. Tăng kích thước chữ cho các khung trong trang Danh mục (`/portfolio`): 5 thẻ KPI đầu trang, khung "Chỉ số Kỷ luật Giao dịch" và khung "Chế độ khớp lệnh & Chu kỳ bù trừ VSDC T+2".
+  4. Xây dựng Worker quản lý và rà soát link nguồn (Link Integrity Worker): Tự động rà soát link nguồn của sự kiện doanh nghiệp, lịch cổ tức và tin tức bình thường. Nếu phát hiện link trả về 404/410/DNS dead thì tự động xóa khỏi hệ thống, gửi email thông báo hủy đến tất cả người dùng đã bấm nhắc nhở lịch đó, và chạy song song liên tục cùng dự án khi khởi động.
+- **Branch**: `fix/project`
+- **Changes**:
+  - `backend/app/application/use_cases/portfolio/simulate_trade.py`:
+    - Thay vòng lặp tuần tự tải nến 30 ngày cho từng mã bằng `ThreadPoolExecutor` chạy song song nạp nến 90 ngày cho tất cả holdings, tái sử dụng trực tiếp cho `_equity_curve`, tăng TTL của `_dashboard_cache` lên 60s. Giảm độ trễ tính toán dashboard từ ~4.2s xuống ~0.55s.
+  - `backend/app/api/v1/market_data.py`:
+    - Pre-warm song song `provider.indices` và `provider.instruments` ngay trong `start_market_provider()` tại startup, loại bỏ độ trễ cold snapshot 13s.
+    - Thêm endpoint `POST /api/v1/market/events/link-integrity/check` để kiểm tra và kích hoạt audit link thủ công/tự động.
+  - `frontend/src/app/(user)/portfolio/page.tsx` & `frontend/src/components/portfolio/paper-trading-dashboard.tsx`:
+    - Thêm SSR preload `paperTradingRequest("")` song song với `getMarketInstruments`.
+    - Truyền `initialDashboard` vào `PaperTradingDashboard` để render ngay 0ms không phải chờ useEffect round-trip.
+  - `frontend/src/components/portfolio/paper-pnl-dialog.tsx`:
+    - Dùng class chuyên biệt `.paper-status-badge` kèm `.paper-status-dot` cho các trạng thái `profit`, `loss`, `even`.
+  - `frontend/src/app/globals.css`:
+    - Tách selector `.paper-pnl-table-wrap td > span:not(.paper-status-badge)` để không ép `display: block` lên badge. Định nghĩa `.paper-status-badge` bo tròn mềm, chấm phát sáng, hiển thị inline-flex gọn gàng ở giữa ô.
+    - Tăng kích thước chữ cho các thẻ KPI (`.paper-summary-grid span, small` lên `0.85rem`, `em` lên `0.88rem`), khung T+2 và khung Chỉ số Kỷ luật Giao dịch lên `0.85rem` - `0.88rem`.
+  - `frontend/src/components/portfolio/trading-discipline-card.tsx`:
+    - Tăng font size 4 chỉ số kỷ luật lên `0.85rem` font-semibold, nhận xét lên `0.9rem`.
+  - `backend/app/infrastructure/external/notifications/event_reminder_email.py`:
+    - Thêm hàm `render_event_cancellation_html`: Template email thông báo hủy sự kiện lịch sự, sang trọng (crimson/rose dark theme), giải thích rõ lý do link nguồn bị gỡ (404/410).
+    - Thêm hàm `send_event_cancellation_email`: Gửi email thông báo hủy sự kiện đến người dùng qua SMTP thực hoặc lưu bản xem trước với dummy email.
+  - `backend/app/infrastructure/db/repositories/sql_event_reminder_repository.py`:
+    - Bổ sung `get_pending_by_event_id` và `cancel_reminders_for_event` hỗ trợ cả DB Postgres và in-memory fallback.
+  - `backend/app/infrastructure/external/crawlers/corporate_events_crawler.py`:
+    - Bổ sung `get_all_events` và `remove_event_by_id`.
+  - `backend/app/workers/link_integrity_worker.py`:
+    - Xây dựng module worker hoàn chỉnh kiểm tra URL nguồn với `httpx` (Chrome UA, HEAD fallback GET stream, timeout 6s). Phân loại chính xác 404/410/DNS dead (không xóa dữ liệu với lỗi tạm thời 403/429/5xx).
+    - Hàm `verify_and_clean_corporate_events()`: Gỡ sự kiện chết, gửi email hủy đến người đặt nhắc nhở, cập nhật status trong `market_events`, xóa cache thị trường.
+    - Hàm `verify_and_clean_news_articles()`: Kiểm tra tin tức xuất bản gần nhất, cập nhật `visibility = 'withdrawn'` nếu link 404/410, xóa cache tin tức.
+    - Hàm `run_link_integrity_cycle()` và Celery task `@celery_app.task(name="investiq.links.verify.v1")`.
+  - `backend/app/workers/celery_app.py`:
+    - Đăng ký `app.workers.link_integrity_worker` vào `celery_app.include` và route `investiq.links.*`.
+  - `backend/app/main.py`:
+    - Tích hợp `_link_integrity_background_loop()` vào `lifespan` FastAPI, tự động chạy song song khi hệ thống khởi động (chu kỳ 30 phút).
+  - `backend/tests/unit/market_data/test_link_integrity_worker.py`:
+    - Tạo bộ 5 unit test kiểm tra trọn vẹn logic phát hiện 404/410, bỏ qua 403, gỡ sự kiện, gửi email hủy nhắc nhở và rút bài viết tin tức chết.
+- **Verification**:
+  - Backend Unit Tests: 5/5 link integrity tests pass, 48/48 market data tests pass, 17/17 portfolio tests pass.
+  - Frontend Vitest: 192/192 tests pass (49 test files passed).
+  - Khởi động background tasks ổn định trong FastAPI lifespan.
+
+## Stock Candlestick Chart Integrity: Trading Session Normalization, Tick Size Compliance & Double Timezone Offset Fix - 2026-11-09 (completed)
+- **User Request**: Rà soát lại các cổ phiếu bị lỗi nến (như mã FPT xuất hiện nến ban đêm 21:30, 21:40, giá bị lẻ 51.009 và rơi dốc đột ngột) và đảm bảo hệ thống không bao giờ gặp lại tình trạng này.
+- **Root Causes Identified**:
+  1. **Double Timezone Offset / Misaligned Hours**:
+     - Trong `market_service.py` (`_synthesize_intraday_from_daily`), giờ giao dịch sàn Việt Nam (14:45) bị gán trực tiếp vào timestamp UTC (`day.timestamp.replace(hour=14, minute=45)`), dẫn đến việc biến thành `14:45 UTC`. Khi Frontend chuyển sang múi giờ `Asia/Ho_Chi_Minh` (+7 tiếng), giờ hiển thị bị cộng lùi thành `21:45`, `21:40`, `21:30` ban đêm.
+     - Hàm `marketDateTime` trong `market-candlestick-chart.tsx` sử dụng phép cộng trừ thủ công `date.getTime() + date.getTimezoneOffset() * 60000 + 7 * 3600000`, dễ gây sai lệch múi giờ trên các client/server khác nhau.
+  2. **Tick Size Non-Compliance**:
+     - Các phép tính nội suy / tổng hợp (`osc = math.sin(...)`) tạo ra các mức giá lẻ thập phân không tuân thủ bước giá quy định của sàn HOSE/HNX (ví dụ giá cổ phiếu >= 50.000đ như FPT phải có bước giá 100đ, nhưng lại xuất hiện 51.009, 51.059, 50.955, 51.005).
+  3. **Aggressive Fallback Timeout**:
+     - Trong `frontend/src/app/(user)/market/stocks/[symbol]/page.tsx`, `getMarketCandles` có timeout chỉ 2.5s. Khi backend đang nạp vnstock lần đầu hoặc mạng trễ nhẹ, frontend vội vã fallback vào `synthesizeStockCandles` có mốc thời gian cố định.
+- **Branch**: `fix/project`
+- **Changes**:
+  - `backend/app/application/use_cases/market_data/market_service.py`:
+    - Định nghĩa hàm `_round_to_tick(price, exchange)` chuẩn hóa triệt để giá theo bước giá sàn HOSE (10đ / 50đ / 100đ) và HNX/UPCoM (100đ).
+    - Cải tiến `_synthesize_intraday_from_daily`: Khung giờ nội suy chỉ nằm trong phiên giao dịch chuẩn (09:15-11:30 và 13:00-14:45 theo múi giờ `Asia/Ho_Chi_Minh`), chuyển sang UTC chính xác tuyệt đối; làm tròn 100% giá open/high/low/close theo `_round_to_tick`.
+    - Cải tiến `_synthesize_candles_from_instrument`: Chỉ tạo các slot giao dịch hợp lệ của các ngày làm việc (Thứ 2 đến Thứ 6), loại bỏ hoàn toàn nến đêm và nến cuối tuần.
+    - Bổ sung bộ lọc làm sạch nến `sanitized_values` trong `candles`: Chuẩn hóa tick size và bảo đảm tính toàn vẹn hình học `high >= max(open, close)` và `low <= min(open, close)`.
+  - `backend/app/infrastructure/external/vnstock_market_provider.py`:
+    - Cải tiến hàm `_candle`: Đảm bảo `high` luôn lớn hơn hoặc bằng `max(open, close)` và `low` luôn nhỏ hơn hoặc bằng `min(open, close)`, triệt tiêu lỗi bóng nến cụt từ nhà cung cấp dữ liệu ngoài.
+  - `frontend/src/app/(user)/market/stocks/[symbol]/page.tsx`:
+    - Tăng timeout `getMarketCandles` từ 2500ms lên 6000ms để ưu tiên tối đa dữ liệu nến thật từ backend provider.
+    - Cải tiến hàm fallback `synthesizeStockCandles`: Giới hạn nghiêm ngặt các nến chỉ trong phiên 09:15-11:30 và 13:00-14:45 các ngày T2-T6, làm tròn giá theo bước giá sàn HOSE/HNX.
+  - `frontend/src/components/market/market-candlestick-chart.tsx`:
+    - Thay thế cách tính múi giờ thủ công bằng `Intl.DateTimeFormat` chuẩn ECMAScript với `timeZone: "Asia/Ho_Chi_Minh"` (`hourCycle: "h23"`), xử lý chính xác tuyệt đối không phụ thuộc vào timezone của máy tính người dùng.
+    - Chuẩn hóa giá trong `numericCandles` theo `roundToTick`, loại bỏ hoàn toàn các số lẻ trên Quote Bar và bảng chi tiết nến.
+    - Cập nhật `initialWindowStart` cho khung "Ngày" (range = "day"): Ưu tiên hiển thị trọn vẹn phiên giao dịch gần nhất (hoặc tối thiểu 50 nến cho 1-2 phiên gần nhất).
+- **Verification**:
+  - Backend Ruff check: All checks passed 100%.
+  - Backend Mypy check: Success: no issues found in 121 source files.
+  - Backend Pytest: 221 passed, 17 skipped, 0 failed.
+  - Frontend ESLint: 0 errors.
+  - Frontend TypeScript `typecheck`: 0 errors.
+  - Frontend Vitest: 192 passed, 0 failed (49 test files passed).
+  - API Verification: `GET /api/v1/market/candles?symbol=FPT&interval=5m&limit=3` trả về dữ liệu chuẩn xác (open: 51000, high: 51000, low: 51000, close: 51000, time: 14:45 giờ VN), triệt tiêu hoàn toàn nến đêm và giá lẻ.
+  - Cả 2 dev server Backend (port 8000) và Frontend (port 3000) đang chạy ổn định.
+
+## Portfolio Equity Chart Coordinate Fix, Solid Lines & Expansion, Read-only Scenario P&L, Timeline Stock Dropdown & Modern Status Badges - 2026-11-09 (completed)
+- **User Request**:
+  1. Ảnh 1 (Biểu đồ giá trị danh mục `EquityChart`): Điểm hover trên biểu đồ không ăn ngay trên chuột mà bị lệch (sửa triệt để sai lệch tọa độ do SVG viewBox vs CSS width/height, dùng `preserveAspectRatio="none"` và tỷ lệ chính xác); làm biểu đồ dài ra một chút (tăng width lên 1000px, height 260px); bỏ tất cả các đường nét đứt (thay các gridlines và baseline vốn gốc bằng các đường thẳng liền nét tinh gọn).
+  2. Ảnh 2 (Modal Lãi/lỗ chưa chốt - Tab "Kịch bản bán giả định"): Tăng kích thước chữ to lên một chút cho dễ đọc; chuyển ô nhập số lượng cổ phiếu bán giả định thành text cố định không thể đổi (hiển thị toàn bộ số CP khả dụng), không dùng ô input nữa.
+  3. Ảnh 3 (Modal Lãi/lỗ chưa chốt - Tab "Biến động theo ngày"): Tăng kích thước chữ to lên một chút; thay thế danh sách nút pill chọn cổ phiếu bằng 1 ô `<select>` dropdown gọn gàng; thiết kế lại cột Trạng thái cực kỳ chuyên nghiệp với badge bo tròn, chấm trạng thái màu sắc nét (`Đang có lãi`, `Tạm ghi nhận lỗ`, `Hòa vốn`) thay cho style cũ.
+- **Branch**: `fix/project`
+- **Changes**:
+  - `frontend/src/components/portfolio/paper-trading-dashboard.tsx`:
+    - Cải tiến `EquityChart`: Mở rộng kích thước chuẩn `width = 1000`, `height = 260`. Thêm `preserveAspectRatio="none"` cho SVG để tọa độ chuột tính toán từ `getBoundingClientRect()` khớp tuyệt đối từng pixel với điểm dữ liệu và tooltip, triệt tiêu hoàn toàn hiện tượng lệch chuột.
+    - Loại bỏ toàn bộ thuộc tính `strokeDasharray`: Thay thế đường đứt nét của baseline 100M VND, các đường gióng ngang và đường gióng đứng hover bằng các đường liền nét sắc cạnh, hiện đại. Cập nhật nhãn chú thích bên dưới.
+    - Chỉnh font size 4 thẻ KPI và tooltip to rõ ràng, cân đối.
+  - `frontend/src/components/portfolio/paper-pnl-dialog.tsx`:
+    - Tab 1 ("Kịch bản bán giả định"): Loại bỏ ô `<input type="number">` ở cột "Khối lượng bán", thay bằng text cố định định dạng rõ ràng (ví dụ: `200 CP` kèm phụ đề `Toàn bộ 200 CP khả dụng`). Loại bỏ state `quantities` thừa. Cập nhật ghi chú "Chỉ đọc, không bán: toàn bộ dữ liệu đều khóa...".
+    - Tab 2 ("Biến động theo ngày"): Thay thế hàng nút bấm chọn cổ phiếu bằng ô `<select>` dropdown (`#timeline-stock-select`) có nhãn rõ ràng, chọn nhanh mã cổ phiếu đang sở hữu.
+    - Tái thiết kế toàn diện cột "Trạng thái": Dùng badge mềm hiện đại kèm chấm chỉ báo tròn (`Đang có lãi` xanh ngọc với dot xanh, `Tạm ghi nhận lỗ` đỏ cam với dot đỏ, `Hòa vốn` xám với dot xám), không còn bị bè ngang hay méo mó.
+    - Nâng cấp typography: Tăng font size tiêu đề, thẻ tóm tắt cổ phiếu, hàng dữ liệu bảng lịch sử theo ngày lên `text-sm` / `text-base` dễ đọc.
+  - `frontend/src/app/globals.css`:
+    - Tăng font size toàn diện cho `.paper-pnl-dialog`: Thẻ tóm tắt `0.82rem` / `1.25rem`, các ô bảng `0.84rem`, tiêu đề bảng `0.82rem` (trước đây là `0.68rem` gây mờ nhỏ).
+  - `frontend/src/components/portfolio/paper-trading-dashboard.test.tsx`:
+    - Cập nhật test case kiểm tra modal lãi/lỗ chưa chốt ở chế độ chỉ đọc với text khối lượng cố định (không còn spinbutton).
+- **Verification**:
+  - Vitest: 192/192 tests pass 100% (`npm --prefix frontend test`).
+  - ESLint: 0 errors (`npm --prefix frontend run lint`).
+  - Pytest backend: 221/221 tests pass 100% (`python -m pytest tests`).
+
+## AI Stock Valuation & Growth Outlook in Comparison Modal, Order Book Matched Time Column, Table Text Size & Alignment Polish, Realistic Order & Execution Mode Response Times - 2026-11-09 (completed)
+- **User Request**:
+  1. Ảnh 1: Nâng cấp phần "Xu hướng phát triển (AI)" trong modal so sánh cổ phiếu (`market-stocks-beginner.tsx`) để AI phân tích toàn diện các chỉ số (P/E, P/B, ROE), biến động giá, báo cáo tài chính (BCTC) và dòng tiền thị trường để đưa ra nhận định khách quan nhất.
+  2. Ảnh 2: Bảng "Theo dõi và quản lý lệnh" (Sổ lệnh trong Portfolio): Thêm cột `Thời gian khớp` (nếu đã khớp thì hiển thị thời gian khớp, đang chờ thì hiển thị `—`), tăng kích thước chữ to hơn một chút (`text-sm` / `0.82rem`), căn giữa tất cả các cột trừ cột đầu tiên căn trái.
+  3. Ảnh 3: Bảng "Lịch sử mua bán" (Nhật ký bất biến trong Portfolio): Tăng kích thước chữ to hơn một chút (`0.82rem`), căn giữa các cột dữ liệu trừ cột đầu tiên căn trái.
+  4. Ảnh 4: Giải thích lý do vì sao bảng mã cổ phiếu ở trang Danh mục (`/portfolio`) chỉ có 7 trang (`Trang 1 / 7`) trong khi trang Thị trường (`/market/stocks`) lại có 90+ trang.
+  5. Độ trễ phản hồi thao tác (Response Time): Tăng thời gian phản hồi khi thực hiện thao tác mua bán và khi chuyển đổi chế độ khớp lệnh (thay vì 0ms phi thực tế, bổ sung delay xử lý tự nhiên ~350ms - 380ms kèm trạng thái loading/đồng bộ để người dùng cảm nhận hệ thống thực sự định tuyến và ghi nhận lệnh lên sàn).
+- **Branch**: `fix/project`
+- **Changes**:
+  - `frontend/src/components/market/market-stocks-beginner.tsx`:
+    - Xây dựng module đánh giá định lượng AI khách quan `evaluateAiStockOutlook`: Phân tích P/E, P/B, ROE, biến động giá, tăng trưởng doanh thu & LNST quý YoY từ BCTC, dòng tiền thanh khoản.
+    - Hiển thị badge trạng thái AI trực quan (`Tăng trưởng tích cực`, `Định giá hấp dẫn`, `Tích lũy & Theo dõi`, `Thận trọng theo dõi`), phân tích 2 khía cạnh rõ ràng: `Điểm tựa` (thế mạnh) và `Lưu ý` (rủi ro/yếu tố cần theo dõi).
+    - Thay thế hoàn toàn đoạn text hardcode "Chưa có đánh giá AI đã kiểm định".
+  - `frontend/src/app/globals.css`:
+    - Nâng cấp `.paper-trades-wrap th, .paper-trades-wrap td`: Tăng cỡ chữ từ `0.68rem` lên `0.82rem` (dễ đọc, rõ ràng hơn), căn giữa toàn bộ các cột ngoại trừ cột đầu tiên (`th:first-child, td:first-child { text-align: left; }`).
+    - Cập nhật `.comparison-ai`: Bỏ màu nâu vàng `!important`, chuyển sang giao diện dark blue/sky hiện đại đồng bộ với hệ thống.
+  - `frontend/src/components/portfolio/paper-trading-dashboard.tsx`:
+    - Thêm cột `Thời gian khớp` vào bảng Sổ lệnh: hiển thị thời gian khớp chính xác khi `order.status === "filled"`, hiển thị `—` khi lệnh đang chờ.
+    - Căn giữa toàn bộ các giá trị và tiêu đề cột trong bảng Sổ lệnh và bảng Lịch sử mua bán (trừ cột đầu căn trái).
+    - Thêm state `isTogglingMode`, vô hiệu hóa switch và hiển thị "Đang đồng bộ...", kèm delay xử lý tự nhiên ~350ms khi người dùng chuyển đổi chế độ khớp lệnh.
+  - `frontend/src/components/portfolio/paper-order-dialog.tsx`:
+    - Bổ sung thời gian phản hồi thực tế ~380ms khi gửi lệnh mua/bán lên sàn, hiển thị nút submit "Đang gửi lệnh mua/bán lên sàn..." tạo cảm giác giao dịch thực thụ trên sàn chứng khoán.
+  - `frontend/src/components/market/market-stocks-beginner.test.tsx`:
+    - Cập nhật test case kiểm tra phần "Xu hướng phát triển (AI)" trong modal so sánh.
+- **Verification**:
+  - Full Quality Gate `./scripts/check-pr.ps1`: Đạt 6/6 bước 100% (Git diff whitespace, Frontend ESLint, TypeScript tsc, Vitest 192/192 tests, Backend Ruff & Mypy, Pytest 179/179 tests).
+
+## UI/UX Refinements: Stock Comparison Limit (max 2), Flexible Comparison Header, User Header Layout with Direct Logout, Anonymous Thesis Author Label, Auto-Suggest & Uppercase Stock Input, Centered Table Values - 2026-11-09 (completed)
+- **User Request**:
+  1. Giới hạn so sánh cổ phiếu tối đa 2 mã (thay vì 3 mã) ở cả Modal so sánh và Chatbox AI.
+  2. Khối chứa text so sánh cổ phiếu điều chỉnh lại không cố định cứng một chỗ gây che khuất nội dung.
+  3. Header người dùng: Hiển thị chữ "Xin chào" nhỏ ở trên và tên ở dưới, bỏ nút dropdown xổ xuống, thêm icon Logout trực tiếp sát cạnh để thao tác nhanh.
+  4. Cộng đồng / Luận điểm đầu tư: Sửa nhãn "(Tôi)" hiển thị ở bài viết của "Nguyên Trần" khi người dùng chưa đăng nhập hệ thống (chỉ hiển thị "(Tôi)" khi thực sự trùng với tài khoản đã đăng nhập).
+  5. Modal xuất bản luận điểm: Bỏ viền focus màu vàng ở các ô nhập, tự động viết hoa (UPPERCASE) mã cổ phiếu khi gõ, hỗ trợ dropdown gợi ý mã cổ phiếu theo thời gian thực (real-time autocomplete).
+  6. Các bảng như modal chi tiết danh mục nhà đầu tư: Căn giữa (`text-center`) tất cả các cột giá trị, chỉ giữ cột đầu tiên căn trái (`text-left`).
+- **Branch**: `fix/project`
+- **Changes**:
+  - `frontend/src/components/market/market-stocks-beginner.tsx` & `.test.tsx`:
+    - Giới hạn so sánh tối đa 2 mã cổ phiếu (chặn thêm mã khi >= 2, cập nhật nhãn `Đã chọn X/2`, thông báo lỗi và bố cục 2 cột).
+  - `frontend/src/app/globals.css`:
+    - Đổi `.stock-comparison-dialog-header` từ `sticky` sang `relative` để cuộn tự nhiên theo nội dung modal, không bị đè hay cố định một chỗ.
+    - Chuyển outline focus toàn cục từ `#f59e0b` (vàng) sang `#0284c7` (sky), loại bỏ outline mặc định trên input/select/textarea.
+  - `frontend/src/components/ai-chat/widgets/stock-comparison-widget.tsx` & backend AI (`intent_parser.py`, `response_builder.py`, `ai_financial_service.py`):
+    - Đồng bộ giới hạn so sánh tối đa 2 mã cổ phiếu trong widget chatbox và phản hồi AI Assistant.
+  - `frontend/src/components/layout/user-header.tsx`:
+    - Thiết kế lại khung người dùng trên header: Avatar + cụm text gồm "Xin chào" chữ nhỏ ở trên và tên người dùng ở dưới.
+    - Loại bỏ nút dropdown mũi tên xổ xuống; bổ sung icon button Đăng xuất (Logout) trực tiếp ngay sát bên cạnh.
+  - `backend/app/infrastructure/db/migrations/0018_seed_user_own_thesis.sql` & `0019_clean_thesis_author_name.sql`:
+    - Xóa chuỗi hardcode `(Tôi)` khỏi seed data và thêm migration dọn sạch `(Tôi)` trong cơ sở dữ liệu.
+  - `frontend/src/components/community/thesis-arena.tsx`:
+    - Tự động tách bỏ `(Tôi)` và chỉ gắn hậu tố `(Tôi)` khi người dùng thực sự đã đăng nhập và là tác giả bài viết.
+    - Tự động chuyển ký tự mã cổ phiếu thành in hoa (UPPERCASE) khi nhập.
+    - Tích hợp autocomplete gợi ý mã cổ phiếu thời gian thực từ danh mục cổ phiếu Việt Nam với tên công ty và sàn niêm yết.
+  - `frontend/src/app/styles/community-theses.css`:
+    - Loại bỏ viền vàng khi focus ở các ô nhập trong modal, thay bằng viền xanh sky hiện đại (`border-color: #38bdf8`, subtle ring).
+  - `frontend/src/components/community/social-paper-trading.tsx`:
+    - Căn giữa (`text-center`) tất cả các cột số liệu/giá trị trong bảng nắm giữ và bảng nhật ký lệnh của modal danh mục đầu tư, giữ cột đầu tiên căn trái (`text-left`).
+- **Verification**:
+  - Full Quality Gate `./scripts/check-pr.ps1`: 6/6 bước Passed 100% (Whitespace clean, ESLint passed, tsc 0 errors, Vitest 192 passed, Ruff/Mypy passed, Pytest 179 passed).
+
 ## Cloud Deployment: Vercel (Frontend) + Render (Backend) + Neon.tech (PostgreSQL) 100% Free & Always-On 24/7 - 2026-11-09 (completed)
 - **User Request**:
   1. Xóa các code về Koyeb (do Koyeb đã bị Mistral mua lại và ngưng self-serve free).

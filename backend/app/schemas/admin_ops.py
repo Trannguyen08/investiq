@@ -209,7 +209,6 @@ class AdminCancelOrderResponse(BaseModel):
     order_id: str
 
 
-
 # Audit logs schemas
 class AdminAuditLogItem(BaseModel):
     model_config = ConfigDict(extra="ignore")

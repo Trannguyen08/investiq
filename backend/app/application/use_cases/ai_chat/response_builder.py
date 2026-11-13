@@ -14,7 +14,10 @@ from app.application.use_cases.ai_chat.intent_parser import (
 )
 from app.application.use_cases.ai_chat.knowledge_base import KnowledgeHit
 from app.application.use_cases.ai_chat.market_snapshot import build_daily_market_snapshot
-from app.application.use_cases.ai_chat.ticker_resolver import find_closest_tickers
+from app.application.use_cases.ai_chat.ticker_resolver import (
+    find_closest_tickers,
+    is_valid_ticker,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -184,9 +187,7 @@ def _build_dividend_and_events_section(
             if ev.get("source_url"):
                 sources.append(
                     {
-                        "kind": "internal"
-                        if str(ev["source_url"]).startswith("/")
-                        else "external",
+                        "kind": "internal" if str(ev["source_url"]).startswith("/") else "external",
                         "title": f"Nguồn tin {sym}: {ev.get('source', 'Công bố')}",
                         "url": str(ev["source_url"]),
                     }
@@ -236,9 +237,7 @@ def _build_news_section(
 ) -> None:
     target_stock = tickers[0] if tickers else ""
     heading = (
-        f"Điểm tin chứng khoán {target_stock}:"
-        if target_stock
-        else "Điểm tin thị trường hôm nay:"
+        f"Điểm tin chứng khoán {target_stock}:" if target_stock else "Điểm tin thị trường hôm nay:"
     )
     text_parts.append(heading)
 
@@ -497,9 +496,7 @@ def _build_leader_section(
                 from app.infrastructure.external.crawlers.leader_crawler import get_leader_crawler
 
                 inst_list = (
-                    market_service.instruments()
-                    if hasattr(market_service, "instruments")
-                    else None
+                    market_service.instruments() if hasattr(market_service, "instruments") else None
                 )
                 raw_people = get_leader_crawler().get_prominent_leaders(inst_list)
                 for rank, p in enumerate(raw_people[:7], start=1):
@@ -589,8 +586,13 @@ def _build_leader_section(
 
         q_fold = normalize_user_input(user_message).lower()
         is_company_query = any(w in q_fold for w in ["tap doan", "cong ty", "doanh nghiep"]) or (
-            not any(w in q_fold for w in ["ong", "ba", "chu tich", "tong giam doc", "ceo", "nguoi", "tieu su"])
-            and any(w in q_fold for w in ["vingroup", "hoa phat", "fpt", "masan", "vietjet", "novaland"])
+            not any(
+                w in q_fold
+                for w in ["ong", "ba", "chu tich", "tong giam doc", "ceo", "nguoi", "tieu su"]
+            )
+            and any(
+                w in q_fold for w in ["vingroup", "hoa phat", "fpt", "masan", "vietjet", "novaland"]
+            )
         )
         heading = (
             f"Thông tin doanh nghiệp & Lãnh đạo: {company} ({name})"
@@ -822,6 +824,11 @@ def _build_typo_suggestion_section(
     invalid_tickers: list[str],
     is_dividend: bool,
     is_forensics: bool,
+    is_trade_order: bool = False,
+    trade_side: str = "buy",
+    trade_quantity: int = 100,
+    is_community_post: bool = False,
+    market_service: Any = None,
     text_parts: list[str],
     sources: list[dict[str, str]],
     suggested_actions: list[dict[str, Any]],
@@ -842,69 +849,185 @@ def _build_typo_suggestion_section(
             if m.symbol not in seen_syms:
                 seen_syms.add(m.symbol)
                 all_suggestions.append(m)
-                suggestion_lines.append(
-                    f"- **{m.symbol}** — {m.name} (Ngành: {m.sector})"
-                )
+                suggestion_lines.append(f"- **{m.symbol}** — {m.name} (Ngành: {m.sector})")
 
     if suggestion_lines:
-        text_parts.append(
-            "Có phải bạn đang tìm kiếm một trong các mã cổ phiếu gần đúng sau:\n"
-            + "\n".join(suggestion_lines[:4])
-        )
-        text_parts.append(
-            "Vui lòng chọn mã gợi ý bên dưới hoặc nhập lại mã cổ phiếu chính xác để InvestIQ phân tích."
-        )
+        if is_trade_order:
+            side_clean = "buy" if trade_side.lower() == "buy" else "sell"
+            side_vi = "Mua" if side_clean == "buy" else "Bán"
+            text_parts.append(
+                f"Có phải bạn muốn đặt lệnh **{side_vi.upper()} {trade_quantity:,} cổ phiếu** cho một trong các mã cổ phiếu gần đúng sau:\n"
+                + "\n".join(suggestion_lines[:4])
+            )
+            text_parts.append(
+                "Vui lòng chọn mã gợi ý bên dưới để hoàn tất đặt lệnh mô phỏng nhanh:"
+            )
 
-        for m in all_suggestions[:3]:
-            sources.append(
+            for m in all_suggestions[:3]:
+                price_val = 20000
+                if market_service and hasattr(market_service, "instrument"):
+                    try:
+                        inst = market_service.instrument(m.symbol, include_fundamentals=False)
+                        if inst and getattr(inst, "price", None):
+                            price_val = float(inst.price)
+                    except Exception:
+                        pass
+
+                sources.append(
+                    {
+                        "kind": "internal",
+                        "title": f"Bảng giá thị trường InvestIQ: {m.symbol} ({m.name})",
+                        "url": f"/market/stocks/{m.symbol}",
+                    }
+                )
+                suggested_actions.append(
+                    {
+                        "label": f"Đặt lệnh {side_vi} {trade_quantity} {m.symbol} ngay",
+                        "action_type": "TRADE_ORDER",
+                        "symbol": m.symbol,
+                        "side": side_clean,
+                        "quantity": trade_quantity,
+                        "price": str(int(price_val)),
+                    }
+                )
+                suggested_actions.append(
+                    {
+                        "label": f"Mở phiếu lệnh {m.symbol}",
+                        "action_type": "NAVIGATE",
+                        "url": f"/portfolio?action=trade&symbol={m.symbol}&side={side_clean}&qty={trade_quantity}",
+                    }
+                )
+
+            suggested_actions.append(
                 {
-                    "kind": "internal",
-                    "title": f"Bảng giá thị trường InvestIQ: {m.symbol} ({m.name})",
-                    "url": f"/market/stocks/{m.symbol}",
+                    "label": "Vào Sổ lệnh & Danh mục",
+                    "action_type": "NAVIGATE",
+                    "url": "/portfolio",
                 }
             )
-            if is_dividend:
+            if all_suggestions:
+                top_m = all_suggestions[0]
                 suggested_actions.append(
                     {
-                        "label": f"Lịch chia cổ tức {m.symbol}",
+                        "label": f"Phân tích chuyên sâu {top_m.symbol}",
                         "action_type": "SEND_PROMPT",
-                        "prompt": f"Lịch chia cổ tức {m.symbol}",
+                        "prompt": f"Phân tích {top_m.symbol}",
                     }
                 )
-            elif is_forensics:
+        elif is_community_post:
+            text_parts.append(
+                "Có phải bạn đang muốn viết bài / đăng luận điểm đầu tư cho một trong các mã gần đúng sau:\n"
+                + "\n".join(suggestion_lines[:4])
+            )
+            text_parts.append(
+                "Vui lòng chọn mã bên dưới để InvestIQ soạn thảo luận điểm đầu tư hoàn chỉnh:"
+            )
+            for m in all_suggestions[:3]:
+                sources.append(
+                    {
+                        "kind": "internal",
+                        "title": f"Bảng giá thị trường InvestIQ: {m.symbol} ({m.name})",
+                        "url": f"/market/stocks/{m.symbol}",
+                    }
+                )
                 suggested_actions.append(
                     {
-                        "label": f"Kiểm tra rủi ro BCTC {m.symbol}",
+                        "label": f"Soạn luận điểm {m.symbol}",
                         "action_type": "SEND_PROMPT",
-                        "prompt": f"Kiểm tra BCTC {m.symbol}",
+                        "prompt": f"Đăng bài về {m.symbol}",
                     }
                 )
-            else:
-                suggested_actions.append(
+        else:
+            text_parts.append(
+                "Có phải bạn đang tìm kiếm một trong các mã cổ phiếu gần đúng sau:\n"
+                + "\n".join(suggestion_lines[:4])
+            )
+            text_parts.append(
+                "Vui lòng chọn mã gợi ý bên dưới hoặc nhập lại mã cổ phiếu chính xác để InvestIQ phân tích."
+            )
+
+            for m in all_suggestions[:3]:
+                sources.append(
                     {
-                        "label": f"Phân tích {m.symbol} ({m.name})",
-                        "action_type": "SEND_PROMPT",
-                        "prompt": f"Phân tích {m.symbol}",
+                        "kind": "internal",
+                        "title": f"Bảng giá thị trường InvestIQ: {m.symbol} ({m.name})",
+                        "url": f"/market/stocks/{m.symbol}",
                     }
                 )
+                if is_dividend:
+                    suggested_actions.append(
+                        {
+                            "label": f"Lịch chia cổ tức {m.symbol}",
+                            "action_type": "SEND_PROMPT",
+                            "prompt": f"Lịch chia cổ tức {m.symbol}",
+                        }
+                    )
+                elif is_forensics:
+                    suggested_actions.append(
+                        {
+                            "label": f"Kiểm tra rủi ro BCTC {m.symbol}",
+                            "action_type": "SEND_PROMPT",
+                            "prompt": f"Kiểm tra BCTC {m.symbol}",
+                        }
+                    )
+                else:
+                    suggested_actions.append(
+                        {
+                            "label": f"Phân tích {m.symbol} ({m.name})",
+                            "action_type": "SEND_PROMPT",
+                            "prompt": f"Phân tích {m.symbol}",
+                        }
+                    )
     else:
-        text_parts.append(
-            "Vui lòng kiểm tra lại mã chứng khoán (gồm 3 ký tự niêm yết trên HOSE, HNX hoặc UPCoM, ví dụ: HPG, VCB, FPT)."
-        )
-        suggested_actions.extend(
-            [
-                {
-                    "label": "Phân tích cổ phiếu HPG",
-                    "action_type": "SEND_PROMPT",
-                    "prompt": "Phân tích HPG",
-                },
-                {
-                    "label": "So sánh VCB và MBB",
-                    "action_type": "SEND_PROMPT",
-                    "prompt": "So sánh VCB và MBB",
-                },
-            ]
-        )
+        if is_trade_order:
+            side_clean = "buy" if trade_side.lower() == "buy" else "sell"
+            side_vi = "Mua" if side_clean == "buy" else "Bán"
+            text_parts.append(
+                "Vui lòng kiểm tra lại mã chứng khoán (gồm 3 ký tự niêm yết trên HOSE, HNX hoặc UPCoM, ví dụ: HPG, VCB, FPT, MBB) để đặt lệnh."
+            )
+            suggested_actions.extend(
+                [
+                    {
+                        "label": f"Đặt lệnh {side_vi} 100 HPG",
+                        "action_type": "TRADE_ORDER",
+                        "symbol": "HPG",
+                        "side": side_clean,
+                        "quantity": 100,
+                        "price": "21200",
+                    },
+                    {
+                        "label": f"Đặt lệnh {side_vi} 100 FPT",
+                        "action_type": "TRADE_ORDER",
+                        "symbol": "FPT",
+                        "side": side_clean,
+                        "quantity": 100,
+                        "price": "50900",
+                    },
+                    {
+                        "label": "Vào Sổ lệnh & Danh mục",
+                        "action_type": "NAVIGATE",
+                        "url": "/portfolio",
+                    },
+                ]
+            )
+        else:
+            text_parts.append(
+                "Vui lòng kiểm tra lại mã chứng khoán (gồm 3 ký tự niêm yết trên HOSE, HNX hoặc UPCoM, ví dụ: HPG, VCB, FPT)."
+            )
+            suggested_actions.extend(
+                [
+                    {
+                        "label": "Phân tích cổ phiếu HPG",
+                        "action_type": "SEND_PROMPT",
+                        "prompt": "Phân tích HPG",
+                    },
+                    {
+                        "label": "So sánh VCB và MBB",
+                        "action_type": "SEND_PROMPT",
+                        "prompt": "So sánh VCB và MBB",
+                    },
+                ]
+            )
 
 
 def _build_comparison_section(
@@ -965,14 +1088,29 @@ def _build_comparison_section(
                     for m in find_closest_tickers(valid_sym, max_results=3, allow_valid=True)
                     if m.symbol != valid_sym
                 ]
-                if valid_alts and valid_sym not in ("HPG", "VCB", "FPT", "VIC", "VHM", "MBB", "TCB", "SSI", "VNM", "MWG", "ACB", "STB"):
+                if valid_alts and valid_sym not in (
+                    "HPG",
+                    "VCB",
+                    "FPT",
+                    "VIC",
+                    "VHM",
+                    "MBB",
+                    "TCB",
+                    "SSI",
+                    "VNM",
+                    "MWG",
+                    "ACB",
+                    "STB",
+                ):
                     alt_desc = ", ".join(f"**{m.symbol}** ({m.name})" for m in valid_alts[:3])
                     suggestion_blocks.append(
                         f"- Nếu **{valid_sym}** cũng là mã nhập nhầm, gợi ý gần đúng: {alt_desc}"
                     )
 
             if suggestion_blocks:
-                text_parts.append("Gợi ý các mã cổ phiếu gần đúng:\n" + "\n".join(suggestion_blocks))
+                text_parts.append(
+                    "Gợi ý các mã cổ phiếu gần đúng:\n" + "\n".join(suggestion_blocks)
+                )
 
             if len(active_tickers) == 1:
                 valid_sym = active_tickers[0]
@@ -1015,9 +1153,7 @@ def _build_comparison_section(
                         pair_candidates.append(m.symbol)
                 if len(pair_candidates) >= 2:
                     s1, s2 = pair_candidates[0], pair_candidates[1]
-                    text_parts.append(
-                        f"Có phải bạn muốn so sánh giữa **{s1}** và **{s2}** không?"
-                    )
+                    text_parts.append(f"Có phải bạn muốn so sánh giữa **{s1}** và **{s2}** không?")
                     suggested_actions.append(
                         {
                             "label": f"So sánh {s1} và {s2}",
@@ -1068,11 +1204,11 @@ def _build_comparison_section(
             f"Hệ thống tiến hành đối chiếu các mã hợp lệ: {', '.join(active_tickers)}.\n"
         )
 
-    # Add limit notice if user asked for > 3 stocks
+    # Add limit notice if user asked for > 2 stocks
     if exceeded_limit:
         text_parts.append(
-            f"> [!NOTE] InvestIQ hỗ trợ so sánh tối đa 3 mã cổ phiếu trong cùng một lượt. "
-            f"Hệ thống sẽ tiến hành so sánh 3 mã: {', '.join(active_tickers)}.\n"
+            f"> [!NOTE] InvestIQ hỗ trợ so sánh tối đa 2 mã cổ phiếu trong cùng một lượt. "
+            f"Hệ thống sẽ tiến hành so sánh 2 mã: {', '.join(active_tickers)}.\n"
         )
 
     tickers_title = " vs ".join(active_tickers)
@@ -1111,7 +1247,9 @@ def _build_comparison_section(
         # Growth fields
         health_status = growth.get("health_status") or "stable"
         health_title = growth.get("health_title") or "Hoạt động & tài chính ổn định"
-        health_summary = growth.get("health_summary") or f"{name} duy trì cơ cấu tài chính lành mạnh."
+        health_summary = (
+            growth.get("health_summary") or f"{name} duy trì cơ cấu tài chính lành mạnh."
+        )
         cap_1m = growth.get("market_cap_growth_1m")
         cap_3m = growth.get("market_cap_growth_3m")
         cap_6m = growth.get("market_cap_growth_6m")
@@ -1229,8 +1367,13 @@ def _build_comparison_section(
         text_parts.append("\n".join(metric_lines))
 
         # Build comparison verdict
-        best_pe = min(parsed_items, key=lambda x: float(x["pe"].replace("x", "")) if "x" in x["pe"] else 999.0)
-        best_roe = max(parsed_items, key=lambda x: float(x["roe"].replace("%", "")) if "%" in x["roe"] else -999.0)
+        best_pe = min(
+            parsed_items, key=lambda x: float(x["pe"].replace("x", "")) if "x" in x["pe"] else 999.0
+        )
+        best_roe = max(
+            parsed_items,
+            key=lambda x: float(x["roe"].replace("%", "")) if "%" in x["roe"] else -999.0,
+        )
         verdict = (
             f"Về mặt định giá, **{best_pe['symbol']}** sở hữu chỉ số P/E hấp dẫn nhất ({best_pe['pe']}), "
             f"trong khi **{best_roe['symbol']}** dẫn đầu về hiệu quả sinh lời trên vốn chủ sở hữu (ROE {best_roe['roe']}). "
@@ -1279,8 +1422,16 @@ def _build_comparison_section(
         text_parts.append(f"Đối chiếu so sánh báo cáo tăng trưởng: {tickers_title}")
         growth_lines = []
         for it in parsed_items:
-            rev_txt = f"Doanh thu quý: {it['revenue_growth_yoy']}" if it['revenue_growth_yoy'] else "Doanh thu: Đang cập nhật"
-            prof_txt = f"LNST quý: {it['profit_growth_yoy']}" if it['profit_growth_yoy'] else "LNST: Đang cập nhật"
+            rev_txt = (
+                f"Doanh thu quý: {it['revenue_growth_yoy']}"
+                if it["revenue_growth_yoy"]
+                else "Doanh thu: Đang cập nhật"
+            )
+            prof_txt = (
+                f"LNST quý: {it['profit_growth_yoy']}"
+                if it["profit_growth_yoy"]
+                else "LNST: Đang cập nhật"
+            )
             cap_txt = f"Vốn hóa 1T: {it['market_cap_growth_1m'] or 'N/A'}, 1N: {it['market_cap_growth_1y'] or 'N/A'}"
             growth_lines.append(
                 f"- **{it['symbol']}** ({it['name']}): Trạng thái **{it['health_title']}**. "
@@ -1351,8 +1502,14 @@ def _build_comparison_section(
     text_parts.append("### 2. Báo cáo Tăng trưởng & Sức khỏe Tài chính:")
     growth_lines = []
     for it in parsed_items:
-        rev_txt = f"Doanh thu quý {it['revenue_growth_yoy']}" if it['revenue_growth_yoy'] else "Doanh thu ổn định"
-        prof_txt = f"LNST quý {it['profit_growth_yoy']}" if it['profit_growth_yoy'] else "LNST ổn định"
+        rev_txt = (
+            f"Doanh thu quý {it['revenue_growth_yoy']}"
+            if it["revenue_growth_yoy"]
+            else "Doanh thu ổn định"
+        )
+        prof_txt = (
+            f"LNST quý {it['profit_growth_yoy']}" if it["profit_growth_yoy"] else "LNST ổn định"
+        )
         growth_lines.append(
             f"- **{it['symbol']}**: Trạng thái **{it['health_title']}**. "
             f"{rev_txt}, {prof_txt}. LNST TTM: {it['profit_ttm'] or 'N/A'}. Tăng trưởng vốn hóa 1T: {it['market_cap_growth_1m'] or 'N/A'}."
@@ -1458,9 +1615,7 @@ def _build_single_stock_section(
     text_parts.append(
         f"- Thị giá: {price:,.0f} đ ({change_p:+.2f}%) | Sàn {exchange} | Ngành {sector}"
     )
-    text_parts.append(
-        f"- Định giá: P/E hiện tại {pe:.1f}x | P/B {pb:.1f}x | ROE {roe:.1f}%"
-    )
+    text_parts.append(f"- Định giá: P/E hiện tại {pe:.1f}x | P/B {pb:.1f}x | ROE {roe:.1f}%")
     text_parts.append(
         f"- Kỹ thuật: RSI (14) đang ở mức {rsi:.1f} | Giá {'nằm trên' if price >= ma20 else 'áp sát'} MA20 ({ma20:,.0f} đ)"
     )
@@ -1503,11 +1658,7 @@ def _build_single_stock_section(
     if is_forensics or flags or zone != "safe":
         flag_items = []
         for f in flags[:4]:
-            sev = (
-                getattr(f, "severity", "")
-                if not isinstance(f, dict)
-                else f.get("severity", "")
-            )
+            sev = getattr(f, "severity", "") if not isinstance(f, dict) else f.get("severity", "")
             title = (
                 getattr(f, "title", "")
                 if not isinstance(f, dict)
@@ -1620,19 +1771,48 @@ def _build_market_overview_section(
             k in q_folded for k in ["bien dong", "manh nhat", "nhieu nhat", "lon nhat"]
         ) and not any(
             k in q_folded
-            for k in ["tang manh", "giam manh", "thanh khoan", "giao dich nhieu", "soi noi", "soi dong"]
+            for k in [
+                "tang manh",
+                "giam manh",
+                "thanh khoan",
+                "giao dich nhieu",
+                "soi noi",
+                "soi dong",
+            ]
         )
         ask_gainers = any(
             k in q_folded
-            for k in ["tang manh", "tang nhieu", "tang tran", "tim tran", "co phieu nao tang", "ma nao tang"]
+            for k in [
+                "tang manh",
+                "tang nhieu",
+                "tang tran",
+                "tim tran",
+                "co phieu nao tang",
+                "ma nao tang",
+            ]
         )
         ask_losers = any(
             k in q_folded
-            for k in ["giam manh", "giam nhieu", "giam sau", "nam san", "giam san", "co phieu nao giam", "ma nao giam"]
+            for k in [
+                "giam manh",
+                "giam nhieu",
+                "giam sau",
+                "nam san",
+                "giam san",
+                "co phieu nao giam",
+                "ma nao giam",
+            ]
         )
         ask_liquidity = any(
             k in q_folded
-            for k in ["thanh khoan", "giao dich nhieu", "soi dong", "soi noi", "hoat dong", "nhon nhip"]
+            for k in [
+                "thanh khoan",
+                "giao dich nhieu",
+                "soi dong",
+                "soi noi",
+                "hoat dong",
+                "nhon nhip",
+            ]
         )
         ask_foreign = any(
             k in q_folded for k in ["khoi ngoai", "mua rong", "ban rong", "nuoc ngoai"]
@@ -1772,9 +1952,7 @@ def _build_market_overview_section(
             text_parts.append(
                 f"- Độ rộng thị trường: {advances} mã tăng / {declines} mã giảm / {unchanged} mã tham chiếu."
             )
-            text_parts.append(
-                f"- Thanh khoản toàn sàn: Xấp xỉ {matched_val:,.1f} nghìn tỷ đồng."
-            )
+            text_parts.append(f"- Thanh khoản toàn sàn: Xấp xỉ {matched_val:,.1f} nghìn tỷ đồng.")
             if top_gainers:
                 gainers_inline = ", ".join(
                     f"**{g['symbol']}** ({g['change_percent']:+.2f}%)" for g in top_gainers[:3]
@@ -1834,6 +2012,189 @@ def _build_market_overview_section(
         )
 
 
+def _build_trade_order_section(
+    *,
+    symbol: str,
+    side: str,
+    quantity: int,
+    stock_data: dict[str, Any],
+    market_service: Any,
+    text_parts: list[str],
+    widgets: list[dict[str, Any]],
+    sources: list[dict[str, str]],
+    suggested_actions: list[dict[str, Any]],
+) -> None:
+    del widgets  # Reserved for order ticket widget
+    inst = stock_data.get(symbol, {}).get("instrument")
+    if not inst and hasattr(market_service, "instrument"):
+        try:
+            inst = market_service.instrument(symbol, include_fundamentals=True)
+        except Exception:
+            inst = None
+
+    name = _get_val(inst, "name", symbol)
+    price_val = _get_val(inst, "price", 20000)
+    price = float(price_val or 20000)
+    change_pct = float(_get_val(inst, "change_percent", 0.0) or 0.0)
+    exchange = _get_val(inst, "exchange", "HOSE")
+    pe_raw = _get_val(inst, "pe")
+    pb_raw = _get_val(inst, "pb")
+    roe_raw = _get_val(inst, "roe_percent")
+    pe = f"{float(pe_raw):.1f}" if pe_raw not in (None, "", "—") else "—"
+    pb = f"{float(pb_raw):.1f}" if pb_raw not in (None, "", "—") else "—"
+    roe = f"{float(roe_raw):.1f}" if roe_raw not in (None, "", "—") else "—"
+
+    side_clean = "buy" if side.lower() == "buy" else "sell"
+    side_vi = "Mua" if side_clean == "buy" else "Bán"
+    order_val = price * quantity
+    fee_sim = round(order_val * 0.0015)
+    total_val = (order_val + fee_sim) if side_clean == "buy" else (order_val - fee_sim)
+
+    text_parts.append(f"Hỗ trợ đặt lệnh mô phỏng: {side_vi.upper()} {quantity:,} {symbol} ({name})")
+    text_parts.append(
+        f"Tôi đã tiếp nhận yêu cầu đặt lệnh giao dịch mô phỏng của bạn cho mã **{symbol}**:\n\n"
+        f"• **Mã cổ phiếu**: {symbol} (Sàn {exchange})\n"
+        f"• **Chiều lệnh**: **{side_vi.upper()}** (Lệnh giới hạn LO / Khớp theo thị giá)\n"
+        f"• **Khối lượng**: **{quantity:,} cổ phiếu** (Khối lượng chuẩn lô chẵn)\n"
+        f"• **Thị giá hiện tại**: **{price:,.0f} ₫** ({change_pct:+.2f}%)\n"
+        f"• **Giá trị lệnh tạm tính**: **{order_val:,.0f} ₫**\n"
+        f"• **Phí giao dịch mô phỏng (0,15%)**: ~{fee_sim:,.0f} ₫\n"
+        f"• **Tổng số tiền {'cần thanh toán' if side_clean == 'buy' else 'dự kiến nhận về'}**: **~{total_val:,.0f} ₫**\n\n"
+        f"**Định giá & Tình trạng khớp lệnh**:\n"
+        f"- Chỉ số định giá: P/E **{pe}x** | P/B **{pb}x** | ROE **{roe}%**\n"
+        f"- Quy chế khớp lệnh: Hệ thống tự động ghi nhận khớp lệnh theo giá khớp thực tế trên sàn (09:00 - 11:30 & 13:00 - 14:45). Ngoài khung giờ giao dịch, lệnh được lưu vào sổ lệnh ở trạng thái chờ khớp cho phiên tiếp theo.\n\n"
+        f"Bạn có thể bấm nút **'Đặt lệnh {side_vi} {quantity:,} {symbol} ngay'** bên dưới để mở phiếu lệnh đã điền sẵn và xác nhận giao dịch tức thì:"
+    )
+
+    sources.append(
+        {
+            "kind": "internal",
+            "title": f"Sổ lệnh & Phòng thực hành đầu tư ({symbol})",
+            "url": f"/portfolio?action=trade&symbol={symbol}&side={side_clean}&qty={quantity}",
+        }
+    )
+
+    suggested_actions.extend(
+        [
+            {
+                "label": f"Đặt lệnh {side_vi} {quantity:,} {symbol} ngay",
+                "action_type": "TRADE_ORDER",
+                "symbol": symbol,
+                "side": side_clean,
+                "quantity": quantity,
+                "price": str(int(price)),
+            },
+            {
+                "label": f"Mở phiếu lệnh {symbol}",
+                "action_type": "NAVIGATE",
+                "url": f"/portfolio?action=trade&symbol={symbol}&side={side_clean}&qty={quantity}",
+            },
+            {
+                "label": "Vào Sổ lệnh & Danh mục",
+                "action_type": "NAVIGATE",
+                "url": "/portfolio",
+            },
+            {
+                "label": f"Phân tích chuyên sâu {symbol}",
+                "action_type": "SEND_PROMPT",
+                "prompt": f"Phân tích {symbol}",
+            },
+        ]
+    )
+
+
+def _build_community_post_draft_section(
+    *,
+    symbol: str,
+    user_message: str,
+    stock_data: dict[str, Any],
+    market_service: Any,
+    text_parts: list[str],
+    widgets: list[dict[str, Any]],
+    sources: list[dict[str, str]],
+    suggested_actions: list[dict[str, Any]],
+) -> None:
+    del user_message, widgets
+    inst = stock_data.get(symbol, {}).get("instrument")
+    if not inst and hasattr(market_service, "instrument"):
+        try:
+            inst = market_service.instrument(symbol, include_fundamentals=True)
+        except Exception:
+            inst = None
+
+    name = _get_val(inst, "name", symbol)
+    price_val = _get_val(inst, "price", 20000)
+    price = float(price_val or 20000)
+    target_price = int(round(price * 1.15 / 50) * 50)
+    stop_loss_price = int(round(price * 0.93 / 50) * 50)
+    pe_raw = _get_val(inst, "pe")
+    pb_raw = _get_val(inst, "pb")
+    roe_raw = _get_val(inst, "roe_percent")
+    pe = f"{float(pe_raw):.1f}" if pe_raw not in (None, "", "—") else "6.5"
+    pb = f"{float(pb_raw):.1f}" if pb_raw not in (None, "", "—") else "1.2"
+    roe = f"{float(roe_raw):.1f}" if roe_raw not in (None, "", "—") else "20.5"
+
+    draft_title = f"Luận điểm đầu tư {symbol}: Động lực tăng trưởng và vùng định giá hấp dẫn"
+    draft_body = (
+        f"1. Tổng quan cơ hội: Cổ phiếu {symbol} ({name}) đang tích lũy ở vùng giá {price:,.0f} ₫ với định giá P/E ~{pe}x, P/B ~{pb}x và ROE đạt ~{roe}%, tạo biên an toàn hấp dẫn cho vị thế nắm giữ trung hạn.\n\n"
+        f"2. Lợi thế cốt lõi & Động lực kinh doanh: Doanh nghiệp sở hữu vị thế hàng đầu ngành, năng lực quản trị rủi ro tốt và hưởng lợi lớn từ chu kỳ phục hồi kinh tế vĩ mô cùng tăng trưởng tín dụng.\n\n"
+        f"3. Quản trị rủi ro & Sức khỏe tài chính: Cơ cấu nguồn vốn an toàn, đòn bẩy tài chính duy trì trong ngưỡng kiểm soát, chất lượng tài sản lành mạnh.\n\n"
+        f"4. Khuyến nghị hành động: Mua tích lũy tại vùng giá quanh {price:,.0f} ₫, mục tiêu kỳ vọng {target_price:,.0f} ₫ (+15%), quản trị rủi ro cắt lỗ nếu giá thủng {stop_loss_price:,.0f} ₫ (-7%)."
+    )
+    draft_catalysts = "Kết quả kinh doanh quý tới tăng trưởng tích cực, mở rộng quy mô hoạt động và dòng tiền tổ chức duy trì mua ròng."
+
+    text_parts.append(f"Bản thảo Luận điểm Đầu tư: {symbol} - {name}")
+    text_parts.append(
+        f"Tôi đã soạn sẵn bản thảo luận điểm phân tích chuyên sâu cho **{symbol}** để bạn xuất bản lên Cộng đồng InvestIQ:\n\n"
+        f"• **Tiêu đề**: {draft_title}\n"
+        f"• **Quan điểm**: MUA / Khả quan (Bullish)\n"
+        f"• **Khung thời gian**: 3 - 6 tháng\n"
+        f"• **Giá tham chiếu hiện tại**: {price:,.0f} ₫\n"
+        f"• **Giá mục tiêu (Target)**: **{target_price:,.0f} ₫** (+15.0%)\n"
+        f"• **Giá cắt lỗ (Stop-loss)**: **{stop_loss_price:,.0f} ₫** (-7.0%)\n\n"
+        f"**Tóm tắt nội dung luận điểm**:\n"
+        f"{draft_body}\n\n"
+        f"**Chất xúc tác tăng giá (Catalysts)**: {draft_catalysts}\n\n"
+        f"Bấm nút **'Đăng bài lên Cộng đồng ngay'** bên dưới để chuyển sang Đấu trường Luận điểm với 100% dữ liệu đã điền sẵn:"
+    )
+
+    sources.append(
+        {
+            "kind": "internal",
+            "title": f"Đấu trường Luận điểm Đầu tư InvestIQ ({symbol})",
+            "url": f"/community?action=new-thesis&symbol={symbol}",
+        }
+    )
+
+    suggested_actions.extend(
+        [
+            {
+                "label": "Đăng bài lên Cộng đồng ngay",
+                "action_type": "POST_COMMUNITY_THESIS",
+                "symbol": symbol,
+                "title": draft_title,
+                "stance": "bullish",
+                "target_price": target_price,
+                "stop_loss_price": stop_loss_price,
+                "horizon": 3,
+                "content": draft_body,
+                "catalysts": draft_catalysts,
+                "url": f"/community?action=new-thesis&symbol={symbol}",
+            },
+            {
+                "label": "Xem Đấu trường Luận điểm",
+                "action_type": "NAVIGATE",
+                "url": "/community",
+            },
+            {
+                "label": f"Phân tích chuyên sâu {symbol}",
+                "action_type": "SEND_PROMPT",
+                "prompt": f"Phân tích {symbol}",
+            },
+        ]
+    )
+
+
 def generate_structured_response(
     *,
     market_service: Any,
@@ -1858,6 +2219,12 @@ def generate_structured_response(
     is_leader_rankings: bool = False,
     is_ecosystem: bool = False,
     ecosystem_id: str | None = None,
+    is_trade_order: bool = False,
+    trade_side: str | None = None,
+    trade_quantity: int | None = None,
+    trade_symbol: str | None = None,
+    is_community_post: bool = False,
+    community_symbol: str | None = None,
     comparison_mode: str = "ask",
     exceeded_limit: bool = False,
     invalid_tickers: list[str] | None = None,
@@ -1870,7 +2237,72 @@ def generate_structured_response(
     sources: list[dict[str, str]] = []
     bad_tickers = list(invalid_tickers or [])
 
-    if is_leader:
+    if is_trade_order:
+        target_sym = trade_symbol or (tickers[0] if tickers else None)
+        is_bad_trade_sym = (
+            target_sym is not None
+            and (target_sym in bad_tickers or not is_valid_ticker(target_sym))
+        ) or (target_sym is None and bool(bad_tickers))
+        if is_bad_trade_sym:
+            order_bad_tickers = list(bad_tickers)
+            if target_sym and target_sym not in order_bad_tickers:
+                order_bad_tickers.insert(0, target_sym)
+            _build_typo_suggestion_section(
+                invalid_tickers=order_bad_tickers,
+                is_dividend=False,
+                is_forensics=False,
+                is_trade_order=True,
+                trade_side=trade_side or "buy",
+                trade_quantity=trade_quantity or 100,
+                market_service=market_service,
+                text_parts=text_parts,
+                sources=sources,
+                suggested_actions=suggested_actions,
+            )
+        else:
+            _build_trade_order_section(
+                symbol=target_sym or "MBB",
+                side=trade_side or "buy",
+                quantity=trade_quantity or 100,
+                stock_data=stock_data,
+                market_service=market_service,
+                text_parts=text_parts,
+                widgets=widgets,
+                sources=sources,
+                suggested_actions=suggested_actions,
+            )
+    elif is_community_post:
+        target_sym = community_symbol or (tickers[0] if tickers else None)
+        is_bad_comm_sym = (
+            target_sym is not None
+            and (target_sym in bad_tickers or not is_valid_ticker(target_sym))
+        ) or (target_sym is None and bool(bad_tickers))
+        if is_bad_comm_sym:
+            comm_bad_tickers = list(bad_tickers)
+            if target_sym and target_sym not in comm_bad_tickers:
+                comm_bad_tickers.insert(0, target_sym)
+            _build_typo_suggestion_section(
+                invalid_tickers=comm_bad_tickers,
+                is_dividend=False,
+                is_forensics=False,
+                is_community_post=True,
+                market_service=market_service,
+                text_parts=text_parts,
+                sources=sources,
+                suggested_actions=suggested_actions,
+            )
+        else:
+            _build_community_post_draft_section(
+                symbol=target_sym or "MBB",
+                user_message=user_message,
+                stock_data=stock_data,
+                market_service=market_service,
+                text_parts=text_parts,
+                widgets=widgets,
+                sources=sources,
+                suggested_actions=suggested_actions,
+            )
+    elif is_leader:
         _build_leader_section(
             user_message=user_message,
             tickers=tickers,
@@ -2074,9 +2506,7 @@ def generate_structured_response(
     if sources:
         citation_lines = ["\n\nNguồn tham khảo:"]
         for s in sources:
-            kind_badge = (
-                "[Hệ thống InvestIQ]" if s.get("kind") == "internal" else "[Nguồn ngoài]"
-            )
+            kind_badge = "[Hệ thống InvestIQ]" if s.get("kind") == "internal" else "[Nguồn ngoài]"
             citation_lines.append(f"- {kind_badge} {s['title']} ({s['url']})")
         text_parts.append("\n".join(citation_lines))
 

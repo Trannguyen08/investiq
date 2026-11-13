@@ -9,11 +9,15 @@ from typing import Any, Literal
 
 from app.application.use_cases.ai_chat.guardrails import fold_text
 from app.application.use_cases.ai_chat.ticker_resolver import (
+    _EXTRA_STOP_WORDS,
     extract_tickers_with_typo_handling,
+    is_valid_ticker,
 )
 
 AiIntent = Literal[
     "blocked",
+    "trade_order",
+    "community_post",
     "comparison",
     "dividend",
     "stock_analysis",
@@ -39,26 +43,210 @@ _EXPLICIT_TICKER_PATTERN = re.compile(
 # Stop words that look like tickers but are Vietnamese words or common financial acronyms
 _NON_TICKER_WORDS = frozenset(
     {
-        "CHO", "CON", "CAC", "NAM", "THI", "GIA", "NEN", "MUA", "BAN", "XEM", "LUC",
-        "QUA", "NAY", "VAY", "NHO", "LON", "TOC", "NGU", "GAP", "DCA", "BCTC", "EPS",
-        "ROE", "ROA", "USD", "VND", "VSA", "MAC", "MAI", "DAO", "SAN", "COT", "DON",
-        "TUC", "TRA", "DAN", "DOC", "BAI", "THE", "KHI", "BAO", "LAI", "COI", "HOI",
-        "VON", "TIEN", "BOT", "HAY", "HOA", "LAM", "SAO", "VOI", "VAN", "GIO", "MAY",
-        "DUY", "TAM", "BAT", "DAP", "CAN", "HAI", "BOM", "CAT", "DEN", "DEP", "DOI",
-        "DOT", "GAY", "GHE", "HAT", "HEM", "HEN", "HOC", "HON", "HOP", "KEP", "KHO",
-        "KYC", "LAN", "LAO", "LAP", "LAT", "LEP", "LOA", "LOT", "LUA", "LUN", "LUY",
-        "MEO", "MUI", "MUN", "NEO", "NGA", "NGO", "NHA", "NHU", "NIT", "NON", "NUT",
-        "ONG", "QUE", "QUI", "RAO", "ROT", "RUA", "RUT", "SAP", "SAT", "SAY", "SEN",
-        "SET", "SOI", "SON", "SOT", "SUA", "SUC", "SUY", "TAI", "TAN", "TAP", "TAT",
-        "TAY", "THA", "THO", "THU", "TIA", "TIE", "TIT", "TOA", "TON", "TRE", "TRI",
-        "TRO", "TRU", "TUI", "TUT", "TUY", "UOC", "VIU", "VUI", "VUN", "XAM", "XAP",
-        "XAU", "XAY", "XOA", "XOI", "XOM", "XON", "XOP", "XOT", "XUC",
+        "CHO",
+        "CON",
+        "CAC",
+        "NAM",
+        "THI",
+        "GIA",
+        "NEN",
+        "MUA",
+        "BAN",
+        "XEM",
+        "LUC",
+        "QUA",
+        "NAY",
+        "VAY",
+        "NHO",
+        "LON",
+        "TOC",
+        "NGU",
+        "GAP",
+        "DCA",
+        "BCTC",
+        "EPS",
+        "ROE",
+        "ROA",
+        "USD",
+        "VND",
+        "VSA",
+        "MAC",
+        "MAI",
+        "DAO",
+        "SAN",
+        "COT",
+        "DON",
+        "TUC",
+        "TRA",
+        "DAN",
+        "DOC",
+        "BAI",
+        "THE",
+        "KHI",
+        "BAO",
+        "LAI",
+        "COI",
+        "HOI",
+        "VON",
+        "TIEN",
+        "BOT",
+        "HAY",
+        "HOA",
+        "LAM",
+        "SAO",
+        "VOI",
+        "VAN",
+        "GIO",
+        "MAY",
+        "DUY",
+        "TAM",
+        "BAT",
+        "DAP",
+        "CAN",
+        "HAI",
+        "BOM",
+        "CAT",
+        "DEN",
+        "DEP",
+        "DOI",
+        "DOT",
+        "GAY",
+        "GHE",
+        "HAT",
+        "HEM",
+        "HEN",
+        "HOC",
+        "HON",
+        "HOP",
+        "KEP",
+        "KHO",
+        "KYC",
+        "LAN",
+        "LAO",
+        "LAP",
+        "LAT",
+        "LEP",
+        "LOA",
+        "LOT",
+        "LUA",
+        "LUN",
+        "LUY",
+        "MEO",
+        "MUI",
+        "MUN",
+        "NEO",
+        "NGA",
+        "NGO",
+        "NHA",
+        "NHU",
+        "NIT",
+        "NON",
+        "NUT",
+        "ONG",
+        "QUE",
+        "QUI",
+        "RAO",
+        "ROT",
+        "RUA",
+        "RUT",
+        "SAP",
+        "SAT",
+        "SAY",
+        "SEN",
+        "SET",
+        "SOI",
+        "SON",
+        "SOT",
+        "SUA",
+        "SUC",
+        "SUY",
+        "TAI",
+        "TAN",
+        "TAP",
+        "TAT",
+        "TAY",
+        "THA",
+        "THO",
+        "THU",
+        "TIA",
+        "TIE",
+        "TIT",
+        "TOA",
+        "TON",
+        "TRE",
+        "TRI",
+        "TRO",
+        "TRU",
+        "TUI",
+        "TUT",
+        "TUY",
+        "UOC",
+        "VIU",
+        "VUI",
+        "VUN",
+        "XAM",
+        "XAP",
+        "XAU",
+        "XAY",
+        "XOA",
+        "XOI",
+        "XOM",
+        "XON",
+        "XOP",
+        "XOT",
+        "XUC",
         # Common conversational Vietnamese words & market index acronyms:
-        "TIN", "HOM", "TAO", "DAY", "TOP", "MUC", "GOI", "MOI", "DAT", "LEN", "XEP",
-        "LOI", "MAT", "TIM", "CAU", "CHON", "MO", "SUN", "TOI", "HNX", "VNI", "UPC",
-        "GDP", "CPI", "FED", "ETF", "NAV", "RSI", "OBV", "SMA", "EMA", "ATR", "ADX",
-        "VAI", "XIN", "NOI", "MOT", "NAO", "CUA", "SAU", "DAU", "CAO", "TOT", "GAN",
-        "VUA", "KHA", "NHI", "LOC", "VAO", "BEN", "CHU",
+        "TIN",
+        "HOM",
+        "TAO",
+        "DAY",
+        "TOP",
+        "MUC",
+        "GOI",
+        "MOI",
+        "DAT",
+        "LEN",
+        "XEP",
+        "LOI",
+        "MAT",
+        "TIM",
+        "CAU",
+        "CHON",
+        "MO",
+        "SUN",
+        "TOI",
+        "HNX",
+        "VNI",
+        "UPC",
+        "GDP",
+        "CPI",
+        "FED",
+        "ETF",
+        "NAV",
+        "RSI",
+        "OBV",
+        "SMA",
+        "EMA",
+        "ATR",
+        "ADX",
+        "VAI",
+        "XIN",
+        "NOI",
+        "MOT",
+        "NAO",
+        "CUA",
+        "SAU",
+        "DAU",
+        "CAO",
+        "TOT",
+        "GAN",
+        "VUA",
+        "KHA",
+        "NHI",
+        "LOC",
+        "VAO",
+        "BEN",
+        "CHU",
     }
 )
 
@@ -75,6 +263,12 @@ class DetectedIntent:
     is_gold_bank: bool
     is_forensics: bool
     is_market_general: bool
+    is_trade_order: bool = False
+    trade_side: str | None = None  # "buy" or "sell"
+    trade_quantity: int | None = None
+    trade_symbol: str | None = None
+    is_community_post: bool = False
+    community_symbol: str | None = None
     is_leader: bool = False
     leader_id: str | None = None
     leader_name: str | None = None
@@ -254,13 +448,28 @@ _LEADER_ALIASES: tuple[tuple[tuple[str, ...], str, str, tuple[str, ...]], ...] =
         ("MWG",),
     ),
     (
-        ("dang thanh tam", "thanh tam", "tam kbc", "chu tich kinh bac", "chu tich kbc", "kinh bac la ai"),
+        (
+            "dang thanh tam",
+            "thanh tam",
+            "tam kbc",
+            "chu tich kinh bac",
+            "chu tich kbc",
+            "kinh bac la ai",
+        ),
         "person-10",
         "Đặng Thành Tâm",
         ("KBC", "SGT"),
     ),
     (
-        ("nguyen van dat", "van dat", "dat phat dat", "dat pdr", "chu tich phat dat", "chu tich pdr", "phat dat la ai"),
+        (
+            "nguyen van dat",
+            "van dat",
+            "dat phat dat",
+            "dat pdr",
+            "chu tich phat dat",
+            "chu tich pdr",
+            "phat dat la ai",
+        ),
         "person-11",
         "Nguyễn Văn Đạt",
         ("PDR",),
@@ -326,7 +535,13 @@ _LEADER_ALIASES: tuple[tuple[tuple[str, ...], str, str, tuple[str, ...]], ...] =
         ("HBC",),
     ),
     (
-        ("johnathan hanh nguyen", "hanh nguyen", "vua hang hieu", "chu tich ippg", "chu tich sasco"),
+        (
+            "johnathan hanh nguyen",
+            "hanh nguyen",
+            "vua hang hieu",
+            "chu tich ippg",
+            "chu tich sasco",
+        ),
         "person-18",
         "Johnathan Hạnh Nguyễn",
         ("SAS",),
@@ -338,7 +553,13 @@ _LEADER_ALIASES: tuple[tuple[tuple[str, ...], str, str, tuple[str, ...]], ...] =
         ("HQC",),
     ),
     (
-        ("dao hong tuyen", "hong tuyen", "chua dao tuan chau", "ong tuyen tuan chau", "chu tich tuan chau"),
+        (
+            "dao hong tuyen",
+            "hong tuyen",
+            "chua dao tuan chau",
+            "ong tuyen tuan chau",
+            "chu tich tuan chau",
+        ),
         "person-20",
         "Đào Hồng Tuyển",
         (),
@@ -357,7 +578,13 @@ _LEADER_ALIASES: tuple[tuple[tuple[str, ...], str, str, tuple[str, ...]], ...] =
     ),
     # International financial legends
     (
-        ("warren buffett", "buffett", "nha tien tri omaha", "chu tich berkshire", "berkshire hathaway"),
+        (
+            "warren buffett",
+            "buffett",
+            "nha tien tri omaha",
+            "chu tich berkshire",
+            "berkshire hathaway",
+        ),
         "global-1",
         "Warren Buffett",
         (),
@@ -481,9 +708,7 @@ def _calculate_rsi(closes: list[float], period: int = 14) -> float:
     return round(100.0 - (100.0 / (1.0 + rs)), 1)
 
 
-def _clean_dividend_ratio(
-    raw_ratio: str, div_type: str, cash_val: Any
-) -> tuple[str, float | None]:
+def _clean_dividend_ratio(raw_ratio: str, div_type: str, cash_val: Any) -> tuple[str, float | None]:
     """Extract a clean ratio token (e.g. '10%', '100:15', '10:1', '100:3') and infer cash value if applicable."""
     text = (raw_ratio or "").strip()
     inferred_cash = float(cash_val) if cash_val is not None else None
@@ -543,37 +768,217 @@ def detect_intent(user_message: str) -> DetectedIntent:
     query_lower = norm_message.lower()
     query_folded = fold_text(norm_message)
 
-    is_dividend = any(
+    # 0. Trade order detection (e.g. "mua giúp tao 300 cổ mbb", "đặt mua 1000 fpt", "bán 500 hpg")
+    is_trade_analysis_query = any(
         kw in query_folded
         for kw in [
-            "co tuc",
-            "chia co tuc",
-            "lich co tuc",
-            "lich chia co tuc",
-            "tra co tuc",
-            "ngay chot quyen",
-            "chot quyen",
-            "gdkhq",
-            "khong huong quyen",
-            "ty le chia",
-            "nhan co tuc",
-            "chia thuong",
-            "quyen mua",
-            "tra bang tien",
-            "tra bang co phieu",
-            "su kien",
-            "lich su kien",
-            "su kien noi bat",
-            "su kien sap toi",
-            "su kien thi truong",
-            "lich thi truong",
-            "sap toi co",
-            "dhcd",
-            "dai hoi co dong",
-            "hop co dong",
-            "phat hanh them",
-            "niem yet moi",
+            "co nen mua",
+            "co nen ban",
+            "nen mua khong",
+            "nen ban khong",
+            "nen mua hay",
+            "nen ban hay",
+            "diem mua",
+            "diem ban",
+            "vung mua",
+            "vung ban",
+            "khuyen nghi mua",
+            "khuyen nghi ban",
+            "tu van mua",
+            "tu van ban",
+            "co mua duoc",
+            "co ban duoc",
+            "chieu mua",
+            "chieu ban",
+            "mua gia nao",
+            "ban gia nao",
+            "phan tich",
+            "danh gia",
+            "nhan dinh",
+            "xu huong",
+            "the nao",
+            "tiem nang",
+            "co tot khong",
         ]
+    )
+
+    is_trade_order = False
+    trade_side: str | None = None
+    trade_quantity: int | None = None
+    trade_symbol: str | None = None
+
+    if not is_trade_analysis_query:
+        qty_match = re.search(
+            r"\b(\d{1,7})\s*(?:co|cp|co phieu|shares)?\b",
+            query_folded,
+        )
+        found_qty = int(qty_match.group(1)) if qty_match else None
+
+        buy_actions = [
+            "mua",
+            "dat mua",
+            "mua them",
+            "mua tiep",
+            "mua giup",
+            "mua ho",
+            "mua dum",
+            "mua cho",
+            "gom",
+            "muc",
+            "vao lenh mua",
+            "lenh mua",
+            "mua vao",
+            "gia lap mua",
+            "mua ngay",
+            "mua luon",
+        ]
+        sell_actions = [
+            "ban",
+            "dat ban",
+            "ban them",
+            "ban bot",
+            "ban tiep",
+            "ban giup",
+            "ban ho",
+            "ban dum",
+            "ban cho",
+            "ban ra",
+            "ban het",
+            "xa",
+            "chot loi",
+            "cat lo",
+            "vao lenh ban",
+            "lenh ban",
+            "gia lap ban",
+            "ban ngay",
+            "ban luon",
+        ]
+
+        has_buy = any(re.search(r"\b" + re.escape(w) + r"\b", query_folded) for w in buy_actions)
+        has_sell = any(re.search(r"\b" + re.escape(w) + r"\b", query_folded) for w in sell_actions)
+
+        # Check explicit patterns: "mua/bán [thêm/giúp/...] [qty] [symbol]" or "mua/bán [thêm/...] [symbol] [qty]"
+        direct_order_match = re.search(
+            r"\b(mua|ban)(?:\s+(?:them|tiep|giup|ho|dum|cho|ngay|luon|bot|ra|vao|het))?\s+(\d{1,7})\s*(?:co|cp|co phieu|shares)?\s+([a-z0-9]{2,5})\b",
+            query_folded,
+        ) or re.search(
+            r"\b(mua|ban)(?:\s+(?:them|tiep|giup|ho|dum|cho|ngay|luon|bot|ra|vao|het))?\s+([a-z0-9]{2,5})\s+(\d{1,7})\s*(?:co|cp|co phieu|shares)?\b",
+            query_folded,
+        )
+
+        if direct_order_match:
+            action_word = direct_order_match.group(1).lower()
+            val1 = direct_order_match.group(2)
+            val2 = direct_order_match.group(3)
+            parsed_sym = (val2 if val1.isdigit() else val1).upper()
+            parsed_qty = int(val1 if val1.isdigit() else val2)
+
+            if parsed_sym in _NON_TICKER_WORDS or parsed_sym in _EXTRA_STOP_WORDS:
+                parsed_sym = tickers[0] if tickers else None
+
+            if parsed_sym:
+                is_trade_order = True
+                trade_side = "sell" if "ban" in action_word else "buy"
+                trade_quantity = parsed_qty
+                trade_symbol = parsed_sym
+
+                if is_valid_ticker(parsed_sym):
+                    if parsed_sym not in tickers:
+                        tickers.insert(0, parsed_sym)
+                else:
+                    if parsed_sym not in invalid_resolved:
+                        invalid_resolved.append(parsed_sym)
+        elif (has_buy or has_sell) and (tickers or invalid_resolved):
+            is_trade_order = True
+            trade_side = "sell" if has_sell else "buy"
+            trade_quantity = found_qty if (found_qty and found_qty > 0) else 100
+            trade_symbol = tickers[0] if tickers else invalid_resolved[0]
+        elif (
+            ("mua" in query_folded or "ban" in query_folded)
+            and found_qty
+            and (tickers or invalid_resolved)
+            and any(
+                w in query_folded
+                for w in [
+                    "giup",
+                    "ho",
+                    "dum",
+                    "tao",
+                    "toi",
+                    "minh",
+                    "dat",
+                    "lenh",
+                    "them",
+                    "tiep",
+                    "bot",
+                    "luon",
+                ]
+            )
+        ):
+            is_trade_order = True
+            trade_side = "sell" if "ban" in query_folded else "buy"
+            trade_quantity = found_qty
+            trade_symbol = tickers[0] if tickers else invalid_resolved[0]
+
+    # 0.1 Community post / thesis draft detection
+    is_community_post = any(
+        kw in query_folded
+        for kw in [
+            "dang bai",
+            "viet bai",
+            "tao bai",
+            "tao luan diem",
+            "dang luan diem",
+            "viet luan diem",
+            "chia se luan diem",
+            "dang len cong dong",
+            "chia se len cong dong",
+            "dang bai giup",
+            "viet bai giup",
+            "soan bai",
+            "soan luan diem",
+            "dang bai ve",
+            "viet bai ve",
+            "tao bai ve",
+        ]
+    )
+    community_symbol = tickers[0] if (is_community_post and tickers) else None
+
+    is_dividend = (
+        not is_trade_order
+        and not is_community_post
+        and any(
+            kw in query_folded
+            for kw in [
+                "co tuc",
+                "chia co tuc",
+                "lich co tuc",
+                "lich chia co tuc",
+                "tra co tuc",
+                "ngay chot quyen",
+                "chot quyen",
+                "gdkhq",
+                "khong huong quyen",
+                "ty le chia",
+                "nhan co tuc",
+                "chia thuong",
+                "quyen mua",
+                "tra bang tien",
+                "tra bang co phieu",
+                "su kien",
+                "lich su kien",
+                "su kien noi bat",
+                "su kien sap toi",
+                "su kien thi truong",
+                "lich thi truong",
+                "sap toi co",
+                "dhcd",
+                "dai hoi co dong",
+                "hop co dong",
+                "phat hanh them",
+                "niem yet moi",
+            ]
+        )
     )
 
     is_news = not is_dividend and any(
@@ -654,9 +1059,9 @@ def detect_intent(user_message: str) -> DetectedIntent:
     comparison_exceeded_limit = False
 
     if is_comparison:
-        if len(tickers) > 3:
+        if len(tickers) > 2:
             comparison_exceeded_limit = True
-            tickers = tickers[:3]
+            tickers = tickers[:2]
 
         if any(
             kw in query_folded
@@ -705,9 +1110,7 @@ def detect_intent(user_message: str) -> DetectedIntent:
             comparison_mode = "metrics"
         else:
             comparison_mode = "ask"
-    is_gold_bank = any(
-        kw in query_lower for kw in ["vàng", "ngân hàng", "tiết kiệm", "gửi tiền"]
-    )
+    is_gold_bank = any(kw in query_lower for kw in ["vàng", "ngân hàng", "tiết kiệm", "gửi tiền"])
     is_forensics = (
         not is_dividend
         and not is_news
@@ -767,13 +1170,18 @@ def detect_intent(user_message: str) -> DetectedIntent:
             leader_name = "Trương Gia Bình"
             if not tickers:
                 tickers = ["FPT", "FOX", "FRT"]
-        elif any(w in query_folded for w in ["masan", "techcombank", "msn", "tcb", "dang quang", "hung anh"]):
+        elif any(
+            w in query_folded
+            for w in ["masan", "techcombank", "msn", "tcb", "dang quang", "hung anh"]
+        ):
             ecosystem_id = "masan-techcombank"
             leader_id = "person-6"
             leader_name = "Nguyễn Đăng Quang & Hồ Hùng Anh"
             if not tickers:
                 tickers = ["MSN", "TCB", "MCH"]
-        elif any(w in query_folded for w in ["vietjet", "sovico", "hdbank", "vjc", "hdb", "phuong thao"]):
+        elif any(
+            w in query_folded for w in ["vietjet", "sovico", "hdbank", "vjc", "hdb", "phuong thao"]
+        ):
             ecosystem_id = "sovico"
             leader_id = "person-3"
             leader_name = "Nguyễn Thị Phương Thảo"
@@ -826,7 +1234,8 @@ def detect_intent(user_message: str) -> DetectedIntent:
         and not is_dividend
         and not is_news
         and not any(
-            kw in query_folded for kw in ["thi truong la", "vnindex la", "vn30 la", "co phieu la gi"]
+            kw in query_folded
+            for kw in ["thi truong la", "vnindex la", "vn30 la", "co phieu la gi"]
         )
         and any(
             kw in query_folded
@@ -905,9 +1314,7 @@ def detect_intent(user_message: str) -> DetectedIntent:
         )
     )
 
-    active_invalid = (
-        () if (is_leader or is_news or is_market_general) else tuple(invalid_resolved)
-    )
+    active_invalid = () if (is_leader or is_news or is_market_general) else tuple(invalid_resolved)
 
     return DetectedIntent(
         normalized_message=norm_message,
@@ -920,6 +1327,12 @@ def detect_intent(user_message: str) -> DetectedIntent:
         is_gold_bank=is_gold_bank,
         is_forensics=is_forensics,
         is_market_general=is_market_general,
+        is_trade_order=is_trade_order,
+        trade_side=trade_side,
+        trade_quantity=trade_quantity,
+        trade_symbol=trade_symbol,
+        is_community_post=is_community_post,
+        community_symbol=community_symbol,
         is_leader=is_leader,
         leader_id=leader_id,
         leader_name=leader_name,
@@ -930,3 +1343,127 @@ def detect_intent(user_message: str) -> DetectedIntent:
         comparison_exceeded_limit=comparison_exceeded_limit,
         invalid_tickers=active_invalid,
     )
+
+
+_NON_FINANCE_NOISE_TOKENS = frozenset(
+    {
+        "ngu",
+        "ngoc",
+        "dien",
+        "khung",
+        "dm",
+        "vcl",
+        "vl",
+        "cc",
+        "wtf",
+        "fuck",
+        "shit",
+        "bitch",
+        "asdf",
+        "qwer",
+        "zxcv",
+        "test",
+        "abc",
+        "123",
+        "hi",
+        "hello",
+        "hey",
+        "alo",
+        "ok",
+        "oke",
+        "haha",
+        "hihi",
+        "hehe",
+        "uh",
+        "um",
+    }
+)
+
+_FINANCE_RELEVANCE_TERMS = (
+    "chung khoan",
+    "co phieu",
+    "thi truong",
+    "tai chinh",
+    "kinh te",
+    "vi mo",
+    "lai suat",
+    "lam phat",
+    "ty gia",
+    "ngan hang",
+    "bat dong san",
+    "vnindex",
+    "vn-index",
+    "vn30",
+    "hnx",
+    "upcom",
+    "hose",
+    "bctc",
+    "bao cao tai chinh",
+    "loi nhuan",
+    "doanh thu",
+    "co tuc",
+    "dinh gia",
+    "chi so",
+    "phan tich",
+    "rui ro",
+    "tang truong",
+    "thanh khoan",
+    "khoi ngoai",
+    "tu doanh",
+    "dau tu",
+    "danh muc",
+    "giao dich",
+    "khop lenh",
+    "cat lo",
+    "chot loi",
+    "trai phieu",
+    "quy mo",
+    "etf",
+    "dca",
+    "margin",
+    "roe",
+    "roa",
+    "eps",
+    "p/e",
+    "p/b",
+    "rsi",
+    "macd",
+    "bollinger",
+    "fed",
+    "gdp",
+    "fdi",
+    "cpi",
+    "vang",
+    "usd",
+    "cong ty",
+    "tap doan",
+    "nganh",
+    "phai sinh",
+    "ipo",
+    "esop",
+    "pht",
+    "nong san",
+    "hang hoa",
+    "xuat khau",
+    "nhap khau",
+    "vi mo",
+    "ty gia",
+    "gia dau",
+    "dau tho",
+    "chinh sach",
+)
+
+
+def is_finance_relevant_query(user_message: str) -> bool:
+    """Return True only when an unmatched query is genuinely about finance/markets."""
+    folded = fold_text(user_message).strip()
+    if not folded:
+        return False
+    tokens = re.findall(r"[a-z0-9]+", folded)
+    if not tokens:
+        return False
+    if all(t in _NON_FINANCE_NOISE_TOKENS for t in tokens):
+        return False
+    if len(tokens) == 1 and len(tokens[0]) < 5:
+        return any(term == tokens[0] for term in _FINANCE_RELEVANCE_TERMS)
+    return any(term in folded for term in _FINANCE_RELEVANCE_TERMS)

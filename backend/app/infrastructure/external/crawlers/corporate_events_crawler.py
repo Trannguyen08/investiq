@@ -517,12 +517,12 @@ def _to_market_event(raw: dict[str, Any]) -> MarketEvent | None:
         event_day = datetime.strptime(date_str, "%Y-%m-%d").date()
         event_at = datetime.combine(event_day, datetime.min.time(), _MARKET_TZ).astimezone(UTC)
         source_url = raw.get("source_url")
-        if not source_url:
-            sym = str(raw.get("symbol", "")).upper()
-            if sym and sym not in ("VNINDEX", "VN30", "HNX"):
-                source_url = f"https://s.cafef.vn/lich-su-kien.chn?symbol={sym}"
-            else:
-                source_url = "https://s.cafef.vn/lich-su-kien.chn"
+        sym = str(raw.get("symbol", "")).upper()
+        from app.infrastructure.external.crawlers.dividend_crawler import (
+            _resolve_direct_article_url,
+        )
+
+        source_url = _resolve_direct_article_url(sym, source_url)
 
         return MarketEvent(
             id=str(raw["id"]),
@@ -574,6 +574,18 @@ class CorporateEventsCrawler:
             active.sort(key=lambda item: (item.event_at, item.symbol, item.id))
             return tuple(active)
 
+    def get_all_events(self) -> list[MarketEvent]:
+        """Returns all current events in the registry."""
+        with self._lock:
+            return list(self._registry)
+
+    def remove_event_by_id(self, event_id: str) -> bool:
+        """Removes an invalid or cancelled event by its ID from memory registry."""
+        with self._lock:
+            before = len(self._registry)
+            self._registry = [e for e in self._registry if e.id != event_id]
+            return len(self._registry) < before
+
     def crawl_and_refresh_events(self, provider: Any | None = None) -> list[MarketEvent]:
         """Continuous crawler cycle: fetch fresh corporate data, prune stale items, deduplicate."""
         now_dt = datetime.now(_MARKET_TZ)
@@ -610,7 +622,7 @@ class CorporateEventsCrawler:
                     "event_date": d.get("ex_date") or d.get("event_date"),
                     "status": "official",
                     "source_name": d.get("source", "CafeF / Vnstock"),
-                    "source_url": None,
+                    "source_url": d.get("source_url"),
                 }
                 item = _to_market_event(raw_evt)
                 if item and item.event_at.astimezone(_MARKET_TZ).date() >= today:

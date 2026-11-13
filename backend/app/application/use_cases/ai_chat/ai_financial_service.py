@@ -42,6 +42,7 @@ from app.application.use_cases.ai_chat.intent_parser import (
     _extract_tickers,
     _get_val,
     detect_intent,
+    is_finance_relevant_query,
     normalize_question,
     normalize_user_input,
 )
@@ -57,6 +58,8 @@ logger = logging.getLogger(__name__)
 _CACHE_KEY_PREFIX = "ai:chat:v7"
 
 _CACHE_TTL_SECONDS: dict[AiIntent, int] = {
+    "trade_order": 30,
+    "community_post": 60,
     "comparison": 60,
     "dividend": 3600,
     "stock_analysis": 60,
@@ -181,6 +184,12 @@ class AiFinancialService:
             is_gold_bank = parsed_intent.is_gold_bank
             is_forensics = parsed_intent.is_forensics
             is_market_general = parsed_intent.is_market_general
+            is_trade_order = parsed_intent.is_trade_order
+            trade_side = parsed_intent.trade_side
+            trade_quantity = parsed_intent.trade_quantity
+            trade_symbol = parsed_intent.trade_symbol
+            is_community_post = parsed_intent.is_community_post
+            community_symbol = parsed_intent.community_symbol
 
             # Maintain recent comparison tickers for follow-up criteria prompts
             if is_comparison and not tickers and self._recent_comparison_tickers:
@@ -190,7 +199,8 @@ class AiFinancialService:
                 "ok",
                 passed=True,
                 note=(
-                    f"tickers={len(tickers)} leader={is_leader} eco={is_ecosystem} dividend={is_dividend} news={is_news} "
+                    f"tickers={len(tickers)} trade={is_trade_order} post={is_community_post} "
+                    f"leader={is_leader} eco={is_ecosystem} dividend={is_dividend} news={is_news} "
                     f"comparison={is_comparison} mode={comparison_mode} forensics={is_forensics} market={is_market_general}"
                 ),
             )
@@ -202,7 +212,19 @@ class AiFinancialService:
         market_events: list[dict[str, Any]] = []
         leader_profile: Any = None
         with trace.step("internal_data_retrieval") as d_step:
-            if is_leader:
+            if is_trade_order or is_community_post:
+                target_sym = trade_symbol or community_symbol or (tickers[0] if tickers else None)
+                if target_sym and target_sym not in invalid_tickers:
+                    try:
+                        inst = self._market.instrument(target_sym, include_fundamentals=True)
+                        if inst:
+                            stock_data[target_sym] = {"instrument": inst}
+                    except Exception as exc:
+                        logger.warning(
+                            "Failed to fetch instrument for trade/community %s: %s", target_sym, exc
+                        )
+                d_step.mark("ok", passed=True, note=f"trade_or_community={target_sym}")
+            elif is_leader:
                 try:
                     from app.infrastructure.external.crawlers.leader_crawler import (
                         get_leader_crawler,
@@ -310,9 +332,7 @@ class AiFinancialService:
                             )
                             growth_res = self._market.growth(ticker)
                             growth = (
-                                growth_res.get("data", {})
-                                if isinstance(growth_res, dict)
-                                else {}
+                                growth_res.get("data", {}) if isinstance(growth_res, dict) else {}
                             )
                             stock_data[ticker] = {
                                 "instrument": inst,
@@ -324,7 +344,7 @@ class AiFinancialService:
                     except Exception as exc:
                         logger.warning("Failed to fetch internal data for %s: %s", ticker, exc)
                 if is_comparison and len(stock_data) >= 2:
-                    self._recent_comparison_tickers = list(stock_data.keys())[:3]
+                    self._recent_comparison_tickers = list(stock_data.keys())[:2]
                 d_step.mark("ok", passed=True, note=f"resolved={len(stock_data)}")
 
         # Step 5: Knowledge retrieval (curated internal educational content & glossary)
@@ -375,15 +395,20 @@ class AiFinancialService:
                 and not is_dividend
                 and not is_leader
                 and not knowledge_hits
+                and is_finance_relevant_query(user_message)
             ):
                 external_snippets = await self._search_external_info(user_message)
                 s_step.mark("ok", passed=True, note=f"snippets={len(external_snippets)}")
             else:
-                s_step.mark("skipped", note="internal_data_or_knowledge_available")
+                s_step.mark("skipped", note="internal_data_or_off_topic")
 
         # Step 7: Response generation
         intent: AiIntent = "general"
-        if is_leader:
+        if is_trade_order:
+            intent = "trade_order"
+        elif is_community_post:
+            intent = "community_post"
+        elif is_leader:
             intent = "leader"
         elif is_dividend:
             intent = "dividend"
@@ -410,6 +435,12 @@ class AiFinancialService:
                 market_events=market_events,
                 knowledge_hits=knowledge_hits,
                 external_snippets=external_snippets,
+                is_trade_order=is_trade_order,
+                trade_side=trade_side,
+                trade_quantity=trade_quantity,
+                trade_symbol=trade_symbol,
+                is_community_post=is_community_post,
+                community_symbol=community_symbol,
                 is_comparison=is_comparison,
                 is_gold_bank=is_gold_bank,
                 is_forensics=is_forensics,
@@ -507,6 +538,12 @@ class AiFinancialService:
         market_events: list[dict[str, Any]] | None = None,
         knowledge_hits: list[KnowledgeHit],
         external_snippets: list[dict[str, str]],
+        is_trade_order: bool = False,
+        trade_side: str | None = None,
+        trade_quantity: int | None = None,
+        trade_symbol: str | None = None,
+        is_community_post: bool = False,
+        community_symbol: str | None = None,
         is_comparison: bool,
         is_gold_bank: bool,
         is_forensics: bool,
@@ -535,6 +572,12 @@ class AiFinancialService:
             market_events=market_events or [],
             knowledge_hits=knowledge_hits,
             external_snippets=external_snippets,
+            is_trade_order=is_trade_order,
+            trade_side=trade_side,
+            trade_quantity=trade_quantity,
+            trade_symbol=trade_symbol,
+            is_community_post=is_community_post,
+            community_symbol=community_symbol,
             is_comparison=is_comparison,
             is_gold_bank=is_gold_bank,
             is_forensics=is_forensics,
