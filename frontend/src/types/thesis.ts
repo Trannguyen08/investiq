@@ -7,7 +7,8 @@ export type InvestmentThesisItem = {
   entry_price: string;
   target_price: string;
   stop_loss_price: string;
-  current_price: string;
+  /** Null while the market-data provider is temporarily unavailable. */
+  current_price: string | null;
   progress_percent: string;
   horizon_months: number;
   title: string;

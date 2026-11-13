@@ -11,6 +11,7 @@ from app.application.use_cases.community.thesis_service import (
     ThesisService,
     ThesisValidationError,
 )
+from app.application.use_cases.market_data.errors import MarketDataUnavailable
 from app.domain.entities.market import Candle, MarketInstrument
 from app.domain.entities.thesis import AnalystReputation, InvestmentThesis
 from app.domain.repositories.i_thesis_repository import IThesisRepository
@@ -313,6 +314,46 @@ def test_evaluate_thesis_stopped_out() -> None:
     theses = service.list_theses(symbol="HPG")
     assert theses[0]["status"] == "stopped_out"
     assert theses[0]["outcome_roi"] == "-10.7%"
+
+
+class UnavailableMarketProvider(MockMarketProvider):
+    def __init__(self) -> None:
+        super().__init__()
+        self.available = True
+
+    def instrument(
+        self, symbol: str, *, include_fundamentals: bool = False
+    ) -> MarketInstrument | None:
+        if not self.available:
+            raise MarketDataUnavailable("provider maintenance window")
+        return super().instrument(symbol, include_fundamentals=include_fundamentals)
+
+
+def test_list_theses_survives_market_provider_outage() -> None:
+    repo = MockThesisRepository()
+    provider = UnavailableMarketProvider()
+    service = ThesisService(repo, provider)
+    _ = service.publish_thesis(
+        user_id="user-1",
+        author_name="Analyst",
+        symbol="HPG",
+        stance="bullish",
+        target_price=Decimal("35000"),
+        stop_loss_price=Decimal("25000"),
+        horizon_months=6,
+        title="HPG triển vọng",
+        thesis_body="Nội dung phân tích chi tiết triển vọng lợi nhuận phục hồi mạnh.",
+        catalysts=(),
+    )
+
+    provider.available = False
+    theses = service.list_theses()
+
+    assert len(theses) == 1
+    assert theses[0]["status"] == "active"
+    assert theses[0]["current_price"] is None
+    assert theses[0]["progress_percent"] == "0.0"
+    assert repo.evaluations == []
 
 
 def test_upvote_and_leaderboard() -> None:

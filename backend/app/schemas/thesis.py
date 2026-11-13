@@ -36,7 +36,7 @@ class ThesisResponse(BaseModel):
     entry_price: str
     target_price: str
     stop_loss_price: str
-    current_price: str
+    current_price: str | None = None
     progress_percent: str
     horizon_months: int
     title: str
