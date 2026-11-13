@@ -4,7 +4,8 @@ import { useState } from "react";
 import type { StockComparisonWidgetData } from "@/types/ai-chat";
 
 export function StockComparisonWidget({ data }: { data: StockComparisonWidgetData }) {
-  const { title, items, summary_verdict, mode = "metrics" } = data;
+  const { title, items: rawItems, summary_verdict, mode = "metrics" } = data;
+  const items = (rawItems || []).slice(0, 2);
   const isBoth = mode === "both";
   const [activeTab, setActiveTab] = useState<"metrics" | "growth">(
     mode === "growth" ? "growth" : "metrics"

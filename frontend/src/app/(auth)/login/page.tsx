@@ -26,17 +26,24 @@ function resolveAuthErrorMessage(code?: string): string {
   }
 }
 
+function safeNextPath(value?: string): string {
+  if (!value || !value.startsWith("/") || value.startsWith("//")) return "";
+  if (value.startsWith("/login") || value.startsWith("/register")) return "";
+  return value;
+}
+
 export default async function LoginPage({
   searchParams,
 }: {
-  searchParams: Promise<{ reset?: string; error?: string }>;
+  searchParams: Promise<{ reset?: string; error?: string; next?: string }>;
 }) {
   const user = await currentUser().catch(() => null);
   if (user?.role === "admin") {
     redirect("/admin");
   }
-  const { reset, error } = await searchParams;
+  const { reset, error, next } = await searchParams;
   const initialError = resolveAuthErrorMessage(error);
+  const nextPath = safeNextPath(next);
   return (
     <AuthShell
       eyebrow="Tài khoản"
@@ -44,7 +51,7 @@ export default async function LoginPage({
       title="Đăng nhập"
       description="Tiếp tục vào không gian đầu tư của bạn."
     >
-      <LoginForm resetSucceeded={reset === "success"} initialError={initialError} />
+      <LoginForm resetSucceeded={reset === "success"} initialError={initialError} nextPath={nextPath} />
     </AuthShell>
   );
 }

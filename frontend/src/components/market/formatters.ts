@@ -23,6 +23,11 @@ export function formatChange(value: string) {
   return `${amount > 0 ? "+" : ""}${formatDecimal(value)}`;
 }
 
+export function formatObservedPrice(value: string) {
+  const amount = Number(value);
+  return Number.isFinite(amount) && amount > 0 ? formatChange(value) : "—";
+}
+
 export function changeTone(value: string) {
   const amount = Number(value);
   if (amount > 0) return "positive";
@@ -53,12 +58,15 @@ export function formatRatioPair(
 ) {
   if (loading) return "Đang tải…";
   const ratio = (value: string | null | undefined) => {
-    if (value === null || value === undefined) return "N/A";
+    if (value === null || value === undefined) return "—";
     const amount = Number(value);
-    if (!Number.isFinite(amount)) return "N/A";
+    if (!Number.isFinite(amount) || amount <= 0) return "—";
     return amount.toFixed(2).replace(/\.00$/, "").replace(/(\.\d)0$/, "$1");
   };
-  return `${ratio(pe)} / ${ratio(pb)}`;
+  const peFormatted = ratio(pe);
+  const pbFormatted = ratio(pb);
+  if (peFormatted === "—" && pbFormatted === "—") return "—";
+  return `${peFormatted} / ${pbFormatted}`;
 }
 
 export function formatMarketTime(value: string) {

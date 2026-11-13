@@ -24,7 +24,9 @@ D = Decimal
 def _fold(text: str) -> str:
     """Normalize and strip Vietnamese diacritics for flexible fuzzy matching."""
     decomposed = unicodedata.normalize("NFD", text.lower().replace("đ", "d"))
-    return re.sub(r"\s+", " ", "".join(ch for ch in decomposed if unicodedata.category(ch) != "Mn")).strip()
+    return re.sub(
+        r"\s+", " ", "".join(ch for ch in decomposed if unicodedata.category(ch) != "Mn")
+    ).strip()
 
 
 @dataclass(frozen=True, slots=True)
@@ -757,7 +759,11 @@ class LeaderCrawler:
             c_core = " ".join(
                 w for w in c_fold.split() if w not in {"tap", "doan", "cong", "ty", "ngan", "hang"}
             )
-            if q_fold in c_fold or c_fold in q_fold or (c_core and (c_core in q_fold or q_fold in c_core)):
+            if (
+                q_fold in c_fold
+                or c_fold in q_fold
+                or (c_core and (c_core in q_fold or q_fold in c_core))
+            ):
                 return p
 
         # 4. Symbol match
@@ -767,7 +773,6 @@ class LeaderCrawler:
                 return p
 
         return None
-
 
 
 _crawler_instance: LeaderCrawler | None = None

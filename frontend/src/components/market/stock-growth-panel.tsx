@@ -428,12 +428,12 @@ export function StockGrowthPanel({ growth }: { growth: StockGrowthData }) {
           <div className="pillar-item">
             <div className="pillar-header">
               <span className="pillar-name">1. Hiệu quả sinh lời</span>
-              <strong className="pillar-score">{growth.roe_percent ?? "12%"}</strong>
+              <strong className="pillar-score">{growth.roe_percent ?? "—"}</strong>
             </div>
             <div className="pillar-bar-bg">
               <div
                 className="pillar-bar-fill"
-                style={{ width: `${Math.min(100, Math.max(15, parseGrowthPercent(growth.roe_percent) * 3.5))}%`, backgroundColor: "#10b981" }}
+                style={{ width: `${growth.roe_percent ? Math.min(100, Math.max(0, parseGrowthPercent(growth.roe_percent) * 3.5)) : 0}%`, backgroundColor: "#10b981" }}
               />
             </div>
             <span className="pillar-desc">ROE và ROA phản ánh năng lực tạo ra lợi nhuận từ vốn cổ đông</span>
@@ -442,12 +442,12 @@ export function StockGrowthPanel({ growth }: { growth: StockGrowthData }) {
           <div className="pillar-item">
             <div className="pillar-header">
               <span className="pillar-name">2. Tăng trưởng kinh doanh</span>
-              <strong className="pillar-score">{growth.quarters.at(-1)?.profit_growth_yoy ?? "+15%"}</strong>
+              <strong className="pillar-score">{growth.quarters.at(-1)?.profit_growth_yoy ?? "—"}</strong>
             </div>
             <div className="pillar-bar-bg">
               <div
                 className="pillar-bar-fill"
-                style={{ width: `${Math.min(100, Math.max(20, Math.abs(parseGrowthPercent(growth.quarters.at(-1)?.profit_growth_yoy)) * 1.5))}%`, backgroundColor: "#38bdf8" }}
+                style={{ width: `${growth.quarters.at(-1)?.profit_growth_yoy ? Math.min(100, Math.abs(parseGrowthPercent(growth.quarters.at(-1)?.profit_growth_yoy)) * 1.5) : 0}%`, backgroundColor: "#38bdf8" }}
               />
             </div>
             <span className="pillar-desc">Tăng trưởng doanh thu và lợi nhuận qua các quý liên tiếp</span>
@@ -456,12 +456,12 @@ export function StockGrowthPanel({ growth }: { growth: StockGrowthData }) {
           <div className="pillar-item">
             <div className="pillar-header">
               <span className="pillar-name">3. Sức khỏe tài chính</span>
-              <strong className="pillar-score">{growth.current_ratio ?? "1.5x"}</strong>
+              <strong className="pillar-score">{growth.current_ratio ?? "—"}</strong>
             </div>
             <div className="pillar-bar-bg">
               <div
                 className="pillar-bar-fill"
-                style={{ width: "70%", backgroundColor: "#a855f7" }}
+                style={{ width: growth.current_ratio ? "70%" : "0%", backgroundColor: "#a855f7" }}
               />
             </div>
             <span className="pillar-desc">Cơ cấu nợ vay và hệ số thanh toán đảm bảo an toàn vận hành</span>
@@ -470,7 +470,7 @@ export function StockGrowthPanel({ growth }: { growth: StockGrowthData }) {
           <div className="pillar-item">
             <div className="pillar-header">
               <span className="pillar-name">4. Vị thế định giá</span>
-              <strong className="pillar-score">{growth.pe ? `${growth.pe}x` : "Hợp lý"}</strong>
+              <strong className="pillar-score">{growth.pe ? `${growth.pe}x` : "—"}</strong>
             </div>
             <div className="pillar-bar-bg">
               <div
@@ -505,16 +505,24 @@ export function StockGrowthPanel({ growth }: { growth: StockGrowthData }) {
               </tr>
             </thead>
             <tbody>
-              {growth.quarters.map((q) => (
-                <tr key={q.period}>
-                  <td className="period-cell"><strong>{q.period}</strong></td>
-                  <td><GrowthValuePill value={q.revenue_growth_yoy} /></td>
-                  <td><GrowthValuePill value={q.profit_growth_yoy} /></td>
-                  <td className="metric-cell">{q.roe ?? "—"}</td>
-                  <td className="metric-cell">{q.net_margin ?? "—"}</td>
-                  <td className="metric-cell">{q.gross_margin ?? "—"}</td>
+              {growth.quarters.length > 0 ? (
+                growth.quarters.map((q) => (
+                  <tr key={q.period}>
+                    <td className="period-cell"><strong>{q.period}</strong></td>
+                    <td><GrowthValuePill value={q.revenue_growth_yoy} /></td>
+                    <td><GrowthValuePill value={q.profit_growth_yoy} /></td>
+                    <td className="metric-cell">{q.roe ?? "—"}</td>
+                    <td className="metric-cell">{q.net_margin ?? "—"}</td>
+                    <td className="metric-cell">{q.gross_margin ?? "—"}</td>
+                  </tr>
+                ))
+              ) : (
+                <tr>
+                  <td className="metric-cell" colSpan={6}>
+                    Nguồn hiện chưa trả báo cáo quý cho mã này.
+                  </td>
                 </tr>
-              ))}
+              )}
             </tbody>
           </table>
         </div>

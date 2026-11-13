@@ -54,6 +54,7 @@ class InstrumentResponse(StrictModel):
     name: str
     exchange: str
     sector: str
+    subsector: str | None = None
     price: str
     reference_price: str
     ceiling_price: str
@@ -188,8 +189,13 @@ class SectorResponse(StrictModel):
     market_cap: str
 
 
+class SubsectorResponse(SectorResponse):
+    parent_sector: str
+
+
 class SectorsResponse(StrictModel):
     data: list[SectorResponse]
+    subsectors: list[SubsectorResponse] = Field(default_factory=list)
     meta: MarketMeta
 
 
@@ -590,6 +596,9 @@ class FinancialStatementsData(StrictModel):
     balance_sheet: list[FinancialMetricItem]
     cash_flow: list[FinancialMetricItem]
     source: str
+    source_provider: str | None = None
+    source_url: str | None = None
+    updated_at: str | None = None
 
 
 class FinancialStatementsEnvelope(StrictModel):

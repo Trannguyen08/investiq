@@ -10,11 +10,7 @@ from app.application.use_cases.ai_chat.intent_parser import _get_val
 def build_daily_market_snapshot(market_service: Any) -> dict[str, Any]:
     """Aggregate daily market data (indices, breadth, VN30 basket, top movers, gainers, losers, liquidity, foreign flow, sectors, upcoming events)."""
     overview_raw = market_service.overview() if hasattr(market_service, "overview") else {}
-    overview_data = (
-        overview_raw.get("data", overview_raw)
-        if isinstance(overview_raw, dict)
-        else {}
-    )
+    overview_data = overview_raw.get("data", overview_raw) if isinstance(overview_raw, dict) else {}
     indices = overview_data.get("indices", []) if isinstance(overview_data, dict) else []
     breadth = overview_data.get("breadth", {}) if isinstance(overview_data, dict) else {}
     upcoming_events = (

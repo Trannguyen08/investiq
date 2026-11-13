@@ -34,7 +34,9 @@ class GlossaryTermSchema(BaseModel):
 class PracticeActionSchema(BaseModel):
     href: str = Field(default="/portfolio", description="Đường dẫn hành động")
     label: str = Field(default="Xem danh mục mô phỏng", description="Nhãn nút hành động")
-    description: str = Field(default="Thực hành với dữ liệu mô phỏng", description="Mô tả hành động")
+    description: str = Field(
+        default="Thực hành với dữ liệu mô phỏng", description="Mô tả hành động"
+    )
 
 
 class LearningTopicSummaryResponse(BaseModel):

@@ -1,17 +1,23 @@
 from __future__ import annotations
 
-from datetime import date
+from datetime import UTC, date, datetime
 from decimal import Decimal
 from threading import Event, Thread
+from types import SimpleNamespace
 
 import pytest
 
+from app.domain.entities.market import resolve_sector_hierarchy
 from app.infrastructure.external.vnstock_market_provider import (
+    DnseOhlcStream,
     OfficialVnstockGateway,
     VnstockConfig,
     VnstockMarketProvider,
+    _aggregate_daily_candles,
+    _financial_statement_data,
     _fundamental_values,
-    _latest_vci_fundamental_rows,
+    _sector_label,
+    _sector_parent,
 )
 
 
@@ -23,6 +29,8 @@ class FakeVnstockGateway:
         self.pre_open = False
         self.partial_open = False
         self.fundamental_calls = 0
+        self.financial_statement_calls = 0
+        self.candle_requests: list[tuple[str, int]] = []
         self.previous_session_calls = 0
         self.event_calls = 0
         self.fail_events = False
@@ -97,7 +105,6 @@ class FakeVnstockGateway:
             return [
                 {
                     **row,
-                    "close_price": 0,
                     "open_price": 0,
                     "high_price": 0,
                     "low_price": 0,
@@ -111,7 +118,6 @@ class FakeVnstockGateway:
                 rows[0],
                 {
                     **rows[1],
-                    "close_price": 0,
                     "open_price": 0,
                     "high_price": 0,
                     "low_price": 0,
@@ -143,8 +149,9 @@ class FakeVnstockGateway:
         interval: str,
         count: int,
     ) -> list[dict[str, object]]:
-        assert interval in {"1D", "1H", "30m", "5m"}
-        assert count in {170, 200, 500}
+        assert interval in {"1D", "1W", "1M", "1H", "30m", "5m"}
+        assert count in {170, 200, 260, 500, 600}
+        self.candle_requests.append((interval, count))
         if symbol in {"VNINDEX", "VN30", "HNXINDEX", "UPCOMINDEX"}:
             return [
                 {
@@ -192,6 +199,21 @@ class FakeVnstockGateway:
     def fundamental_quarterly_rows(self, symbol: str) -> list[dict[str, object]]:
         return []
 
+    def financial_statement_data(
+        self, symbol: str, period_type: str, limit: int
+    ) -> dict[str, object]:
+        self.financial_statement_calls += 1
+        return {
+            "symbol": symbol,
+            "period_type": period_type,
+            "periods": [],
+            "charts": [],
+            "income_statement": [],
+            "balance_sheet": [],
+            "cash_flow": [],
+            "source": "test",
+        }
+
     def trade_rows(self, symbol: str, limit: int) -> list[dict[str, object]]:
         assert symbol == "FPT"
         assert limit >= 2
@@ -199,6 +221,9 @@ class FakeVnstockGateway:
             {"time": "2026-10-08 09:10:01", "price": 102, "volume": 200, "match_type": "buy"},
             {"time": "2026-10-08 09:10:02", "price": 101.9, "volume": 300, "match_type": "sell"},
         ]
+
+    def order_book_rows(self, symbol: str) -> list[dict[str, object]]:
+        return []
 
     def event_rows(self, symbol: str) -> list[dict[str, object]]:
         self.event_calls += 1
@@ -238,6 +263,125 @@ def config() -> VnstockConfig:
     )
 
 
+def test_dnse_daily_stream_chunks_full_exchange_universe_within_connection_limit() -> None:
+    symbols = tuple(f"S{index:04d}" for index in range(1396))
+
+    batches = DnseOhlcStream._batches(symbols)
+
+    assert len(batches) == 7
+    assert max(map(len, batches)) == 200
+    assert tuple(symbol for batch in batches for symbol in batch) == symbols
+
+
+def test_dnse_daily_ohlc_enriches_missing_exchange_fields_only_for_today() -> None:
+    provider = VnstockMarketProvider(
+        config(),
+        gateway=FakeVnstockGateway(),
+        today=lambda: date(2026, 11, 12),
+    )
+    provider.instruments()
+    event_time = int(datetime(2026, 11, 12, 3, 0, tzinfo=UTC).timestamp())
+    event = SimpleNamespace(
+        symbol="SHS",
+        resolution="1D",
+        open=18.0,
+        high=18.6,
+        low=17.9,
+        close=18.4,
+        volume=1_500_000,
+        lastUpdated=event_time,
+    )
+
+    provider._apply_dnse_ohlc(event)
+
+    shs = next(item for item in provider.instruments() if item.symbol == "SHS")
+    assert shs.price == Decimal("18400.0")
+    assert shs.open_price == Decimal("18000.0")
+    assert shs.high_price == Decimal("18600.0")
+    assert shs.low_price == Decimal("17900.0")
+    assert shs.volume == Decimal("1500000")
+
+    previous_day = SimpleNamespace(**{**event.__dict__, "lastUpdated": event_time - 86400})
+    provider._apply_dnse_ohlc(previous_day)
+    assert next(item for item in provider.instruments() if item.symbol == "SHS").price == Decimal(
+        "18400.0"
+    )
+
+
+def test_snapshot_metadata_does_not_trigger_network_refresh(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    provider = VnstockMarketProvider(config(), gateway=FakeVnstockGateway())
+
+    def fail_if_refreshed() -> None:
+        raise AssertionError("metadata getters must not trigger a market data refresh")
+
+    monkeypatch.setattr(provider, "_ensure_snapshot", fail_if_refreshed)
+
+    assert provider.market_time
+    assert provider.freshness == "fresh"
+
+
+def test_first_instrument_read_waits_for_the_initial_snapshot() -> None:
+    gateway = FakeVnstockGateway()
+    gateway.block_quotes = True
+    provider = VnstockMarketProvider(config(), gateway=gateway)
+    returned = Event()
+    instruments: list[object] = []
+
+    provider.warm_up()
+    assert gateway.refresh_started.wait(timeout=1)
+
+    def _read() -> None:
+        instruments.extend(provider.instruments())
+        returned.set()
+
+    reader = Thread(target=_read)
+    reader.start()
+    assert not returned.wait(timeout=0.1)
+    gateway.release_refresh.set()
+
+    assert returned.wait(timeout=2)
+    reader.join(timeout=1)
+    assert len(instruments) == 2
+
+
+@pytest.mark.parametrize(
+    ("source_name", "expected"),
+    [
+        ("financials", "Tài chính"),
+        ("telecommunications", "Viễn thông"),
+        ("basic-materials", "Nguyên vật liệu"),
+        ("consumer-staples", "Hàng tiêu dùng thiết yếu"),
+        ("real-estate", "Bất động sản"),
+        ("consumer-discretionary", "Hàng tiêu dùng không thiết yếu"),
+        ("healthcare", "Y tế"),
+        ("utilities", "Tiện ích"),
+        ("energy", "Năng lượng"),
+        ("industrials", "Công nghiệp"),
+        ("technology", "Công nghệ"),
+        ("construction-and-materials", "Xây dựng và Vật liệu"),
+    ],
+)
+def test_fhsc_sector_slugs_have_vietnamese_display_names(source_name: str, expected: str) -> None:
+    assert _sector_label(source_name) == expected
+
+
+@pytest.mark.parametrize(
+    ("subsector", "parent"),
+    [
+        ("Ngân hàng", "Tài chính"),
+        ("Dịch vụ tài chính", "Tài chính"),
+        ("Bảo hiểm", "Tài chính"),
+        ("Thực phẩm và đồ uống", "Hàng tiêu dùng thiết yếu"),
+        ("Công nghệ Thông tin", "Công nghệ"),
+        ("không rõ", None),
+    ],
+)
+def test_bundled_subsector_has_a_known_broad_sector(subsector: str, parent: str | None) -> None:
+    assert _sector_parent(subsector) == parent
+
+
 def test_vnstock_rows_are_normalized_without_claiming_realtime() -> None:
     provider = VnstockMarketProvider(config(), gateway=FakeVnstockGateway())
 
@@ -273,7 +417,55 @@ def test_vnstock_rows_are_normalized_without_claiming_realtime() -> None:
     assert index.declines == 0
 
 
-def test_pre_open_zero_board_uses_latest_completed_session_batch() -> None:
+def test_vnstock_instrument_keeps_bundled_subsector_metadata() -> None:
+    gateway = FakeVnstockGateway()
+    rows = gateway.quote_rows(["FPT", "SHS"])
+    instrument = VnstockMarketProvider._instrument_from_rows(
+        "FPT",
+        {"exchange": "HOSE", "organ_name": "FPT", "subsector": "Công nghệ thông tin"},
+        rows[0],
+        "Công nghệ",
+        True,
+    )
+
+    assert instrument is not None
+    assert instrument.sector == "Công nghệ"
+    assert instrument.subsector == "Công nghệ thông tin"
+
+
+def test_discordant_source_parent_sector_is_corrected_to_canonical_parent() -> None:
+    gateway = FakeVnstockGateway()
+    rows = gateway.quote_rows(["FPT", "SHS"])
+    # Upstream source incorrectly labels VCB as "Công nghiệp" or "Nguyên vật liệu"
+    instrument = VnstockMarketProvider._instrument_from_rows(
+        "VCB",
+        {"exchange": "HOSE", "organ_name": "Vietcombank", "subsector": "Ngân hàng"},
+        rows[0],
+        "Nguyên vật liệu",
+        True,
+    )
+
+    assert instrument is not None
+    assert instrument.sector == "Tài chính"
+    assert instrument.subsector == "Ngân hàng"
+
+
+def test_resolve_sector_hierarchy_promotes_subsector_label_to_canonical_parent() -> None:
+    # If source only gave subsector name as sector:
+    assert resolve_sector_hierarchy("Ngân hàng", "") == ("Tài chính", "Ngân hàng")
+    assert resolve_sector_hierarchy("Dịch vụ tài chính", "") == ("Tài chính", "Dịch vụ tài chính")
+    assert resolve_sector_hierarchy("Bảo hiểm", "") == ("Tài chính", "Bảo hiểm")
+    # If source gave mismatched broad sector:
+    assert resolve_sector_hierarchy("Khác", "Ngân hàng") == ("Tài chính", "Ngân hàng")
+    assert resolve_sector_hierarchy("Công nghệ", "Công nghệ Thông tin") == (
+        "Công nghệ",
+        "Công nghệ Thông tin",
+    )
+    # If identical to broad sector:
+    assert resolve_sector_hierarchy("Bất động sản", "Bất động sản") == ("Bất động sản", "")
+
+
+def test_pre_open_screener_keeps_observed_closes_without_intraday_values() -> None:
     gateway = FakeVnstockGateway()
     gateway.pre_open = True
     provider = VnstockMarketProvider(config(), gateway=gateway)
@@ -282,7 +474,7 @@ def test_pre_open_zero_board_uses_latest_completed_session_batch() -> None:
     fpt = next(item for item in instruments if item.symbol == "FPT")
     shs = next(item for item in instruments if item.symbol == "SHS")
 
-    assert gateway.previous_session_calls == 1
+    assert gateway.previous_session_calls == 0
     assert fpt.price == 102_000
     assert fpt.reference_price == 100_000
     assert fpt.change_percent == 2
@@ -298,30 +490,263 @@ def test_unmatched_stock_stays_in_an_open_session_as_unchanged() -> None:
     instruments = provider.instruments()
     shs = next(item for item in instruments if item.symbol == "SHS")
 
-    assert gateway.previous_session_calls == 0
     assert len(instruments) == 2
-    assert shs.price == shs.reference_price == 18_500
-    assert shs.change_percent == 0
+    assert shs.price == 18_000
+    assert shs.reference_price == 18_500
+    assert shs.change_percent < 0
     assert shs.open_price == 0
     assert shs.high_price == 0
     assert shs.low_price == 0
 
 
-def test_vnstock_system_exit_is_normalized_as_provider_failure() -> None:
-    class QuotaLimitedMarket:
+def test_vnstock_system_exit_is_normalized_as_provider_failure(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    class QuotaLimitedEquity:
         @staticmethod
-        def quote(**_: object) -> object:
+        def screener(**_: object) -> object:
             raise SystemExit("rate limit")
 
+    class QuotaLimitedMarket:
+        equity = QuotaLimitedEquity()
+
     gateway = OfficialVnstockGateway.__new__(OfficialVnstockGateway)
-    gateway._market = QuotaLimitedMarket()
+    monkeypatch.setattr(gateway, "_market", QuotaLimitedMarket(), raising=False)
 
-    with pytest.raises(RuntimeError, match="quote request failed"):
-        gateway.quote_rows(["FPT"])
+    with pytest.raises(RuntimeError, match="reference request failed"):
+        gateway.reference_rows()
 
 
-def test_stock_candles_fall_back_to_vci_when_kbs_is_temporarily_unavailable() -> None:
-    calls: list[str] = []
+def test_reference_snapshot_uses_the_fhsc_index_quote_timestamp(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    class Frame:
+        def __init__(self, rows: list[dict[str, object]]) -> None:
+            self.rows = rows
+
+        def to_dict(self, *, orient: str) -> list[dict[str, object]]:
+            assert orient == "records"
+            return self.rows
+
+    class Equity:
+        @staticmethod
+        def screener(*, exchange: str, compat: str) -> Frame:
+            assert compat == "v5"
+            return Frame(
+                [
+                    {
+                        "symbol": "FPT",
+                        "name": "FPT",
+                        "exchange": exchange,
+                        "close": 100_000,
+                        "price_change_percent": 0,
+                    }
+                ]
+                if exchange == "HOSE"
+                else []
+            )
+
+        @staticmethod
+        def quote(symbols: list[str], *, compat: str) -> Frame:
+            assert symbols == ["FPT"]
+            assert compat == "v5"
+            return Frame([{"symbol": "FPT", "close_price": 100_000}])
+
+    class IndexQuote:
+        @staticmethod
+        def quote(*, compat: str) -> Frame:
+            assert compat == "v5"
+            return Frame([{"time": "2026-11-11 14:43:45+07:00"}])
+
+    class Market:
+        equity = Equity()
+
+        @staticmethod
+        def index(symbol: str) -> IndexQuote:
+            assert symbol == "VNINDEX"
+            return IndexQuote()
+
+    class IndexReference:
+        @staticmethod
+        def constituents() -> Frame:
+            return Frame([{"symbol": "FPT"}])
+
+    class Reference:
+        @staticmethod
+        def index(symbol: str) -> IndexReference:
+            assert symbol == "VN30"
+            return IndexReference()
+
+    gateway = OfficialVnstockGateway.__new__(OfficialVnstockGateway)
+    monkeypatch.setattr(gateway, "_market", Market(), raising=False)
+    monkeypatch.setattr(gateway, "_reference", Reference(), raising=False)
+
+    gateway.reference_rows()
+    quote = gateway.quote_rows(["FPT"])[0]
+
+    assert quote["time"] == "2026-11-11 14:43:45+07:00"
+
+
+def test_fhsc_quote_board_restores_vnd_prices_ohlc_and_depth(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    class Frame:
+        def to_dict(self, *, orient: str) -> list[dict[str, object]]:
+            assert orient == "records"
+            return [
+                {
+                    "symbol": "SHB",
+                    "close_price": 11_150,
+                    "reference_price": 10_900,
+                    "open_price": 10_900,
+                    "high_price": 11_300,
+                    "low_price": 10_800,
+                    "ceiling_price": 11_650,
+                    "floor_price": 10_150,
+                    "total_volume": 100_000,
+                    "total_value": 1_115_000_000,
+                    "bid_price_1": 11_100,
+                    "bid_vol_1": 50_000,
+                    "ask_price_1": 11_150,
+                    "ask_vol_1": 30_000,
+                    "time": "2026-11-11 14:45:00+07:00",
+                }
+            ]
+
+    class Equity:
+        @staticmethod
+        def quote(symbols: list[str], *, compat: str) -> Frame:
+            assert symbols == ["SHB"]
+            assert compat == "v5"
+            return Frame()
+
+    class Market:
+        equity = Equity()
+
+    gateway = OfficialVnstockGateway.__new__(OfficialVnstockGateway)
+    monkeypatch.setattr(gateway, "_market", Market(), raising=False)
+    monkeypatch.setattr(gateway, "_market_time", None, raising=False)
+    monkeypatch.setattr(
+        gateway,
+        "_screener_rows",
+        [{"symbol": "SHB", "close": 11.15, "price_change_percent": 2.29}],
+        raising=False,
+    )
+
+    quote = gateway.quote_rows(["SHB"])[0]
+
+    assert quote["close_price"] == 11_150
+    assert quote["reference_price"] == 10_900
+    assert quote["open_price"] == 10_900
+    assert quote["high_price"] == 11_300
+    assert quote["low_price"] == 10_800
+    assert quote["bid_price_1"] == 11_100
+    assert quote["ask_price_1"] == 11_150
+
+
+def test_fhsc_screener_fallback_converts_thousand_dong_to_vnd(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    class EmptyFrame:
+        @staticmethod
+        def to_dict(*, orient: str) -> list[dict[str, object]]:
+            assert orient == "records"
+            return []
+
+    class Equity:
+        @staticmethod
+        def quote(symbols: list[str], *, compat: str) -> EmptyFrame:
+            assert symbols == ["ACB"]
+            assert compat == "v5"
+            return EmptyFrame()
+
+    class Market:
+        equity = Equity()
+
+    gateway = OfficialVnstockGateway.__new__(OfficialVnstockGateway)
+    monkeypatch.setattr(gateway, "_market", Market(), raising=False)
+    monkeypatch.setattr(gateway, "_market_time", None, raising=False)
+    monkeypatch.setattr(
+        gateway,
+        "_screener_rows",
+        [
+            {
+                "symbol": "ACB",
+                "close": 20.6,
+                "price_change_percent": 0,
+                "total_volume": 12_345_000,
+                "total_value": 254_307_000_000,
+                "market_cap": 100_000_000_000_000,
+                "foreign_net_value": 1_200_000_000,
+                "pe": 8.5,
+                "pb": 1.2,
+                "eps": 2_400,
+            }
+        ],
+        raising=False,
+    )
+
+    quote = gateway.quote_rows(["ACB"])[0]
+
+    assert quote["close_price"] == 20_600
+    assert quote["reference_price"] == 20_600
+    assert quote["volume_accumulated"] == 12_345_000
+    assert quote["total_value"] == 254_307_000_000
+    assert quote["market_cap"] == 100_000_000_000_000
+    assert quote["foreign_net_value"] == 1_200_000_000
+    assert quote["pe"] == 8.5
+    assert quote["pb"] == 1.2
+    assert quote["eps"] == 2_400
+    assert quote.get("open_price") is None
+
+
+def test_full_market_screener_rows_survive_bounded_fhsc_quote_enrichment(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    requested_batches: list[list[str]] = []
+
+    class Frame:
+        @staticmethod
+        def to_dict(*, orient: str) -> list[dict[str, object]]:
+            assert orient == "records"
+            return []
+
+    class Equity:
+        @staticmethod
+        def quote(symbols: list[str], *, compat: str) -> Frame:
+            requested_batches.append(symbols)
+            assert compat == "v5"
+            return Frame()
+
+    class Market:
+        equity = Equity()
+
+    symbols = [f"S{index:02d}" for index in range(120)]
+    gateway = OfficialVnstockGateway.__new__(OfficialVnstockGateway)
+    monkeypatch.setattr(gateway, "_market", Market(), raising=False)
+    monkeypatch.setattr(gateway, "_market_time", None, raising=False)
+    monkeypatch.setattr(
+        gateway,
+        "_screener_rows",
+        [{"symbol": symbol, "close": 10, "price_change_percent": 0} for symbol in symbols],
+        raising=False,
+    )
+
+    rows = gateway.quote_rows(symbols)
+
+    assert [symbol for batch in requested_batches for symbol in batch] == symbols[:30]
+    assert all(len(batch) <= 5 for batch in requested_batches)
+    assert len(requested_batches) == 6
+    assert len(rows) == len(symbols)
+    assert rows[0]["symbol"] == symbols[0]
+    assert rows[0]["close_price"] == 10_000
+    assert rows[-1]["symbol"] == symbols[-1]
+    assert rows[-1]["close_price"] == 10_000
+    assert rows[-1].get("open_price") is None
+
+
+def test_stock_candles_use_v6_market_arguments(monkeypatch: pytest.MonkeyPatch) -> None:
+    calls: list[dict[str, object]] = []
 
     class Frame:
         @staticmethod
@@ -341,98 +766,144 @@ def test_stock_candles_fall_back_to_vci_when_kbs_is_temporarily_unavailable() ->
     class Equity:
         @staticmethod
         def ohlcv(**kwargs: object) -> object:
-            source = str(kwargs["source"])
-            calls.append(source)
-            if source == "kbs":
-                raise SystemExit("temporary KBS quota exit")
+            calls.append(kwargs)
             return Frame()
 
-    class FallbackMarket:
+    class Market:
         @staticmethod
-        def equity(*, symbol: str) -> object:
+        def equity(symbol: str) -> object:
             assert symbol == "VPB"
             return Equity()
 
     gateway = OfficialVnstockGateway.__new__(OfficialVnstockGateway)
-    gateway._market = FallbackMarket()
+    monkeypatch.setattr(gateway, "_market", Market(), raising=False)
 
     rows = gateway.candle_rows("VPB", "1D", 500)
 
-    assert calls == ["kbs", "vci"]
+    assert calls == [{"interval": "1D", "limit": 500, "compat": "v5"}]
     assert rows[0]["close"] == 24.4
 
 
-def test_vci_event_request_is_bounded_and_normalizes_camel_case() -> None:
-    calls: list[dict[str, object]] = []
+def test_v6_quarterly_statements_restore_real_growth_rows(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    class Frame:
+        def __init__(self, rows: list[dict[str, object]]) -> None:
+            self.rows = rows
 
-    def send(**kwargs: object) -> dict[str, object]:
-        calls.append(kwargs)
-        return {
-            "data": {
-                "content": [
-                    {
-                        "id": "event-1",
-                        "ticker": "FPT",
-                        "eventCode": "DIV",
-                        "eventTitleVi": "Trả cổ tức bằng tiền mặt",
-                        "payoutDate": "2026-10-16T00:00:00",
-                    }
-                ]
-            }
+        def to_dict(self, *, orient: str) -> list[dict[str, object]]:
+            assert orient == "records"
+            return self.rows
+
+    periods = [(2024, quarter, quarter * 100, quarter * 10) for quarter in range(1, 5)] + [
+        (2025, quarter, (quarter + 1) * 100, (quarter + 1) * 10) for quarter in range(1, 5)
+    ]
+    income_rows = [
+        {
+            "period": f"{year}-Q{quarter}",
+            "IS_NET_REVENUE": revenue,
+            "IS_NET_PROFIT_AFTER_TAX": profit,
+            "IS_GROSS_PROFIT": revenue / 2,
         }
+        for year, quarter, revenue, profit in periods
+    ]
+    balance_rows = [
+        {
+            "period": f"{year}-Q{quarter}",
+            "BS_TOTAL_EQUITY": equity,
+            "BS_TOTAL_ASSETS": assets,
+            "BS_CURRENT_ASSETS": 350,
+            "BS_CURRENT_LIABILITIES": 250,
+            "BS_TOTAL_LIABILITIES": 650,
+        }
+        for year, quarter, _, _ in periods
+        for equity, assets in [(1500 if year == 2025 else 1200, 10_000 if year == 2025 else 8_000)]
+    ]
+
+    class Equity:
+        def income_statement(self, **kwargs: object) -> Frame:
+            assert kwargs == {
+                "period": "quarter",
+                "format": "time_series",
+                "source": "fhsc",
+            }
+            return Frame(income_rows)
+
+        def balance_sheet(self, **kwargs: object) -> Frame:
+            assert kwargs == {
+                "period": "quarter",
+                "format": "time_series",
+                "source": "fhsc",
+            }
+            return Frame(balance_rows)
+
+    class Fundamental:
+        @staticmethod
+        def equity(symbol: str) -> Equity:
+            assert symbol == "SHB"
+            return Equity()
 
     gateway = OfficialVnstockGateway.__new__(OfficialVnstockGateway)
-    gateway._event_url = "https://events.example.test"
-    gateway._event_headers = {"Accept": "application/json"}
-    gateway._event_sender = send
+    monkeypatch.setattr(gateway, "_fundamental", Fundamental(), raising=False)
+
+    rows = gateway.fundamental_quarterly_rows("SHB")
+
+    latest = rows[-1]
+    assert latest["year"] == 2025
+    assert latest["quarter"] == 4
+    assert latest["revenue_ttm"] == Decimal("1400")
+    assert latest["profit_ttm"] == Decimal("140")
+    assert latest["after_tax_profit_margin"] == Decimal("0.1")
+    assert latest["gross_margin"] == Decimal("0.5")
+    assert latest["current_ratio"] == Decimal("1.4")
+    assert latest["debt_to_equity"] == Decimal("650") / Decimal("1500")
+
+
+def test_company_events_use_the_v6_reference_route(monkeypatch: pytest.MonkeyPatch) -> None:
+    calls: list[dict[str, object]] = []
+
+    class Frame:
+        @staticmethod
+        def to_dict(*, orient: str) -> list[dict[str, object]]:
+            assert orient == "records"
+            return [{"symbol": "FPT", "event_type": "dividend", "payout_date": "2026-11-20"}]
+
+    class Company:
+        @staticmethod
+        def events(**kwargs: object) -> object:
+            calls.append(kwargs)
+            return Frame()
+
+    class Reference:
+        @staticmethod
+        def company(symbol: str) -> Company:
+            assert symbol == "FPT"
+            return Company()
+
+    gateway = OfficialVnstockGateway.__new__(OfficialVnstockGateway)
+    monkeypatch.setattr(gateway, "_reference", Reference(), raising=False)
 
     rows = gateway.event_rows("FPT")
 
-    assert rows[0]["event_code"] == "DIV"
-    assert rows[0]["payout_date"] == "2026-10-16T00:00:00"
-    assert calls[0]["timeout"] == 5
-    params = calls[0]["params"]
-    assert isinstance(params, dict)
-    assert params["ticker"] == "FPT"
-    assert params["page"] == 0
-    assert params["size"] == 50
+    assert rows[0]["event_type"] == "dividend"
+    assert rows[0]["payout_date"] == "2026-11-20"
+    assert set(calls[0]) == {"start", "end"}
 
 
-def test_vci_fundamentals_use_the_latest_ttm_quarter_not_the_annual_row() -> None:
+def test_v6_summary_ratio_values_are_normalized_without_rescaling() -> None:
     rows = [
-        {
-            "year": 2025,
-            "quarter": 4,
-            "ratio_type": "RATIO_TTM",
-            "pe": 13.6,
-            "pb": 3.5,
-            "roe": 0.28,
-        },
-        {
-            "year": 2025,
-            "quarter": 5,
-            "ratio_type": "RATIO_YEAR",
-            "pe": 10.3,
-            "pb": 2.6,
-            "roe": 0.27,
-        },
-        {
-            "year": 2026,
-            "quarter": 2,
-            "ratio_type": "RATIO_TTM",
-            "pe": 10.72,
-            "pb": 2.69,
-            "roe": 0.26,
-        },
+        {"item_id": "pe_ratio", "value": 10.72},
+        {"item_id": "pb_ratio", "value": 2.69},
+        {"item_id": "trailing_eps", "value": 5200},
+        {"item_id": "roe", "value": 26},
     ]
 
-    normalized = _latest_vci_fundamental_rows(rows)
-    pe, pb, eps, roe = _fundamental_values(normalized)
+    pe, pb, eps, roe = _fundamental_values(rows)
 
     assert pe == Decimal("10.72")
     assert pb == Decimal("2.69")
-    assert eps is None
-    assert roe == Decimal("26.00")
+    assert eps == Decimal("5200")
+    assert roe == Decimal("26")
 
 
 def test_fundamentals_are_loaded_on_detail_only_and_cached() -> None:
@@ -462,6 +933,54 @@ def test_fundamental_failure_keeps_the_quote_available() -> None:
     assert value.price == 102_000
     assert value.pe is None
     assert value.pb is None
+
+
+def test_empty_financial_statements_are_retried_after_short_negative_cache() -> None:
+    gateway = FakeVnstockGateway()
+    now = [0.0]
+    provider = VnstockMarketProvider(config(), gateway=gateway, clock=lambda: now[0])
+
+    first = provider.financial_statements("FPT", "quarter", 4)
+    now[0] = 59
+    cached = provider.financial_statements("FPT", "quarter", 4)
+    now[0] = 61
+    retried = provider.financial_statements("FPT", "quarter", 4)
+
+    assert first["periods"] == cached["periods"] == retried["periods"] == []
+    assert gateway.financial_statement_calls == 2
+
+
+def test_statement_chart_accepts_fhsc_owner_equity_codes() -> None:
+    result = _financial_statement_data(
+        "FPT",
+        "quarter",
+        {
+            "income_statement": [
+                {
+                    "period": "2026-Q3",
+                    "id": "IS_NET_REVENUE",
+                    "name": "Revenue",
+                    "value": 100_000_000_000,
+                }
+            ],
+            "balance_sheet": [
+                {
+                    "period": "2026-Q3",
+                    "id": "BS_EQUITY",
+                    "name": "Equity",
+                    "value": 60_000_000_000,
+                }
+            ],
+            "cash_flow": [],
+        },
+        4,
+    )
+
+    charts = result["charts"]
+    assert isinstance(charts, list)
+    assert charts
+    assert isinstance(charts[0], dict)
+    assert charts[0]["equity_billion"] == 60
 
 
 def test_expired_fundamentals_serve_last_observed_values_after_provider_failure() -> None:
@@ -495,6 +1014,44 @@ def test_stock_history_is_scaled_from_vnstock_thousands_to_vnd_and_cached() -> N
     assert provider.candles("FPT", "30m")[0].close == 102_000
 
 
+def test_weekly_monthly_and_year_history_use_real_source_intervals() -> None:
+    gateway = FakeVnstockGateway()
+    provider = VnstockMarketProvider(config(), gateway=gateway)
+
+    assert provider.candles("FPT", "1w")
+    assert provider.candles("FPT", "1M")
+    assert provider.candles("FPT", "1d")
+
+    assert gateway.candle_requests[:3] == [("1W", 260), ("1M", 600), ("1D", 500)]
+
+
+def test_weekly_and_monthly_bars_aggregate_observed_daily_ohlcv() -> None:
+    rows = [
+        {"time": "2026-10-05", "open": 100, "high": 110, "low": 95, "close": 105, "volume": 10},
+        {"time": "2026-10-06", "open": 105, "high": 115, "low": 100, "close": 112, "volume": 20},
+        {"time": "2026-10-12", "open": 112, "high": 120, "low": 108, "close": 118, "volume": 30},
+    ]
+
+    weekly = _aggregate_daily_candles(rows, "1W", 52)
+    monthly = _aggregate_daily_candles(rows, "1M", 24)
+
+    assert len(weekly) == 2
+    assert weekly[0] == {
+        "time": "2026-10-05",
+        "open": Decimal("100"),
+        "high": Decimal("115"),
+        "low": Decimal("95"),
+        "close": Decimal("112"),
+        "volume": Decimal("30"),
+    }
+    assert len(monthly) == 1
+    assert monthly[0]["open"] == Decimal("100")
+    assert monthly[0]["high"] == Decimal("120")
+    assert monthly[0]["low"] == Decimal("95")
+    assert monthly[0]["close"] == Decimal("118")
+    assert monthly[0]["volume"] == Decimal("60")
+
+
 def test_intraday_trades_preserve_observed_side_and_vnd_price() -> None:
     provider = VnstockMarketProvider(config(), gateway=FakeVnstockGateway())
 
@@ -505,7 +1062,7 @@ def test_intraday_trades_preserve_observed_side_and_vnd_price() -> None:
     assert trades[-1].volume == 300
 
 
-def test_upcoming_vci_events_use_the_next_published_milestone_and_are_cached() -> None:
+def test_upcoming_fhsc_events_use_the_next_published_milestone_and_are_cached() -> None:
     gateway = FakeVnstockGateway()
     provider = VnstockMarketProvider(
         config(),
@@ -524,7 +1081,7 @@ def test_upcoming_vci_events_use_the_next_published_milestone_and_are_cached() -
     assert first[0].date_type == "payment_date"
     assert first[0].event_at.isoformat() == "2026-10-15T17:00:00+00:00"
     assert first[0].status == "official"
-    assert first[0].source_name == "VCI qua Vnstock"
+    assert first[0].source_name == "FHSC qua Vnstock"
 
 
 def test_event_refresh_failure_retains_last_observed_calendar() -> None:

@@ -6,10 +6,10 @@ import type { DividendItem } from "@/types/market";
 
 const mockUpcomingEvents: DividendItem[] = [
   {
-    id: "FPT-2026-11-12",
+    id: "FPT-2026-11-20",
     symbol: "FPT",
-    event_date: "2026-11-12",
-    ex_date: "2026-11-12",
+    event_date: "2026-11-20",
+    ex_date: "2026-11-20",
     record_date: null,
     payout_date: "2026-12-05",
     type: "cash",
@@ -17,7 +17,7 @@ const mockUpcomingEvents: DividendItem[] = [
     cash_value: 1000,
     title: "Tạm ứng cổ tức đợt 2/2026 bằng Tiền mặt, tỷ lệ 10% (1.000 đ/cp)",
     source: "Nghị quyết HĐQT",
-    source_url: "https://s.cafef.vn/lich-su-kien/FPT/sub.chn",
+    source_url: "https://cafef.vn/fpt-chot-ngay-phat-hanh-hon-171-trieu-co-phieu-thuong-1882609102017279.chn",
   },
   {
     id: "HPG-2026-11-28",
@@ -31,7 +31,7 @@ const mockUpcomingEvents: DividendItem[] = [
     cash_value: null,
     title: "Phát hành cổ phiếu trả cổ tức năm 2026, tỷ lệ 10:1",
     source: "Nghị quyết ĐHCĐ",
-    source_url: "https://s.cafef.vn/lich-su-kien/HPG/sub.chn",
+    source_url: "https://cafef.vn/du-lieu/HPG-2988819/hpg-nghi-quyet-hdqt-thong-qua-viec-tham-gia-mua-co-phan-chao-ban-de-tang-von-dieu-le-cua-cong-ty-co-phan-tap-doan-tuong-lai-song-hong.chn",
   },
 ];
 
@@ -95,10 +95,10 @@ describe("DividendCalendarWidget", () => {
         source: "Nghị quyết HĐQT",
       },
       {
-        id: "EARLY-2026-11-10",
+        id: "EARLY-2026-12-01",
         symbol: "EARLY",
-        event_date: "2026-11-10",
-        ex_date: "2026-11-10",
+        event_date: "2026-12-01",
+        ex_date: "2026-12-01",
         record_date: null,
         payout_date: null,
         type: "cash",
@@ -146,9 +146,31 @@ describe("DividendCalendarWidget", () => {
     const sourceLinks = screen.getAllByRole("link", { name: /Xem nguồn thông tin|Nguồn tin ↗/i });
     expect(sourceLinks.length).toBeGreaterThan(0);
     const fptLink = sourceLinks.find(
-      (link) => link.getAttribute("href") === "https://s.cafef.vn/lich-su-kien/FPT/sub.chn"
+      (link) => link.getAttribute("href") === "https://cafef.vn/fpt-chot-ngay-phat-hanh-hon-171-trieu-co-phieu-thuong-1882609102017279.chn"
     );
     expect(fptLink).toBeDefined();
     expect(fptLink?.getAttribute("target")).toBe("_blank");
+  });
+
+  it("opens DividendDetailModal when clicking Chi tiết or card", () => {
+    render(<DividendCalendarWidget initialEvents={mockUpcomingEvents} />);
+
+    // Click "Chi tiết" button on the first card (FPT)
+    const detailButtons = screen.getAllByRole("button", { name: "Chi tiết" });
+    expect(detailButtons.length).toBeGreaterThan(0);
+    fireEvent.click(detailButtons[0]);
+
+    // Modal should now be open
+    expect(screen.getByRole("dialog")).toBeInTheDocument();
+    expect(screen.getByText(/FPT — Tập đoàn FPT/i)).toBeInTheDocument();
+    expect(screen.getByText(/Giá trị chi trả cổ tức/i)).toBeInTheDocument();
+    expect(screen.getByText(/1.000 ₫ \/ CP/i)).toBeInTheDocument();
+    expect(screen.getByText(/Mốc 1 • Ngày GDKHQ/i)).toBeInTheDocument();
+    expect(screen.getByText(/Xem nghị quyết trên CafeF/i)).toBeInTheDocument();
+
+    // Close the modal
+    const closeBtn = screen.getByRole("button", { name: "Đóng" });
+    fireEvent.click(closeBtn);
+    expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
   });
 });

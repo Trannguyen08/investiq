@@ -4,7 +4,9 @@ import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 import type { DividendItem } from "@/types/market";
 import { Pagination } from "@/components/ui/pagination";
+import { DividendDetailModal } from "./dividend-detail-modal";
 import { EventReminderModal, type ReminderTargetEvent } from "./event-reminder-modal";
+import { resolveDirectArticleUrl } from "@/lib/market-article-links";
 
 const PAGE_SIZE = 6;
 
@@ -17,6 +19,7 @@ export function DividendCalendarWidget({ initialEvents = [] }: DividendCalendarW
   const [searchQuery, setSearchQuery] = useState("");
   const [currentPage, setCurrentPage] = useState(1);
   const [reminderEvent, setReminderEvent] = useState<ReminderTargetEvent | null>(null);
+  const [selectedDetailEvent, setSelectedDetailEvent] = useState<DividendItem | null>(null);
 
   // Reset to page 1 whenever filter or search query changes
   useEffect(() => {
@@ -158,8 +161,8 @@ export function DividendCalendarWidget({ initialEvents = [] }: DividendCalendarW
                 }
               }
 
-              // Determine official source info link
-              const sourceUrl = event.source_url || `/market/stocks/${encodeURIComponent(event.symbol)}?tab=dividend`;
+              // Determine official source info link (direct article URL)
+              const sourceUrl = resolveDirectArticleUrl(event.symbol, event.source_url);
               const isExternal = sourceUrl.startsWith("http://") || sourceUrl.startsWith("https://");
 
               const handleCardClick = (e: React.MouseEvent<HTMLElement>) => {
@@ -168,11 +171,7 @@ export function DividendCalendarWidget({ initialEvents = [] }: DividendCalendarW
                 if (target.closest("a, button, input")) {
                   return;
                 }
-                if (isExternal) {
-                  window.open(sourceUrl, "_blank", "noopener,noreferrer");
-                } else {
-                  window.location.href = sourceUrl;
-                }
+                setSelectedDetailEvent(event);
               };
 
               return (
@@ -180,7 +179,7 @@ export function DividendCalendarWidget({ initialEvents = [] }: DividendCalendarW
                   key={event.id}
                   onClick={handleCardClick}
                   className="dividend-event-card bg-slate-900/90 border border-slate-800 hover:border-sky-500/50 rounded-2xl overflow-hidden shadow-lg hover:shadow-xl transition flex flex-row group cursor-pointer relative"
-                  title="Bấm để mở nguồn thông tin chi tiết"
+                  title="Bấm để xem chi tiết lịch chia cổ tức"
                 >
                   <div className="dividend-card-date bg-slate-950/80 border-r border-slate-800/80 w-20 min-h-[82px] flex flex-col items-center justify-center p-2.5 text-center shrink-0">
                     <span className="dividend-date-day text-2xl font-black text-white leading-none tracking-tight">{displayDay}</span>
@@ -216,37 +215,56 @@ export function DividendCalendarWidget({ initialEvents = [] }: DividendCalendarW
                       )}
                     </div>
 
-                    <a
-                      href={sourceUrl}
-                      target={isExternal ? "_blank" : undefined}
-                      rel={isExternal ? "noopener noreferrer" : undefined}
-                      onClick={(e) => e.stopPropagation()}
-                      className="dividend-card-title text-xs sm:text-sm font-semibold text-slate-100 line-clamp-2 m-0 group-hover:text-sky-300 hover:underline transition leading-snug"
-                      title={`Xem nguồn thông tin: ${event.title}`}
+                    <button
+                      type="button"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setSelectedDetailEvent(event);
+                      }}
+                      className="dividend-card-title text-left text-xs sm:text-sm font-semibold text-slate-100 line-clamp-2 m-0 group-hover:text-sky-300 hover:underline transition leading-snug cursor-pointer p-0 bg-transparent border-0"
+                      title={`Xem chi tiết thông tin: ${event.title}`}
                     >
                       {event.title}
-                    </a>
+                    </button>
 
                     <div className="dividend-card-footer flex items-center justify-between gap-2 pt-2 border-t border-slate-800/60 text-[11px]">
-                      <div className="flex flex-col gap-0.5 min-w-0">
+                      <div className="flex flex-col gap-0.5 min-w-0 pr-1">
                         {event.cash_value ? (
-                          <span className="dividend-cash-highlight text-emerald-400 font-bold truncate">
+                          <span className="dividend-cash-highlight text-emerald-400 font-bold whitespace-nowrap text-xs">
                             Thực nhận: <strong>{new Intl.NumberFormat("vi-VN").format(event.cash_value)} đ/cp</strong>
                           </span>
-                        ) : null}
-                        <a
-                          href={sourceUrl}
-                          target={isExternal ? "_blank" : undefined}
-                          rel={isExternal ? "noopener noreferrer" : undefined}
-                          onClick={(e) => e.stopPropagation()}
-                          className="dividend-source-text text-slate-400 hover:text-sky-300 transition truncate flex items-center gap-1 group/src"
-                          title={`Xem nguồn thông tin: ${event.source}`}
+                        ) : event.ratio ? (
+                          <span className="dividend-cash-highlight text-purple-400 font-bold whitespace-nowrap text-xs">
+                            {event.type === "bonus" ? "Thưởng CP" : "Cổ tức CP"}: <strong>{event.ratio}</strong>
+                          </span>
+                        ) : (
+                          <span className="dividend-cash-highlight text-slate-400 font-medium whitespace-nowrap text-xs">
+                            Theo nghị quyết ĐHCĐ
+                          </span>
+                        )}
+                        <span
+                          className="dividend-source-text text-[11px] text-slate-400 truncate block"
+                          title={`Nguồn công bố: ${event.source}`}
                         >
-                          <span className="truncate">Nguồn: {event.source}</span>
-                          <span className="text-[10px] text-slate-500 group-hover/src:text-sky-300">↗</span>
-                        </a>
+                          Nguồn: {event.source}
+                        </span>
                       </div>
-                      <div className="flex items-center gap-2 shrink-0">
+                      <div className="flex items-center gap-1.5 shrink-0">
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setSelectedDetailEvent(event);
+                          }}
+                          className="dividend-detail-btn w-7 h-7 flex items-center justify-center rounded-lg bg-slate-800/90 hover:bg-slate-700 text-slate-300 hover:text-white border border-slate-700/80 transition cursor-pointer shadow-sm"
+                          title="Xem chi tiết các mốc ngày và quy định cổ tức"
+                          aria-label="Chi tiết"
+                        >
+                          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
+                          </svg>
+                        </button>
                         <button
                           type="button"
                           onClick={(e) => {
@@ -265,20 +283,26 @@ export function DividendCalendarWidget({ initialEvents = [] }: DividendCalendarW
                               },
                             });
                           }}
-                          className="dividend-reminder-btn text-[11px] font-semibold text-sky-400 hover:text-sky-300 hover:bg-sky-950/70 border border-sky-800/60 rounded-lg px-2.5 py-1 transition"
+                          className="dividend-reminder-btn w-7 h-7 flex items-center justify-center rounded-lg bg-sky-950/80 hover:bg-sky-900 text-sky-400 hover:text-sky-300 border border-sky-800/60 transition shadow-sm cursor-pointer"
                           title="Đặt nhắc nhở qua Email trước 1-2 ngày"
+                          aria-label="Nhắc nhở"
                         >
-                          Nhắc nhở
+                          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9" />
+                          </svg>
                         </button>
                         <a
                           href={sourceUrl}
                           target={isExternal ? "_blank" : undefined}
                           rel={isExternal ? "noopener noreferrer" : undefined}
                           onClick={(e) => e.stopPropagation()}
-                          className="dividend-detail-link text-slate-400 hover:text-sky-300 font-semibold shrink-0 transition flex items-center gap-0.5"
-                          title="Xem nguồn thông tin chi tiết"
+                          className="dividend-detail-link w-7 h-7 flex items-center justify-center rounded-lg bg-slate-800/90 hover:bg-slate-700 text-slate-400 hover:text-sky-300 border border-slate-700/80 transition shadow-sm"
+                          title="Xem nguồn thông tin chi tiết trên CafeF"
+                          aria-label="Nguồn tin ↗"
                         >
-                          Nguồn tin ↗
+                          <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
+                          </svg>
                         </a>
                       </div>
                     </div>
@@ -306,6 +330,27 @@ export function DividendCalendarWidget({ initialEvents = [] }: DividendCalendarW
           <p className="text-xs m-0">Thử thay đổi bộ lọc phân loại hoặc tìm kiếm với từ khóa khác.</p>
         </div>
       )}
+
+      <DividendDetailModal
+        isOpen={Boolean(selectedDetailEvent)}
+        onClose={() => setSelectedDetailEvent(null)}
+        event={selectedDetailEvent}
+        onOpenReminder={(ev) => {
+          setReminderEvent({
+            id: ev.id,
+            symbol: ev.symbol,
+            title: ev.title,
+            date: ev.ex_date || ev.event_date || "",
+            type: "dividend",
+            extraInfo: {
+              cash_value: ev.cash_value,
+              ratio: ev.ratio,
+              record_date: ev.record_date,
+              payout_date: ev.payout_date,
+            },
+          });
+        }}
+      />
 
       <EventReminderModal
         isOpen={Boolean(reminderEvent)}

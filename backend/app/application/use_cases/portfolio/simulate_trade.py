@@ -2,8 +2,10 @@
 
 from __future__ import annotations
 
+import json
 from datetime import UTC, datetime, time, timedelta
 from decimal import Decimal
+from pathlib import Path
 from time import monotonic as _monotonic
 from typing import cast
 from uuid import uuid4
@@ -24,7 +26,7 @@ from app.application.use_cases.portfolio.exchange_simulator import (
     match_against_orderbook,
     validate_vietnam_exchange_rules,
 )
-from app.domain.entities.market import MarketInstrument
+from app.domain.entities.market import Candle, MarketInstrument
 from app.domain.entities.portfolio import PaperOrder, PaperPortfolio, PaperTrade
 from app.domain.repositories.i_market_provider import IMarketProvider
 from app.domain.repositories.i_portfolio_repository import (
@@ -117,6 +119,74 @@ def _day_order_expiry(now: datetime) -> datetime:
     return candidate.astimezone(UTC)
 
 
+_SHARED_DASHBOARD_CACHE: dict[str, tuple[float, dict[str, object]]] = {}
+_HOLDING_CANDLES_FILE = (
+    Path(__file__).resolve().parent.parent.parent.parent / "storage" / "holding_candles_cache.json"
+)
+
+
+def _load_persisted_candles() -> dict[str, tuple[float, list[Candle]]]:
+    result: dict[str, tuple[float, list[Candle]]] = {}
+    if not _HOLDING_CANDLES_FILE.exists():
+        return result
+    try:
+        with open(_HOLDING_CANDLES_FILE, encoding="utf-8") as f:
+            raw = json.load(f)
+        far_future = _monotonic() + 86400.0 * 7
+        for sym, items in raw.items():
+            candle_list: list[Candle] = []
+            for item in items:
+                try:
+                    ts = datetime.fromisoformat(item["timestamp"].replace("Z", "+00:00"))
+                    candle_list.append(
+                        Candle(
+                            timestamp=ts,
+                            open=Decimal(str(item.get("open", 0))),
+                            high=Decimal(str(item.get("high", 0))),
+                            low=Decimal(str(item.get("low", 0))),
+                            close=Decimal(str(item.get("close", 0))),
+                            volume=Decimal(str(item.get("volume", 0))),
+                        )
+                    )
+                except Exception:
+                    pass
+            if candle_list:
+                result[sym] = (far_future, candle_list)
+    except Exception:
+        pass
+    return result
+
+
+def _persist_candles_to_disk(sym: str, candles: list[Candle]) -> None:
+    try:
+        _HOLDING_CANDLES_FILE.parent.mkdir(parents=True, exist_ok=True)
+        raw: dict[str, list[dict[str, str]]] = {}
+        if _HOLDING_CANDLES_FILE.exists():
+            try:
+                with open(_HOLDING_CANDLES_FILE, encoding="utf-8") as f:
+                    raw = json.load(f)
+            except Exception:
+                pass
+        raw[sym] = [
+            {
+                "timestamp": c.timestamp.isoformat().replace("+00:00", "Z"),
+                "open": str(c.open),
+                "high": str(c.high),
+                "low": str(c.low),
+                "close": str(c.close),
+                "volume": str(c.volume),
+            }
+            for c in candles
+        ]
+        with open(_HOLDING_CANDLES_FILE, "w", encoding="utf-8") as f:
+            json.dump(raw, f, indent=2)
+    except Exception:
+        pass
+
+
+_SHARED_HOLDING_CANDLES_CACHE: dict[str, tuple[float, list[Candle]]] = _load_persisted_candles()
+
+
 class PaperTradingService:
     def __init__(
         self,
@@ -129,7 +199,8 @@ class PaperTradingService:
         self._provider = provider
         self._sim_store = sim_store or get_exchange_simulation_store()
         self._clock = clock
-        self._dashboard_cache: dict[str, tuple[float, dict[str, object]]] = {}
+        self._dashboard_cache = _SHARED_DASHBOARD_CACHE if clock is None else {}
+        self._holding_candles_cache = _SHARED_HOLDING_CANDLES_CACHE if clock is None else {}
 
     def invalidate_dashboard_cache(self, user_id: str | None = None) -> None:
         if user_id:
@@ -139,6 +210,11 @@ class PaperTradingService:
 
     def _now(self) -> datetime:
         return self._clock or datetime.now(UTC)
+
+    def _now_ts(self) -> float:
+        if self._clock is not None:
+            return self._clock.timestamp()
+        return _monotonic()
 
     def _execution(
         self,
@@ -245,9 +321,7 @@ class PaperTradingService:
             else self._sim_store.get_mode(user_id)
         )
         enforce_strict = (
-            command.strict_rules
-            or active_mode == "exchange_hours"
-            or typed_order_type != "LO"
+            command.strict_rules or active_mode == "exchange_hours" or typed_order_type != "LO"
         )
 
         is_valid, err_code, err_msg = validate_vietnam_exchange_rules(
@@ -292,7 +366,8 @@ class PaperTradingService:
         ):
             base_order_price = (
                 command.limit_price
-                if (active_mode == "exchange_hours" or command.use_orderbook_depth) and command.limit_price
+                if (active_mode == "exchange_hours" or command.use_orderbook_depth)
+                and command.limit_price
                 else instrument.price
             )
             if (
@@ -309,7 +384,10 @@ class PaperTradingService:
                     "INVALID_STOP_LOSS",
                     f"Giá cắt lỗ ({decimal_text(command.stop_loss_price)} đ) phải nhỏ hơn giá đặt mua ({decimal_text(base_order_price)} đ).",
                 )
-            if command.take_profit_price is not None and command.take_profit_price <= base_order_price:
+            if (
+                command.take_profit_price is not None
+                and command.take_profit_price <= base_order_price
+            ):
                 raise PaperOrderError(
                     "INVALID_TAKE_PROFIT",
                     f"Giá chốt lời ({decimal_text(command.take_profit_price)} đ) phải lớn hơn giá đặt mua ({decimal_text(base_order_price)} đ).",
@@ -385,7 +463,11 @@ class PaperTradingService:
 
         submission_limit_price = (
             instrument.price
-            if (active_mode == "instant" and not command.use_orderbook_depth and typed_order_type == "LO")
+            if (
+                active_mode == "instant"
+                and not command.use_orderbook_depth
+                and typed_order_type == "LO"
+            )
             else exec_price
         )
         reserved_gross = round_vnd(submission_limit_price * Decimal(filled_qty))
@@ -546,6 +628,8 @@ class PaperTradingService:
             net_received=net_received,
             days_advanced=days_advanced,
         )
+        if hasattr(self._repository, "credit_cash") and callable(self._repository.credit_cash):
+            self._repository.credit_cash(user_id, net_received)
         self.invalidate_dashboard_cache(user_id)
         return {
             "advance": {
@@ -624,12 +708,14 @@ class PaperTradingService:
 
             if mode == "exchange_hours":
                 display_type: OrderTypeCode = meta.display_order_type if meta else "LO"
-                in_sess, _ = is_within_exchange_trading_hours(
+                in_sess, sess_reason = is_within_exchange_trading_hours(
                     now,
                     self._provider.session,
                     display_type,
                 )
                 if not in_sess:
+                    if meta:
+                        meta.pending_reason = sess_reason
                     continue
                 match = match_against_orderbook(
                     side=order.side,
@@ -641,6 +727,8 @@ class PaperTradingService:
                     use_orderbook_depth=True,
                 )
                 if not match.can_fill_now:
+                    if meta:
+                        meta.pending_reason = match.pending_reason
                     continue
                 fill_price = match.execution_price
             else:
@@ -726,7 +814,7 @@ class PaperTradingService:
         return self._repository.get_or_create(user_id, STARTING_CASH)
 
     def dashboard(self, user_id: str) -> dict[str, object]:
-        now_ts = _monotonic()
+        now_ts = self._now_ts()
         cached = self._dashboard_cache.get(user_id)
         if cached and cached[0] > now_ts:
             return cached[1]
@@ -745,6 +833,46 @@ class PaperTradingService:
         total_market_value = Decimal()
         missing_prices = 0
         notices: list[dict[str, str]] = []
+
+        # Gather 90-day daily candles for holdings, refreshing stale cache so daily history stays current
+        holding_symbols = [holding.symbol for holding in portfolio.holdings]
+        all_candles: dict[str, list[Candle]] = {}
+        market_tz = ZoneInfo("Asia/Ho_Chi_Minh")
+        today_market = datetime.now(market_tz).date()
+        if holding_symbols:
+            now_mono = _monotonic()
+            symbols_to_fetch: list[str] = []
+            for sym in holding_symbols:
+                cached_c = self._holding_candles_cache.get(sym)
+                cached_latest_date = (
+                    cached_c[1][-1].timestamp.astimezone(market_tz).date()
+                    if cached_c and cached_c[1]
+                    else None
+                )
+                is_fresh = (
+                    cached_c is not None
+                    and cached_c[0] > now_mono
+                    and bool(cached_c[1])
+                    and (cached_latest_date is not None and cached_latest_date >= today_market)
+                )
+                if is_fresh and cached_c is not None:
+                    all_candles[sym] = cached_c[1]
+                else:
+                    symbols_to_fetch.append(sym)
+
+            for s in symbols_to_fetch:
+                try:
+                    fetched = list(self._provider.candles(s, "1d"))[-90:]
+                    if fetched:
+                        self._holding_candles_cache[s] = (_monotonic() + 300.0, fetched)
+                        _persist_candles_to_disk(s, fetched)
+                        all_candles[s] = fetched
+                        continue
+                except Exception:
+                    pass
+                fallback_c = self._holding_candles_cache.get(s)
+                if fallback_c and fallback_c[1]:
+                    all_candles[s] = fallback_c[1]
 
         histories: dict[str, list[dict[str, str]]] = {}
         for holding in portfolio.holdings:
@@ -765,7 +893,20 @@ class PaperTradingService:
                 if unrealized is not None and holding.total_cost_basis
                 else None
             )
-            candles = list(self._provider.candles(holding.symbol, "1d"))[-30:]
+            candles = list(all_candles.get(holding.symbol, [])[-30:])
+            if price is not None and (
+                not candles or candles[-1].timestamp.astimezone(market_tz).date() < today_market
+            ):
+                candles.append(
+                    Candle(
+                        timestamp=datetime.now(UTC),
+                        open=price,
+                        high=price,
+                        low=price,
+                        close=price,
+                        volume=instrument.volume if instrument else Decimal("0"),
+                    )
+                )
             histories[holding.symbol] = [
                 {"timestamp": _iso(item.timestamp), "close": decimal_text(item.close)}
                 for item in candles
@@ -896,7 +1037,11 @@ class PaperTradingService:
             key=lambda item: (item.change_percent, item.matched_value),
             reverse=True,
         )[:6]
-        equity_curve = self._equity_curve(portfolio)
+        equity_curve = self._equity_curve(
+            portfolio,
+            precomputed_candles=all_candles,
+            current_total_value=total_value,
+        )
         res: dict[str, object] = {
             "account": {
                 "id": portfolio.id,
@@ -975,7 +1120,7 @@ class PaperTradingService:
             },
             "exchange_simulation": self._exchange_simulation_payload(user_id, portfolio),
         }
-        self._dashboard_cache[user_id] = (now_ts + 15.0, res)
+        self._dashboard_cache[user_id] = (now_ts + 60.0, res)
         return res
 
     def _exchange_simulation_payload(
@@ -1050,35 +1195,110 @@ class PaperTradingService:
             "order_meta": order_meta_map,
         }
 
-    def _equity_curve(self, portfolio: PaperPortfolio) -> list[dict[str, str]]:
-        if not portfolio.holdings:
+    def _equity_curve(
+        self,
+        portfolio: PaperPortfolio,
+        precomputed_candles: dict[str, list[Candle]] | None = None,
+        current_total_value: Decimal | None = None,
+    ) -> list[dict[str, str]]:
+        if not portfolio.holdings and not portfolio.trades:
             return []
-        close_by_symbol: dict[str, dict[str, Decimal]] = {}
-        for holding in portfolio.holdings:
-            candles = self._provider.candles(holding.symbol, "1d")[-90:]
-            if not candles:
-                continue
-            close_by_symbol[holding.symbol] = {
-                candle.timestamp.date().isoformat(): candle.close for candle in candles
-            }
-        if not close_by_symbol:
-            return []
-        common_days = set.intersection(*(set(values) for values in close_by_symbol.values()))
+
         holding_by_symbol = {item.symbol: item for item in portfolio.holdings}
-        by_date = {
-            day: portfolio.cash_balance
-            + sum(
-                (
-                    round_vnd(values[day] * Decimal(holding_by_symbol[symbol].quantity))
-                    for symbol, values in close_by_symbol.items()
-                ),
-                Decimal(),
+        close_by_symbol: dict[str, dict[str, Decimal]] = {}
+        fallback_prices: dict[str, Decimal] = {}
+
+        # 1. Gather all candle history and establish safe fallback price per holding
+        for holding in portfolio.holdings:
+            candles: list[Candle] = []
+            if precomputed_candles and holding.symbol in precomputed_candles:
+                candles = precomputed_candles[holding.symbol]
+
+            inst = self._provider.instrument(holding.symbol, include_fundamentals=False)
+            safe_price = (
+                inst.price
+                if inst and inst.price > 0
+                else (candles[-1].close if candles else holding.average_cost)
             )
-            for day in common_days
-        }
+            fallback_prices[holding.symbol] = safe_price if safe_price > 0 else Decimal("10000")
+
+            if candles:
+                close_by_symbol[holding.symbol] = {
+                    candle.timestamp.date().isoformat(): candle.close for candle in candles
+                }
+            else:
+                close_by_symbol[holding.symbol] = {}
+
+        # 2. Determine earliest buy trade date (or trade date / inception)
+        all_dates_set: set[str] = set()
+        for c_dict in close_by_symbol.values():
+            all_dates_set.update(c_dict.keys())
+
+        buy_trades = [t for t in portfolio.trades if t.side == "buy"]
+        if buy_trades:
+            first_buy_date = min(t.created_at.astimezone(_MARKET_TZ).date() for t in buy_trades)
+        elif portfolio.trades:
+            first_buy_date = min(
+                t.created_at.astimezone(_MARKET_TZ).date() for t in portfolio.trades
+            )
+        else:
+            first_buy_date = portfolio.created_at.astimezone(_MARKET_TZ).date()
+
+        baseline_date = first_buy_date - timedelta(days=1)
+        baseline_iso = baseline_date.isoformat()
+        first_buy_iso = first_buy_date.isoformat()
+        today_iso = datetime.now(_MARKET_TZ).date().isoformat()
+
+        # Collect candidate dates strictly from the baseline date (day before first buy) up to today
+        # This eliminates months of flat starting capital prior to the first trade.
+        eligible_days = {d for d in all_dates_set if d >= baseline_iso}
+        eligible_days.add(baseline_iso)
+        eligible_days.add(first_buy_iso)
+        eligible_days.add(today_iso)
+
+        trade_dates = [
+            t.created_at.astimezone(_MARKET_TZ).date().isoformat() for t in portfolio.trades
+        ]
+        for td in trade_dates:
+            if td >= baseline_iso:
+                eligible_days.add(td)
+
+        sorted_days = sorted(eligible_days)
+
+        # 3. For each day, calculate portfolio equity with all holdings strictly included
+        by_date: dict[str, Decimal] = {}
+        for day in sorted_days:
+            if day == today_iso and current_total_value is not None:
+                by_date[day] = current_total_value
+                continue
+
+            if day <= baseline_iso:
+                by_date[day] = portfolio.starting_cash
+                continue
+
+            day_holdings_val = Decimal()
+            for symbol, holding in holding_by_symbol.items():
+                price = close_by_symbol.get(symbol, {}).get(day)
+                if price is None or price <= 0:
+                    price = fallback_prices.get(symbol, holding.average_cost)
+                day_holdings_val += round_vnd(price * Decimal(holding.quantity))
+
+            by_date[day] = portfolio.cash_balance + day_holdings_val
+
+        # 4. Guarantee today's endpoint strictly matches current_total_value
+        if current_total_value is not None:
+            by_date[today_iso] = current_total_value
+
+        # 5. Guarantee at least 2 points for chart visualization
+        if len(by_date) < 2:
+            yesterday_iso = (datetime.now(_MARKET_TZ).date() - timedelta(days=1)).isoformat()
+            if yesterday_iso not in by_date:
+                by_date[yesterday_iso] = portfolio.starting_cash
+                by_date[yesterday_iso] = portfolio.starting_cash
+
         return [
             {"timestamp": f"{day}T08:00:00Z", "value": decimal_text(value)}
-            for day, value in sorted(by_date.items())[-90:]
+            for day, value in sorted(by_date.items())
         ]
 
     def set_public_visibility(

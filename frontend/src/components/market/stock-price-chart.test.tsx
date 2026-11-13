@@ -24,8 +24,8 @@ describe("StockPriceChart", () => {
   it("explains provider limitations instead of fabricating yearly history", () => {
     render(<StockPriceChart symbol="FPT" range="year" candles={[]} />);
 
-    expect(screen.getByText("Chưa có chuỗi giá cho khoảng này")).toBeInTheDocument();
-    expect(screen.getByText(/không cung cấp OHLC nhiều phiên/)).toBeInTheDocument();
+    expect(screen.getByText(/Chưa có chuỗi giá theo năm cho FPT/)).toBeInTheDocument();
+    expect(screen.getByText(/chưa có đủ dữ liệu nến lịch sử/)).toBeInTheDocument();
   });
 
   it("renders provider fundamentals in the metrics panel beside the chart", () => {
@@ -67,36 +67,36 @@ describe("StockPriceChart", () => {
     expect(screen.getByText(/InvestIQ không thay số chưa có bằng dữ liệu giả/)).toBeInTheDocument();
   });
 
-  it("enforces minimum candle boundaries: 70 for day/week, 100 for month, 150 for year", () => {
-    expect(STOCK_DETAIL_CHART_LIMITS.day.minimum).toBe(70);
-    expect(STOCK_DETAIL_CHART_LIMITS.week.minimum).toBe(70);
-    expect(STOCK_DETAIL_CHART_LIMITS.month.minimum).toBe(100);
-    expect(STOCK_DETAIL_CHART_LIMITS.year.minimum).toBe(150);
+  it("uses zoom minimums that fit the available day, week, month and year ranges", () => {
+    expect(STOCK_DETAIL_CHART_LIMITS.day.minimum).toBe(20);
+    expect(STOCK_DETAIL_CHART_LIMITS.week.minimum).toBe(12);
+    expect(STOCK_DETAIL_CHART_LIMITS.month.minimum).toBe(6);
+    expect(STOCK_DETAIL_CHART_LIMITS.year.minimum).toBe(30);
 
     const manyCandles: MarketCandle[] = Array.from({ length: 200 }, (_, index) => ({
       timestamp: new Date(Date.UTC(2026, 0, index + 1, 3)).toISOString(),
       open: "100", high: "105", low: "98", close: "102", volume: "1000",
     }));
 
-    // In day view, with 200 candles, initial/minimum visible candles should be 70
+    // Day view falls back to a 50 bar intraday window when the source only has daily test rows.
     const { rerender } = render(<StockPriceChart symbol="FPT" range="day" candles={manyCandles} />);
-    expect(screen.getByRole("img", { name: /70 nến giá xanh đỏ/ })).toBeInTheDocument();
+    expect(screen.getByRole("img", { name: /50 nến giá xanh đỏ/ })).toBeInTheDocument();
 
-    // In week view, with 200 candles, initial/minimum visible candles should be 70
+    // Weekly bars show the latest 52 weekly observations.
     rerender(<StockPriceChart symbol="FPT" range="week" candles={manyCandles} />);
-    expect(screen.getByRole("img", { name: /70 nến giá xanh đỏ/ })).toBeInTheDocument();
+    expect(screen.getByRole("img", { name: /52 nến giá xanh đỏ/ })).toBeInTheDocument();
 
-    // In month view, with 200 candles, initial/minimum visible candles should be 100
+    // Monthly bars show the latest 24 monthly observations.
     rerender(<StockPriceChart symbol="FPT" range="month" candles={manyCandles} />);
-    expect(screen.getByRole("img", { name: /100 nến giá xanh đỏ/ })).toBeInTheDocument();
+    expect(screen.getByRole("img", { name: /24 nến giá xanh đỏ/ })).toBeInTheDocument();
 
-    // In year view, with 200 candles, zooming in clamps at exactly minimum 150 candles
+    // Year view starts with the full loaded year and zooms in to the configured minimum.
     rerender(<StockPriceChart symbol="FPT" range="year" candles={manyCandles} />);
     const zoomIn = screen.getByRole("button", { name: "Phóng to biểu đồ năm" });
     while (!zoomIn.hasAttribute("disabled")) {
       fireEvent.click(zoomIn);
     }
-    expect(screen.getByRole("img", { name: /150 nến giá xanh đỏ/ })).toBeInTheDocument();
+    expect(screen.getByRole("img", { name: /30 nến giá xanh đỏ/ })).toBeInTheDocument();
     expect(zoomIn).toBeDisabled();
   });
 });

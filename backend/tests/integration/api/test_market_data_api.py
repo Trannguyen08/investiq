@@ -1,11 +1,15 @@
 from __future__ import annotations
 
+from dataclasses import replace
+from typing import Any, cast
+
 import pytest
 from fastapi.testclient import TestClient
 
 from app.api.v1 import market_data
 from app.application.use_cases.market_data.errors import MarketDataUnavailable
 from app.domain.entities.market import MarketInstrument
+from app.infrastructure.cache.market_cache import MarketReadCache
 from app.infrastructure.config.settings import settings
 from app.infrastructure.external.market_fixture_provider import FixtureMarketProvider
 from app.main import app
@@ -59,9 +63,76 @@ def test_sector_endpoint_aggregates_the_complete_provider_snapshot(
         response = client.get("/api/v1/market/sectors")
 
     assert response.status_code == 200
-    rows = response.json()["data"]
+    payload = response.json()
+    rows = payload["data"]
     assert sum(row["member_count"] for row in rows) == len(provider.instruments())
-    assert next(row for row in rows if row["name"] == "Ngân hàng")["member_count"] > 1
+    assert next(row for row in rows if row["name"] == "Tài chính")["member_count"] >= 5
+    subsectors = payload["subsectors"]
+    assert (
+        next(
+            row
+            for row in subsectors
+            if row["parent_sector"] == "Tài chính" and row["name"] == "Ngân hàng"
+        )["member_count"]
+        == 5
+    )
+
+
+def test_market_api_exposes_and_filters_by_sector_subgroup(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    class SubsectorFixtureProvider(FixtureMarketProvider):
+        def instruments(self) -> tuple[MarketInstrument, ...]:
+            financial_labels = {
+                "Ng\u00e2n h\u00e0ng",
+                "D\u1ecbch v\u1ee5 t\u00e0i ch\u00ednh",
+                "B\u1ea3o hi\u1ec3m",
+            }
+            return tuple(
+                replace(item, sector="T\u00e0i ch\u00ednh", subsector=item.sector)
+                if item.sector in financial_labels
+                else item
+                for item in super().instruments()
+            )
+
+    provider = SubsectorFixtureProvider()
+    monkeypatch.setattr(market_data, "_provider", lambda: provider)
+
+    class MemoryRedis:
+        def __init__(self) -> None:
+            self.values: dict[str, str] = {}
+
+        def get(self, key: str) -> str | None:
+            return self.values.get(key)
+
+        def set(self, key: str, value: str, *, ex: int) -> None:
+            self.values[key] = value
+
+    cache = MarketReadCache(client=cast(Any, MemoryRedis()))
+    monkeypatch.setattr(market_data, "get_market_read_cache", lambda: cache)
+
+    with TestClient(app) as client:
+        sectors = client.get("/api/v1/market/sectors")
+        banks = client.get(
+            "/api/v1/market/instruments",
+            params={"sector": "Ng\u00e2n h\u00e0ng", "sort": "symbol", "direction": "asc"},
+        )
+
+    assert sectors.status_code == 200
+    bank_group = next(
+        item
+        for item in sectors.json()["subsectors"]
+        if item["parent_sector"] == "T\u00e0i ch\u00ednh" and item["name"] == "Ng\u00e2n h\u00e0ng"
+    )
+    assert bank_group["member_count"] == 5
+    assert banks.status_code == 200
+    assert [item["symbol"] for item in banks.json()["data"]] == [
+        "ACB",
+        "MBB",
+        "STB",
+        "TCB",
+        "VCB",
+    ]
 
 
 def test_market_instrument_screener_contract_and_invalid_range(

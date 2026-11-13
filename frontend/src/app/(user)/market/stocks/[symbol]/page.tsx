@@ -29,14 +29,14 @@ import {
   getMarketIntradayTrades,
   getRelatedStockNews,
 } from "@/lib/api-client";
-import type { InstrumentEnvelope, MarketCandle, StockGrowthData } from "@/types/market";
+import type { InstrumentEnvelope, StockGrowthData } from "@/types/market";
 
 export const dynamic = "force-dynamic";
 
-const rangeConfig: Record<StockChartRange, { interval: "1d" | "1h" | "30m" | "5m"; limit: number }> = {
-  day: { interval: "5m", limit: 200 },
-  week: { interval: "30m", limit: 500 },
-  month: { interval: "1h", limit: 500 },
+const rangeConfig: Record<StockChartRange, { interval: "1d" | "1w" | "1M" | "5m"; limit: number }> = {
+  day: { interval: "5m", limit: 60 },
+  week: { interval: "1d", limit: 500 },
+  month: { interval: "1d", limit: 500 },
   year: { interval: "1d", limit: 500 },
 };
 
@@ -50,40 +50,6 @@ function safeReturnTo(value: string | string[] | undefined) {
   return "/market/stocks#stock-table";
 }
 
-
-function synthesizeStockCandles(
-  symbol: string,
-  range: StockChartRange,
-  priceStr: string | null | undefined,
-  refPriceStr: string | null | undefined,
-): MarketCandle[] {
-  const count = range === "day" ? 75 : (range === "week" ? 80 : (range === "month" ? 100 : 150));
-  const stepMinutes = range === "day" ? 5 : (range === "week" ? 30 : (range === "month" ? 60 : 1440));
-  const hash = symbol.split("").reduce((acc, c) => acc + c.charCodeAt(0), 0);
-  const basePrice = Number(priceStr) || Number(refPriceStr) || 25000;
-  const baseTimestamp = 1772600000000;
-  const list: MarketCandle[] = [];
-
-  for (let i = 0; i < count; i++) {
-    const time = new Date(baseTimestamp - (count - i) * stepMinutes * 60 * 1000).toISOString();
-    const osc = Math.sin(i * 0.22 + hash * 0.1) * 0.025;
-    const osc2 = Math.cos(i * 0.22 + hash * 0.1) * 0.02;
-    const close = Math.round(basePrice * (1 + osc));
-    const open = Math.round(basePrice * (1 + osc2));
-    const high = Math.max(open, close) + 150;
-    const low = Math.max(1000, Math.min(open, close) - 150);
-    const volume = Math.round(80000 + Math.abs(Math.sin(i * 0.5)) * 120000);
-    list.push({
-      timestamp: time,
-      open: String(open),
-      high: String(high),
-      low: String(low),
-      close: String(close),
-      volume: String(volume),
-    });
-  }
-  return list;
-}
 
 export default async function StockDetailPage({
   params,
@@ -105,13 +71,13 @@ export default async function StockDetailPage({
     (value) => ({ status: "fulfilled" as const, value }),
     () => ({ status: "rejected" as const }),
   );
-  const candlesPromise = getMarketCandles(symbol, selected.interval, selected.limit, 2500).catch(() => null);
+  const candlesPromise = getMarketCandles(symbol, selected.interval, selected.limit, 8000).catch(() => null);
   const intradayPromise = getMarketIntradayTrades(symbol, 100, 1500).catch(() => null);
   const growthPromise = getMarketGrowth(symbol, 1500).catch(() => null);
   const forensicsPromise = getMarketForensics(symbol, 1500).catch(() => null);
   const dividendsPromise = getInstrumentDividends(symbol, 1500).catch(() => null);
-  const fsQuarterPromise = getInstrumentFinancialStatements(symbol, "quarter", 6, 1500).catch(() => null);
-  const fsYearPromise = getInstrumentFinancialStatements(symbol, "year", 4, 1500).catch(() => null);
+  const fsQuarterPromise = getInstrumentFinancialStatements(symbol, "quarter", 6, 10000).catch(() => null);
+  const fsYearPromise = getInstrumentFinancialStatements(symbol, "year", 4, 10000).catch(() => null);
 
   const [
     instrumentResult,
@@ -187,10 +153,8 @@ export default async function StockDetailPage({
   };
   const dividendEvents = dividendsEnvelope?.data?.events ?? [];
 
-  // Đảm bảo mọi cổ phiếu đều có đầy đủ nến trong các khung Ngày, Tuần, Tháng, Năm
-  const activeCandles = (candles?.data && candles.data.length > 1)
-    ? candles.data
-    : synthesizeStockCandles(symbol, range, item.price, item.reference_price);
+  // Preserve the source response; the chart handles missing history explicitly.
+  const activeCandles = candles?.data ?? [];
 
   const chartSection = (
     <>
@@ -200,6 +164,7 @@ export default async function StockDetailPage({
           range={range}
           candles={activeCandles}
           returnTo={returnTo}
+          candleInterval={selected.interval}
         />
         <StockMetricsPanel item={item} />
       </div>
@@ -272,6 +237,25 @@ export default async function StockDetailPage({
           </div>
           <div className="shrink-0"><StockLivePrice item={item} /></div>
         </header>
+
+        {/* Data source transparency bar: Exchange API vs Crawled data */}
+        <div
+          className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 px-4 py-2.5 rounded-xl bg-slate-900/60 border border-slate-800/80 text-xs text-slate-400"
+          aria-label="Phân loại nguồn dữ liệu"
+        >
+          <div className="flex items-center gap-2">
+            <span className="inline-flex items-center px-2 py-0.5 rounded-md text-[10px] font-bold uppercase tracking-wider bg-emerald-500/15 text-emerald-300 border border-emerald-500/30 shrink-0">
+              API Sàn ({envelope.meta.provider_name})
+            </span>
+            <span>Giá, biểu đồ nến OHLCV, sổ lệnh, khớp lệnh trong phiên &amp; định giá</span>
+          </div>
+          <div className="flex items-center gap-2">
+            <span className="inline-flex items-center px-2 py-0.5 rounded-md text-[10px] font-bold uppercase tracking-wider bg-amber-500/15 text-amber-300 border border-amber-500/30 shrink-0">
+              Data Crawl
+            </span>
+            <span>BCTC (Nợ, VCSH, KQKD), sự kiện cổ tức &amp; tin tức từ Vietstock / CafeF</span>
+          </div>
+        </div>
 
         {/* 5 Main Tabs: Biểu đồ & Sổ lệnh | BCTC & Tăng trưởng | Lịch sử Cổ tức | Rủi ro BCTC | Tin tức */}
         <StockDetailTabs

@@ -180,15 +180,15 @@ async def test_ai_financial_service_comparison() -> None:
     assert "stock_comparison" in [w["type"] for w in res_both["widgets"]]
     assert res_both["widgets"][0]["data"]["mode"] == "both"
 
-    # 5. Comparing 3 stocks
+    # 5. Comparing 3 stocks (capped at 2)
     res_three = await ai_service.process_chat("So sánh VCB, MBB và TCB theo thông số")
     assert "stock_comparison" in [w["type"] for w in res_three["widgets"]]
-    assert len(res_three["widgets"][0]["data"]["items"]) == 3
+    assert len(res_three["widgets"][0]["data"]["items"]) == 2
 
-    # 6. Exceeding 3 stocks limit (capped at 3)
+    # 6. Exceeding 2 stocks limit (capped at 2)
     res_four = await ai_service.process_chat("So sánh VCB, MBB, TCB, HPG theo thông số")
-    assert "tối đa 3 mã" in res_four["content"]
-    assert len(res_four["widgets"][0]["data"]["items"]) == 3
+    assert "tối đa 2 mã" in res_four["content"]
+    assert len(res_four["widgets"][0]["data"]["items"]) == 2
 
 
 @pytest.mark.anyio
@@ -658,3 +658,157 @@ async def test_ai_typo_ticker_suggestions() -> None:
     assert "VICC" in res_vicc["content"]
     assert "VIC" in res_vicc["content"]
     assert "Tập đoàn Vingroup" in res_vicc["content"]
+
+
+@pytest.mark.anyio
+async def test_ai_trade_order_intent_and_response() -> None:
+    from app.application.use_cases.ai_chat.intent_parser import detect_intent
+
+    # 1. Intent parser tests
+    intent_buy = detect_intent("mua giúp tao 300 cổ mbb")
+    assert intent_buy.is_trade_order is True
+    assert intent_buy.trade_side == "buy"
+    assert intent_buy.trade_quantity == 300
+    assert "MBB" in intent_buy.tickers
+
+    intent_sell = detect_intent("bán giúp tao 500 hpg")
+    assert intent_sell.is_trade_order is True
+    assert intent_sell.trade_side == "sell"
+    assert intent_sell.trade_quantity == 500
+    assert "HPG" in intent_sell.tickers
+
+    intent_direct = detect_intent("đặt lệnh mua 1000 fpt")
+    assert intent_direct.is_trade_order is True
+    assert intent_direct.trade_side == "buy"
+    assert intent_direct.trade_quantity == 1000
+
+    intent_more = detect_intent("mua thêm 300cp fpt")
+    assert intent_more.is_trade_order is True
+    assert intent_more.trade_side == "buy"
+    assert intent_more.trade_quantity == 300
+    assert intent_more.trade_symbol == "FPT"
+
+    # Passive question should NOT be a trade order
+    intent_passive = detect_intent("Có nên mua MBB lúc này không?")
+    assert intent_passive.is_trade_order is False
+
+    # 2. End-to-end process_chat test for "mua giúp tao 300 cổ mbb"
+    provider = FixtureMarketProvider()
+    service = MarketService(provider)
+    ai_service = AiFinancialService(market_service=service)
+
+    res = await ai_service.process_chat("mua giúp tao 300 cổ mbb")
+    assert "Hỗ trợ đặt lệnh mô phỏng: MUA 300 MBB" in res["content"]
+    assert "300 cổ phiếu" in res["content"]
+    assert "Giá trị lệnh tạm tính" in res["content"]
+    assert "Phí giao dịch mô phỏng" in res["content"]
+
+    # Check suggested actions
+    actions = res["suggested_actions"]
+    assert any(
+        a.get("action_type") == "TRADE_ORDER"
+        and a.get("symbol") == "MBB"
+        and a.get("side") == "buy"
+        and a.get("quantity") == 300
+        for a in actions
+    )
+    assert any("Đặt lệnh Mua 300 MBB ngay" in a.get("label", "") for a in actions)
+
+
+@pytest.mark.anyio
+async def test_ai_community_post_intent_and_response() -> None:
+    from app.application.use_cases.ai_chat.intent_parser import detect_intent
+
+    # 1. Intent parser tests
+    intent_post = detect_intent("đăng bài giúp tao về mbb")
+    assert intent_post.is_community_post is True
+    assert "MBB" in intent_post.tickers
+
+    intent_thesis = detect_intent("viết luận điểm cho fpt")
+    assert intent_thesis.is_community_post is True
+    assert "FPT" in intent_thesis.tickers
+
+    # 2. End-to-end process_chat test for "đăng bài giúp tao về mbb"
+    provider = FixtureMarketProvider()
+    service = MarketService(provider)
+    ai_service = AiFinancialService(market_service=service)
+
+    res = await ai_service.process_chat("đăng bài giúp tao về mbb")
+    assert "Bản thảo Luận điểm Đầu tư: MBB" in res["content"]
+    assert "MUA / Khả quan (Bullish)" in res["content"]
+    assert "Giá mục tiêu" in res["content"]
+    assert "Chất xúc tác tăng giá" in res["content"]
+
+    actions = res["suggested_actions"]
+    assert any(
+        a.get("action_type") == "POST_COMMUNITY_THESIS"
+        and a.get("symbol") == "MBB"
+        and "Đăng bài lên Cộng đồng ngay" in a.get("label", "")
+        for a in actions
+    )
+
+
+@pytest.mark.anyio
+async def test_ai_trade_order_with_typo_ticker_suggestions() -> None:
+    from app.application.use_cases.ai_chat.intent_parser import detect_intent
+
+    # 1. Intent parser for mistyped trade order "mua them 300cp hppg"
+    intent = detect_intent("mua them 300cp hppg")
+    assert intent.is_trade_order is True
+    assert intent.trade_side == "buy"
+    assert intent.trade_quantity == 300
+    assert intent.trade_symbol == "HPPG"
+    assert "HPPG" in intent.invalid_tickers
+
+    # 2. End-to-end chat response must suggest HPG and NOT create a fake HPPG order
+    provider = FixtureMarketProvider()
+    service = MarketService(provider)
+    ai_service = AiFinancialService(market_service=service)
+
+    res = await ai_service.process_chat("mua them 300cp hppg")
+    content = res["content"]
+    # Must explicitly state HPPG is not found
+    assert "Không tìm thấy mã cổ phiếu **HPPG**" in content
+    # Must NOT propose fake order for HPPG
+    assert "Hỗ trợ đặt lệnh mô phỏng: MUA 300 HPPG" not in content
+    # Must suggest close matches: HPG
+    assert "HPG" in content
+    assert "Tập đoàn Hòa Phát" in content
+    assert "MUA 300" in content
+
+    # Check suggested actions offer 1-click trade for HPG
+    actions = res["suggested_actions"]
+    assert any(
+        a.get("action_type") == "TRADE_ORDER"
+        and a.get("symbol") == "HPG"
+        and a.get("side") == "buy"
+        and a.get("quantity") == 300
+        for a in actions
+    )
+    assert any(
+        a.get("action_type") == "NAVIGATE"
+        and "/portfolio?action=trade&symbol=HPG" in a.get("url", "")
+        for a in actions
+    )
+    assert any(
+        a.get("action_type") == "SEND_PROMPT" and "HPG" in a.get("prompt", "") for a in actions
+    )
+
+
+@pytest.mark.anyio
+async def test_ai_nonsense_and_finance_relevance_gate() -> None:
+    from app.application.use_cases.ai_chat.intent_parser import is_finance_relevant_query
+
+    assert is_finance_relevant_query("ngu") is False
+    assert is_finance_relevant_query("vl") is False
+    assert is_finance_relevant_query("Lãi suất Fed ảnh hưởng gì đến chứng khoán?") is True
+    assert is_finance_relevant_query("Giá vàng SJC hôm nay") is True
+
+    provider = FixtureMarketProvider()
+    service = MarketService(provider)
+    ai_service = AiFinancialService(market_service=service)
+
+    res = await ai_service.process_chat("ngu")
+    assert "InvestIQ Financial Assistant" in res["content"]
+    assert "Investing.com" not in res["content"]
+    assert "TradingView" not in res["content"]

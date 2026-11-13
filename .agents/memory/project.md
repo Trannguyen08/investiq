@@ -6,8 +6,9 @@
 - Repository: `C:\investiq`
 - Application type: FastAPI and Next.js monorepo
 - Status: Runnable operational baseline with six-source stock news, feature-flagged end-user
-  authentication, a beginner-first home/market vertical slice, a source-delayed Vnstock evaluation
-  adapter, a credential-gated TCBS iFlash adapter, and an authenticated beginner paper-trading
+  authentication, a beginner-first home/market vertical slice, a Vnstock 6 FHSC adapter gated by
+  source credentials, a credential-gated TCBS
+  iFlash adapter, and an authenticated beginner paper-trading
   vertical slice; production market redistribution and ML modules remain gated or placeholders.
 
 ## Confirmed stack
@@ -87,20 +88,18 @@
   a beginner decision checklist, and direct routes to real tools; it does not imply course progress
   or an available community feature. Absolute prices remain unsigned and visually distinct from
   signed movement. Every market view exposes a clear last-data-update time. In Vnstock mode, stock detail lazily loads
-  and caches VCI current-TTM P/E, P/B, and ROE while preserving explicit unavailable states and the
-  last observed values across transient failures; stock tables load only their current visible page
-  in bounded batches of 15. A reset pre-open
-  KBS board uses VCI's batch latest-close/preceding-reference fields rather than presenting every
-  stock and sector as 0%; after the session begins, unmatched symbols remain in the snapshot at their
-  reference price instead of disappearing. The Vnstock provider is instantiated once during
-  application startup before concurrent reads can stampede the guest quota. Stock OHLCV reads prefer
-  KBS and use VCI as a bounded fallback when KBS fails or returns no rows, while successful series
-  retain the existing process cache and VND normalization. The detail headline and enclosing metric panel consume
+  and caches P/E, P/B, EPS, and ROE from the v6 FHSC summary while preserving explicit unavailable
+  states and last-observed values across transient failures; stock tables load only their current
+  visible page in bounded batches of 15. The FHSC screener supplies the exchange snapshot and a
+  derived reference price from its reported percentage change. The provider is instantiated once
+  during application startup before concurrent reads can stampede the source quota. Stock OHLCV
+  reads use FHSC and retain the existing process cache and VND normalization. Unsupported trade tape
+  and quote depth remain unavailable. The detail headline and enclosing metric panel consume
   WebSocket snapshots, label auction fields as unavailable until a trade occurs, explain each metric,
   and show quote-based market time; Vnstock snapshots refresh every minute by default. Quota exits
   degrade through the provider failure path. Activation still
   requires a current token or API key plus Smart OTP and explicit redistribution rights. In local
-  Vnstock mode, Home and Events now show observed VCI milestones for the next 30 days across the eight
+  Vnstock mode, Home and Events now show observed FHSC milestones for the next 30 days across the eight
   highest-interest snapshot symbols, with bounded fan-out, a 30-minute cache, explicit partial-scope
   copy, and stale fallback. FiinGroup remains recommended for licensed full-market
   corporate/event/people coverage. Provider failover, licensed history
@@ -146,6 +145,14 @@
 - Market-data work must follow `.agents/rules/market-data-freshness.md`: verify runtime provider
   timestamps against the latest valid Vietnam trading session, refresh only bounded relevant caches,
   and never manufacture calendar-day candles for weekends or holidays.
+- The backend installs Vnstock 6 and `vnstock-oapi` from the official package index. The Render
+  blueprint selects `MARKET_DATA_MODE=vnstock`; FHSC supplies exchange screeners, company summaries,
+  fundamentals, index membership, and company events. Optional DNSE credentials enrich last trades,
+  stock candles, order-book depth, and execution tape, with FHSC as the overlapping-data fallback.
+  `VNSTOCK_API_KEY`
+  authenticates the Vnstock account; `FHSC_API_KEY` and the optional `DNSE_API_KEY` /
+  `DNSE_API_SECRET` authenticate their own sources. Public redistribution still requires provider
+  authorization.
 
 ## Local development
 
@@ -172,3 +179,10 @@
 ## Admin account management
 
 Implemented `/admin/users` with backend role checks, stable search/filter pagination, account role/status updates, active-session revocation on disable, Redis rate limits, and audit details. The Admin News shared password remains a separate gate and does not authorize the account API. See `docs/plan/admin-user-management.md`.
+
+## Recent platform extensions (2026-11-13)
+
+- Removed unused user scaffold pages `/alerts` and `/backtesting` (`ScaffoldPage`).
+- Added PostgreSQL market candle persistence (`SqlMarketCandlesRepository`), DB candle fallback in `VnstockMarketProvider`, and scheduled Celery Beat tasks (`investiq.events.crawl.v1`, `investiq.market.eod_sync.v1`, `investiq.market.financials_sync.v1`).
+- Added community thesis counter-analysis (`GET /api/v1/theses/{thesis_id}/counter-analysis`), thesis reporting & moderation queue (`thesis_reports` in `0026_thesis_moderation_and_benchmark.sql`), and quantitative ML Sentiment-to-Impact scoring (`GET /api/v1/market/instruments/{symbol}/sentiment-impact`).
+- Added market staleness/DB health endpoint (`GET /api/v1/market/health`), sliding-window rate limiting (`rate_limiter.py`) on AI chat, and authenticated personal data export/deletion (`GET /api/v1/auth/me/export`, `DELETE /api/v1/auth/me/data`).

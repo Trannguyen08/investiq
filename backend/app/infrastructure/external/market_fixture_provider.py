@@ -12,6 +12,7 @@ from app.domain.entities.market import (
     MarketIndex,
     MarketInstrument,
     MarketPerson,
+    resolve_sector_hierarchy,
 )
 
 D = Decimal
@@ -70,14 +71,16 @@ def _instrument(
     seed: int,
     interest: str,
     reasons: tuple[str, ...],
+    subsector: str = "",
 ) -> MarketInstrument:
+    parent_sector, canonical_subsector = resolve_sector_hierarchy(sector, subsector)
     last = D(price)
     ref = D(reference)
     return MarketInstrument(
         symbol=symbol,
         name=name,
         exchange=exchange,
-        sector=sector,
+        sector=parent_sector,
         price=last,
         reference_price=ref,
         ceiling_price=(ref * D("1.07")).quantize(D("0.01")),
@@ -98,6 +101,7 @@ def _instrument(
         interest_reasons=reasons,
         candles=_candles(last, seed),
         is_vn30=symbol in _VN30_FIXTURE,
+        subsector=canonical_subsector,
     )
 
 
@@ -549,7 +553,7 @@ class FixtureMarketProvider:
             return self._people
 
     def candles(self, symbol: str, interval: str) -> tuple[Candle, ...]:
-        if interval not in {"1d", "1h", "30m", "5m"}:
+        if interval not in {"1d", "1w", "1M", "1h", "30m", "5m"}:
             return ()
         instrument = self.instrument(symbol)
         if instrument:

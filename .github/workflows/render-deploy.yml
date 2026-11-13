@@ -15,17 +15,19 @@ jobs:
   ci-backend:
     name: Backend Lint, Typecheck & Tests
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    timeout-minutes: 30
     steps:
       - name: Checkout Source Code
-        uses: actions/checkout@v4
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6.1.0
 
       - name: Set up Python 3.13
-        uses: actions/setup-python@v5
+        uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6.3.0
         with:
           python-version: "3.13"
           cache: "pip"
-          cache-dependency-path: "backend/requirements-dev.txt"
+          cache-dependency-path: |
+            backend/requirements.txt
+            backend/requirements-dev.txt
 
       - name: Install Dependencies
         working-directory: backend
@@ -43,7 +45,7 @@ jobs:
 
       - name: Run Unit Tests (Pytest)
         working-directory: backend
-        run: python -m pytest tests/unit/ -v
+        run: python -m pytest tests/unit/ -v --dist=loadfile -n auto --timeout=120 --durations=20
 
   ci-frontend:
     name: Frontend Lint, Typecheck & Tests
@@ -51,10 +53,10 @@ jobs:
     timeout-minutes: 15
     steps:
       - name: Checkout Source Code
-        uses: actions/checkout@v4
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6.1.0
 
       - name: Set up Node.js 24
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6.5.0
         with:
           node-version: "24"
           cache: "npm"
@@ -128,23 +130,6 @@ jobs:
             echo "Đã kích hoạt Backend Deploy qua REST API thành công."
           else
             echo "RENDER_BACKEND_DEPLOY_HOOK hoặc RENDER_API_KEY không có, Render sẽ tự động build từ commit push nhánh main."
-          fi
-
-      - name: Trigger Frontend Deploy
-        env:
-          FRONTEND_HOOK: ${{ secrets.RENDER_FRONTEND_DEPLOY_HOOK }}
-          RENDER_API_KEY: ${{ secrets.RENDER_API_KEY }}
-        run: |
-          if [ -n "$FRONTEND_HOOK" ]; then
-            echo "Gửi tín hiệu deploy Frontend tới Render qua Deploy Hook..."
-            curl -f -X POST "$FRONTEND_HOOK"
-            echo "Đã kích hoạt Frontend Deploy thành công."
-          elif [ -n "$RENDER_API_KEY" ]; then
-            echo "Gửi tín hiệu deploy Frontend tới Render qua REST API..."
-            curl -f -X POST -H "Authorization: Bearer $RENDER_API_KEY" -H "Content-Type: application/json" -d '{"clearCache":"clear"}' https://api.render.com/v1/services/srv-dbdn1s8473hc73cuqp40/deploys
-            echo "Đã kích hoạt Frontend Deploy qua REST API thành công."
-          else
-            echo "RENDER_FRONTEND_DEPLOY_HOOK hoặc RENDER_API_KEY không có, Render sẽ tự động build từ commit push nhánh main."
           fi
 
       - name: Deploy Summary

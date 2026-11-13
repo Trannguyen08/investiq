@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from decimal import Decimal
+from functools import lru_cache
 from typing import Annotated, Any
 from uuid import UUID
 
@@ -53,6 +54,7 @@ router = APIRouter(
 )
 
 
+@lru_cache
 def get_paper_trading_service() -> PaperTradingService:
     return PaperTradingService(SqlPortfolioRepository(get_pool()), get_market_provider())
 
@@ -177,7 +179,12 @@ def force_fill_paper_order(
         order, trade = service.force_fill_order(user_id, str(order_id))
     except PaperOrderError as exc:
         raise HTTPException(status_code=422, detail=exc.message) from exc
-    except (InsufficientCashError, InsufficientSharesError, HoldingLimitError, PortfolioConflictError) as exc:
+    except (
+        InsufficientCashError,
+        InsufficientSharesError,
+        HoldingLimitError,
+        PortfolioConflictError,
+    ) as exc:
         raise HTTPException(status_code=409, detail=str(exc)) from exc
     return {
         "order": _order_response(order),
@@ -258,7 +265,6 @@ def cancel_paper_conditional_trigger(
 ) -> dict[str, object]:
     _private(response)
     return service.cancel_conditional_trigger(user_id, trigger_id)
-
 
 
 @router.delete(
@@ -364,9 +370,13 @@ def send_daily_report_now(
     account_raw = dashboard.get("account")
     account_dict: dict[str, Any] = dict(account_raw) if isinstance(account_raw, dict) else {}
     holdings_raw = dashboard.get("holdings")
-    holdings_list: list[dict[str, Any]] = list(holdings_raw) if isinstance(holdings_raw, list) else []
+    holdings_list: list[dict[str, Any]] = (
+        list(holdings_raw) if isinstance(holdings_raw, list) else []
+    )
     trades_raw = dashboard.get("trades")
-    trades_list: list[dict[str, Any]] | None = list(trades_raw) if isinstance(trades_raw, list) else None
+    trades_list: list[dict[str, Any]] | None = (
+        list(trades_raw) if isinstance(trades_raw, list) else None
+    )
 
     ai_review = generate_ai_portfolio_review(
         account_data=account_dict,

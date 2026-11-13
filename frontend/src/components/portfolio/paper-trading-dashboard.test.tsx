@@ -6,7 +6,7 @@ import { PaperTradingDashboard } from "@/components/portfolio/paper-trading-dash
 
 import type { MarketInstrument } from "@/types/market";
 
-import type { PaperDashboard } from "@/types/portfolio";
+import type { PaperDashboard, PaperOrder, PaperTrade } from "@/types/portfolio";
 
 const useAuth = vi.fn();
 
@@ -238,7 +238,7 @@ describe("PaperTradingDashboard", () => {
 
   });
 
-  it("opens a read-only unrealized P&L scenario and recalculates only from quantity", async () => {
+  it("opens a read-only unrealized P&L scenario with fixed non-editable quantity text", async () => {
 
     render(<PaperTradingDashboard positiveNews={[]} marketInstruments={marketInstruments} />);
 
@@ -248,25 +248,17 @@ describe("PaperTradingDashboard", () => {
 
     const dialog = screen.getByRole("dialog", { name: "Lãi/lỗ dự kiến nếu bán" });
 
-    const quantity = screen.getByRole("spinbutton", { name: "Khối lượng bán giả định FPT" });
-
     expect(dialog).toHaveTextContent("Chỉ đọc, không bán");
 
     expect(dialog).toHaveTextContent("159.500 ₫");
 
     expect(dialog).toHaveTextContent("+1,59%");
 
-    expect(quantity).toHaveValue(100);
+    expect(dialog).toHaveTextContent("100 CP");
 
-    expect(quantity).toHaveAttribute("max", "100");
+    expect(screen.queryByRole("spinbutton")).not.toBeInTheDocument();
 
     expect(screen.queryByRole("button", { name: /xác nhận bán/i })).not.toBeInTheDocument();
-
-    fireEvent.change(quantity, { target: { value: "50" } });
-
-    expect(quantity).toHaveValue(50);
-
-    expect(dialog).toHaveTextContent("79.750 ₫");
 
     fireEvent.keyDown(document, { key: "Escape" });
 
@@ -464,6 +456,30 @@ describe("PaperTradingDashboard", () => {
 
     expect(within(row).getByText("TC +100.000")).toHaveClass("price-reference");
 
+  });
+
+  it("shows missing observed OHLC values as unavailable instead of zero", async () => {
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue({ ok: true, json: async () => dashboard }));
+    const missingIntradayPrices = {
+      ...marketInstrument,
+      open_price: "0",
+      high_price: "0",
+      low_price: "0",
+    };
+
+    render(
+      <PaperTradingDashboard
+        positiveNews={[]}
+        marketInstruments={[missingIntradayPrices]}
+      />,
+    );
+
+    const marketTable = await screen.findByRole("table", {
+      name: "Bảng cổ phiếu nâng cao để giao dịch mô phỏng",
+    });
+    const row = within(marketTable).getByRole("row", { name: /FPT/ });
+
+    expect(row.querySelector('[data-label="Mở · Cao · Thấp"]')?.textContent).toBe("— · — · —");
   });
 
   it("loads fundamental ratios in bounded batches as each page becomes visible", async () => {
@@ -744,4 +760,87 @@ describe("PaperTradingDashboard", () => {
     expect(submitBtn).not.toBeDisabled();
   });
 
+  it("paginates holdings, orders, and trades tables at 10 items per page with shared pagination", async () => {
+    const twelveHoldings = Array.from({ length: 12 }, (_, i) => ({
+      ...dashboard.holdings[0],
+      symbol: `SYM${String(i + 1).padStart(2, "0")}`,
+      name: `Công ty ${i + 1}`,
+    }));
+
+    const twelveOrders = Array.from({ length: 12 }, (_, i) => ({
+      id: `order-${i + 1}`,
+      portfolio_id: "portfolio-1",
+      symbol: `ORD${String(i + 1).padStart(2, "0")}`,
+      side: "buy" as const,
+      order_type: "LO" as const,
+      quantity: 100,
+      filled_quantity: 100,
+      limit_price: "20000",
+      status: "filled" as const,
+      created_at: `2026-11-09T10:${String(i).padStart(2, "0")}:00Z`,
+      updated_at: `2026-11-09T10:${String(i).padStart(2, "0")}:00Z`,
+    }));
+
+    const twelveTrades = Array.from({ length: 12 }, (_, i) => ({
+      id: `trade-${i + 1}`,
+      order_id: `order-${i + 1}`,
+      portfolio_id: "portfolio-1",
+      symbol: `TRD${String(i + 1).padStart(2, "0")}`,
+      side: "buy" as const,
+      quantity: 100,
+      execution_price: "20000",
+      fee_amount: "3000",
+      tax_amount: "0",
+      cash_effect: "-2003000",
+      realized_pnl: null,
+      created_at: `2026-11-09T10:${String(i).padStart(2, "0")}:00Z`,
+    }));
+
+    const customDashboard: PaperDashboard = {
+      ...dashboard,
+      holdings: twelveHoldings,
+      orders: twelveOrders as unknown as PaperOrder[],
+      trades: twelveTrades as unknown as PaperTrade[],
+    };
+
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: true,
+      json: async () => customDashboard,
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    render(
+      <PaperTradingDashboard
+        positiveNews={[]}
+        marketInstruments={[marketInstrument]}
+        initialDashboard={customDashboard}
+      />
+    );
+
+    // 1. Check Holdings table pagination
+    expect(screen.getByText("SYM01")).toBeInTheDocument();
+    expect(screen.getByText("SYM10")).toBeInTheDocument();
+    expect(screen.queryByText("SYM11")).not.toBeInTheDocument();
+    expect(screen.getByRole("navigation", { name: "Phân trang danh mục cổ phiếu đã mua" })).toBeInTheDocument();
+
+    // 2. Check Orders table pagination
+    expect(screen.getByText("ORD01")).toBeInTheDocument();
+    expect(screen.getByText("ORD10")).toBeInTheDocument();
+    expect(screen.queryByText("ORD11")).not.toBeInTheDocument();
+    expect(screen.getByRole("navigation", { name: "Phân trang sổ lệnh" })).toBeInTheDocument();
+
+    // 3. Check Trades table pagination
+    expect(screen.getByText("TRD01")).toBeInTheDocument();
+    expect(screen.getByText("TRD10")).toBeInTheDocument();
+    expect(screen.queryByText("TRD11")).not.toBeInTheDocument();
+    expect(screen.getByRole("navigation", { name: "Phân trang lịch sử mua bán" })).toBeInTheDocument();
+
+    // Navigate to page 2 on Holdings table
+    const holdingsNav = screen.getByRole("navigation", { name: "Phân trang danh mục cổ phiếu đã mua" });
+    const holdingsNextBtn = within(holdingsNav).getByRole("button", { name: /Trang sau/i });
+    fireEvent.click(holdingsNextBtn);
+    expect(screen.getByText("SYM11")).toBeInTheDocument();
+    expect(screen.getByText("SYM12")).toBeInTheDocument();
+    expect(screen.queryByText("SYM01")).not.toBeInTheDocument();
+  });
 });

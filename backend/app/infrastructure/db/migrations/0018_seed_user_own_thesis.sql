@@ -11,7 +11,7 @@ INSERT INTO investment_theses (
 SELECT
     'e1111111-1111-4111-e111-111111111111',
     id,
-    'Nguyễn Trần (Tôi)',
+    'Nguyễn Trần',
     'FPT',
     'bullish',
     128000.0000,
