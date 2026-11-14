@@ -160,6 +160,19 @@ flowchart TD
 - **Xử lý nền & Lập lịch**: Celery 5.6, Celery Beat scheduler cho các tác vụ crawl tin tức và kiểm tra định kỳ.
 - **Giám sát & Logs**: Dozzle log viewer, per-step AI telemetry metrics endpoint (`/api/v1/ai/metrics`).
 
+### Vì Sao Chọn Các Công Nghệ Này & Giá Trị Mang Lại (Technology Rationale):
+
+| Công nghệ | Lý do lựa chọn | Giá trị mang lại cho InvestIQ |
+| :--- | :--- | :--- |
+| **Next.js 16 (App Router) + React 19 + TypeScript** | Hỗ trợ SSR, Server Components và API Route Handlers (BFF) trong cùng một codebase, kèm kiểm soát kiểu dữ liệu chặt chẽ. | Tăng tốc độ hiển thị trang đầu tiên, che giấu URL backend nội bộ và JWT khỏi trình duyệt qua lớp BFF (`/auth-api`, `/portfolio-api`, `/market-data-api`), đồng thời giảm lỗi runtime trên các màn hình nhiều số liệu tài chính. |
+| **Tailwind CSS v4** | Utility-first CSS gọn nhẹ, tùy biến nhanh hệ thống màu tối (dark terminal) và responsive. | Xây dựng nhất quán các bảng giá, thẻ chỉ số, biểu đồ và modal đặt lệnh mật độ cao mà không phình kích thước CSS. |
+| **Python 3.13 + FastAPI + Pydantic v2** | Python là hệ sinh thái chuẩn cho dữ liệu tài chính (`vnstock`, phân tích định lượng, AI/RAG); FastAPI hỗ trợ async, WebSocket và validate dữ liệu tốc độ cao. | Dễ dàng kết nối đa nguồn dữ liệu chứng khoán Việt Nam (`vnstock`, DNSE, FHSC), chạy pipeline chấm điểm 5 nhân tố / Altman Z-Score / AI Guardrails và tự động sinh tài liệu OpenAPI. |
+| **Clean Architecture (Backend)** | Tách bạch tầng `domain`, `application` (use cases), `infrastructure` và `api`. | Cho phép thay đổi/fallback nguồn dữ liệu thị trường hoặc viết unit test độc lập mà không làm vỡ nghiệp vụ cốt lõi. |
+| **PostgreSQL 17 (`psycopg` pool)** | Cơ sở dữ liệu quan hệ mạnh về ACID và khóa dòng (`SELECT ... FOR UPDATE`). | Đảm bảo khớp lệnh Paper Trading (số dư tiền, khối lượng cổ phiếu, sổ cái) chính xác tuyệt đối khi có nhiều yêu cầu đồng thời, đồng thời lưu trữ bền vững tin tức, bài học, luận điểm và nhật ký kiểm toán. |
+| **Redis 8 (Upstash / Local Redis)** | Lưu trữ in-memory độ trễ mili-giây với TTL linh hoạt và hỗ trợ làm broker cho hàng đợi tác vụ. | Cache bảng giá, dữ liệu nến, chỉ số cơ bản (P/E, P/B) và kết quả AI để giảm tải cho API nguồn ngoài, hạn chế bị rate-limit (HTTP 429) và tăng tốc độ phản hồi khi người dùng quay lại trang. |
+| **Celery 5.6 + Celery Beat** | Chuẩn công nghiệp trong Python cho xử lý tác vụ bất đồng bộ và lập lịch định kỳ. | Tách việc thu thập tin tức từ 6 đầu báo, phân tích sentiment và gửi email cố vấn danh mục ra chạy nền, giữ cho các API người dùng luôn nhẹ và phản hồi nhanh. |
+| **Docker Compose & Quality Gate (Pytest, Vitest, Ruff, Mypy)** | Đóng gói đồng nhất môi trường phát triển đa dịch vụ và tự động hóa kiểm tra chất lượng mã nguồn. | Khởi chạy toàn bộ stack chỉ với một câu lệnh và đảm bảo mọi thay đổi trước khi merge đều vượt qua lint, typecheck và unit test. |
+
 ---
 
 ## 4. Cấu Trúc Thư Mục (Repository Structure)
@@ -285,12 +298,21 @@ KẾT QUẢ: TẤT CẢ KIỂM TRA ĐỀU XANH (READY FOR PR / MERGE)!
 
 ## 7. Triển Khai Môi Trường Thực Tế (Cloud Deployment)
 
-InvestIQ hỗ trợ các mô hình triển khai đám mây tối ưu chi phí và hiệu năng:
+### Liên kết Triển khai Trực tiếp (Live Demo):
+- **Frontend (Vercel)**: [https://investiq-chi-eosin.vercel.app](https://investiq-chi-eosin.vercel.app)
+- **Backend API (Render)**: [https://investiq-backend-xe6x.onrender.com](https://investiq-backend-xe6x.onrender.com) *(Swagger Docs: [`/docs`](https://investiq-backend-xe6x.onrender.com/docs))*
 
-### Mô hình Khuyên dùng: Frontend Vercel + Backend Render + Neon.tech DB (100% Free & Always-On 24/7)
-- **Frontend (Vercel)**: Tận dụng Edge Network toàn cầu của Vercel cho Next.js, loại bỏ 100% hiện tượng cold-start, tốc độ tải trang tức thì (< 50ms).
-- **Backend (Render.com)**: Chạy Web Service FastAPI máy chủ Singapore `ap-southeast-1`, kết hợp UptimeRobot hoặc GitHub Actions Keep-Alive ping định kỳ để hệ thống luôn thức 24/7, loại bỏ hoàn toàn độ trễ khởi động lại.
-- **Database (Neon.tech)**: PostgreSQL Serverless máy chủ Singapore `aws-ap-southeast-1` cho độ trễ cực thấp 5–15ms, miễn phí vĩnh viễn kèm connection pooling.
+> [!NOTE]
+> **Lưu ý về sự khác biệt giữa bản Deploy và chạy Local:**
+> Bản triển khai trực tuyến hiện đang sử dụng hạ tầng **miễn phí (Free Tier)** nên dữ liệu và tốc độ phản hồi **sẽ khác đáng kể so với chạy Local**:
+> 1. **Giới hạn tài nguyên của nền tảng Free**: Render Free có CPU/RAM rất hạn chế và có thể ngủ đông khi không có lưu lượng truy cập; khi nhiều endpoint gọi đồng thời (tải biểu đồ nến, chỉ số P/E, P/B, tin tức), server miễn phí không đủ mạnh để gọi API nhanh nên dễ xảy ra độ trễ cao, timeout hoặc trả về trạng thái tạm thời thiếu dữ liệu.
+> 2. **Gọi API dữ liệu thị trường từ IP Cloud nước ngoài**: Các nguồn dữ liệu chứng khoán Việt Nam (`vnstock`, DNSE, FHSC...) thường phản hồi chậm hơn hoặc giới hạn tần suất (rate-limit) mạnh hơn đối với shared IP ở nước ngoài so với mạng trong nước khi chạy Local, khiến một số mã có thể cập nhật chậm hơn hoặc dùng dữ liệu snapshot dự phòng.
+> 3. **Để trải nghiệm đầy đủ và chuẩn xác nhất**, khuyến khích chạy dự án ở môi trường Local theo hướng dẫn tại **Mục 5** (hoặc deploy Backend lên VPS đặt tại Việt Nam / PaaS trả phí có cấu hình cao hơn).
+
+### Mô hình Triển khai Hiện tại: Frontend Vercel + Backend Render + Neon.tech DB (100% Free)
+- **Frontend (Vercel)**: Tận dụng Edge Network toàn cầu của Vercel cho Next.js, giúp phục vụ giao diện và định tuyến BFF nhanh chóng.
+- **Backend (Render.com)**: Chạy Web Service FastAPI máy chủ Singapore `ap-southeast-1`, kết hợp GitHub Actions Keep-Alive ping định kỳ để giảm thiểu cold-start.
+- **Database (Neon.tech)**: PostgreSQL Serverless máy chủ Singapore `aws-ap-southeast-1` miễn phí vĩnh viễn kèm connection pooling.
 
 > [!TIP]
 > Xem hướng dẫn cấu hình chi tiết từng bước tại tài liệu: [`docs/deploy-vercel.md`](docs/deploy-vercel.md), và tài liệu tổng quan tại [`docs/deploy.md`](docs/deploy.md).

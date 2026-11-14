@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import re
 import unicodedata
 from dataclasses import asdict, replace
 from datetime import UTC, datetime, timedelta
@@ -159,22 +160,33 @@ class SqlNewsRepository:
         parameters: list[object] = []
         if query.query:
             trimmed_query = query.query.strip()
-            clauses.append(
-                "(r.search_document @@ plainto_tsquery('simple', %s) OR "
-                "news_unaccent(lower(coalesce(r.title, '') || ' ' || "
-                "coalesce(r.description, '') || ' ' || coalesce(r.content_text, ''))) "
-                "LIKE news_unaccent(lower(%s)) ESCAPE '\\' OR "
-                "EXISTS (SELECT 1 FROM article_mentions qm "
-                "JOIN security_identifiers qi ON qi.id = qm.identifier_id "
-                "WHERE qm.revision_id = r.id AND upper(qi.symbol) = upper(%s)) OR "
-                "r.candidate_symbols ? %s)"
-            )
-            literal_query = (
-                trimmed_query.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
-            )
-            parameters.extend(
-                (trimmed_query, f"%{literal_query}%", trimmed_query, trimmed_query.upper())
-            )
+            is_short_ticker_like = bool(re.fullmatch(r"[A-Za-z0-9]{2,5}", trimmed_query))
+            if is_short_ticker_like:
+                clauses.append(
+                    "(EXISTS (SELECT 1 FROM article_mentions qm "
+                    "JOIN security_identifiers qi ON qi.id = qm.identifier_id "
+                    "WHERE qm.revision_id = r.id AND upper(qi.symbol) = upper(%s)) OR "
+                    "news_unaccent(lower(coalesce(r.title, '') || ' ' || coalesce(r.description, ''))) "
+                    "~ ('\\m' || news_unaccent(lower(%s)) || '\\M'))"
+                )
+                parameters.extend((trimmed_query, trimmed_query))
+            else:
+                clauses.append(
+                    "(r.search_document @@ plainto_tsquery('simple', %s) OR "
+                    "news_unaccent(lower(coalesce(r.title, '') || ' ' || "
+                    "coalesce(r.description, '') || ' ' || coalesce(r.content_text, ''))) "
+                    "LIKE news_unaccent(lower(%s)) ESCAPE '\\' OR "
+                    "EXISTS (SELECT 1 FROM article_mentions qm "
+                    "JOIN security_identifiers qi ON qi.id = qm.identifier_id "
+                    "WHERE qm.revision_id = r.id AND upper(qi.symbol) = upper(%s)) OR "
+                    "r.candidate_symbols ? %s)"
+                )
+                literal_query = (
+                    trimmed_query.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
+                )
+                parameters.extend(
+                    (trimmed_query, f"%{literal_query}%", trimmed_query, trimmed_query.upper())
+                )
         if query.sources:
             clauses.append("s.slug = ANY(%s)")
             parameters.append(list(query.sources))
