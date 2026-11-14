@@ -158,16 +158,23 @@ class SqlNewsRepository:
         clauses = ["a.visibility = 'published'"]
         parameters: list[object] = []
         if query.query:
+            trimmed_query = query.query.strip()
             clauses.append(
                 "(r.search_document @@ plainto_tsquery('simple', %s) OR "
                 "news_unaccent(lower(coalesce(r.title, '') || ' ' || "
                 "coalesce(r.description, '') || ' ' || coalesce(r.content_text, ''))) "
-                "LIKE news_unaccent(lower(%s)) ESCAPE '\\')"
+                "LIKE news_unaccent(lower(%s)) ESCAPE '\\' OR "
+                "EXISTS (SELECT 1 FROM article_mentions qm "
+                "JOIN security_identifiers qi ON qi.id = qm.identifier_id "
+                "WHERE qm.revision_id = r.id AND upper(qi.symbol) = upper(%s)) OR "
+                "r.candidate_symbols ? %s)"
             )
             literal_query = (
-                query.query.strip().replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
+                trimmed_query.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
             )
-            parameters.extend((query.query, f"%{literal_query}%"))
+            parameters.extend(
+                (trimmed_query, f"%{literal_query}%", trimmed_query, trimmed_query.upper())
+            )
         if query.sources:
             clauses.append("s.slug = ANY(%s)")
             parameters.append(list(query.sources))

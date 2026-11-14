@@ -1199,3 +1199,48 @@ def test_empty_order_book_retries_after_short_ttl(monkeypatch: pytest.MonkeyPatc
     assert len(second.bid_levels) == 1
     assert second.bid_levels[0].price == Decimal("50100.0")
     assert calls == 2
+
+
+def test_quote_rows_fetches_dnse_daily_ohlc_beyond_fhsc_30_limit() -> None:
+    gateway = OfficialVnstockGateway.__new__(OfficialVnstockGateway)
+    symbols = [f"S{idx:02d}" for idx in range(35)]
+    gateway._screener_rows = [
+        {
+            "symbol": sym,
+            "close": 20.0,
+            "price_change_percent": 0.0,
+            "total_volume": 100_000,
+            "total_value": float((idx + 1) * 1_000_000_000),
+        }
+        for idx, sym in enumerate(symbols)
+    ]
+    gateway._market = SimpleNamespace(  # type: ignore[assignment]
+        equity=SimpleNamespace(quote=lambda batch, compat="v5": [])
+    )
+    gateway._market_time = "2026-11-13 15:00:00"
+    gateway._dnse_market = object()  # type: ignore[assignment]
+    called_ohlc: list[str] = []
+
+    def fake_last_trade(
+        symbol: str, include_last_trade: bool = True, include_daily_ohlc: bool = False
+    ) -> dict[str, object] | None:
+        if include_daily_ohlc:
+            called_ohlc.append(symbol)
+            return {
+                "daily_ohlc": {
+                    "time": "2026-11-13 07:00:00",
+                    "open": 19.5,
+                    "high": 20.5,
+                    "low": 19.2,
+                }
+            }
+        return None
+
+    gateway._dnse_last_trade_row = fake_last_trade  # type: ignore[method-assign]
+    rows = gateway.quote_rows(symbols)
+
+    assert "S34" in called_ohlc
+    s34 = next(row for row in rows if row["symbol"] == "S34")
+    assert s34["open_price"] == Decimal("19500.0")
+    assert s34["high_price"] == Decimal("20500.0")
+    assert s34["low_price"] == Decimal("19200.0")

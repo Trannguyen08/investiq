@@ -11,6 +11,7 @@ import {
 import { StocksView } from "@/components/market/market-stocks-beginner";
 import {
   getMarketCandles,
+  getMarketEcosystemDetail,
   getMarketEcosystems,
   getMarketEvents,
   getMarketGrowth,
@@ -137,12 +138,17 @@ export default async function MarketTabPage({
   }
 
   if (tab === "ecosystems") {
-    const ecosystemsRes = await getMarketEcosystems();
+    const requestedEcoId = value(queryParams, "eco") || "vingroup";
+    const [ecosystemsRes, detailRes] = await Promise.all([
+      getMarketEcosystems(),
+      getMarketEcosystemDetail(requestedEcoId).catch(() => null),
+    ]);
     return (
       <MarketShell tab={tab} meta={ecosystemsRes.meta ?? indexCollection.meta} symbols={symbols}>
         <EcosystemsView
           initialEcosystems={ecosystemsRes.data}
           initialEcoId={value(queryParams, "eco") || undefined}
+          initialDetail={detailRes?.data ?? null}
         />
       </MarketShell>
     );
