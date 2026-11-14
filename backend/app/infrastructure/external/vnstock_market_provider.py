@@ -439,6 +439,7 @@ class OfficialVnstockGateway:
         self._fundamental = Fundamental()
         self._screener_rows: list[dict[str, object]] = []
         self._market_time: str | None = None
+        self._fhsc_candle_cooldown_until = 0.0
 
     def reference_rows(self) -> tuple[list[dict[str, object]], set[str], dict[str, str]]:
         try:
@@ -575,7 +576,7 @@ class OfficialVnstockGateway:
         if not dnse_symbols:
             return list(rows_by_symbol.values())
         executor = ThreadPoolExecutor(
-            max_workers=min(12, len(dnse_symbols)), thread_name_prefix="dnse-last-trade"
+            max_workers=min(16, len(dnse_symbols)), thread_name_prefix="dnse-last-trade"
         )
         for symbol, needs_last_trade, needs_daily_ohlc in dnse_symbols:
             futures[
@@ -587,7 +588,7 @@ class OfficialVnstockGateway:
                 )
             ] = symbol
         dnse_by_symbol: dict[str, dict[str, object]] = {}
-        batch_timeout = 12 if len(dnse_symbols) > 30 else _DNSE_REQUEST_TIMEOUT_SECONDS
+        batch_timeout = 25 if len(dnse_symbols) > 30 else _DNSE_REQUEST_TIMEOUT_SECONDS
         try:
             for future in as_completed(futures, timeout=batch_timeout):
                 symbol = futures[future]
@@ -630,7 +631,8 @@ class OfficialVnstockGateway:
                     .astimezone(_MARKET_TZ)
                     .date()
                 )
-                if session_day == candle_day:
+                day_delta = (session_day - candle_day).days
+                if 0 <= day_delta <= 7:
                     for field in ("open", "high", "low"):
                         value = _optional_decimal(daily_ohlc.get(field))
                         if value is not None and value > 0:
@@ -745,27 +747,34 @@ class OfficialVnstockGateway:
         def _fetch_dnse() -> list[dict[str, object]]:
             if dnse_market is None or symbol in _INDEX_EXCHANGE:
                 return []
+            dnse_interval = source_interval if is_daily_or_higher else interval
             frame = _bounded_call(
                 lambda: dnse_market.equity(symbol).ohlcv(
-                    interval=interval, limit=count, compat="v5"
+                    interval=dnse_interval, limit=count, compat="v5"
                 ),
-                timeout=_DNSE_REQUEST_TIMEOUT_SECONDS,
+                timeout=_CANDLE_REQUEST_TIMEOUT_SECONDS,
                 operation="dnse-candles",
             )
-            return _frame_records(frame)
+            rows = _frame_records(frame)
+            if norm_interval in {"1W", "1M", "1Y"} and rows:
+                rows = _aggregate_daily_candles(rows, norm_interval, count)
+            return rows
 
         # Daily/weekly/monthly candles come cleanly from FHSC without waiting for DNSE first;
         # intraday candles prefer DNSE and only fall back to FHSC if DNSE is empty/unavailable.
         if is_daily_or_higher:
-            try:
-                rows = _fetch_fhsc()
-                if rows:
-                    return rows
-            except (Exception, SystemExit) as exc:
-                logger.warning(
-                    "vnstock_fhsc_candles_unavailable",
-                    extra={"symbol": symbol, "interval": interval, "error_type": type(exc).__name__},
-                )
+            if monotonic() >= getattr(self, "_fhsc_candle_cooldown_until", 0.0):
+                try:
+                    rows = _fetch_fhsc()
+                    if rows:
+                        return rows
+                except (Exception, SystemExit) as exc:
+                    if "429" in str(exc) or "RateLimit" in type(exc).__name__:
+                        self._fhsc_candle_cooldown_until = monotonic() + 30.0
+                    logger.warning(
+                        "vnstock_fhsc_candles_unavailable",
+                        extra={"symbol": symbol, "interval": interval, "error_type": type(exc).__name__},
+                    )
             try:
                 rows = _fetch_dnse()
                 if rows:
@@ -773,7 +782,7 @@ class OfficialVnstockGateway:
             except (Exception, SystemExit) as exc:
                 logger.warning(
                     "vnstock_dnse_candles_unavailable",
-                    extra={"symbol": symbol, "error_type": type(exc).__name__},
+                    extra={"error_type": type(exc).__name__},
                 )
         else:
             try:
@@ -1487,7 +1496,6 @@ class VnstockMarketProvider:
         self._refreshing = False
         self._snapshot_ready = ThreadEvent()
         self._closed = False
-        self._candle_warmer_started = False
         self._candle_cache: dict[tuple[str, str], tuple[float, tuple[Candle, ...]]] = {}
         self._fundamental_cache: dict[
             str,
@@ -2079,34 +2087,6 @@ class VnstockMarketProvider:
             self._apply_dnse_ohlc(daily_ohlc)
         if self._dnse_ohlc_stream is not None and not self._closed:
             self._dnse_ohlc_stream.set_symbols(symbols)
-        if not os.getenv("PYTEST_CURRENT_TEST") and not self._closed:
-            self._start_top_candle_warmer(instruments)
-
-    def _start_top_candle_warmer(self, instruments: tuple[MarketInstrument, ...]) -> None:
-        if getattr(self, "_candle_warmer_started", False):
-            return
-        self._candle_warmer_started = True
-        vn30_syms = [item.symbol for item in instruments if item.is_vn30]
-        other_syms = [
-            item.symbol
-            for item in sorted(
-                (item for item in instruments if not item.is_vn30),
-                key=lambda item: item.matched_value,
-                reverse=True,
-            )[: max(0, _MAX_DNSE_OHLC_SYMBOLS - len(vn30_syms))]
-        ]
-        targets = vn30_syms + other_syms
-
-        def _warm() -> None:
-            executor = ThreadPoolExecutor(max_workers=4, thread_name_prefix="warm-candles")
-            try:
-                list(executor.map(lambda sym: self.candles(sym, "1d"), targets))
-            except Exception:
-                pass
-            finally:
-                executor.shutdown(wait=False)
-
-        Thread(target=_warm, name="vnstock-top-candle-warmer", daemon=True).start()
 
     def _apply_dnse_ohlc(self, event: object) -> None:
         """Merge only today's complete DNSE daily candle into the FHSC baseline."""

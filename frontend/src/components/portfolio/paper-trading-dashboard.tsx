@@ -588,18 +588,28 @@ export function PaperTradingDashboard({
   useEffect(() => {
     if (auth.status !== "authenticated") return;
     let cancelled = false;
-    requestPaperDashboard()
-      .then((value) => {
-        if (!cancelled) {
-          setDashboard(value);
-          setError("");
-        }
-      })
-      .catch((value: unknown) => {
-        if (!cancelled) setError(value instanceof Error ? value.message : "Không thể tải danh mục.");
-      });
+    let retryTimer: ReturnType<typeof setTimeout> | null = null;
+    const load = (attempt: number) => {
+      requestPaperDashboard()
+        .then((value) => {
+          if (!cancelled) {
+            setDashboard(value);
+            setError("");
+          }
+        })
+        .catch((value: unknown) => {
+          if (cancelled) return;
+          if (attempt < 2) {
+            retryTimer = setTimeout(() => load(attempt + 1), 3000);
+            return;
+          }
+          setError(value instanceof Error ? value.message : "Không thể tải danh mục.");
+        });
+    };
+    load(0);
     return () => {
       cancelled = true;
+      if (retryTimer) clearTimeout(retryTimer);
     };
   }, [auth.status]);
 
@@ -1107,7 +1117,26 @@ export function PaperTradingDashboard({
     return (
       <main id="main-content" className="paper-page">
         <div className="paper-state" role={error ? "alert" : "status"}>
-          {error || "Đang tải danh mục mô phỏng…"}
+          <p>{error || "Đang tải danh mục mô phỏng…"}</p>
+          {error ? (
+            <button
+              type="button"
+              className="secondary-button"
+              onClick={() => {
+                setError("");
+                requestPaperDashboard()
+                  .then((value) => {
+                    setDashboard(value);
+                    setError("");
+                  })
+                  .catch((value: unknown) => {
+                    setError(value instanceof Error ? value.message : "Không thể tải danh mục.");
+                  });
+              }}
+            >
+              Thử lại
+            </button>
+          ) : null}
         </div>
       </main>
     );
