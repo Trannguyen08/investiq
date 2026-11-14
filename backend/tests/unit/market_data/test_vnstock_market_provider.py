@@ -1138,3 +1138,109 @@ def test_expired_snapshot_returns_immediately_while_refresh_runs_in_background()
     finally:
         gateway.release_refresh.set()
         reader.join(timeout=1)
+
+
+def test_fundamentals_preserve_screener_ratios_when_fundamental_rows_fail_or_empty(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    gateway = FakeVnstockGateway()
+    original_quote_rows = gateway.quote_rows
+
+    def quote_rows_with_screener_ratios(symbols: list[str]) -> list[dict[str, object]]:
+        rows = original_quote_rows(symbols)
+        for row in rows:
+            if row.get("symbol") == "FPT":
+                row["pe"] = 14.5
+                row["pb"] = 3.4
+        return rows
+
+    monkeypatch.setattr(gateway, "quote_rows", quote_rows_with_screener_ratios)
+    now = [0.0]
+    provider = VnstockMarketProvider(config(), gateway=gateway, clock=lambda: now[0])
+
+    gateway.fail_fundamentals = True
+    fallback = provider.instrument("FPT", include_fundamentals=True)
+    assert fallback is not None
+    assert fallback.pe == Decimal("14.5")
+    assert fallback.pb == Decimal("3.4")
+
+    # Empty/failed fundamentals should only be cached briefly (30s), not 3600s.
+    now[0] = 31.0
+    gateway.fail_fundamentals = False
+    recovered = provider.instrument("FPT", include_fundamentals=True)
+    assert recovered is not None
+    assert recovered.pe == Decimal("15.53")
+    assert recovered.pb == Decimal("3.7")
+    assert gateway.fundamental_calls == 2
+
+
+def test_empty_order_book_retries_after_short_ttl(monkeypatch: pytest.MonkeyPatch) -> None:
+    gateway = FakeVnstockGateway()
+    now = [0.0]
+    calls = 0
+
+    def failing_then_ok(symbol: str) -> list[dict[str, object]]:
+        nonlocal calls
+        calls += 1
+        if calls == 1:
+            raise RuntimeError("DNSE order-book request failed")
+        return [{"bid_price_1": 50100.0, "bid_vol_1": 1000, "ask_price_1": 50200.0, "ask_vol_1": 500}]
+
+    monkeypatch.setattr(gateway, "order_book_rows", failing_then_ok)
+    provider = VnstockMarketProvider(config(), gateway=gateway, clock=lambda: now[0])
+
+    first = provider.instrument("FPT", include_fundamentals=True)
+    assert first is not None
+    assert first.bid_levels[0].price == Decimal("101900")
+
+    now[0] = 6.0
+    second = provider.instrument("FPT", include_fundamentals=True)
+    assert second is not None
+    assert len(second.bid_levels) == 1
+    assert second.bid_levels[0].price == Decimal("50100.0")
+    assert calls == 2
+
+
+def test_quote_rows_fetches_dnse_daily_ohlc_beyond_fhsc_30_limit() -> None:
+    gateway = OfficialVnstockGateway.__new__(OfficialVnstockGateway)
+    symbols = [f"S{idx:02d}" for idx in range(35)]
+    gateway._screener_rows = [
+        {
+            "symbol": sym,
+            "close": 20.0,
+            "price_change_percent": 0.0,
+            "total_volume": 100_000,
+            "total_value": float((idx + 1) * 1_000_000_000),
+        }
+        for idx, sym in enumerate(symbols)
+    ]
+    gateway._market = SimpleNamespace(  # type: ignore[assignment]
+        equity=SimpleNamespace(quote=lambda batch, compat="v5": [])
+    )
+    gateway._market_time = "2026-11-13 15:00:00"
+    gateway._dnse_market = object()  # type: ignore[assignment]
+    called_ohlc: list[str] = []
+
+    def fake_last_trade(
+        symbol: str, include_last_trade: bool = True, include_daily_ohlc: bool = False
+    ) -> dict[str, object] | None:
+        if include_daily_ohlc:
+            called_ohlc.append(symbol)
+            return {
+                "daily_ohlc": {
+                    "time": "2026-11-13 07:00:00",
+                    "open": 19.5,
+                    "high": 20.5,
+                    "low": 19.2,
+                }
+            }
+        return None
+
+    gateway._dnse_last_trade_row = fake_last_trade  # type: ignore[method-assign]
+    rows = gateway.quote_rows(symbols)
+
+    assert "S34" in called_ohlc
+    s34 = next(row for row in rows if row["symbol"] == "S34")
+    assert s34["open_price"] == Decimal("19500.0")
+    assert s34["high_price"] == Decimal("20500.0")
+    assert s34["low_price"] == Decimal("19200.0")

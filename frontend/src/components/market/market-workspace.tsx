@@ -22,6 +22,7 @@ import { useVisibleFundamentals } from "@/hooks/use-visible-fundamentals";
 import { marketPath, type MarketTab } from "@/lib/market-routes";
 import { Pagination, encodeCursor } from "@/components/ui/pagination";
 import type {
+  EcosystemDetailData,
   EcosystemSummary,
   InstrumentCollection,
   MarketMeta,
@@ -274,13 +275,19 @@ export function WatchlistView({ instruments }: { instruments: InstrumentCollecti
 export function EcosystemsView({
   initialEcosystems,
   initialEcoId,
+  initialDetail,
 }: {
   initialEcosystems?: EcosystemSummary[];
   initialEcoId?: string;
+  initialDetail?: EcosystemDetailData | null;
 }) {
   return (
     <section className="market-tab-panel ecosystems-view">
-      <EcosystemGraph initialEcosystemId={initialEcoId} initialEcosystems={initialEcosystems} />
+      <EcosystemGraph
+        initialEcosystemId={initialEcoId}
+        initialEcosystems={initialEcosystems}
+        initialDetail={initialDetail}
+      />
     </section>
   );
 }
