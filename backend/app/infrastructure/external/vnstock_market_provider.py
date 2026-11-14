@@ -50,6 +50,7 @@ _DNSE_STREAM_MAX_CONNECTIONS = 10
 _QUOTE_BOARD_TIMEOUT_SECONDS = 10
 _QUOTE_BOARD_BATCH_SIZE = 5
 _DNSE_REQUEST_TIMEOUT_SECONDS = 3
+_DNSE_DETAIL_TIMEOUT_SECONDS = 5
 _FUNDAMENTAL_REQUEST_TIMEOUT_SECONDS = 5
 _CANDLE_REQUEST_TIMEOUT_SECONDS = 6
 _INITIAL_SNAPSHOT_WAIT_SECONDS = 180
@@ -907,7 +908,7 @@ class OfficialVnstockGateway:
                 lambda: dnse_market.equity(symbol).trades(
                     limit=min(limit, 1000), board="G1", compat="v5"
                 ),
-                timeout=_DNSE_REQUEST_TIMEOUT_SECONDS,
+                timeout=_DNSE_DETAIL_TIMEOUT_SECONDS,
                 operation="dnse-trades",
             )
             return _frame_records(frame)
@@ -923,7 +924,7 @@ class OfficialVnstockGateway:
                 # Vnstock 6.0.0's DNSE order_book route rejects the board argument,
                 # while its default already selects the supported board.
                 lambda: dnse_market.equity(symbol).order_book(compat="v5"),
-                timeout=_DNSE_REQUEST_TIMEOUT_SECONDS,
+                timeout=_DNSE_DETAIL_TIMEOUT_SECONDS,
                 operation="dnse-order-book",
             )
             return _frame_records(frame)
@@ -1863,7 +1864,14 @@ class VnstockMarketProvider:
         else:
             try:
                 fundamentals = _fundamental_values(self._gateway.fundamental_rows(value.symbol))
-                ttl = self._config.fundamental_cache_seconds
+                has_values = any(item is not None for item in fundamentals)
+                if not has_values and cached and any(item is not None for item in cached[1]):
+                    fundamentals = cached[1]
+                ttl = (
+                    self._config.fundamental_cache_seconds
+                    if has_values
+                    else min(30, self._config.fundamental_cache_seconds)
+                )
             except (RuntimeError, TypeError, ValueError):
                 logger.warning(
                     "vnstock_fundamentals_unavailable",
@@ -1874,12 +1882,18 @@ class VnstockMarketProvider:
                     if cached and any(item is not None for item in cached[1])
                     else (None, None, None, None)
                 )
-                ttl = min(300, self._config.fundamental_cache_seconds)
+                ttl = min(30, self._config.fundamental_cache_seconds)
             if len(self._fundamental_cache) >= self._config.max_symbols:
                 self._fundamental_cache.clear()
             self._fundamental_cache[value.symbol] = (now + ttl, fundamentals)
         pe, pb, eps, roe_percent = fundamentals
-        return replace(value, pe=pe, pb=pb, eps=eps, roe_percent=roe_percent)
+        return replace(
+            value,
+            pe=pe if pe is not None else value.pe,
+            pb=pb if pb is not None else value.pb,
+            eps=eps if eps is not None else value.eps,
+            roe_percent=roe_percent if roe_percent is not None else value.roe_percent,
+        )
 
     def _with_dnse_depth(self, value: MarketInstrument) -> MarketInstrument:
         now = self._clock()
@@ -1889,14 +1903,16 @@ class VnstockMarketProvider:
         else:
             try:
                 rows = self._gateway.order_book_rows(value.symbol)
+                ttl = 30.0 if rows else 5.0
             except (RuntimeError, TypeError, ValueError):
                 logger.warning(
                     "vnstock_dnse_order_book_unavailable", extra={"symbol": value.symbol}
                 )
                 rows = cached[1] if cached else []
+                ttl = 30.0 if rows else 5.0
             if len(self._order_book_cache) >= self._config.max_symbols:
                 self._order_book_cache.clear()
-            self._order_book_cache[value.symbol] = (now + 30.0, rows)
+            self._order_book_cache[value.symbol] = (now + ttl, rows)
         if not rows:
             return value
         row = rows[-1]
