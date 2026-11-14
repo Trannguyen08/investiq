@@ -197,6 +197,7 @@ def _cached(
     cache: MarketReadCache,
     *,
     durable: bool = True,
+    ttl_seconds: int | None = None,
 ) -> dict[str, object]:
     key = cache.key(resource, dimensions)
     found = cache.get(key)
@@ -208,7 +209,7 @@ def _cached(
     if not isinstance(payload, dict):
         raise TypeError("Market cache loader returned an invalid payload")
     if not from_snapshot:
-        cache.set(key, payload, settings.market_public_cache_seconds)
+        cache.set(key, payload, ttl_seconds or settings.market_public_cache_seconds)
     return payload
 
 
@@ -343,6 +344,7 @@ def stock_growth(symbol: str, response: Response) -> dict[str, object]:
         {"symbol": normalized},
         lambda: _service().growth(normalized),
         get_market_read_cache(),
+        ttl_seconds=settings.vnstock_fundamental_cache_seconds,
     )
     if value is None:
         raise HTTPException(status_code=404, detail="Stock growth data not found")
@@ -427,6 +429,7 @@ def instrument_dividends(symbol: str, response: Response) -> dict[str, object]:
         {"symbol": normalized},
         _loader,
         get_market_read_cache(),
+        ttl_seconds=settings.vnstock_fundamental_cache_seconds,
     )
 
 
@@ -507,6 +510,7 @@ def instrument_financial_statements(
         {"symbol": normalized, "period": period, "limit": limit},
         _loader,
         get_market_read_cache(),
+        ttl_seconds=settings.vnstock_fundamental_cache_seconds,
     )
 
 
@@ -550,7 +554,12 @@ def candles(
     if not isinstance(value, dict):
         raise HTTPException(status_code=404, detail="Candle series not found")
     if not from_snapshot:
-        cache.set(key, value, settings.market_public_cache_seconds)
+        candle_ttl = (
+            settings.vnstock_candle_cache_seconds
+            if interval in {"1d", "1w", "1M"}
+            else min(60, settings.vnstock_candle_cache_seconds)
+        )
+        cache.set(key, value, candle_ttl)
     return value
 
 
@@ -732,6 +741,7 @@ def forensics(symbol: str, response: Response) -> dict[str, object]:
         {"symbol": symbol.upper()},
         lambda: service.forensics(symbol),
         get_market_read_cache(),
+        ttl_seconds=settings.vnstock_fundamental_cache_seconds,
     )
     if value is None:
         raise HTTPException(status_code=404, detail="Instrument not found")
