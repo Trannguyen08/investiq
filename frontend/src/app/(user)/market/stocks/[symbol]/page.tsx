@@ -68,17 +68,23 @@ export default async function StockDetailPage({
   const initialTab = typeof query.tab === "string" ? query.tab : "chart";
   const selected = rangeConfig[range];
 
-  const instrumentPromise = getMarketInstrument(symbol, 8000).then(
+  const instrumentPromise = getMarketInstrument(symbol, 10000).then(
     (value) => ({ status: "fulfilled" as const, value }),
     (error: unknown) => ({ status: "rejected" as const, error }),
   );
-  const candlesPromise = getMarketCandles(symbol, selected.interval, selected.limit, 8000).catch(() => null);
+  const candlesPromise = getMarketCandles(symbol, selected.interval, selected.limit, 10000).catch(() => null);
   const intradayPromise = getMarketIntradayTrades(symbol, 100, 1500).catch(() => null);
-  const growthPromise = getMarketGrowth(symbol, 1500).catch(() => null);
-  const forensicsPromise = getMarketForensics(symbol, 1500).catch(() => null);
-  const dividendsPromise = getInstrumentDividends(symbol, 1500).catch(() => null);
-  const fsQuarterPromise = getInstrumentFinancialStatements(symbol, "quarter", 6, 10000).catch(() => null);
-  const fsYearPromise = getInstrumentFinancialStatements(symbol, "year", 4, 10000).catch(() => null);
+  const growthTimeout = initialTab === "growth" || initialTab === "financials" ? 6000 : 1500;
+  const forensicsTimeout = initialTab === "forensics" ? 6000 : 1500;
+  const dividendsTimeout = initialTab === "dividends" ? 6000 : 1500;
+  const fsTimeout = initialTab === "growth" || initialTab === "financials" ? 6000 : 1500;
+  const newsTimeout = initialTab === "news" ? 4000 : 1000;
+  const growthPromise = getMarketGrowth(symbol, growthTimeout).catch(() => null);
+  const forensicsPromise = getMarketForensics(symbol, forensicsTimeout).catch(() => null);
+  const dividendsPromise = getInstrumentDividends(symbol, dividendsTimeout).catch(() => null);
+  const fsQuarterPromise = getInstrumentFinancialStatements(symbol, "quarter", 6, fsTimeout).catch(() => null);
+  const fsYearPromise = getInstrumentFinancialStatements(symbol, "year", 4, fsTimeout).catch(() => null);
+  const relatedNewsPromise = getRelatedStockNews("", symbol, 6, newsTimeout).catch(() => null);
 
   const [
     instrumentResult,
@@ -89,6 +95,7 @@ export default async function StockDetailPage({
     dividendsEnvelope,
     fsQuarterEnvelope,
     fsYearEnvelope,
+    relatedNews,
   ] = await Promise.all([
     instrumentPromise,
     candlesPromise,
@@ -98,6 +105,7 @@ export default async function StockDetailPage({
     dividendsPromise,
     fsQuarterPromise,
     fsYearPromise,
+    relatedNewsPromise,
   ]);
 
   if (instrumentResult.status === "rejected") {
@@ -139,8 +147,6 @@ export default async function StockDetailPage({
   }
   const envelope: InstrumentEnvelope = instrumentResult.value;
   const item = envelope.data;
-
-  const relatedNews = await getRelatedStockNews(item.exchange, item.symbol, 6, 1000).catch(() => null);
 
   // Fallback for growth overview
   const capBillions = item.market_cap ? (parseFloat(item.market_cap) / 1e9).toFixed(0) : "1,000";
