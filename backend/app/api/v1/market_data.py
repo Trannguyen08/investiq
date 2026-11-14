@@ -315,15 +315,22 @@ def sectors(response: Response) -> dict[str, object]:
 @router.get("/instruments/{symbol}", response_model=InstrumentEnvelope)
 def instrument(symbol: str, response: Response) -> dict[str, object]:
     _public_headers(response)
-    service = _service()
+    cache = get_market_read_cache()
     normalized = symbol.upper()
-    value, _ = _with_snapshot_fallback(
+    key = cache.key("instrument", {"symbol": normalized})
+    found = cache.get(key)
+    if found is not None:
+        return found
+    service = _service()
+    value, from_snapshot = _with_snapshot_fallback(
         "instrument",
-        get_market_read_cache().key("instrument", {"symbol": normalized}),
+        key,
         lambda: service.instrument(symbol),
     )
     if not isinstance(value, dict):
         raise HTTPException(status_code=404, detail="Instrument not found")
+    if not from_snapshot:
+        cache.set(key, value, settings.market_public_cache_seconds)
     return value
 
 
@@ -526,9 +533,24 @@ def candles(
     limit: Annotated[int, Query(ge=1, le=500)] = 120,
 ) -> dict[str, object]:
     _public_headers(response)
-    value = _service().candles(symbol, interval, limit)
-    if not value["data"]:
+    cache = get_market_read_cache()
+    key = cache.key("candles", {"symbol": symbol.upper(), "interval": interval, "limit": limit})
+    found = cache.get(key)
+    if found is not None:
+        return found
+    service = _service()
+
+    def load_candles() -> dict[str, object]:
+        payload = service.candles(symbol, interval, limit)
+        if not payload["data"]:
+            raise HTTPException(status_code=404, detail="Candle series not found")
+        return payload
+
+    value, from_snapshot = _with_snapshot_fallback("candles", key, load_candles)
+    if not isinstance(value, dict):
         raise HTTPException(status_code=404, detail="Candle series not found")
+    if not from_snapshot:
+        cache.set(key, value, settings.market_public_cache_seconds)
     return value
 
 

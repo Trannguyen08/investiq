@@ -49,7 +49,7 @@ _DNSE_STREAM_BATCH_SIZE = 200
 _DNSE_STREAM_MAX_CONNECTIONS = 10
 _QUOTE_BOARD_TIMEOUT_SECONDS = 10
 _QUOTE_BOARD_BATCH_SIZE = 5
-_DNSE_REQUEST_TIMEOUT_SECONDS = 6
+_DNSE_REQUEST_TIMEOUT_SECONDS = 3
 _FUNDAMENTAL_REQUEST_TIMEOUT_SECONDS = 5
 _INITIAL_SNAPSHOT_WAIT_SECONDS = 180
 _INDEX_EXCHANGE = {
@@ -757,7 +757,12 @@ class OfficialVnstockGateway:
 
     def fundamental_rows(self, symbol: str) -> list[dict[str, object]]:
         try:
-            row = _frame_records(self._market.equity(symbol).summary())
+            frame = _bounded_call(
+                lambda: self._market.equity(symbol).summary(),
+                timeout=_FUNDAMENTAL_REQUEST_TIMEOUT_SECONDS,
+                operation="fhsc-fundamental-summary",
+            )
+            row = _frame_records(frame)
             if row:
                 latest = row[-1]
                 return [
@@ -779,24 +784,30 @@ class OfficialVnstockGateway:
     def fundamental_quarterly_rows(self, symbol: str) -> list[dict[str, object]]:
         try:
             equity = self._fundamental.equity(symbol)
-            income_rows = _frame_records(
-                equity.income_statement(
+            income_frame = _bounded_call(
+                lambda: equity.income_statement(
                     period="quarter",
                     format="time_series",
                     source="fhsc",
-                )
+                ),
+                timeout=_FUNDAMENTAL_REQUEST_TIMEOUT_SECONDS,
+                operation="fhsc-quarterly-income",
             )
+            income_rows = _frame_records(income_frame)
         except (Exception, SystemExit) as exc:
             raise RuntimeError("Vnstock 6 quarterly income statement request failed") from exc
 
         try:
-            balance_rows = _frame_records(
-                equity.balance_sheet(
+            balance_frame = _bounded_call(
+                lambda: equity.balance_sheet(
                     period="quarter",
                     format="time_series",
                     source="fhsc",
-                )
+                ),
+                timeout=_FUNDAMENTAL_REQUEST_TIMEOUT_SECONDS,
+                operation="fhsc-quarterly-balance",
             )
+            balance_rows = _frame_records(balance_frame)
         except (Exception, SystemExit) as exc:
             logger.warning(
                 "vnstock_quarterly_balance_sheet_unavailable",
@@ -1444,6 +1455,7 @@ class VnstockMarketProvider:
             ],
         ] = {}
         self._intraday_cache: dict[str, tuple[float, tuple[IntradayTrade, ...]]] = {}
+        self._order_book_cache: dict[str, tuple[float, list[dict[str, object]]]] = {}
         self._event_lock = RLock()
         self._event_cache: tuple[float, tuple[MarketEvent, ...]] | None = None
         self._growth_cache: dict[str, tuple[float, list[dict[str, object]]]] = {}
@@ -1733,7 +1745,12 @@ class VnstockMarketProvider:
             values = tuple(sorted(values, key=lambda item: item.timestamp))
         except (RuntimeError, TypeError, ValueError):
             logger.warning("vnstock_intraday_trades_unavailable", extra={"symbol": normalized})
-            return cached[1][-limit:] if cached else ()
+            fallback = cached[1] if cached else ()
+            self._intraday_cache[normalized] = (
+                now + min(30, self._config.candle_cache_seconds),
+                fallback,
+            )
+            return fallback[-limit:]
         if len(self._intraday_cache) >= self._config.max_symbols:
             self._intraday_cache.clear()
         self._intraday_cache[normalized] = (
@@ -1806,11 +1823,21 @@ class VnstockMarketProvider:
         return replace(value, pe=pe, pb=pb, eps=eps, roe_percent=roe_percent)
 
     def _with_dnse_depth(self, value: MarketInstrument) -> MarketInstrument:
-        try:
-            rows = self._gateway.order_book_rows(value.symbol)
-        except (RuntimeError, TypeError, ValueError):
-            logger.warning("vnstock_dnse_order_book_unavailable", extra={"symbol": value.symbol})
-            return value
+        now = self._clock()
+        cached = self._order_book_cache.get(value.symbol)
+        if cached and cached[0] > now:
+            rows = cached[1]
+        else:
+            try:
+                rows = self._gateway.order_book_rows(value.symbol)
+            except (RuntimeError, TypeError, ValueError):
+                logger.warning(
+                    "vnstock_dnse_order_book_unavailable", extra={"symbol": value.symbol}
+                )
+                rows = cached[1] if cached else []
+            if len(self._order_book_cache) >= self._config.max_symbols:
+                self._order_book_cache.clear()
+            self._order_book_cache[value.symbol] = (now + 30.0, rows)
         if not rows:
             return value
         row = rows[-1]
