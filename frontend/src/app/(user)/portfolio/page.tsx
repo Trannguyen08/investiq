@@ -9,7 +9,7 @@ export default async function PortfolioPage() {
   const marketQuery = new URLSearchParams({ sort: "vn30", direction: "desc", limit: "100" });
   const dashboardWithTimeout = Promise.race([
     paperTradingRequest("").then(async (res) => (res.ok ? ((await res.json()) as PaperDashboard) : null)),
-    new Promise<null>((resolve) => setTimeout(() => resolve(null), 1200)),
+    new Promise<null>((resolve) => setTimeout(() => resolve(null), 3500)),
   ]).catch(() => null);
 
   const [marketResult, dashboardResult] = await Promise.allSettled([

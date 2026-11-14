@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+from concurrent.futures import ThreadPoolExecutor
 from datetime import UTC, datetime, time, timedelta
 from decimal import Decimal
 from pathlib import Path
@@ -844,35 +845,33 @@ class PaperTradingService:
             symbols_to_fetch: list[str] = []
             for sym in holding_symbols:
                 cached_c = self._holding_candles_cache.get(sym)
-                cached_latest_date = (
-                    cached_c[1][-1].timestamp.astimezone(market_tz).date()
-                    if cached_c and cached_c[1]
-                    else None
-                )
-                is_fresh = (
-                    cached_c is not None
-                    and cached_c[0] > now_mono
-                    and bool(cached_c[1])
-                    and (cached_latest_date is not None and cached_latest_date >= today_market)
-                )
-                if is_fresh and cached_c is not None:
+                if cached_c is not None and cached_c[0] > now_mono and bool(cached_c[1]):
                     all_candles[sym] = cached_c[1]
                 else:
                     symbols_to_fetch.append(sym)
 
-            for s in symbols_to_fetch:
-                try:
-                    fetched = list(self._provider.candles(s, "1d"))[-90:]
+            if symbols_to_fetch:
+                def _fetch_holding_candles(sym: str) -> tuple[str, list[Candle]]:
+                    try:
+                        return sym, list(self._provider.candles(sym, "1d"))[-90:]
+                    except Exception:
+                        return sym, []
+
+                if len(symbols_to_fetch) == 1:
+                    results = [_fetch_holding_candles(symbols_to_fetch[0])]
+                else:
+                    with ThreadPoolExecutor(max_workers=min(4, len(symbols_to_fetch))) as pool:
+                        results = list(pool.map(_fetch_holding_candles, symbols_to_fetch))
+
+                for s, fetched in results:
                     if fetched:
                         self._holding_candles_cache[s] = (_monotonic() + 300.0, fetched)
                         _persist_candles_to_disk(s, fetched)
                         all_candles[s] = fetched
-                        continue
-                except Exception:
-                    pass
-                fallback_c = self._holding_candles_cache.get(s)
-                if fallback_c and fallback_c[1]:
-                    all_candles[s] = fallback_c[1]
+                    else:
+                        fallback_c = self._holding_candles_cache.get(s)
+                        if fallback_c and fallback_c[1]:
+                            all_candles[s] = fallback_c[1]
 
         histories: dict[str, list[dict[str, str]]] = {}
         for holding in portfolio.holdings:

@@ -10,6 +10,7 @@ from app.api.v1 import market_data
 from app.application.use_cases.market_data.errors import MarketDataUnavailable
 from app.domain.entities.market import MarketInstrument
 from app.infrastructure.cache.market_cache import MarketReadCache
+from app.infrastructure.cache.market_snapshot_store import MarketSnapshotStore
 from app.infrastructure.config.settings import settings
 from app.infrastructure.external.market_fixture_provider import FixtureMarketProvider
 from app.main import app
@@ -185,8 +186,25 @@ def test_market_provider_failures_return_safe_503(monkeypatch: pytest.MonkeyPatc
         ) -> MarketInstrument | None:
             raise MarketDataUnavailable("upstream detail must not leak")
 
+    class EmptyRedis:
+        def get(self, key: str) -> None:
+            return None
+
+        def set(self, key: str, value: str, *, ex: int) -> None:
+            return None
+
     provider = FailingProvider()
     monkeypatch.setattr(market_data, "_provider", lambda: provider)
+    monkeypatch.setattr(
+        market_data,
+        "get_market_read_cache",
+        lambda: MarketReadCache(client=cast(Any, EmptyRedis())),
+    )
+    monkeypatch.setattr(
+        market_data,
+        "get_market_snapshot_store",
+        lambda: MarketSnapshotStore(enabled=False),
+    )
 
     with TestClient(app) as client:
         response = client.get("/api/v1/market/instruments/FPT")
