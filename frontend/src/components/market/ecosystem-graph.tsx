@@ -100,14 +100,18 @@ function formatTrillion(rawVal: string | number | undefined | null): string {
 export function EcosystemGraph({
   initialEcosystemId,
   initialEcosystems,
+  initialDetail,
 }: {
   initialEcosystemId?: string;
   initialEcosystems?: EcosystemSummary[];
+  initialDetail?: EcosystemDetailData | null;
 } = {}) {
   const [ecosystems, setEcosystems] = useState<EcosystemSummary[]>(initialEcosystems ?? []);
   const [selectedId, setSelectedId] = useState<string>(initialEcosystemId ?? initialEcosystems?.[0]?.id ?? "vingroup");
-  const [detail, setDetail] = useState<EcosystemDetailData | null>(null);
-  const [loading, setLoading] = useState<boolean>(!initialEcosystems?.length);
+  const [detail, setDetail] = useState<EcosystemDetailData | null>(initialDetail ?? null);
+  const [loading, setLoading] = useState<boolean>(!initialDetail && !initialEcosystems?.length);
+  const [loadError, setLoadError] = useState<boolean>(false);
+  const [reloadKey, setReloadKey] = useState<number>(0);
   const [viewLayout, setViewLayout] = useState<"tree" | "matrix">("tree");
   const [nodeFilter, setNodeFilter] = useState<"all" | "listed" | "unlisted">("all");
 
@@ -138,14 +142,24 @@ export function EcosystemGraph({
   // Load ecosystem detail whenever selectedId changes
   useEffect(() => {
     if (!selectedId) return;
+    if (reloadKey === 0 && initialDetail && initialDetail.id === selectedId) {
+      setDetail(initialDetail);
+      setLoadError(false);
+      setLoading(false);
+      return;
+    }
     let ignore = false;
     setLoading(true);
+    setLoadError(false);
     getMarketEcosystemDetail(selectedId)
       .then((res) => {
         if (!ignore) setDetail(res.data);
       })
       .catch(() => {
-        if (!ignore) setDetail(null);
+        if (!ignore) {
+          setDetail(null);
+          setLoadError(true);
+        }
       })
       .finally(() => {
         if (!ignore) setLoading(false);
@@ -153,7 +167,7 @@ export function EcosystemGraph({
     return () => {
       ignore = true;
     };
-  }, [selectedId]);
+  }, [selectedId, reloadKey, initialDetail]);
 
   const currentSummary = useMemo(
     () => ecosystems.find((e) => e.id === selectedId) ?? ecosystems[0],
@@ -237,6 +251,19 @@ export function EcosystemGraph({
         <div className="eco-loading-indicator">
           <div className="eco-spinner" />
           <p>Đang tải dữ liệu mạng lưới hệ sinh thái {currentSummary?.name || ""}...</p>
+        </div>
+      )}
+
+      {!loading && loadError && !detail && (
+        <div className="eco-loading-indicator">
+          <p>Chưa tải được dữ liệu chi tiết hệ sinh thái {currentSummary?.name || ""}.</p>
+          <button
+            type="button"
+            className="eco-layout-btn active"
+            onClick={() => setReloadKey((k) => k + 1)}
+          >
+            Thử lại
+          </button>
         </div>
       )}
 

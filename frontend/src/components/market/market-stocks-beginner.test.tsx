@@ -244,17 +244,15 @@ describe("StocksView navigation", () => {
     expect(screen.queryByRole("heading", { name: "Góc nhìn đã lưu" })).not.toBeInTheDocument();
   });
 
-  it("opens the advanced fields from the button beside the ordering control", () => {
+  it("renders streamlined filter controls without ordering, advanced filter, or reset buttons", () => {
     render(<StocksView collection={collection} summary={collection} sectors={sectors} filters={{ q: "", exchange: "", sort: "vn30", direction: "desc", mode: "basic" }} selected="" selectedCandles={[]} index={index} />);
 
-    const trigger = screen.getByRole("button", { name: "Lọc nâng cao" });
-    expect(trigger).toHaveAttribute("aria-expanded", "false");
-    expect(screen.queryByLabelText("% tăng tối thiểu")).not.toBeInTheDocument();
-
-    fireEvent.click(trigger);
-
-    expect(trigger).toHaveAttribute("aria-expanded", "true");
-    expect(screen.getByLabelText("% tăng tối thiểu")).toBeInTheDocument();
+    expect(screen.getByLabelText("Tìm mã hoặc công ty")).toBeInTheDocument();
+    expect(screen.getByLabelText("Sàn")).toBeInTheDocument();
+    expect(screen.getByLabelText("Sắp xếp")).toBeInTheDocument();
+    expect(screen.queryByLabelText("Thứ tự")).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Lọc nâng cao" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("link", { name: "Đặt lại" })).not.toBeInTheDocument();
   });
 
   it("selects, removes and reloads up to two stocks in a comparison dialog", () => {

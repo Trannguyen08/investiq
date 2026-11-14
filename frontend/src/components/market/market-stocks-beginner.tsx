@@ -696,8 +696,6 @@ export function StocksView({
   const stream = useMarketStreamState();
   const comparisonButtonRef = useRef<HTMLButtonElement>(null);
   const [comparisonOpen, setComparisonOpen] = useState(comparisonSymbols.length >= 2);
-  const activeAdvancedFilterCount = [filters.min_change, filters.max_change, filters.min_matched_value_billion, filters.min_market_cap_billion, filters.min_volume_ratio, filters.vn30].filter(Boolean).length;
-  const [advancedFilterOpen, setAdvancedFilterOpen] = useState(activeAdvancedFilterCount > 0);
   const [searchQuery, setSearchQuery] = useState(filters.q || "");
   const [heatmapTab, setHeatmapTab] = useState<"treemap" | "sectors">("treemap");
   const [selectedTreemapSector, setSelectedTreemapSector] = useState<string>("ALL");
@@ -1000,52 +998,6 @@ export function StocksView({
               {hasVolumeBaseline && <option value="volume_vs_20d">Khối lượng so với TB20</option>}
             </select>
           </label>
-          <label className="flex flex-col gap-1 text-slate-400 font-medium min-w-[100px]">
-            Thứ tự
-            <select
-              name="direction"
-              defaultValue={filters.direction}
-              onChange={(e) => {
-                const nextUrl = hrefWith(filters, { direction: e.target.value, cursor: null });
-                router.push(nextUrl, { scroll: false });
-              }}
-              className="bg-slate-900 border border-slate-700 rounded-lg px-2.5 py-1.5 text-white text-xs focus:outline-none focus:border-sky-500"
-            >
-              <option value="desc">Giảm dần</option>
-              <option value="asc">Tăng dần</option>
-            </select>
-          </label>
-          <button
-            type="button"
-            className="advanced-filter-trigger px-3 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs font-semibold border border-slate-700 transition cursor-pointer flex items-center gap-1.5"
-            aria-expanded={advancedFilterOpen}
-            aria-controls="advanced-stock-filter-panel"
-            onClick={() => setAdvancedFilterOpen((current) => !current)}
-          >
-            Lọc nâng cao{activeAdvancedFilterCount ? <span className="bg-sky-500 text-white rounded-full px-1.5 py-0.2 text-[10px] font-bold">{activeAdvancedFilterCount}</span> : null}
-          </button>
-          <div className="stock-filter-actions flex items-center gap-2">
-            <Link href="/market/stocks" prefetch={false} onClick={() => setSearchQuery("")} className="px-3 py-1.5 rounded-lg text-slate-400 hover:text-white transition">Đặt lại</Link>
-          </div>
-          {advancedFilterOpen && (
-            <section id="advanced-stock-filter-panel" className="advanced-stock-filter w-full pt-3 mt-1 border-t border-slate-800" aria-label="Bộ lọc nâng cao">
-              <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-                <label className="flex flex-col gap-1 text-slate-400">% tăng tối thiểu<input type="number" step="0.1" min="-100" max="100" name="min_change" defaultValue={filters.min_change} placeholder="Ví dụ: 1" className="bg-slate-900 border border-slate-700 rounded-lg px-2.5 py-1 text-white text-xs" /></label>
-                <label className="flex flex-col gap-1 text-slate-400">% tăng tối đa<input type="number" step="0.1" min="-100" max="100" name="max_change" defaultValue={filters.max_change} placeholder="Ví dụ: 5" className="bg-slate-900 border border-slate-700 rounded-lg px-2.5 py-1 text-white text-xs" /></label>
-                <label className="flex flex-col gap-1 text-slate-400">GTGD tối thiểu (tỷ)<input type="number" step="1" min="0" name="min_matched_value_billion" defaultValue={filters.min_matched_value_billion} placeholder="Ví dụ: 100" className="bg-slate-900 border border-slate-700 rounded-lg px-2.5 py-1 text-white text-xs" /></label>
-                <label className="flex flex-col gap-1 text-slate-400">Vốn hóa tối thiểu (tỷ)<input type="number" step="1" min="0" name="min_market_cap_billion" defaultValue={filters.min_market_cap_billion} placeholder="Ví dụ: 10000" className="bg-slate-900 border border-slate-700 rounded-lg px-2.5 py-1 text-white text-xs" /></label>
-                {hasVolumeBaseline ? (
-                  <label className="flex flex-col gap-1 text-slate-400">KL / TB20 tối thiểu<input type="number" step="0.1" min="0" max="1000" name="min_volume_ratio" defaultValue={filters.min_volume_ratio} placeholder="Ví dụ: 1.5" className="bg-slate-900 border border-slate-700 rounded-lg px-2.5 py-1 text-white text-xs" /></label>
-                ) : (
-                  <p className="filter-unavailable text-slate-500 text-xs italic col-span-2 self-center">Nguồn hiện tại chưa cung cấp khối lượng trung bình 20 phiên cho toàn thị trường.</p>
-                )}
-                <label className="checkbox-filter flex items-center gap-2 text-slate-300 cursor-pointer self-center mt-2">
-                  <input type="checkbox" name="vn30" value="true" defaultChecked={filters.vn30 === "true"} className="rounded border-slate-700" />
-                  Chỉ mã VN30
-                </label>
-              </div>
-            </section>
-          )}
         </div>
 
         {/* Table Wrap */}
