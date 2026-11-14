@@ -861,9 +861,9 @@ class PaperTradingService:
                         _persist_candles_to_disk(sym, fetched)
                     return fetched
 
-                pool = ThreadPoolExecutor(max_workers=min(4, len(symbols_to_fetch)))
+                pool = ThreadPoolExecutor(max_workers=min(8, len(symbols_to_fetch)))
                 futures = {pool.submit(_fetch_holding_candles, sym): sym for sym in symbols_to_fetch}
-                done, _ = wait(futures.keys(), timeout=2.5)
+                done, _ = wait(futures.keys(), timeout=6.0)
                 pool.shutdown(wait=False, cancel_futures=False)
 
                 for sym in symbols_to_fetch:

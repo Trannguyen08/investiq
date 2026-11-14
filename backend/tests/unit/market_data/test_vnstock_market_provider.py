@@ -1217,7 +1217,7 @@ def test_quote_rows_fetches_dnse_daily_ohlc_beyond_fhsc_30_limit() -> None:
     gateway._market = SimpleNamespace(  # type: ignore[assignment]
         equity=SimpleNamespace(quote=lambda batch, compat="v5": [])
     )
-    gateway._market_time = "2026-11-13 15:00:00"
+    gateway._market_time = "2026-11-14 08:00:00"
     gateway._dnse_market = object()  # type: ignore[assignment]
     called_ohlc: list[str] = []
 
