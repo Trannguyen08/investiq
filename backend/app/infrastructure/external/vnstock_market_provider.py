@@ -51,6 +51,7 @@ _QUOTE_BOARD_TIMEOUT_SECONDS = 10
 _QUOTE_BOARD_BATCH_SIZE = 5
 _DNSE_REQUEST_TIMEOUT_SECONDS = 3
 _FUNDAMENTAL_REQUEST_TIMEOUT_SECONDS = 5
+_CANDLE_REQUEST_TIMEOUT_SECONDS = 6
 _INITIAL_SNAPSHOT_WAIT_SECONDS = 180
 _INDEX_EXCHANGE = {
     "VNINDEX": "HOSE",
@@ -710,49 +711,78 @@ class OfficialVnstockGateway:
         count: int,
     ) -> list[dict[str, object]]:
         dnse_market = getattr(self, "_dnse_market", None)
-        candidates: list[list[dict[str, object]]] = []
-        if dnse_market is not None and symbol not in _INDEX_EXCHANGE:
-            try:
-                frame = _bounded_call(
-                    lambda: dnse_market.equity(symbol).ohlcv(
-                        interval=interval, limit=count, compat="v5"
-                    ),
-                    timeout=_DNSE_REQUEST_TIMEOUT_SECONDS,
-                    operation="dnse-candles",
-                )
-                rows = _frame_records(frame)
-                if rows:
-                    candidates.append(rows)
-                    if interval not in {"1W", "1M"} and len(rows) >= count:
-                        return rows
-                    if interval in {"1h", "30m", "5m"}:
-                        return rows
-            except (Exception, SystemExit) as exc:
-                logger.warning(
-                    "vnstock_dnse_candles_unavailable_using_fhsc",
-                    extra={"symbol": symbol, "error_type": type(exc).__name__},
-                )
         norm_interval = interval.upper() if interval.lower() in {"1w", "1m", "1y"} else interval
         source_interval = "1D" if norm_interval in {"1W", "1M", "1Y"} else interval
-        try:
+        is_daily_or_higher = norm_interval in {"1D", "1W", "1M", "1Y"}
+
+        def _fetch_fhsc() -> list[dict[str, object]]:
             asset = (
                 self._market.index(symbol)
                 if symbol in _INDEX_EXCHANGE
                 else self._market.equity(symbol)
             )
-            frame = asset.ohlcv(interval=source_interval, limit=count, compat="v5")
+            frame = _bounded_call(
+                lambda: asset.ohlcv(interval=source_interval, limit=count, compat="v5"),
+                timeout=_CANDLE_REQUEST_TIMEOUT_SECONDS,
+                operation="fhsc-candles",
+            )
             rows = _frame_records(frame)
             if norm_interval in {"1W", "1M", "1Y"}:
                 rows = _aggregate_daily_candles(rows, norm_interval, count)
-            if rows:
-                candidates.append(rows)
-        except (Exception, SystemExit) as exc:
-            logger.warning(
-                "vnstock_fhsc_candles_unavailable",
-                extra={"symbol": symbol, "interval": interval, "error_type": type(exc).__name__},
+            return rows
+
+        def _fetch_dnse() -> list[dict[str, object]]:
+            if dnse_market is None or symbol in _INDEX_EXCHANGE:
+                return []
+            frame = _bounded_call(
+                lambda: dnse_market.equity(symbol).ohlcv(
+                    interval=interval, limit=count, compat="v5"
+                ),
+                timeout=_DNSE_REQUEST_TIMEOUT_SECONDS,
+                operation="dnse-candles",
             )
-        if candidates:
-            return max(candidates, key=len)
+            return _frame_records(frame)
+
+        # Daily/weekly/monthly candles come cleanly from FHSC without waiting for DNSE first;
+        # intraday candles prefer DNSE and only fall back to FHSC if DNSE is empty/unavailable.
+        if is_daily_or_higher:
+            try:
+                rows = _fetch_fhsc()
+                if rows:
+                    return rows
+            except (Exception, SystemExit) as exc:
+                logger.warning(
+                    "vnstock_fhsc_candles_unavailable",
+                    extra={"symbol": symbol, "interval": interval, "error_type": type(exc).__name__},
+                )
+            try:
+                rows = _fetch_dnse()
+                if rows:
+                    return rows
+            except (Exception, SystemExit) as exc:
+                logger.warning(
+                    "vnstock_dnse_candles_unavailable",
+                    extra={"symbol": symbol, "error_type": type(exc).__name__},
+                )
+        else:
+            try:
+                rows = _fetch_dnse()
+                if rows:
+                    return rows
+            except (Exception, SystemExit) as exc:
+                logger.warning(
+                    "vnstock_dnse_candles_unavailable_using_fhsc",
+                    extra={"symbol": symbol, "error_type": type(exc).__name__},
+                )
+            try:
+                rows = _fetch_fhsc()
+                if rows:
+                    return rows
+            except (Exception, SystemExit) as exc:
+                logger.warning(
+                    "vnstock_fhsc_candles_unavailable",
+                    extra={"symbol": symbol, "interval": interval, "error_type": type(exc).__name__},
+                )
         raise RuntimeError("Vnstock candle request failed")
 
     def fundamental_rows(self, symbol: str) -> list[dict[str, object]]:
@@ -1709,7 +1739,36 @@ class VnstockMarketProvider:
                 now + self._config.candle_cache_seconds,
                 values,
             )
+            if interval == "1d" and not os.getenv("PYTEST_CURRENT_TEST"):
+                self._persist_candles_async(normalized, source_interval, values)
         return self._with_current_daily_candle(normalized, values) if interval == "1d" else values
+
+    def _persist_candles_async(
+        self, symbol: str, source_interval: str, values: tuple[Candle, ...]
+    ) -> None:
+        def _save() -> None:
+            try:
+                from app.infrastructure.db.repositories.sql_market_candles_repository import (
+                    SqlMarketCandlesRepository,
+                )
+
+                instrument = next(
+                    (item for item in self._instruments if item.symbol == symbol), None
+                )
+                SqlMarketCandlesRepository().upsert_candles(
+                    provider_slug="vnstock",
+                    provider_name="Vnstock 6",
+                    symbol=symbol,
+                    exchange=instrument.exchange if instrument else "HOSE",
+                    name=instrument.name if instrument else symbol,
+                    instrument_type="index" if symbol in _INDEX_EXCHANGE else "stock",
+                    interval=source_interval,
+                    candles=values,
+                )
+            except Exception:
+                pass
+
+        Thread(target=_save, name=f"persist-candles-{symbol}", daemon=True).start()
 
     @staticmethod
     def _db_candles_fallback(symbol: str, source_interval: str, limit: int) -> tuple[Candle, ...]:

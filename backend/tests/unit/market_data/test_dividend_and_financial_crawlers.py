@@ -219,8 +219,21 @@ def test_financial_statements_fallback_when_vnstock_empty() -> None:
         "source": "CafeF Data",
     }
 
+    class _EmptyRedis:
+        def get(self, key: str) -> None:
+            return None
+
+        def set(self, key: str, value: str, *, ex: int) -> None:
+            return None
+
+    from app.infrastructure.cache.market_cache import MarketReadCache
+
     with (
         patch("app.api.v1.market_data.settings.market_data_mode", "vnstock"),
+        patch(
+            "app.api.v1.market_data.get_market_read_cache",
+            return_value=MarketReadCache(client=_EmptyRedis()),  # type: ignore[arg-type]
+        ),
         patch("app.api.v1.market_data._provider", return_value=mock_vnstock_provider),
         patch("app.workers.financial_statements_sync.get_stored_statement", return_value=None),
         patch(

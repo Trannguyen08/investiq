@@ -13,7 +13,7 @@ export default async function PortfolioPage() {
   ]).catch(() => null);
 
   const [marketResult, dashboardResult] = await Promise.allSettled([
-    getMarketInstruments(marketQuery, 30),
+    getMarketInstruments(marketQuery, 30, 5000),
     dashboardWithTimeout,
   ]);
 
