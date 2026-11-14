@@ -209,10 +209,14 @@ function normalizeInstrumentCollection(
   };
 }
 
-export async function getMarketInstruments(query: URLSearchParams, revalidate: number = 30): Promise<InstrumentCollection> {
+export async function getMarketInstruments(
+  query: URLSearchParams,
+  revalidate: number = 30,
+  timeoutMs?: number,
+): Promise<InstrumentCollection> {
   const request = async (selected: URLSearchParams) => {
     const suffix = selected.size ? `?${selected.toString()}` : "";
-    return requestJson<InstrumentCollection>(`/v1/market/instruments${suffix}`, revalidate);
+    return requestJson<InstrumentCollection>(`/v1/market/instruments${suffix}`, revalidate, timeoutMs);
   };
   try {
     return normalizeInstrumentCollection(await request(query), query);

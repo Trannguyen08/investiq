@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import json
-from concurrent.futures import ThreadPoolExecutor
+from concurrent.futures import ThreadPoolExecutor, wait
 from datetime import UTC, datetime, time, timedelta
 from decimal import Decimal
 from pathlib import Path
@@ -851,27 +851,36 @@ class PaperTradingService:
                     symbols_to_fetch.append(sym)
 
             if symbols_to_fetch:
-                def _fetch_holding_candles(sym: str) -> tuple[str, list[Candle]]:
+                def _fetch_holding_candles(sym: str) -> list[Candle]:
                     try:
-                        return sym, list(self._provider.candles(sym, "1d"))[-90:]
+                        fetched = list(self._provider.candles(sym, "1d"))[-90:]
                     except Exception:
-                        return sym, []
-
-                if len(symbols_to_fetch) == 1:
-                    results = [_fetch_holding_candles(symbols_to_fetch[0])]
-                else:
-                    with ThreadPoolExecutor(max_workers=min(4, len(symbols_to_fetch))) as pool:
-                        results = list(pool.map(_fetch_holding_candles, symbols_to_fetch))
-
-                for s, fetched in results:
+                        return []
                     if fetched:
-                        self._holding_candles_cache[s] = (_monotonic() + 300.0, fetched)
-                        _persist_candles_to_disk(s, fetched)
-                        all_candles[s] = fetched
+                        self._holding_candles_cache[sym] = (_monotonic() + 300.0, fetched)
+                        _persist_candles_to_disk(sym, fetched)
+                    return fetched
+
+                pool = ThreadPoolExecutor(max_workers=min(4, len(symbols_to_fetch)))
+                futures = {pool.submit(_fetch_holding_candles, sym): sym for sym in symbols_to_fetch}
+                done, _ = wait(futures.keys(), timeout=2.5)
+                pool.shutdown(wait=False, cancel_futures=False)
+
+                for sym in symbols_to_fetch:
+                    fetched: list[Candle] = []
+                    for fut, fut_sym in futures.items():
+                        if fut_sym == sym and fut in done:
+                            try:
+                                fetched = fut.result()
+                            except Exception:
+                                fetched = []
+                            break
+                    if fetched:
+                        all_candles[sym] = fetched
                     else:
-                        fallback_c = self._holding_candles_cache.get(s)
+                        fallback_c = self._holding_candles_cache.get(sym)
                         if fallback_c and fallback_c[1]:
-                            all_candles[s] = fallback_c[1]
+                            all_candles[sym] = fallback_c[1]
 
         histories: dict[str, list[dict[str, str]]] = {}
         for holding in portfolio.holdings:
