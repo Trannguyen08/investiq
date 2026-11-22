@@ -3,6 +3,8 @@ import Link from "next/link";
 import { getAssessmentQuestions, getLatestAssessment } from "@/lib/api-client";
 import { InvestorAssessmentWizard } from "@/components/learn/investor-assessment-wizard";
 
+export const dynamic = "force-dynamic";
+
 export const metadata: Metadata = {
   title: "Đánh giá Mức độ Sẵn sàng Đầu tư | InvestIQ",
   description:
