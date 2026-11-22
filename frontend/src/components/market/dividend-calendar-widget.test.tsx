@@ -1,5 +1,5 @@
 import { fireEvent, render, screen } from "@testing-library/react";
-import { describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { DividendCalendarWidget } from "@/components/market/dividend-calendar-widget";
 import type { DividendItem } from "@/types/market";
@@ -51,6 +51,15 @@ const mockManyEvents: DividendItem[] = Array.from({ length: 8 }, (_, i) => ({
 }));
 
 describe("DividendCalendarWidget", () => {
+  beforeEach(() => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date("2026-11-10T09:00:00+07:00"));
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
   it("renders upcoming future dividend calendar title and cards", () => {
     render(<DividendCalendarWidget initialEvents={mockUpcomingEvents} />);
 
