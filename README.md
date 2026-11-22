@@ -315,7 +315,9 @@ KẾT QUẢ: TẤT CẢ KIỂM TRA ĐỀU XANH (READY FOR PR / MERGE)!
 - **Database (Neon.tech)**: PostgreSQL Serverless máy chủ Singapore `aws-ap-southeast-1` miễn phí vĩnh viễn kèm connection pooling.
 
 > [!TIP]
-> Xem hướng dẫn cấu hình chi tiết từng bước tại tài liệu: [`docs/deploy-vercel.md`](docs/deploy-vercel.md), và tài liệu tổng quan tại [`docs/deploy.md`](docs/deploy.md).
+> Xem hướng dẫn cấu hình chi tiết từng bước tại:
+> - **Oracle Cloud Always Free (2 OCPU / 12 GB RAM — khuyên dùng cho tốc độ gần như Local)**: [`docs/deploy-oracle-cloud.md`](docs/deploy-oracle-cloud.md)
+> - **Vercel + Render + Neon (100% Free)**: [`docs/deploy-vercel.md`](docs/deploy-vercel.md) và tổng quan tại [`docs/deploy.md`](docs/deploy.md)
 
 ---
 

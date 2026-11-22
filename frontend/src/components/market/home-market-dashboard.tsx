@@ -9,6 +9,8 @@ import { mergeLiveIndex, mergeLiveInstrument } from "@/components/market/live-ma
 import { MarketStatus } from "@/components/market/market-status";
 import { DailyDigestBanner } from "@/components/market/daily-digest-banner";
 import { DividendCalendarWidget } from "@/components/market/dividend-calendar-widget";
+import { F0OnboardingChecklist } from "@/components/market/f0-onboarding-checklist";
+import { PriceAlertsBar } from "@/components/market/price-alerts-bar";
 import { MarketStreamProvider, useMarketStreamState } from "@/hooks/use-realtime-price";
 import type { NewsSummary } from "@/lib/api-client";
 import type { DividendItem, MarketEvent, MarketIndex, MarketInstrument, MarketMeta, MarketOverview, MarketSector } from "@/types/market";
@@ -408,6 +410,8 @@ function HomeMarketContent({
       </div>
       <MarketSnapshotRibbon indices={indices} />
       <DailyDigestBanner />
+      <PriceAlertsBar instruments={pulseInstruments} />
+      <F0OnboardingChecklist />
       <section className="beginner-hero relative" aria-labelledby="today-market-title">
         <div className="beginner-hero-copy">
           <p className="eyebrow">HÔM NAY THỊ TRƯỜNG THẾ NÀO?</p>

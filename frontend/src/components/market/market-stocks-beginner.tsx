@@ -1006,14 +1006,49 @@ export function StocksView({
             <thead>
               <tr className="bg-slate-950/80 border-b border-slate-800 text-slate-400 uppercase tracking-wider text-[11px]">
                 <th className="py-3 px-3 font-semibold">Mã &amp; công ty</th>
-                <th className="py-3 px-3 font-semibold">Giá</th>
+                <th className="py-3 px-3 font-semibold">
+                  <span className="inline-flex items-center gap-1">
+                    Giá
+                    <InfoTip term="Giá & TC">Giá khớp mới nhất và giá Tham chiếu (TC) — mốc so sánh tăng/giảm của phiên hôm nay.</InfoTip>
+                  </span>
+                </th>
                 <th className="py-3 px-3 font-semibold">% hôm nay</th>
-                <th className="py-3 px-3 font-semibold">Mở · Cao · Thấp</th>
-                <th className="py-3 px-3 font-semibold">Khối lượng</th>
-                <th className="py-3 px-3 font-semibold">GTGD</th>
-                <th className="py-3 px-3 font-semibold">Khối ngoại</th>
-                <th className="py-3 px-3 font-semibold">Vốn hóa</th>
-                <th className="py-3 px-3 font-semibold">P/E / P/B</th>
+                <th className="py-3 px-3 font-semibold">
+                  <span className="inline-flex items-center gap-1">
+                    Mở · Cao · Thấp
+                    <InfoTip term="Mở · Cao · Thấp">Giá mở cửa, giá cao nhất và giá thấp nhất cổ phiếu đã khớp trong phiên.</InfoTip>
+                  </span>
+                </th>
+                <th className="py-3 px-3 font-semibold">
+                  <span className="inline-flex items-center gap-1">
+                    Khối lượng
+                    <InfoTip term="Khối lượng">Tổng số cổ phiếu đã khớp lệnh trong phiên; khối lượng càng cao thì càng dễ mua bán.</InfoTip>
+                  </span>
+                </th>
+                <th className="py-3 px-3 font-semibold">
+                  <span className="inline-flex items-center gap-1">
+                    GTGD
+                    <InfoTip term="GTGD">Giá trị giao dịch = tổng số tiền đã trao tay trong phiên (tỷ đồng).</InfoTip>
+                  </span>
+                </th>
+                <th className="py-3 px-3 font-semibold">
+                  <span className="inline-flex items-center gap-1">
+                    Khối ngoại
+                    <InfoTip term="Khối ngoại">Chênh lệch mua trừ bán của nhà đầu tư nước ngoài (dương là mua ròng, âm là bán ròng).</InfoTip>
+                  </span>
+                </th>
+                <th className="py-3 px-3 font-semibold">
+                  <span className="inline-flex items-center gap-1">
+                    Vốn hóa
+                    <InfoTip term="Vốn hóa">Tổng giá trị thị trường của doanh nghiệp = Thị giá × Số cổ phiếu lưu hành.</InfoTip>
+                  </span>
+                </th>
+                <th className="py-3 px-3 font-semibold">
+                  <span className="inline-flex items-center gap-1">
+                    P/E / P/B
+                    <InfoTip term="P/E và P/B">P/E: số năm hoàn vốn theo lợi nhuận hiện tại (thấp thường rẻ hơn). P/B: giá cổ phiếu so với giá trị sổ sách.</InfoTip>
+                  </span>
+                </th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-800/60">

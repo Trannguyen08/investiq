@@ -15,6 +15,7 @@ import { StockIntradayTable } from "@/components/market/stock-intraday-table";
 import { StockRelatedNews } from "@/components/market/stock-related-news";
 import { FinancialForensicsPanel } from "@/components/market/financial-forensics-panel";
 import { DCASimulatorButton } from "@/components/market/dca-simulator-modal";
+import { PriceAlertButton } from "@/components/market/price-alert-button";
 import { StockTradeActions } from "@/components/portfolio/stock-trade-actions";
 import { StockDividendPanel } from "@/components/market/stock-dividend-panel";
 import { StockFinancialStatements } from "@/components/market/stock-financial-statements";
@@ -274,6 +275,11 @@ export default async function StockDetailPage({
                 symbol={item.symbol}
                 name={item.name}
                 price={item.price}
+              />
+              <PriceAlertButton
+                symbol={item.symbol}
+                name={item.name}
+                currentPrice={item.price}
               />
               <DCASimulatorButton symbol={symbol} />
             </div>

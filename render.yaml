@@ -35,7 +35,7 @@ services:
       - key: DNSE_API_SECRET
         sync: false
       - key: VNSTOCK_REFRESH_SECONDS
-        value: "60"
+        value: "300"
       - key: LOG_LEVEL
         value: INFO
       - key: AUTH_ENABLED
