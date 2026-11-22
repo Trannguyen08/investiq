@@ -1244,3 +1244,223 @@ def test_quote_rows_fetches_dnse_daily_ohlc_beyond_fhsc_30_limit() -> None:
     assert s34["open_price"] == Decimal("19500.0")
     assert s34["high_price"] == Decimal("20500.0")
     assert s34["low_price"] == Decimal("19200.0")
+
+
+def test_candle_rows_prefers_dnse_first_with_length_for_equities_and_indices() -> None:
+    dnse_calls: list[tuple[str, str, dict[str, object]]] = []
+    fhsc_calls: list[str] = []
+
+    class Frame:
+        def __init__(self, rows: list[dict[str, object]]) -> None:
+            self._rows = rows
+
+        def to_dict(self, *, orient: str) -> list[dict[str, object]]:
+            assert orient == "records"
+            return self._rows
+
+    class DnseAsset:
+        def __init__(self, kind: str, symbol: str) -> None:
+            self._kind = kind
+            self._symbol = symbol
+
+        def ohlcv(self, **kwargs: object) -> Frame:
+            dnse_calls.append((self._kind, self._symbol, kwargs))
+            return Frame(
+                [
+                    {
+                        "time": "2026-11-20",
+                        "open": 45.6,
+                        "high": 46.0,
+                        "low": 44.65,
+                        "close": 45.0,
+                        "volume": 15_670_800,
+                    }
+                ]
+            )
+
+    class DnseMarket:
+        @staticmethod
+        def equity(symbol: str) -> DnseAsset:
+            return DnseAsset("equity", symbol)
+
+        @staticmethod
+        def index(symbol: str) -> DnseAsset:
+            return DnseAsset("index", symbol)
+
+    class FhscMarket:
+        @staticmethod
+        def equity(symbol: str) -> object:
+            fhsc_calls.append(symbol)
+            raise AssertionError("FHSC should not be called when DNSE succeeds")
+
+        @staticmethod
+        def index(symbol: str) -> object:
+            fhsc_calls.append(symbol)
+            raise AssertionError("FHSC index should not be called when DNSE succeeds")
+
+    gateway = OfficialVnstockGateway.__new__(OfficialVnstockGateway)
+    gateway._dnse_market = DnseMarket()  # type: ignore[assignment]
+    gateway._market = FhscMarket()  # type: ignore[assignment]
+
+    eq_rows = gateway.candle_rows("FPT", "1D", 500)
+    idx_rows = gateway.candle_rows("VNINDEX", "1D", 500)
+
+    assert len(eq_rows) == 1
+    assert len(idx_rows) == 1
+    assert fhsc_calls == []
+    assert dnse_calls == [
+        ("equity", "FPT", {"interval": "1D", "length": 500, "compat": "v5"}),
+        ("index", "VNINDEX", {"interval": "1D", "length": 500, "compat": "v5"}),
+    ]
+
+
+def test_quote_rows_skips_fhsc_quote_board_when_dnse_enabled_and_derives_price_band() -> None:
+    fhsc_called = False
+
+    def fail_fhsc_quote(*_args: object, **_kwargs: object) -> object:
+        nonlocal fhsc_called
+        fhsc_called = True
+        raise AssertionError("FHSC equity.quote should be skipped when DNSE is enabled")
+
+    gateway = OfficialVnstockGateway.__new__(OfficialVnstockGateway)
+    gateway._screener_rows = []
+    gateway._dnse_reference_rows = [{"symbol": "FPT", "exchange": "HOSE", "organ_name": "CTCP FPT"}]
+    gateway._market = SimpleNamespace(equity=SimpleNamespace(quote=fail_fhsc_quote))  # type: ignore[assignment]
+    gateway._market_time = "2026-11-20 15:05:05+07:00"
+    gateway._dnse_market = object()  # type: ignore[assignment]
+
+    def fake_dnse_row(
+        symbol: str, include_last_trade: bool = True, include_daily_ohlc: bool = False
+    ) -> dict[str, object] | None:
+        assert symbol == "FPT"
+        assert include_daily_ohlc is True
+        return {
+            "prev_close": 45.7,
+            "daily_ohlc": {
+                "time": "2026-11-20 07:00:00+07:00",
+                "open": 45.6,
+                "high": 46.0,
+                "low": 44.65,
+                "close": 45.0,
+                "volume": 15_670_800,
+            },
+        }
+
+    gateway._dnse_last_trade_row = fake_dnse_row  # type: ignore[method-assign]
+    rows = gateway.quote_rows(["FPT"])
+
+    assert fhsc_called is False
+    assert len(rows) == 1
+    fpt = rows[0]
+    assert fpt["close_price"] == Decimal("45000.0")
+    assert fpt["reference_price"] == Decimal("45700.0")
+    assert fpt["ceiling_price"] == Decimal("48850")
+    assert fpt["floor_price"] == Decimal("42550")
+    assert fpt["open_price"] == Decimal("45600.0")
+    assert fpt["high_price"] == Decimal("46000.0")
+    assert fpt["low_price"] == Decimal("44650.00")
+    assert fpt["volume_accumulated"] == Decimal("15670800")
+
+
+def test_reference_rows_dnse_first_boots_without_blocking_on_fhsc_screener() -> None:
+    class Frame:
+        def __init__(self, rows: list[dict[str, object]]) -> None:
+            self._rows = rows
+
+        def to_dict(self, *, orient: str) -> list[dict[str, object]]:
+            assert orient == "records"
+            return self._rows
+
+    gateway = OfficialVnstockGateway.__new__(OfficialVnstockGateway)
+    gateway._screener_rows = []
+    gateway._dnse_reference_rows = []
+    gateway._vn30_cache = None
+    gateway._market = SimpleNamespace(  # type: ignore[assignment]
+        equity=SimpleNamespace(
+            screener=lambda **_kw: (_ for _ in ()).throw(
+                AssertionError("FHSC screener should not block DNSE-first reference_rows")
+            )
+        )
+    )
+    gateway._reference = SimpleNamespace(  # type: ignore[assignment]
+        index=lambda _sym: SimpleNamespace(constituents=lambda: Frame([{"symbol": "FPT"}]))
+    )
+    gateway._dnse_reference = SimpleNamespace(  # type: ignore[assignment]
+        equity=SimpleNamespace(
+            list=lambda: Frame(
+                [
+                    {"symbol": "FPT", "exchange": "HOSE", "organ_name": "CTCP FPT"},
+                    {"symbol": "SHS", "exchange": "HNX", "organ_name": "Chứng khoán SHS"},
+                ]
+            )
+        )
+    )
+    gateway._dnse_market = SimpleNamespace(  # type: ignore[assignment]
+        index=lambda _sym: SimpleNamespace(
+            quote=lambda **_kw: Frame([{"time": "2026-11-20 15:05:05+07:00"}])
+        )
+    )
+
+    refs, vn30, _sectors = gateway.reference_rows()
+
+    assert [r["symbol"] for r in refs] == ["FPT", "SHS"]
+    assert vn30 == {"FPT"}
+    assert gateway._market_time == "2026-11-20 15:05:05+07:00"
+
+
+def test_index_from_candles_prefers_official_dnse_breadth_and_value() -> None:
+    gateway = FakeVnstockGateway()
+    gateway.index_quote_rows = lambda _syms: {  # type: ignore[attr-defined]
+        "VNINDEX": {
+            "close_price": 1688.79,
+            "reference_price": 1689.62,
+            "high_price": 1688.79,
+            "low_price": 1666.41,
+            "advances": 91,
+            "declines": 206,
+            "no_change": 65,
+            "ceiling_count": 5,
+            "floor_count": 11,
+            "accumulated_value": 10_681_119_636_030,
+            "accumulated_volume": 719_801_984,
+        }
+    }
+    provider = VnstockMarketProvider(config(), gateway=gateway)
+
+    vnindex = provider.index("VNINDEX")
+    assert vnindex is not None
+    assert vnindex.value == Decimal("1688.79")
+    assert vnindex.advances == 91
+    assert vnindex.declines == 206
+    assert vnindex.unchanged == 65
+    assert vnindex.ceiling_count == 5
+    assert vnindex.floor_count == 11
+    assert vnindex.matched_value == Decimal("10681119636030")
+
+
+def test_with_fundamentals_skips_fhsc_call_when_all_screener_ratios_present(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    gateway = FakeVnstockGateway()
+    original_quote_rows = gateway.quote_rows
+
+    def quote_rows_with_all_ratios(symbols: list[str]) -> list[dict[str, object]]:
+        rows = original_quote_rows(symbols)
+        for row in rows:
+            if row.get("symbol") == "FPT":
+                row["pe"] = 14.5
+                row["pb"] = 3.4
+                row["eps"] = 5500.0
+                row["roe"] = 28.2
+        return rows
+
+    monkeypatch.setattr(gateway, "quote_rows", quote_rows_with_all_ratios)
+    provider = VnstockMarketProvider(config(), gateway=gateway)
+
+    detail = provider.instrument("FPT", include_fundamentals=True)
+    assert detail is not None
+    assert detail.pe == Decimal("14.5")
+    assert detail.pb == Decimal("3.4")
+    assert detail.eps == Decimal("5500.0")
+    assert detail.roe_percent == Decimal("28.2")
+    assert gateway.fundamental_calls == 0

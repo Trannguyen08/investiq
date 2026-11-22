@@ -15,6 +15,7 @@ import os
 import re
 from collections.abc import Callable
 from concurrent.futures import Future, ThreadPoolExecutor, as_completed
+from contextlib import suppress
 from dataclasses import dataclass, replace
 from datetime import UTC, date, datetime, time, timedelta
 from decimal import Decimal, InvalidOperation
@@ -52,8 +53,11 @@ _QUOTE_BOARD_TIMEOUT_SECONDS = 10
 _QUOTE_BOARD_BATCH_SIZE = 5
 _DNSE_REQUEST_TIMEOUT_SECONDS = 3
 _DNSE_DETAIL_TIMEOUT_SECONDS = 5
+_INDEX_QUOTE_TIMEOUT_SECONDS = 5
 _FUNDAMENTAL_REQUEST_TIMEOUT_SECONDS = 5
 _CANDLE_REQUEST_TIMEOUT_SECONDS = 6
+_SCREENER_CACHE_SECONDS = 30 * 60
+_VN30_CACHE_SECONDS = 24 * 60 * 60
 _INITIAL_SNAPSHOT_WAIT_SECONDS = 180
 _INDEX_EXCHANGE = {
     "VNINDEX": "HOSE",
@@ -206,6 +210,7 @@ def _bounded_call(call: Callable[[], object], *, timeout: int, operation: str) -
 
 _RESOURCES_DIR = Path(__file__).resolve().parent / "resources"
 _SECTORS_FILE = _RESOURCES_DIR / "stock_sectors.json"
+_FUNDAMENTALS_FILE = _RESOURCES_DIR / "stock_fundamentals.json"
 
 
 def _load_bundled_sectors() -> dict[str, str]:
@@ -221,7 +226,49 @@ def _load_bundled_sectors() -> dict[str, str]:
     return {}
 
 
+def _load_bundled_priority_symbols() -> frozenset[str]:
+    if not _FUNDAMENTALS_FILE.exists():
+        return frozenset()
+    try:
+        with open(_FUNDAMENTALS_FILE, encoding="utf-8") as file:
+            data = json.load(file)
+            if isinstance(data, dict):
+                return frozenset(str(k).upper() for k in data)
+    except Exception:
+        logger.warning("failed_loading_bundled_priority_symbols")
+    return frozenset()
+
+
+def _exchange_price_band(reference_price: Decimal, exchange: str) -> tuple[Decimal, Decimal]:
+    """Compute official Vietnam exchange ceiling and floor prices from reference price."""
+    if reference_price <= 0:
+        return Decimal(), Decimal()
+    normalized = exchange.upper().replace("HSX", "HOSE")
+    if normalized == "HOSE":
+        band = Decimal("0.07")
+        tick = (
+            Decimal("10")
+            if reference_price < Decimal("10000")
+            else Decimal("50")
+            if reference_price < Decimal("50000")
+            else Decimal("100")
+        )
+    elif normalized == "HNX":
+        band = Decimal("0.10")
+        tick = Decimal("100")
+    else:
+        band = Decimal("0.15")
+        tick = Decimal("100")
+    raw_ceiling = reference_price * (Decimal("1") + band)
+    raw_floor = reference_price * (Decimal("1") - band)
+    ceiling = (raw_ceiling // tick) * tick
+    floor_units = (raw_floor + tick - Decimal("1")) // tick
+    floor = max(tick, floor_units * tick)
+    return ceiling, floor
+
+
 _BUNDLED_SECTORS = _load_bundled_sectors()
+_BUNDLED_PRIORITY_SYMBOLS = _load_bundled_priority_symbols()
 _SECTOR_LABELS = {
     "basic-materials": "Nguyên vật liệu",
     "communication-services": "Dịch vụ viễn thông",
@@ -435,13 +482,136 @@ class OfficialVnstockGateway:
             logger.warning("vnstock_fhsc_api_key_missing_source_calls_will_fail")
         self._market = Market("fhsc")
         self._dnse_market = Market("dnse") if dnse_api_key and dnse_api_secret else None
+        self._dnse_reference = Reference("dnse") if dnse_api_key and dnse_api_secret else None
         self._reference = Reference("fhsc")
         self._fundamental = Fundamental()
+        self._screener_lock = RLock()
+        self._screener_by_exchange: dict[str, list[dict[str, object]]] = {}
         self._screener_rows: list[dict[str, object]] = []
+        self._screener_expires_at = 0.0
+        self._screener_warming = False
+        self._dnse_reference_rows: list[dict[str, object]] = []
+        self._vn30_cache: tuple[float, set[str]] | None = None
+        self._on_screener_updated: Callable[[], None] | None = None
         self._market_time: str | None = None
         self._fhsc_candle_cooldown_until = 0.0
 
+    def set_on_screener_updated(self, callback: Callable[[], None] | None) -> None:
+        self._on_screener_updated = callback
+
+    def _get_vn30_members(self) -> set[str]:
+        cached = getattr(self, "_vn30_cache", None)
+        now = monotonic()
+        if cached is not None and cached[0] > now and cached[1]:
+            return set(cached[1])
+        members = _frame_records(self._reference.index("VN30").constituents())
+        vn30 = {_text(row.get("symbol")).upper() for row in members if _text(row.get("symbol"))}
+        if vn30:
+            self._vn30_cache = (now + _VN30_CACHE_SECONDS, set(vn30))
+        return vn30
+
+    def _fetch_dnse_index_quote(self, symbol: str) -> dict[str, object] | None:
+        dnse_market = getattr(self, "_dnse_market", None)
+        if dnse_market is None:
+            return None
+        try:
+            frame = _bounded_call(
+                lambda: dnse_market.index(symbol).quote(compat="v5"),
+                timeout=_INDEX_QUOTE_TIMEOUT_SECONDS,
+                operation="dnse-index-quote",
+            )
+            rows = _frame_records(frame)
+            return rows[-1] if rows else None
+        except (Exception, SystemExit) as exc:
+            logger.warning(
+                "vnstock_dnse_index_quote_unavailable",
+                extra={"symbol": symbol, "error_type": type(exc).__name__},
+            )
+            return None
+
+    def index_quote_rows(self, symbols: list[str]) -> dict[str, dict[str, object]]:
+        dnse_market = getattr(self, "_dnse_market", None)
+        if dnse_market is None or not symbols:
+            return {}
+        results: dict[str, dict[str, object]] = {}
+        executor = ThreadPoolExecutor(
+            max_workers=min(4, len(symbols)), thread_name_prefix="dnse-index-quote"
+        )
+        futures = {
+            executor.submit(self._fetch_dnse_index_quote, symbol.upper()): symbol.upper()
+            for symbol in symbols
+        }
+        try:
+            for future in as_completed(futures, timeout=_INDEX_QUOTE_TIMEOUT_SECONDS + 2):
+                sym = futures[future]
+                try:
+                    row = future.result()
+                except (Exception, SystemExit):
+                    continue
+                if row:
+                    results[sym] = row
+        except TimeoutError:
+            logger.warning("vnstock_dnse_index_quote_batch_timeout")
+        finally:
+            executor.shutdown(wait=False, cancel_futures=True)
+        return results
+
+    def _start_fhsc_screener_refresh_async(self) -> None:
+        if os.getenv("PYTEST_CURRENT_TEST"):
+            return
+        lock = getattr(self, "_screener_lock", None)
+        if lock is None:
+            return
+        with lock:
+            if getattr(self, "_screener_warming", False):
+                return
+            self._screener_warming = True
+
+        def _worker() -> None:
+            try:
+                any_loaded = False
+                for exchange in self._EXCHANGES:
+                    try:
+                        exchange_rows = _frame_records(
+                            self._market.equity.screener(exchange=exchange, compat="v5")
+                        )
+                    except (Exception, SystemExit) as exc:
+                        logger.warning(
+                            "vnstock_fhsc_screener_exchange_unavailable",
+                            extra={"exchange": exchange, "error_type": type(exc).__name__},
+                        )
+                        continue
+                    if not exchange_rows:
+                        continue
+                    any_loaded = True
+                    with lock:
+                        self._screener_by_exchange[exchange] = exchange_rows
+                        merged_rows = [
+                            row
+                            for ex in self._EXCHANGES
+                            for row in self._screener_by_exchange.get(ex, ())
+                        ]
+                        self._screener_rows = merged_rows
+                    if exchange in {"HOSE", "UPCOM"}:
+                        callback = getattr(self, "_on_screener_updated", None)
+                        if callback is not None:
+                            with suppress(Exception):
+                                callback()
+                if any_loaded:
+                    with lock:
+                        self._screener_expires_at = monotonic() + _SCREENER_CACHE_SECONDS
+            finally:
+                with lock:
+                    self._screener_warming = False
+
+        Thread(target=_worker, name="fhsc-screener-enrichment", daemon=True).start()
+
     def reference_rows(self) -> tuple[list[dict[str, object]], set[str], dict[str, str]]:
+        dnse_ref = getattr(self, "_dnse_reference", None)
+        dnse_market = getattr(self, "_dnse_market", None)
+        if dnse_ref is not None and dnse_market is not None:
+            return self._reference_rows_dnse_first(dnse_ref)
+
         try:
             screener_rows = [
                 row
@@ -450,7 +620,7 @@ class OfficialVnstockGateway:
                     self._market.equity.screener(exchange=exchange, compat="v5")
                 )
             ]
-            members = _frame_records(self._reference.index("VN30").constituents())
+            vn30 = self._get_vn30_members()
         except (Exception, SystemExit) as exc:
             raise RuntimeError("Vnstock 6 FHSC market reference request failed") from exc
 
@@ -463,18 +633,93 @@ class OfficialVnstockGateway:
             logger.warning("vnstock_fhsc_market_timestamp_unavailable")
 
         self._screener_rows = screener_rows
+        return self._build_reference_payload(screener_rows, [], vn30)
+
+    def _reference_rows_dnse_first(
+        self, dnse_ref: object
+    ) -> tuple[list[dict[str, object]], set[str], dict[str, str]]:
+        lock = getattr(self, "_screener_lock", None)
+        if lock is not None:
+            with lock:
+                screener_rows = list(self._screener_rows)
+                screener_expires_at = getattr(self, "_screener_expires_at", 0.0)
+                cached_dnse_refs = list(getattr(self, "_dnse_reference_rows", []))
+        else:
+            screener_rows = list(getattr(self, "_screener_rows", []))
+            screener_expires_at = getattr(self, "_screener_expires_at", 0.0)
+            cached_dnse_refs = list(getattr(self, "_dnse_reference_rows", []))
+
+        def _fetch_dnse_list() -> list[dict[str, object]]:
+            if cached_dnse_refs:
+                return cached_dnse_refs
+            frame = _bounded_call(
+                lambda: dnse_ref.equity.list(),  # type: ignore[attr-defined]
+                timeout=_INDEX_QUOTE_TIMEOUT_SECONDS,
+                operation="dnse-equity-list",
+            )
+            return _frame_records(frame)
+
+        def _fetch_vn30_safe() -> set[str]:
+            try:
+                return self._get_vn30_members()
+            except (Exception, SystemExit) as exc:
+                logger.warning(
+                    "vnstock_fhsc_vn30_unavailable",
+                    extra={"error_type": type(exc).__name__},
+                )
+                cached = getattr(self, "_vn30_cache", None)
+                return set(cached[1]) if cached else set()
+
+        with ThreadPoolExecutor(max_workers=3, thread_name_prefix="dnse-ref-bootstrap") as ex:
+            fut_list = ex.submit(_fetch_dnse_list)
+            fut_vn30 = ex.submit(_fetch_vn30_safe)
+            fut_idx = ex.submit(self._fetch_dnse_index_quote, "VNINDEX")
+            try:
+                dnse_refs = fut_list.result()
+            except (Exception, SystemExit) as exc:
+                logger.warning(
+                    "vnstock_dnse_reference_list_unavailable",
+                    extra={"error_type": type(exc).__name__},
+                )
+                dnse_refs = cached_dnse_refs
+            vn30 = fut_vn30.result()
+            vnindex_row = fut_idx.result()
+
+        if dnse_refs:
+            self._dnse_reference_rows = dnse_refs
+
+        self._market_time = (
+            _text(vnindex_row.get("time")) or None if isinstance(vnindex_row, dict) else None
+        )
+
+        if not screener_rows and not dnse_refs:
+            raise RuntimeError("Vnstock DNSE and FHSC market reference requests failed")
+
+        if not screener_rows or monotonic() >= screener_expires_at:
+            self._start_fhsc_screener_refresh_async()
+
+        return self._build_reference_payload(screener_rows, dnse_refs, vn30)
+
+    def _build_reference_payload(
+        self,
+        screener_rows: list[dict[str, object]],
+        dnse_refs: list[dict[str, object]],
+        vn30: set[str],
+    ) -> tuple[list[dict[str, object]], set[str], dict[str, str]]:
         references: list[dict[str, object]] = []
+        seen: set[str] = set()
         sectors = {
             symbol: resolve_sector_hierarchy("", name)[0]
             for symbol, name in _BUNDLED_SECTORS.items()
         }
         for row in screener_rows:
             symbol = _text(row.get("symbol")).upper()
+            if not symbol or symbol in seen:
+                continue
+            seen.add(symbol)
             subsector = _BUNDLED_SECTORS.get(symbol, "")
             raw_sector = _sector_label(row.get("sector_slug"))
             sector, subsector = resolve_sector_hierarchy(raw_sector, subsector)
-            if not symbol:
-                continue
             references.append(
                 {
                     "symbol": symbol,
@@ -487,78 +732,127 @@ class OfficialVnstockGateway:
             )
             if sector:
                 sectors[symbol] = sector
-        vn30 = {_text(row.get("symbol")).upper() for row in members if _text(row.get("symbol"))}
+        for row in dnse_refs:
+            symbol = _text(row.get("symbol")).upper()
+            if not symbol or symbol in seen:
+                continue
+            seen.add(symbol)
+            subsector = _BUNDLED_SECTORS.get(symbol, "")
+            sector, subsector = resolve_sector_hierarchy("", subsector)
+            references.append(
+                {
+                    "symbol": symbol,
+                    "exchange": row.get("exchange"),
+                    "organ_name": row.get("organ_name") or row.get("organ_short_name"),
+                    "listed_shares": row.get("listed_shares"),
+                    "sector_slug": sector,
+                    "subsector": subsector,
+                }
+            )
+            if sector:
+                sectors[symbol] = sector
         return references, vn30, sectors
 
     def quote_rows(self, symbols: list[str]) -> list[dict[str, object]]:
         all_symbols = list(dict.fromkeys(symbol.upper() for symbol in symbols))
         fhsc_quote_symbols = all_symbols[:_MAX_FHSC_QUOTE_SYMBOLS]
+        lock = getattr(self, "_screener_lock", None)
+        if lock is not None:
+            with lock:
+                screener_snapshot = list(self._screener_rows)
+        else:
+            screener_snapshot = list(getattr(self, "_screener_rows", []))
         screener_by_symbol = {
             _text(row.get("symbol")).upper(): row
-            for row in self._screener_rows
+            for row in screener_snapshot
+            if _text(row.get("symbol"))
+        }
+        dnse_exchange_by_symbol = {
+            _text(row.get("symbol")).upper(): _text(row.get("exchange")).upper()
+            for row in getattr(self, "_dnse_reference_rows", [])
             if _text(row.get("symbol"))
         }
         # The exchange screener is the full-market baseline. FHSC's quote route is
-        # per-symbol and rate-limited, so only the highest-priority 30 get the richer board.
+        # per-symbol and rate-limited (~48s for 30 symbols), so when DNSE is enabled
+        # we skip FHSC equity.quote() completely and enrich the top 130 symbols via DNSE (~2.3s).
         rows = self._screener_quote_fallback(all_symbols, screener_by_symbol)
         rows_by_symbol = {
             _text(row.get("symbol")).upper(): row for row in rows if _text(row.get("symbol"))
         }
-        quote_rows: list[dict[str, object]] = []
-        for offset in range(0, len(fhsc_quote_symbols), _QUOTE_BOARD_BATCH_SIZE):
-            batch = fhsc_quote_symbols[offset : offset + _QUOTE_BOARD_BATCH_SIZE]
-
-            def fetch_batch(batch: list[str] = batch) -> object:
-                return self._market.equity.quote(batch, compat="v5")
-
-            try:
-                result = _bounded_call(
-                    fetch_batch,
-                    timeout=_QUOTE_BOARD_TIMEOUT_SECONDS,
-                    operation="fhsc-quote-board",
-                )
-                quote_rows.extend(_frame_records(result))
-            except (Exception, SystemExit) as exc:
-                logger.warning(
-                    "vnstock_fhsc_quote_board_batch_unavailable",
-                    extra={"batch_size": len(batch), "error_type": type(exc).__name__},
-                )
-        quotes_by_symbol = {
-            _text(row.get("symbol")).upper(): row for row in quote_rows if _text(row.get("symbol"))
-        }
-        for symbol in fhsc_quote_symbols:
-            normalized = symbol.upper()
-            base = rows_by_symbol.get(normalized)
-            quote = quotes_by_symbol.get(normalized)
-            if base is None or quote is None:
-                continue
-            merged = {key: value for key, value in quote.items() if value is not None}
-            merged = {**base, **merged, "symbol": normalized}
-            for field in (
-                "close_price",
-                "reference_price",
-                "open_price",
-                "high_price",
-                "low_price",
-                "ceiling_price",
-                "floor_price",
-            ):
-                merged[field] = _positive_or(quote.get(field), base.get(field))
-            merged["volume_accumulated"] = _positive_or(
-                quote.get("total_volume"), base.get("volume_accumulated")
-            )
-            merged["total_value"] = _positive_or(quote.get("total_value"), base.get("total_value"))
-            merged["time"] = quote.get("time") or base.get("time") or self._market_time
-            rows_by_symbol[normalized] = merged
+        for symbol in all_symbols:
+            if symbol not in rows_by_symbol:
+                rows_by_symbol[symbol] = {
+                    "symbol": symbol,
+                    "exchange": dnse_exchange_by_symbol.get(symbol, "HOSE"),
+                    "time": self._market_time,
+                }
 
         dnse_market = getattr(self, "_dnse_market", None)
-        if dnse_market is None or not rows_by_symbol:
+        if dnse_market is None:
+            quote_rows: list[dict[str, object]] = []
+            for offset in range(0, len(fhsc_quote_symbols), _QUOTE_BOARD_BATCH_SIZE):
+                batch = fhsc_quote_symbols[offset : offset + _QUOTE_BOARD_BATCH_SIZE]
+
+                def fetch_batch(batch: list[str] = batch) -> object:
+                    return self._market.equity.quote(batch, compat="v5")
+
+                try:
+                    result = _bounded_call(
+                        fetch_batch,
+                        timeout=_QUOTE_BOARD_TIMEOUT_SECONDS,
+                        operation="fhsc-quote-board",
+                    )
+                    quote_rows.extend(_frame_records(result))
+                except (Exception, SystemExit) as exc:
+                    logger.warning(
+                        "vnstock_fhsc_quote_board_batch_unavailable",
+                        extra={"batch_size": len(batch), "error_type": type(exc).__name__},
+                    )
+            quotes_by_symbol = {
+                _text(row.get("symbol")).upper(): row
+                for row in quote_rows
+                if _text(row.get("symbol"))
+            }
+            for symbol in fhsc_quote_symbols:
+                normalized = symbol.upper()
+                base = rows_by_symbol.get(normalized)
+                quote = quotes_by_symbol.get(normalized)
+                if base is None or quote is None:
+                    continue
+                merged = {key: value for key, value in quote.items() if value is not None}
+                merged = {**base, **merged, "symbol": normalized}
+                for field in (
+                    "close_price",
+                    "reference_price",
+                    "open_price",
+                    "high_price",
+                    "low_price",
+                    "ceiling_price",
+                    "floor_price",
+                ):
+                    merged[field] = _positive_or(quote.get(field), base.get(field))
+                merged["volume_accumulated"] = _positive_or(
+                    quote.get("total_volume"), base.get("volume_accumulated")
+                )
+                merged["total_value"] = _positive_or(
+                    quote.get("total_value"), base.get("total_value")
+                )
+                merged["time"] = quote.get("time") or base.get("time") or self._market_time
+                rows_by_symbol[normalized] = merged
             return list(rows_by_symbol.values())
+
+        if not rows_by_symbol:
+            return []
         futures: dict[Future[dict[str, object] | None], str] = {}
         fhsc_priority = set(fhsc_quote_symbols)
         non_fhsc_ranked = sorted(
             (sym for sym in rows_by_symbol if sym not in fhsc_priority),
-            key=lambda sym: _decimal(rows_by_symbol[sym].get("total_value")),
+            key=lambda sym: (
+                _decimal(rows_by_symbol[sym].get("total_value")) > 0,
+                _decimal(rows_by_symbol[sym].get("total_value")),
+                sym in _BUNDLED_PRIORITY_SYMBOLS,
+                _text(rows_by_symbol[sym].get("exchange")).upper() == "HOSE",
+            ),
             reverse=True,
         )
         dnse_ohlc_priority = fhsc_priority | set(
@@ -569,10 +863,13 @@ class OfficialVnstockGateway:
             needs_last_trade = _positive_or(quote.get("close_price"), None) <= 0
             needs_daily_ohlc = symbol in dnse_ohlc_priority and any(
                 _positive_or(quote.get(field), None) <= 0
-                for field in ("open_price", "high_price", "low_price")
+                for field in ("open_price", "high_price", "low_price", "close_price")
             )
-            if needs_last_trade or needs_daily_ohlc:
-                dnse_symbols.append((symbol, needs_last_trade, needs_daily_ohlc))
+            if needs_daily_ohlc:
+                # 1D OHLCV (length=2) already carries close, volume, OHLC, and prev_close.
+                dnse_symbols.append((symbol, False, True))
+            elif needs_last_trade and symbol in dnse_ohlc_priority:
+                dnse_symbols.append((symbol, True, False))
         if not dnse_symbols:
             return list(rows_by_symbol.values())
         executor = ThreadPoolExecutor(
@@ -620,6 +917,9 @@ class OfficialVnstockGateway:
             accumulated_volume = _optional_decimal(dnse.get("accumulated_volume"))
             if accumulated_volume is not None and accumulated_volume > 0:
                 merged["volume_accumulated"] = accumulated_volume
+            prev_close = _optional_decimal(dnse.get("prev_close"))
+            if prev_close is not None and prev_close > 0 and _positive_or(merged.get("reference_price"), None) <= 0:
+                merged["reference_price"] = prev_close * Decimal("1000")
             daily_ohlc = dnse.get("daily_ohlc")
             if isinstance(daily_ohlc, dict):
                 session_time = dnse.get("time") or row.get("time")
@@ -638,7 +938,34 @@ class OfficialVnstockGateway:
                         if value is not None and value > 0:
                             # Vnstock's v5 OHLCV prices are expressed in thousand VND.
                             merged[f"{field}_price"] = value * Decimal("1000")
-            merged["time"] = dnse.get("time") or row.get("time")
+                    ohlc_close = _optional_decimal(daily_ohlc.get("close"))
+                    if ohlc_close is not None and ohlc_close > 0:
+                        merged["close_price"] = ohlc_close * Decimal("1000")
+                    ohlc_volume = _optional_decimal(daily_ohlc.get("volume"))
+                    if (
+                        ohlc_volume is not None
+                        and ohlc_volume > 0
+                        and _positive_or(merged.get("volume_accumulated"), None) <= 0
+                    ):
+                        merged["volume_accumulated"] = ohlc_volume
+                    if not merged.get("time") and daily_ohlc.get("time"):
+                        merged["time"] = daily_ohlc.get("time")
+            close_val = _positive_or(merged.get("close_price"), None)
+            vol_val = _positive_or(merged.get("volume_accumulated"), None)
+            if close_val > 0 and vol_val > 0 and _positive_or(merged.get("total_value"), None) <= 0:
+                merged["total_value"] = close_val * vol_val
+            ref_val = _positive_or(merged.get("reference_price"), None)
+            if ref_val > 0 and (
+                _positive_or(merged.get("ceiling_price"), None) <= 0
+                or _positive_or(merged.get("floor_price"), None) <= 0
+            ):
+                exchange = _text(merged.get("exchange")) or dnse_exchange_by_symbol.get(symbol, "HOSE")
+                ceiling, floor = _exchange_price_band(ref_val, exchange)
+                if _positive_or(merged.get("ceiling_price"), None) <= 0 and ceiling > 0:
+                    merged["ceiling_price"] = ceiling
+                if _positive_or(merged.get("floor_price"), None) <= 0 and floor > 0:
+                    merged["floor_price"] = floor
+            merged["time"] = dnse.get("time") or merged.get("time") or row.get("time")
             merged_rows.append(merged)
         return merged_rows
 
@@ -672,7 +999,7 @@ class OfficialVnstockGateway:
             try:
                 candles = _frame_records(
                     _bounded_call(
-                        lambda: market.equity(symbol).ohlcv(interval="1D", length=1, compat="v5"),
+                        lambda: market.equity(symbol).ohlcv(interval="1D", length=2, compat="v5"),
                         timeout=_DNSE_REQUEST_TIMEOUT_SECONDS,
                         operation="dnse-daily-ohlc",
                     )
@@ -685,6 +1012,8 @@ class OfficialVnstockGateway:
             else:
                 if candles:
                     last_trade["daily_ohlc"] = candles[-1]
+                    if len(candles) >= 2:
+                        last_trade["prev_close"] = candles[-2].get("close")
         return last_trade or None
 
     def _screener_quote_fallback(
@@ -745,13 +1074,16 @@ class OfficialVnstockGateway:
             return rows
 
         def _fetch_dnse() -> list[dict[str, object]]:
-            if dnse_market is None or symbol in _INDEX_EXCHANGE:
+            if dnse_market is None:
                 return []
             dnse_interval = source_interval if is_daily_or_higher else interval
+            asset = (
+                dnse_market.index(symbol)
+                if symbol in _INDEX_EXCHANGE
+                else dnse_market.equity(symbol)
+            )
             frame = _bounded_call(
-                lambda: dnse_market.equity(symbol).ohlcv(
-                    interval=dnse_interval, limit=count, compat="v5"
-                ),
+                lambda: asset.ohlcv(interval=dnse_interval, length=count, compat="v5"),
                 timeout=_CANDLE_REQUEST_TIMEOUT_SECONDS,
                 operation="dnse-candles",
             )
@@ -760,31 +1092,10 @@ class OfficialVnstockGateway:
                 rows = _aggregate_daily_candles(rows, norm_interval, count)
             return rows
 
-        # Daily/weekly/monthly candles come cleanly from FHSC without waiting for DNSE first;
-        # intraday candles prefer DNSE and only fall back to FHSC if DNSE is empty/unavailable.
-        if is_daily_or_higher:
-            if monotonic() >= getattr(self, "_fhsc_candle_cooldown_until", 0.0):
-                try:
-                    rows = _fetch_fhsc()
-                    if rows:
-                        return rows
-                except (Exception, SystemExit) as exc:
-                    if "429" in str(exc) or "RateLimit" in type(exc).__name__:
-                        self._fhsc_candle_cooldown_until = monotonic() + 30.0
-                    logger.warning(
-                        "vnstock_fhsc_candles_unavailable",
-                        extra={"symbol": symbol, "interval": interval, "error_type": type(exc).__name__},
-                    )
-            try:
-                rows = _fetch_dnse()
-                if rows:
-                    return rows
-            except (Exception, SystemExit) as exc:
-                logger.warning(
-                    "vnstock_dnse_candles_unavailable",
-                    extra={"error_type": type(exc).__name__},
-                )
-        else:
+        # DNSE serves both equities and indices across daily and intraday intervals in ~40-110ms
+        # (30-50x faster than FHSC and free of FHSC's strict rate limit). Prefer DNSE first and
+        # fall back to FHSC only when DNSE is disabled, empty, or unavailable.
+        if dnse_market is not None:
             try:
                 rows = _fetch_dnse()
                 if rows:
@@ -792,13 +1103,16 @@ class OfficialVnstockGateway:
             except (Exception, SystemExit) as exc:
                 logger.warning(
                     "vnstock_dnse_candles_unavailable_using_fhsc",
-                    extra={"symbol": symbol, "error_type": type(exc).__name__},
+                    extra={"symbol": symbol, "interval": interval, "error_type": type(exc).__name__},
                 )
+        if monotonic() >= getattr(self, "_fhsc_candle_cooldown_until", 0.0):
             try:
                 rows = _fetch_fhsc()
                 if rows:
                     return rows
             except (Exception, SystemExit) as exc:
+                if "429" in str(exc) or "RateLimit" in type(exc).__name__:
+                    self._fhsc_candle_cooldown_until = monotonic() + 30.0
                 logger.warning(
                     "vnstock_fhsc_candles_unavailable",
                     extra={"symbol": symbol, "interval": interval, "error_type": type(exc).__name__},
@@ -1522,6 +1836,21 @@ class VnstockMarketProvider:
             if config.dnse_api_key and config.dnse_api_secret
             else None
         )
+        register_screener_hook = getattr(self._gateway, "set_on_screener_updated", None)
+        if callable(register_screener_hook):
+            register_screener_hook(self._schedule_background_refresh)
+
+    def _schedule_background_refresh(self) -> None:
+        with self._lock:
+            if self._closed or self._refreshing:
+                return
+            self._refreshing = True
+            self._snapshot_ready.clear()
+            Thread(
+                target=self._refresh_snapshot_in_background,
+                name="vnstock-screener-merge-refresh",
+                daemon=True,
+            ).start()
 
     @property
     def market_time(self) -> str:
@@ -1876,6 +2205,8 @@ class VnstockMarketProvider:
         return (*values, observed)
 
     def _with_fundamentals(self, value: MarketInstrument) -> MarketInstrument:
+        if all(item is not None for item in (value.pe, value.pb, value.eps, value.roe_percent)):
+            return value
         now = self._clock()
         cached = self._fundamental_cache.get(value.symbol)
         if cached and cached[0] > now:
@@ -2057,19 +2388,59 @@ class VnstockMarketProvider:
             raise ValueError("Vnstock returned no usable stock quotes")
 
         fetched_at = datetime.now(UTC)
+        index_symbols = list(_INDEX_EXCHANGE)
+        index_quote_loader = getattr(self._gateway, "index_quote_rows", None)
+        index_quotes: dict[str, dict[str, object]] = {}
+        index_candle_rows: dict[str, list[dict[str, object]]] = {}
+
+        def _load_index_candles(sym: str) -> list[dict[str, object]]:
+            return self._gateway.candle_rows(sym, "1D", 500)
+
+        with ThreadPoolExecutor(
+            max_workers=len(index_symbols) + (1 if callable(index_quote_loader) else 0),
+            thread_name_prefix="vnstock-indices",
+        ) as ex:
+            candle_futs = {
+                ex.submit(_load_index_candles, sym): sym for sym in index_symbols
+            }
+            quote_fut = (
+                ex.submit(index_quote_loader, index_symbols)
+                if callable(index_quote_loader)
+                else None
+            )
+            for fut, sym in candle_futs.items():
+                try:
+                    index_candle_rows[sym] = fut.result()
+                except (RuntimeError, TypeError, ValueError):
+                    logger.warning("vnstock_index_unavailable", extra={"symbol": sym})
+            if quote_fut is not None:
+                try:
+                    loaded_quotes = quote_fut.result()
+                    if isinstance(loaded_quotes, dict):
+                        index_quotes = loaded_quotes
+                except (RuntimeError, TypeError, ValueError):
+                    logger.warning("vnstock_index_quotes_unavailable")
+
         indices: list[MarketIndex] = []
-        for symbol in _INDEX_EXCHANGE:
-            try:
-                rows = self._gateway.candle_rows(symbol, "1D", 500)
-                candles = tuple(
-                    candle
-                    for row in rows
-                    if (candle := _candle(row, symbol, fetched_at)) is not None
+        for symbol in index_symbols:
+            rows = index_candle_rows.get(symbol)
+            if not rows:
+                continue
+            candles = tuple(
+                candle
+                for row in rows
+                if (candle := _candle(row, symbol, fetched_at)) is not None
+            )
+            if candles:
+                indices.append(
+                    self._index_from_candles(
+                        symbol,
+                        rows,
+                        candles,
+                        instruments,
+                        index_quote=index_quotes.get(symbol),
+                    )
                 )
-                if candles:
-                    indices.append(self._index_from_candles(symbol, rows, candles, instruments))
-            except (RuntimeError, TypeError, ValueError):
-                logger.warning("vnstock_index_unavailable", extra={"symbol": symbol})
 
         timestamps = [item.timestamp for index in indices for item in index.candles[-1:]]
         if has_live_matches:
@@ -2085,8 +2456,8 @@ class VnstockMarketProvider:
         self._stale = False
         for daily_ohlc in tuple(self._dnse_daily_ohlc.values()):
             self._apply_dnse_ohlc(daily_ohlc)
-        if self._dnse_ohlc_stream is not None and not self._closed:
-            self._dnse_ohlc_stream.set_symbols(symbols)
+        if self._dnse_ohlc_stream is not None and not self._closed and self.session != "closed":
+            self._dnse_ohlc_stream.set_symbols(symbols[:_DNSE_STREAM_BATCH_SIZE])
 
     def _apply_dnse_ohlc(self, event: object) -> None:
         """Merge only today's complete DNSE daily candle into the FHSC baseline."""
@@ -2188,6 +2559,9 @@ class VnstockMarketProvider:
         pe = _optional_decimal(quote.get("pe"))
         pb = _optional_decimal(quote.get("pb"))
         eps = _optional_decimal(quote.get("eps"))
+        roe_percent = _optional_decimal(
+            quote.get("roe_percent") if quote.get("roe_percent") is not None else quote.get("roe")
+        )
         parent_sector, subsector = resolve_sector_hierarchy(
             sector, _text(metadata.get("subsector"))
         )
@@ -2211,7 +2585,7 @@ class VnstockMarketProvider:
             pe=pe,
             pb=pb,
             eps=eps,
-            roe_percent=None,
+            roe_percent=roe_percent,
             volume_vs_20d=Decimal(),
             interest_score=matched_value,
             interest_reasons=tuple(reasons),
@@ -2228,6 +2602,7 @@ class VnstockMarketProvider:
         rows: list[dict[str, object]],
         candles: tuple[Candle, ...],
         instruments: tuple[MarketInstrument, ...],
+        index_quote: dict[str, object] | None = None,
     ) -> MarketIndex:
         current = candles[-1]
         reference = candles[-2].close if len(candles) > 1 else current.open
@@ -2246,17 +2621,49 @@ class VnstockMarketProvider:
         floor = sum(item.floor_price > 0 and item.price <= item.floor_price for item in members)
         latest_row = rows[-1] if rows else {}
         matched_value = _decimal(latest_row.get("value"))
+        volume = current.volume
+        value = current.close
+        high_value = current.high
+        low_value = current.low
+        if isinstance(index_quote, dict):
+            q_adv = int(_decimal(index_quote.get("advances")))
+            q_dec = int(_decimal(index_quote.get("declines")))
+            q_unc = int(_decimal(index_quote.get("no_change")))
+            if q_adv + q_dec + q_unc > 0:
+                advances = q_adv
+                declines = q_dec
+                unchanged = q_unc
+                ceiling = int(_decimal(index_quote.get("ceiling_count")))
+                floor = int(_decimal(index_quote.get("floor_count")))
+            q_val = _decimal(index_quote.get("accumulated_value"))
+            if q_val > 0:
+                matched_value = q_val
+            q_vol = _decimal(index_quote.get("accumulated_volume") or index_quote.get("total_volume"))
+            if q_vol > 0:
+                volume = q_vol
+            q_close = _decimal(index_quote.get("close_price"))
+            if q_close > 0:
+                value = q_close
+            q_ref = _decimal(index_quote.get("reference_price"))
+            if q_ref > 0:
+                reference = q_ref
+            q_high = _decimal(index_quote.get("high_price"))
+            if q_high > 0:
+                high_value = q_high
+            q_low = _decimal(index_quote.get("low_price"))
+            if q_low > 0:
+                low_value = q_low
         if matched_value <= 0:
             matched_value = sum((item.matched_value for item in members), Decimal())
         return MarketIndex(
             symbol=symbol,
             name=_INDEX_NAMES[symbol],
-            value=current.close,
+            value=value,
             reference_value=reference,
             open_value=current.open,
-            high_value=current.high,
-            low_value=current.low,
-            volume=current.volume,
+            high_value=high_value,
+            low_value=low_value,
+            volume=volume,
             matched_value=matched_value,
             advances=advances,
             declines=declines,
