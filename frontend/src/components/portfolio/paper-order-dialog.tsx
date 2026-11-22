@@ -4,6 +4,7 @@ import Link from "next/link";
 import { FormEvent, useEffect, useMemo, useRef, useState } from "react";
 
 import { useAuth } from "@/hooks/use-auth";
+import { saveTradeJournalEntry } from "@/lib/trading-journal";
 import type {
   PaperDashboard,
   PaperExecutionMode,
@@ -266,6 +267,7 @@ function PaperOrderDialogContent({
   const [useOrderbookDepth, setUseOrderbookDepth] = useState<boolean>(false);
   const [stopLossInput, setStopLossInput] = useState<string>("");
   const [takeProfitInput, setTakeProfitInput] = useState<string>("");
+  const [journalNote, setJournalNote] = useState<string>("");
 
   const executionPrice =
     orderType === "LO" && (activeExecutionMode === "exchange_hours" || useOrderbookDepth) && customLimitPrice
@@ -549,6 +551,16 @@ function PaperOrderDialogContent({
           );
         } catch {}
       }
+      if (journalNote.trim()) {
+        saveTradeJournalEntry({
+          id: body.trade?.id ?? body.order.id,
+          orderId: body.order.id,
+          symbol: instrument.symbol,
+          side,
+          note: journalNote.trim(),
+          createdAt: new Date().toISOString(),
+        });
+      }
       idempotencyKeyRef.current = null;
       onDashboard?.(body.data);
       onSuccess?.(successMessage);
@@ -791,6 +803,39 @@ function PaperOrderDialogContent({
               )}
             </div>
           )}
+          <div className="space-y-1.5 my-2">
+            <label htmlFor="paper-journal-note-input" className="block text-xs font-semibold text-slate-300">
+              Nhật ký vào lệnh (Lý do {side === "buy" ? "mua" : "bán"} — tùy chọn)
+            </label>
+            <input
+              id="paper-journal-note-input"
+              type="text"
+              maxLength={200}
+              placeholder={
+                side === "buy"
+                  ? "VD: P/E thấp hơn trung bình ngành, giải ngân 30% vốn"
+                  : "VD: Đạt mục tiêu chốt lời +15% hoặc cắt lỗ theo kỷ luật"
+              }
+              value={journalNote}
+              onChange={(event) => setJournalNote(event.target.value)}
+              className="w-full rounded-lg border border-slate-700 bg-slate-950/90 px-3 py-2 text-xs text-slate-100 placeholder:text-slate-500 focus:border-sky-400 focus:outline-none"
+            />
+            <div className="flex flex-wrap gap-1.5">
+              {(side === "buy"
+                ? ["Định giá P/E hấp dẫn", "Tích sản dài hạn", "Bật tăng từ hỗ trợ"]
+                : ["Chốt lời theo kế hoạch", "Cắt lỗ giữ kỷ luật", "Cơ cấu lại danh mục"]
+              ).map((preset) => (
+                <button
+                  key={preset}
+                  type="button"
+                  onClick={() => setJournalNote(preset)}
+                  className="text-[11px] px-2 py-0.5 rounded-md border border-slate-700/80 bg-slate-900 text-slate-300 hover:border-sky-400/60 hover:text-sky-200 transition"
+                >
+                  {preset}
+                </button>
+              ))}
+            </div>
+          </div>
           <dl className="paper-order-totals">
             <div><dt>Giá trị dự kiến</dt><dd>{money(estimate.gross || 0)}</dd></div>
             <div><dt>Phí mô phỏng 0,15%</dt><dd>{money(estimate.fee || 0)}</dd></div>

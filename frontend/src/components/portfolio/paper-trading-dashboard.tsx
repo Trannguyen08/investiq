@@ -25,6 +25,7 @@ import {
 import { useAuth } from "@/hooks/use-auth";
 import { useVisibleFundamentals } from "@/hooks/use-visible-fundamentals";
 import { roundVnd } from "@/lib/portfolio-math";
+import { loadTradeJournalMap } from "@/lib/trading-journal";
 import type { MarketInstrument } from "@/types/market";
 import type {
   PaperDashboard,
@@ -803,6 +804,10 @@ export function PaperTradingDashboard({
   }, [ordersPage, ordersPageCount]);
 
   const allTrades = useMemo(() => dashboard?.trades ?? [], [dashboard?.trades]);
+  const journalMap = useMemo(() => {
+    void allTrades.length;
+    return loadTradeJournalMap();
+  }, [allTrades.length]);
   const tradesPageCount = Math.max(1, Math.ceil(allTrades.length / TRADES_PAGE_SIZE));
   const visibleTrades = useMemo(
     () =>
@@ -1755,6 +1760,7 @@ export function PaperTradingDashboard({
                     <th className="text-center">Phí + thuế</th>
                     <th className="text-center">Tiền vào/ra</th>
                     <th className="text-center">Lãi/lỗ chốt</th>
+                    <th className="text-left">Nhật ký / Lý do</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -1769,6 +1775,9 @@ export function PaperTradingDashboard({
                       <td className={`text-center ${tone(trade.cash_effect)}`}>{money(trade.cash_effect)}</td>
                       <td className={`text-center ${tone(trade.realized_pnl ?? 0)}`}>
                         {trade.realized_pnl === null ? "—" : money(trade.realized_pnl)}
+                      </td>
+                      <td className="text-left text-xs text-slate-300 max-w-[220px] truncate" title={journalMap[trade.id] || ""}>
+                        {journalMap[trade.id] || <span className="text-slate-500">—</span>}
                       </td>
                     </tr>
                   ))}
