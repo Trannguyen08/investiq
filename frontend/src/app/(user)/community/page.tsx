@@ -10,7 +10,7 @@ export const metadata: Metadata = {
     "Đấu trường luận điểm đầu tư kiểm chứng tự động (Proof-of-Thesis Arena) và bảng xếp hạng danh mục mô phỏng minh bạch.",
 };
 
-export const revalidate = 10;
+export const dynamic = "force-dynamic";
 
 export default async function CommunityPage() {
   let initialTheses: InvestmentThesisItem[] = [];
