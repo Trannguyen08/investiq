@@ -1464,3 +1464,51 @@ def test_with_fundamentals_skips_fhsc_call_when_all_screener_ratios_present(
     assert detail.eps == Decimal("5500.0")
     assert detail.roe_percent == Decimal("28.2")
     assert gateway.fundamental_calls == 0
+
+
+def test_reference_rows_dnse_first_falls_back_to_fhsc_when_dnse_unavailable() -> None:
+    class Frame:
+        def __init__(self, rows: list[dict[str, object]]) -> None:
+            self._rows = rows
+
+        def to_dict(self, *, orient: str) -> list[dict[str, object]]:
+            assert orient == "records"
+            return self._rows
+
+    gateway = OfficialVnstockGateway.__new__(OfficialVnstockGateway)
+    gateway._screener_rows = []
+    gateway._dnse_reference_rows = []
+    gateway._vn30_cache = None
+    gateway._dnse_cooldown_until = 0.0
+    gateway._dnse_reference = SimpleNamespace(  # type: ignore[assignment]
+        equity=SimpleNamespace(
+            list=lambda: (_ for _ in ()).throw(RuntimeError("DNSE blocked on cloud IP"))
+        )
+    )
+    gateway._dnse_market = SimpleNamespace(  # type: ignore[assignment]
+        index=lambda _sym: SimpleNamespace(
+            quote=lambda **_kw: (_ for _ in ()).throw(RuntimeError("DNSE blocked"))
+        )
+    )
+    gateway._market = SimpleNamespace(  # type: ignore[assignment]
+        equity=SimpleNamespace(
+            screener=lambda *, exchange, compat: Frame(
+                [{"symbol": "FPT", "name": "FPT", "exchange": exchange, "close": 45.0}]
+                if exchange == "HOSE"
+                else []
+            )
+        ),
+        index=lambda _sym: SimpleNamespace(
+            quote=lambda **_kw: Frame([{"time": "2026-11-20 15:00:00+07:00"}])
+        ),
+    )
+    gateway._reference = SimpleNamespace(  # type: ignore[assignment]
+        index=lambda _sym: SimpleNamespace(constituents=lambda: Frame([{"symbol": "FPT"}]))
+    )
+
+    refs, vn30, _sectors = gateway.reference_rows()
+
+    assert [r["symbol"] for r in refs] == ["FPT"]
+    assert vn30 == {"FPT"}
+    assert gateway._market_time == "2026-11-20 15:00:00+07:00"
+    assert gateway._dnse_available() is False
