@@ -117,23 +117,40 @@ async function csrfToken() {
 
 let memoryDashboardCache: PaperDashboard | null = null;
 let memoryDashboardTimestamp = 0;
-const DASHBOARD_CACHE_KEY = "investiq_cached_paper_dashboard";
+const DASHBOARD_CACHE_KEY = "investiq_cached_paper_dashboard_v2";
 const CACHE_TTL_MS = 25_000;
 
-export function getCachedPaperDashboard(): PaperDashboard | null {
+function persistDashboardCache(data: PaperDashboard, timestamp: number): void {
+  memoryDashboardCache = data;
+  memoryDashboardTimestamp = timestamp;
+  if (typeof window === "undefined") return;
+  const serialized = JSON.stringify({ timestamp, data });
+  try {
+    window.localStorage.setItem(DASHBOARD_CACHE_KEY, serialized);
+  } catch {
+    try {
+      window.sessionStorage.setItem(DASHBOARD_CACHE_KEY, serialized);
+    } catch {}
+  }
+}
+
+export function getCachedPaperDashboard(allowStale = true): PaperDashboard | null {
   if (process.env.NODE_ENV === "test") return null;
-  if (memoryDashboardCache && Date.now() - memoryDashboardTimestamp < CACHE_TTL_MS) {
+  if (memoryDashboardCache && (allowStale || Date.now() - memoryDashboardTimestamp < CACHE_TTL_MS)) {
     return memoryDashboardCache;
   }
   if (typeof window !== "undefined") {
     try {
-      const stored = sessionStorage.getItem(DASHBOARD_CACHE_KEY);
+      const stored =
+        window.localStorage.getItem(DASHBOARD_CACHE_KEY) ??
+        window.sessionStorage.getItem(DASHBOARD_CACHE_KEY);
       if (stored) {
         const parsed = JSON.parse(stored);
         if (
           parsed &&
+          parsed.data &&
           typeof parsed.timestamp === "number" &&
-          Date.now() - parsed.timestamp < CACHE_TTL_MS
+          (allowStale || Date.now() - parsed.timestamp < CACHE_TTL_MS)
         ) {
           memoryDashboardCache = parsed.data;
           memoryDashboardTimestamp = parsed.timestamp;
@@ -150,28 +167,22 @@ export function invalidatePaperDashboardCache(): void {
   memoryDashboardTimestamp = 0;
   if (typeof window !== "undefined") {
     try {
-      sessionStorage.removeItem(DASHBOARD_CACHE_KEY);
+      window.localStorage.removeItem(DASHBOARD_CACHE_KEY);
+      window.sessionStorage.removeItem(DASHBOARD_CACHE_KEY);
     } catch {}
   }
 }
 
 export async function requestPaperDashboard(forceRefresh = false): Promise<PaperDashboard> {
   if (process.env.NODE_ENV !== "test") {
-    const cached = getCachedPaperDashboard();
+    const cached = getCachedPaperDashboard(false);
     if (!forceRefresh && cached) {
       if (Date.now() - memoryDashboardTimestamp > 5000) {
         fetch("/portfolio-api", { cache: "no-store" })
           .then((res) => (res.ok ? res.json() : null))
           .then((fresh) => {
             if (fresh && !fresh.error) {
-              memoryDashboardCache = fresh;
-              memoryDashboardTimestamp = Date.now();
-              try {
-                sessionStorage.setItem(
-                  DASHBOARD_CACHE_KEY,
-                  JSON.stringify({ timestamp: Date.now(), data: fresh })
-                );
-              } catch {}
+              persistDashboardCache(fresh, Date.now());
             }
           })
           .catch(() => {});
@@ -191,16 +202,7 @@ export async function requestPaperDashboard(forceRefresh = false): Promise<Paper
         : "Không thể tải tài khoản mô phỏng."
     );
   }
-  memoryDashboardCache = body;
-  memoryDashboardTimestamp = Date.now();
-  if (typeof window !== "undefined") {
-    try {
-      sessionStorage.setItem(
-        DASHBOARD_CACHE_KEY,
-        JSON.stringify({ timestamp: Date.now(), data: body })
-      );
-    } catch {}
-  }
+  persistDashboardCache(body, Date.now());
   return body;
 }
 
@@ -541,16 +543,7 @@ function PaperOrderDialogContent({
         }
       }
       setLoadedDashboard(body.data);
-      memoryDashboardCache = body.data;
-      memoryDashboardTimestamp = Date.now();
-      if (typeof window !== "undefined") {
-        try {
-          sessionStorage.setItem(
-            DASHBOARD_CACHE_KEY,
-            JSON.stringify({ timestamp: Date.now(), data: body.data })
-          );
-        } catch {}
-      }
+      persistDashboardCache(body.data, Date.now());
       if (journalNote.trim()) {
         saveTradeJournalEntry({
           id: body.trade?.id ?? body.order.id,
