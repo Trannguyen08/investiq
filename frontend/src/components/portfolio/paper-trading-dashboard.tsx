@@ -587,11 +587,20 @@ export function PaperTradingDashboard({
   );
 
   useEffect(() => {
+    if (auth.status === "anonymous") {
+      invalidatePaperDashboardCache();
+      setDashboard(null);
+      return;
+    }
     if (auth.status !== "authenticated") return;
+    const staleCached = getCachedPaperDashboard(true);
+    if (staleCached) {
+      setDashboard((current) => current ?? staleCached);
+    }
     let cancelled = false;
     let retryTimer: ReturnType<typeof setTimeout> | null = null;
     const load = (attempt: number) => {
-      requestPaperDashboard()
+      requestPaperDashboard(true)
         .then((value) => {
           if (!cancelled) {
             setDashboard(value);
@@ -604,7 +613,12 @@ export function PaperTradingDashboard({
             retryTimer = setTimeout(() => load(attempt + 1), 3000);
             return;
           }
-          setError(value instanceof Error ? value.message : "Không thể tải danh mục.");
+          setDashboard((current) => {
+            if (!current) {
+              setError(value instanceof Error ? value.message : "Không thể tải danh mục.");
+            }
+            return current;
+          });
         });
     };
     load(0);
