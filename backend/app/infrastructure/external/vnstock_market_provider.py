@@ -58,6 +58,7 @@ _FUNDAMENTAL_REQUEST_TIMEOUT_SECONDS = 5
 _CANDLE_REQUEST_TIMEOUT_SECONDS = 6
 _SCREENER_CACHE_SECONDS = 30 * 60
 _VN30_CACHE_SECONDS = 24 * 60 * 60
+_DNSE_COOLDOWN_SECONDS = 120.0
 _INITIAL_SNAPSHOT_WAIT_SECONDS = 180
 _INDEX_EXCHANGE = {
     "VNINDEX": "HOSE",
@@ -495,6 +496,15 @@ class OfficialVnstockGateway:
         self._on_screener_updated: Callable[[], None] | None = None
         self._market_time: str | None = None
         self._fhsc_candle_cooldown_until = 0.0
+        self._dnse_cooldown_until = 0.0
+
+    def _dnse_available(self) -> bool:
+        return getattr(self, "_dnse_market", None) is not None and monotonic() >= getattr(
+            self, "_dnse_cooldown_until", 0.0
+        )
+
+    def _mark_dnse_unavailable(self) -> None:
+        self._dnse_cooldown_until = monotonic() + _DNSE_COOLDOWN_SECONDS
 
     def set_on_screener_updated(self, callback: Callable[[], None] | None) -> None:
         self._on_screener_updated = callback
@@ -530,8 +540,7 @@ class OfficialVnstockGateway:
             return None
 
     def index_quote_rows(self, symbols: list[str]) -> dict[str, dict[str, object]]:
-        dnse_market = getattr(self, "_dnse_market", None)
-        if dnse_market is None or not symbols:
+        if not self._dnse_available() or not symbols:
             return {}
         results: dict[str, dict[str, object]] = {}
         executor = ThreadPoolExecutor(
@@ -608,18 +617,33 @@ class OfficialVnstockGateway:
 
     def reference_rows(self) -> tuple[list[dict[str, object]], set[str], dict[str, str]]:
         dnse_ref = getattr(self, "_dnse_reference", None)
-        dnse_market = getattr(self, "_dnse_market", None)
-        if dnse_ref is not None and dnse_market is not None:
+        if dnse_ref is not None and self._dnse_available():
             return self._reference_rows_dnse_first(dnse_ref)
+        return self._reference_rows_fhsc()
 
+    def _reference_rows_fhsc(self) -> tuple[list[dict[str, object]], set[str], dict[str, str]]:
+        lock = getattr(self, "_screener_lock", None)
+        cached_screener = list(getattr(self, "_screener_rows", []))
+        screener_expires_at = getattr(self, "_screener_expires_at", 0.0)
         try:
-            screener_rows = [
-                row
-                for exchange in self._EXCHANGES
-                for row in _frame_records(
-                    self._market.equity.screener(exchange=exchange, compat="v5")
-                )
-            ]
+            if cached_screener and monotonic() < screener_expires_at:
+                screener_rows = cached_screener
+            else:
+                screener_rows = [
+                    row
+                    for exchange in self._EXCHANGES
+                    for row in _frame_records(
+                        self._market.equity.screener(exchange=exchange, compat="v5")
+                    )
+                ]
+                if screener_rows:
+                    if lock is not None:
+                        with lock:
+                            self._screener_rows = screener_rows
+                            self._screener_expires_at = monotonic() + _SCREENER_CACHE_SECONDS
+                    else:
+                        self._screener_rows = screener_rows
+                        self._screener_expires_at = monotonic() + _SCREENER_CACHE_SECONDS
             vn30 = self._get_vn30_members()
         except (Exception, SystemExit) as exc:
             raise RuntimeError("Vnstock 6 FHSC market reference request failed") from exc
@@ -670,6 +694,7 @@ class OfficialVnstockGateway:
                 cached = getattr(self, "_vn30_cache", None)
                 return set(cached[1]) if cached else set()
 
+        dnse_failed = False
         with ThreadPoolExecutor(max_workers=3, thread_name_prefix="dnse-ref-bootstrap") as ex:
             fut_list = ex.submit(_fetch_dnse_list)
             fut_vn30 = ex.submit(_fetch_vn30_safe)
@@ -677,9 +702,10 @@ class OfficialVnstockGateway:
             try:
                 dnse_refs = fut_list.result()
             except (Exception, SystemExit) as exc:
+                dnse_failed = True
                 logger.warning(
                     "vnstock_dnse_reference_list_unavailable",
-                    extra={"error_type": type(exc).__name__},
+                    extra={"error_type": type(exc).__name__, "detail": str(exc)[:120]},
                 )
                 dnse_refs = cached_dnse_refs
             vn30 = fut_vn30.result()
@@ -692,8 +718,13 @@ class OfficialVnstockGateway:
             _text(vnindex_row.get("time")) or None if isinstance(vnindex_row, dict) else None
         )
 
+        if dnse_failed and not dnse_refs:
+            self._mark_dnse_unavailable()
+
         if not screener_rows and not dnse_refs:
-            raise RuntimeError("Vnstock DNSE and FHSC market reference requests failed")
+            # DNSE is unreachable (e.g. geo-blocked or timed out on cloud IP); fall back to FHSC.
+            self._mark_dnse_unavailable()
+            return self._reference_rows_fhsc()
 
         if not screener_rows or monotonic() >= screener_expires_at:
             self._start_fhsc_screener_refresh_async()
@@ -787,8 +818,7 @@ class OfficialVnstockGateway:
                     "time": self._market_time,
                 }
 
-        dnse_market = getattr(self, "_dnse_market", None)
-        if dnse_market is None:
+        if not self._dnse_available():
             quote_rows: list[dict[str, object]] = []
             for offset in range(0, len(fhsc_quote_symbols), _QUOTE_BOARD_BATCH_SIZE):
                 batch = fhsc_quote_symbols[offset : offset + _QUOTE_BOARD_BATCH_SIZE]
@@ -1093,9 +1123,9 @@ class OfficialVnstockGateway:
             return rows
 
         # DNSE serves both equities and indices across daily and intraday intervals in ~40-110ms
-        # (30-50x faster than FHSC and free of FHSC's strict rate limit). Prefer DNSE first and
-        # fall back to FHSC only when DNSE is disabled, empty, or unavailable.
-        if dnse_market is not None:
+        # (30-50x faster than FHSC and free of FHSC's strict rate limit). Prefer DNSE first when
+        # available and not on cooldown, and fall back to FHSC otherwise.
+        if self._dnse_available():
             try:
                 rows = _fetch_dnse()
                 if rows:
