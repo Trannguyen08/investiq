@@ -1512,3 +1512,84 @@ def test_reference_rows_dnse_first_falls_back_to_fhsc_when_dnse_unavailable() ->
     assert vn30 == {"FPT"}
     assert gateway._market_time == "2026-11-20 15:00:00+07:00"
     assert gateway._dnse_available() is False
+
+
+def test_quote_rows_falls_back_to_fhsc_immediately_when_dnse_returns_empty() -> None:
+    fhsc_batches: list[list[str]] = []
+
+    class Frame:
+        def __init__(self, rows: list[dict[str, object]]) -> None:
+            self._rows = rows
+
+        def to_dict(self, *, orient: str) -> list[dict[str, object]]:
+            assert orient == "records"
+            return self._rows
+
+    gateway = OfficialVnstockGateway.__new__(OfficialVnstockGateway)
+    gateway._screener_rows = [
+        {"symbol": "FPT", "close": 46.9, "price_change_percent": 4.22, "total_volume": 16_000_000}
+    ]
+    gateway._dnse_reference_rows = []
+    gateway._market_time = "2026-11-23 14:25:00+07:00"
+    gateway._dnse_market = object()  # type: ignore[assignment]
+    gateway._dnse_cooldown_until = 0.0
+    gateway._dnse_last_trade_row = lambda *_a, **_kw: None  # type: ignore[method-assign]
+    def fake_fhsc_quote(batch: list[str], compat: str = "v5") -> Frame:
+        assert compat == "v5"
+        fhsc_batches.append(batch)
+        return Frame(
+            [
+                {
+                    "symbol": "FPT",
+                    "close_price": 46_900,
+                    "reference_price": 45_000,
+                    "open_price": 45_200,
+                    "high_price": 47_100,
+                    "low_price": 45_000,
+                }
+            ]
+        )
+
+    gateway._market = SimpleNamespace(  # type: ignore[assignment]
+        equity=SimpleNamespace(quote=fake_fhsc_quote)
+    )
+
+    rows = gateway.quote_rows(["FPT"])
+
+    assert fhsc_batches == [["FPT"]]
+    assert gateway._dnse_available() is False
+    assert rows[0]["open_price"] == Decimal("45200")
+    assert rows[0]["high_price"] == Decimal("47100")
+    assert rows[0]["low_price"] == Decimal("45000")
+
+
+def test_refresh_preserves_previous_indices_and_same_day_ohlc_when_partial() -> None:
+    gateway = FakeVnstockGateway()
+    provider = VnstockMarketProvider(config(), gateway=gateway)
+
+    initial_fpt = next(i for i in provider.instruments() if i.symbol == "FPT")
+    initial_indices = provider.indices()
+    assert initial_fpt.open_price == Decimal("100500")
+    assert len(initial_indices) > 0
+
+    # Simulate a refresh on the same day where OHLC is missing (0) and index candles fail
+    original_quote_rows = gateway.quote_rows
+
+    def quote_rows_no_ohlc(symbols: list[str]) -> list[dict[str, object]]:
+        rows = original_quote_rows(symbols)
+        for row in rows:
+            row["open_price"] = 0
+            row["high_price"] = 0
+            row["low_price"] = 0
+        return rows
+
+    gateway.quote_rows = quote_rows_no_ohlc  # type: ignore[method-assign]
+    gateway.candle_rows = lambda *_a, **_kw: []  # type: ignore[method-assign]
+
+    provider._refresh_snapshot()
+
+    refreshed_fpt = next(i for i in provider.instruments() if i.symbol == "FPT")
+    assert refreshed_fpt.open_price == Decimal("100500")
+    assert refreshed_fpt.high_price == Decimal("103000")
+    assert refreshed_fpt.low_price == Decimal("99500")
+    assert len(provider.indices()) == len(initial_indices)

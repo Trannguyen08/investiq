@@ -46,6 +46,7 @@ logger = logging.getLogger(__name__)
 _MARKET_TZ = ZoneInfo("Asia/Ho_Chi_Minh")
 _STOCK_SYMBOL = re.compile(r"^[A-Z]{3}$")
 _MAX_FHSC_QUOTE_SYMBOLS = 30
+_MAX_FHSC_EXTRA_OHLC_SYMBOLS = 70
 _MAX_DNSE_OHLC_SYMBOLS = 130
 _DNSE_STREAM_BATCH_SIZE = 200
 _DNSE_STREAM_MAX_CONNECTIONS = 10
@@ -57,8 +58,9 @@ _INDEX_QUOTE_TIMEOUT_SECONDS = 5
 _FUNDAMENTAL_REQUEST_TIMEOUT_SECONDS = 5
 _CANDLE_REQUEST_TIMEOUT_SECONDS = 6
 _SCREENER_CACHE_SECONDS = 30 * 60
+_FHSC_EXTRA_OHLC_CACHE_SECONDS = 15 * 60
 _VN30_CACHE_SECONDS = 24 * 60 * 60
-_DNSE_COOLDOWN_SECONDS = 120.0
+_DNSE_COOLDOWN_SECONDS = 900.0
 _INITIAL_SNAPSHOT_WAIT_SECONDS = 180
 _INDEX_EXCHANGE = {
     "VNINDEX": "HOSE",
@@ -497,6 +499,10 @@ class OfficialVnstockGateway:
         self._market_time: str | None = None
         self._fhsc_candle_cooldown_until = 0.0
         self._dnse_cooldown_until = 0.0
+        self._fhsc_extra_lock = RLock()
+        self._fhsc_extra_quotes: dict[str, dict[str, object]] = {}
+        self._fhsc_extra_quotes_expires_at = 0.0
+        self._fhsc_extra_ohlc_warming = False
 
     def _dnse_available(self) -> bool:
         return getattr(self, "_dnse_market", None) is not None and monotonic() >= getattr(
@@ -784,6 +790,120 @@ class OfficialVnstockGateway:
                 sectors[symbol] = sector
         return references, vn30, sectors
 
+    def _fetch_fhsc_quote_board(
+        self,
+        symbols: list[str],
+        rows_by_symbol: dict[str, dict[str, object]],
+    ) -> dict[str, dict[str, object]]:
+        quote_rows: list[dict[str, object]] = []
+        for offset in range(0, len(symbols), _QUOTE_BOARD_BATCH_SIZE):
+            batch = symbols[offset : offset + _QUOTE_BOARD_BATCH_SIZE]
+
+            def fetch_batch(batch: list[str] = batch) -> object:
+                return self._market.equity.quote(batch, compat="v5")
+
+            try:
+                result = _bounded_call(
+                    fetch_batch,
+                    timeout=_QUOTE_BOARD_TIMEOUT_SECONDS,
+                    operation="fhsc-quote-board",
+                )
+                quote_rows.extend(_frame_records(result))
+            except (Exception, SystemExit) as exc:
+                logger.warning(
+                    "vnstock_fhsc_quote_board_batch_unavailable",
+                    extra={"batch_size": len(batch), "error_type": type(exc).__name__},
+                )
+        quotes_by_symbol = {
+            _text(row.get("symbol")).upper(): row
+            for row in quote_rows
+            if _text(row.get("symbol"))
+        }
+        for symbol in symbols:
+            normalized = symbol.upper()
+            base = rows_by_symbol.get(normalized)
+            quote = quotes_by_symbol.get(normalized)
+            if base is None or quote is None:
+                continue
+            merged = {key: value for key, value in quote.items() if value is not None}
+            merged = {**base, **merged, "symbol": normalized}
+            for field in (
+                "close_price",
+                "reference_price",
+                "open_price",
+                "high_price",
+                "low_price",
+                "ceiling_price",
+                "floor_price",
+            ):
+                merged[field] = _positive_or(quote.get(field), base.get(field))
+            merged["volume_accumulated"] = _positive_or(
+                quote.get("total_volume"), base.get("volume_accumulated")
+            )
+            merged["total_value"] = _positive_or(
+                quote.get("total_value"), base.get("total_value")
+            )
+            merged["time"] = quote.get("time") or base.get("time") or self._market_time
+            rows_by_symbol[normalized] = merged
+        return quotes_by_symbol
+
+    def _start_fhsc_ohlc_enrichment_async(self, extra_symbols: list[str]) -> None:
+        if os.getenv("PYTEST_CURRENT_TEST") or not extra_symbols:
+            return
+        lock = getattr(self, "_fhsc_extra_lock", None)
+        if lock is None:
+            return
+        now = monotonic()
+        with lock:
+            if getattr(self, "_fhsc_extra_ohlc_warming", False):
+                return
+            if (
+                getattr(self, "_fhsc_extra_quotes", None)
+                and now < getattr(self, "_fhsc_extra_quotes_expires_at", 0.0)
+            ):
+                return
+            self._fhsc_extra_ohlc_warming = True
+
+        def _worker() -> None:
+            from time import sleep
+
+            try:
+                collected: dict[str, dict[str, object]] = {}
+                for offset in range(0, len(extra_symbols), _QUOTE_BOARD_BATCH_SIZE):
+                    batch = extra_symbols[offset : offset + _QUOTE_BOARD_BATCH_SIZE]
+
+                    def fetch_batch(batch: list[str] = batch) -> object:
+                        return self._market.equity.quote(batch, compat="v5")
+
+                    try:
+                        result = _bounded_call(
+                            fetch_batch,
+                            timeout=_QUOTE_BOARD_TIMEOUT_SECONDS,
+                            operation="fhsc-extra-quote-board",
+                        )
+                        for row in _frame_records(result):
+                            sym = _text(row.get("symbol")).upper()
+                            if sym:
+                                collected[sym] = row
+                    except (Exception, SystemExit):
+                        pass
+                    sleep(0.25)
+                if collected:
+                    with lock:
+                        self._fhsc_extra_quotes = {**self._fhsc_extra_quotes, **collected}
+                        self._fhsc_extra_quotes_expires_at = (
+                            monotonic() + _FHSC_EXTRA_OHLC_CACHE_SECONDS
+                        )
+                    callback = getattr(self, "_on_screener_updated", None)
+                    if callback is not None:
+                        with suppress(Exception):
+                            callback()
+            finally:
+                with lock:
+                    self._fhsc_extra_ohlc_warming = False
+
+        Thread(target=_worker, name="fhsc-extra-ohlc-enrichment", daemon=True).start()
+
     def quote_rows(self, symbols: list[str]) -> list[dict[str, object]]:
         all_symbols = list(dict.fromkeys(symbol.upper() for symbol in symbols))
         fhsc_quote_symbols = all_symbols[:_MAX_FHSC_QUOTE_SYMBOLS]
@@ -818,62 +938,34 @@ class OfficialVnstockGateway:
                     "time": self._market_time,
                 }
 
-        if not self._dnse_available():
-            quote_rows: list[dict[str, object]] = []
-            for offset in range(0, len(fhsc_quote_symbols), _QUOTE_BOARD_BATCH_SIZE):
-                batch = fhsc_quote_symbols[offset : offset + _QUOTE_BOARD_BATCH_SIZE]
+        # Apply cached background FHSC extra OHLC quotes (top 70 non-VN30 stocks) if present.
+        extra_lock = getattr(self, "_fhsc_extra_lock", None)
+        extra_quotes: dict[str, dict[str, object]] = {}
+        if extra_lock is not None:
+            with extra_lock:
+                extra_quotes = dict(getattr(self, "_fhsc_extra_quotes", {}))
+        for sym, quote in extra_quotes.items():
+            base = rows_by_symbol.get(sym)
+            if base is None:
+                continue
+            merged = {**base, **{k: v for k, v in quote.items() if v is not None}, "symbol": sym}
+            for field in (
+                "close_price",
+                "reference_price",
+                "open_price",
+                "high_price",
+                "low_price",
+                "ceiling_price",
+                "floor_price",
+            ):
+                merged[field] = _positive_or(quote.get(field), base.get(field))
+            merged["volume_accumulated"] = _positive_or(
+                quote.get("total_volume"), base.get("volume_accumulated")
+            )
+            merged["total_value"] = _positive_or(quote.get("total_value"), base.get("total_value"))
+            merged["time"] = quote.get("time") or base.get("time") or self._market_time
+            rows_by_symbol[sym] = merged
 
-                def fetch_batch(batch: list[str] = batch) -> object:
-                    return self._market.equity.quote(batch, compat="v5")
-
-                try:
-                    result = _bounded_call(
-                        fetch_batch,
-                        timeout=_QUOTE_BOARD_TIMEOUT_SECONDS,
-                        operation="fhsc-quote-board",
-                    )
-                    quote_rows.extend(_frame_records(result))
-                except (Exception, SystemExit) as exc:
-                    logger.warning(
-                        "vnstock_fhsc_quote_board_batch_unavailable",
-                        extra={"batch_size": len(batch), "error_type": type(exc).__name__},
-                    )
-            quotes_by_symbol = {
-                _text(row.get("symbol")).upper(): row
-                for row in quote_rows
-                if _text(row.get("symbol"))
-            }
-            for symbol in fhsc_quote_symbols:
-                normalized = symbol.upper()
-                base = rows_by_symbol.get(normalized)
-                quote = quotes_by_symbol.get(normalized)
-                if base is None or quote is None:
-                    continue
-                merged = {key: value for key, value in quote.items() if value is not None}
-                merged = {**base, **merged, "symbol": normalized}
-                for field in (
-                    "close_price",
-                    "reference_price",
-                    "open_price",
-                    "high_price",
-                    "low_price",
-                    "ceiling_price",
-                    "floor_price",
-                ):
-                    merged[field] = _positive_or(quote.get(field), base.get(field))
-                merged["volume_accumulated"] = _positive_or(
-                    quote.get("total_volume"), base.get("volume_accumulated")
-                )
-                merged["total_value"] = _positive_or(
-                    quote.get("total_value"), base.get("total_value")
-                )
-                merged["time"] = quote.get("time") or base.get("time") or self._market_time
-                rows_by_symbol[normalized] = merged
-            return list(rows_by_symbol.values())
-
-        if not rows_by_symbol:
-            return []
-        futures: dict[Future[dict[str, object] | None], str] = {}
         fhsc_priority = set(fhsc_quote_symbols)
         non_fhsc_ranked = sorted(
             (sym for sym in rows_by_symbol if sym not in fhsc_priority),
@@ -885,6 +977,17 @@ class OfficialVnstockGateway:
             ),
             reverse=True,
         )
+
+        if not self._dnse_available():
+            self._fetch_fhsc_quote_board(fhsc_quote_symbols, rows_by_symbol)
+            self._start_fhsc_ohlc_enrichment_async(
+                non_fhsc_ranked[:_MAX_FHSC_EXTRA_OHLC_SYMBOLS]
+            )
+            return list(rows_by_symbol.values())
+
+        if not rows_by_symbol:
+            return []
+        futures: dict[Future[dict[str, object] | None], str] = {}
         dnse_ohlc_priority = fhsc_priority | set(
             non_fhsc_ranked[: max(0, _MAX_DNSE_OHLC_SYMBOLS - len(fhsc_priority))]
         )
@@ -933,6 +1036,16 @@ class OfficialVnstockGateway:
             logger.warning("vnstock_dnse_last_trade_batch_timeout")
         finally:
             executor.shutdown(wait=False, cancel_futures=True)
+
+        if dnse_symbols and not dnse_by_symbol:
+            # All DNSE quote calls failed (e.g. geo-blocked on cloud); cool down DNSE and
+            # fall back to FHSC quote board immediately so VN30 OHLC is never wiped out.
+            self._mark_dnse_unavailable()
+            self._fetch_fhsc_quote_board(fhsc_quote_symbols, rows_by_symbol)
+            self._start_fhsc_ohlc_enrichment_async(
+                non_fhsc_ranked[:_MAX_FHSC_EXTRA_OHLC_SYMBOLS]
+            )
+            return list(rows_by_symbol.values())
 
         merged_rows: list[dict[str, object]] = []
         for symbol, row in rows_by_symbol.items():
@@ -1131,6 +1244,7 @@ class OfficialVnstockGateway:
                 if rows:
                     return rows
             except (Exception, SystemExit) as exc:
+                self._mark_dnse_unavailable()
                 logger.warning(
                     "vnstock_dnse_candles_unavailable_using_fhsc",
                     extra={"symbol": symbol, "interval": interval, "error_type": type(exc).__name__},
@@ -1263,8 +1377,8 @@ class OfficialVnstockGateway:
         return _financial_statement_data(symbol, period_type, tables, limit)
 
     def trade_rows(self, symbol: str, limit: int) -> list[dict[str, object]]:
-        dnse_market = self._dnse_market
-        if dnse_market is None:
+        dnse_market = getattr(self, "_dnse_market", None)
+        if dnse_market is None or not self._dnse_available():
             return []
         try:
             frame = _bounded_call(
@@ -1276,11 +1390,12 @@ class OfficialVnstockGateway:
             )
             return _frame_records(frame)
         except (Exception, SystemExit) as exc:
+            self._mark_dnse_unavailable()
             raise RuntimeError("DNSE intraday trade request failed") from exc
 
     def order_book_rows(self, symbol: str) -> list[dict[str, object]]:
-        dnse_market = self._dnse_market
-        if dnse_market is None:
+        dnse_market = getattr(self, "_dnse_market", None)
+        if dnse_market is None or not self._dnse_available():
             return []
         try:
             frame = _bounded_call(
@@ -1292,6 +1407,7 @@ class OfficialVnstockGateway:
             )
             return _frame_records(frame)
         except (Exception, SystemExit) as exc:
+            self._mark_dnse_unavailable()
             raise RuntimeError("DNSE order-book request failed") from exc
 
     def event_rows(self, symbol: str) -> list[dict[str, object]]:
@@ -2451,10 +2567,14 @@ class VnstockMarketProvider:
                 except (RuntimeError, TypeError, ValueError):
                     logger.warning("vnstock_index_quotes_unavailable")
 
+        prev_indices_by_symbol = {item.symbol: item for item in self._indices}
         indices: list[MarketIndex] = []
         for symbol in index_symbols:
             rows = index_candle_rows.get(symbol)
             if not rows:
+                prev_index = prev_indices_by_symbol.get(symbol)
+                if prev_index is not None:
+                    indices.append(prev_index)
                 continue
             candles = tuple(
                 candle
@@ -2471,6 +2591,8 @@ class VnstockMarketProvider:
                         index_quote=index_quotes.get(symbol),
                     )
                 )
+            elif symbol in prev_indices_by_symbol:
+                indices.append(prev_indices_by_symbol[symbol])
 
         timestamps = [item.timestamp for index in indices for item in index.candles[-1:]]
         if has_live_matches:
@@ -2479,9 +2601,40 @@ class VnstockMarketProvider:
                 for row in quote_rows
                 if _text(row.get("time"))
             )
+        new_market_time = max(timestamps, default=fetched_at)
+        same_trading_day = (
+            bool(self._instruments)
+            and self._market_time.astimezone(_MARKET_TZ).date()
+            == new_market_time.astimezone(_MARKET_TZ).date()
+        )
+        if same_trading_day:
+            prev_by_symbol = {item.symbol: item for item in self._instruments}
+            preserved: list[MarketInstrument] = []
+            for item in instruments:
+                prev = prev_by_symbol.get(item.symbol)
+                if prev is not None and (
+                    item.open_price <= 0
+                    or item.high_price <= 0
+                    or item.low_price <= 0
+                    or item.ceiling_price <= 0
+                    or item.floor_price <= 0
+                ):
+                    item = replace(
+                        item,
+                        open_price=item.open_price if item.open_price > 0 else prev.open_price,
+                        high_price=item.high_price if item.high_price > 0 else prev.high_price,
+                        low_price=item.low_price if item.low_price > 0 else prev.low_price,
+                        ceiling_price=(
+                            item.ceiling_price if item.ceiling_price > 0 else prev.ceiling_price
+                        ),
+                        floor_price=item.floor_price if item.floor_price > 0 else prev.floor_price,
+                    )
+                preserved.append(item)
+            instruments = tuple(preserved)
+
         self._instruments = instruments
         self._indices = tuple(indices)
-        self._market_time = max(timestamps, default=fetched_at)
+        self._market_time = new_market_time
         self._expires_at = self._clock() + self._config.refresh_seconds
         self._stale = False
         for daily_ohlc in tuple(self._dnse_daily_ohlc.values()):
