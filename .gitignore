@@ -244,6 +244,9 @@ docs/assets/
 *.png
 *.jpg
 *.jpeg
+!docs/demo/
+!docs/demo/*.png
+!docs/demo/*.jpg
 scripts/generate_architecture_diagrams.py
 .vercel
 .env*

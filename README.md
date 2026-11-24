@@ -98,6 +98,28 @@ Khác biệt hoàn toàn với các chatbot thông thường, InvestIQ AI Assist
 
 ---
 
+## Demo Giao Diện Thực Tế (Screenshots)
+
+Ảnh chụp thực tế từ môi trường local (đã đăng nhập tài khoản Google `. Tran Chi Nguyen`) minh họa đầy đủ các phân hệ chính phòng trường hợp link deploy tạm thời không truy cập được:
+
+### Trang chủ & Toàn cảnh Thị trường
+![Trang chủ InvestIQ](docs/demo/01-home-overview.png)
+![Bảng giá & Heatmap Thị trường](docs/demo/02-market-heatmap.png)
+
+### Phân tích Cổ phiếu (Biểu đồ nến, Chỉ báo kỹ thuật & Trợ lý AI)
+![Chi tiết cổ phiếu FPT](docs/demo/03-stock-detail-fpt.png)
+![Trợ lý AI Định lượng](docs/demo/08-ai-assistant.png)
+
+### Đầu tư Giả lập (Paper Trading) & Danh mục thực tế
+![Danh mục Đầu tư Giả lập](docs/demo/04-portfolio-paper-trading.png)
+
+### Tin tức Sentiment, Học viện F0 & Cộng đồng Luận điểm
+![Tin tức & Phân tích Cảm xúc](docs/demo/05-news-sentiment.png)
+![Học viện Đầu tư F0](docs/demo/06-learn-academy.png)
+![Cộng đồng Luận điểm Đầu tư](docs/demo/07-community-theses.png)
+
+---
+
 ## 3. Kiến Trúc Kỹ Thuật (Architecture & Tech Stack)
 
 Hệ thống được thiết kế theo mô hình **Monorepo** chuẩn mực, kết hợp **Clean Architecture** ở phía Backend và kiến trúc **Backend-for-Frontend (BFF)** hiện đại ở phía Frontend:
