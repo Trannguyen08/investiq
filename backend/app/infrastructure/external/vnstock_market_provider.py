@@ -635,13 +635,24 @@ class OfficialVnstockGateway:
             if cached_screener and monotonic() < screener_expires_at:
                 screener_rows = cached_screener
             else:
-                screener_rows = [
-                    row
-                    for exchange in self._EXCHANGES
-                    for row in _frame_records(
+                def _fetch_exchange_screener(exchange: str) -> list[dict[str, object]]:
+                    return _frame_records(
                         self._market.equity.screener(exchange=exchange, compat="v5")
                     )
-                ]
+
+                with ThreadPoolExecutor(
+                    max_workers=len(self._EXCHANGES),
+                    thread_name_prefix="fhsc-screener",
+                ) as ex:
+                    futures_by_exchange = {
+                        exchange: ex.submit(_fetch_exchange_screener, exchange)
+                        for exchange in self._EXCHANGES
+                    }
+                    screener_rows = [
+                        row
+                        for exchange in self._EXCHANGES
+                        for row in futures_by_exchange[exchange].result()
+                    ]
                 if screener_rows:
                     if lock is not None:
                         with lock:
@@ -2460,6 +2471,21 @@ class VnstockMarketProvider:
                 ).start()
                 return
             else:
+                from app.infrastructure.cache.vnstock_snapshot_cache import load_vnstock_snapshot
+
+                cached_snap = load_vnstock_snapshot()
+                if cached_snap is not None:
+                    snap_inst, snap_idx, snap_mt, snap_events = cached_snap
+                    self._instruments = snap_inst
+                    self._indices = snap_idx
+                    if snap_mt is not None:
+                        self._market_time = snap_mt
+                    if snap_events:
+                        self._event_cache = (now + _EVENT_CACHE_SECONDS, snap_events)
+                    self._expires_at = now + self._config.refresh_seconds
+                    self._stale = False
+                    self._snapshot_ready.set()
+                    return
                 self._refreshing = True
                 self._snapshot_ready.clear()
                 refresh_synchronously = True
@@ -2637,6 +2663,10 @@ class VnstockMarketProvider:
         self._market_time = new_market_time
         self._expires_at = self._clock() + self._config.refresh_seconds
         self._stale = False
+        from app.infrastructure.cache.vnstock_snapshot_cache import save_vnstock_snapshot
+
+        cached_events = self._event_cache[1] if self._event_cache else ()
+        save_vnstock_snapshot(self._instruments, self._indices, self._market_time, cached_events)
         for daily_ohlc in tuple(self._dnse_daily_ohlc.values()):
             self._apply_dnse_ohlc(daily_ohlc)
         if self._dnse_ohlc_stream is not None and not self._closed and self.session != "closed":

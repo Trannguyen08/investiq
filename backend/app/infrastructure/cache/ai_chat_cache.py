@@ -29,8 +29,8 @@ class AiChatCache:
     def __init__(self, client: Redis | None = None) -> None:
         self._client = client or Redis.from_url(
             settings.redis_url,
-            socket_connect_timeout=0.2,
-            socket_timeout=0.2,
+            socket_connect_timeout=2.0,
+            socket_timeout=2.0,
             decode_responses=True,
         )
         self._namespace = f"ai:chat:v1:{settings.app_env}"

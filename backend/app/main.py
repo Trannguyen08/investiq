@@ -209,9 +209,11 @@ async def _link_integrity_background_loop() -> None:
 
 @asynccontextmanager
 async def lifespan(_: FastAPI) -> AsyncIterator[None]:
-    await start_market_provider()
     is_pytest = bool(os.getenv("PYTEST_CURRENT_TEST"))
-    if not is_pytest:
+    is_serverless = bool(os.getenv("VERCEL"))
+    if not is_serverless:
+        await start_market_provider()
+    if not is_pytest and not is_serverless:
         try:
             from app.workers.financial_statements_sync import sync_financial_statements_store
 
@@ -221,7 +223,7 @@ async def lifespan(_: FastAPI) -> AsyncIterator[None]:
     news_task = None
     events_task = None
     link_integrity_task = None
-    if not is_pytest:
+    if not is_pytest and not is_serverless:
         if settings.news_ingestion_enabled:
             news_task = asyncio.create_task(_news_background_loop())
         events_task = asyncio.create_task(_events_background_loop())

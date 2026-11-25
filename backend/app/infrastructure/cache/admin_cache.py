@@ -25,8 +25,8 @@ class AdminCache:
     def __init__(self, client: Redis | None = None) -> None:
         self._client = client or Redis.from_url(
             settings.redis_url,
-            socket_connect_timeout=0.15,
-            socket_timeout=0.15,
+            socket_connect_timeout=2.0,
+            socket_timeout=2.0,
             decode_responses=True,
         )
         self._prefix = f"admin:v1:{settings.app_env}:"
