@@ -133,7 +133,9 @@ def _load_persisted_candles() -> dict[str, tuple[float, list[Candle]]]:
     try:
         with open(_HOLDING_CANDLES_FILE, encoding="utf-8") as f:
             raw = json.load(f)
-        far_future = _monotonic() + 86400.0 * 7
+        # Treat disk-loaded candles as immediately stale so fresh trading sessions are fetched,
+        # while retaining them in memory as a fallback if live fetch fails or times out.
+        stale_expiry = 0.0
         for sym, items in raw.items():
             candle_list: list[Candle] = []
             for item in items:
@@ -152,7 +154,7 @@ def _load_persisted_candles() -> dict[str, tuple[float, list[Candle]]]:
                 except Exception:
                     pass
             if candle_list:
-                result[sym] = (far_future, candle_list)
+                result[sym] = (stale_expiry, candle_list)
     except Exception:
         pass
     return result
@@ -863,7 +865,7 @@ class PaperTradingService:
 
                 pool = ThreadPoolExecutor(max_workers=min(8, len(symbols_to_fetch)))
                 futures = {pool.submit(_fetch_holding_candles, sym): sym for sym in symbols_to_fetch}
-                done, _ = wait(futures.keys(), timeout=6.0)
+                done, _ = wait(futures.keys(), timeout=15.0)
                 pool.shutdown(wait=False, cancel_futures=False)
 
                 for sym in symbols_to_fetch:
